@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { HttpNotesApi, type NotesApi } from "./api/client";
 import { AppHeader } from "./components/AppHeader";
 import { NoteWorkspace } from "./components/NoteWorkspace";
+import { BoardView } from "./board/BoardView";
+import { useBoards } from "./board/useBoards";
 import { useWorkspace } from "./hooks/useWorkspace";
 
 interface AppProps {
@@ -10,16 +12,25 @@ interface AppProps {
   api?: NotesApi;
 }
 
+/** The two top-level presentations of the same notes. */
+export type AppView = "list" | "board";
+
 /**
  * The application root.
  *
  * It constructs the API client once (or accepts one for tests), hands it to the
- * workspace hook, and renders the header and workspace. No data fetching or
- * business logic lives here.
+ * workspace hook, and renders the header and the active view (list or board).
+ * No data fetching or business logic lives here.
  */
 export function App({ api }: AppProps) {
   const client = useMemo(() => api ?? new HttpNotesApi(), [api]);
   const workspace = useWorkspace(client);
+  const [view, setView] = useState<AppView>("list");
+
+  const boards = useBoards({
+    userKey: workspace.currentUser?.id ?? null,
+    notes: workspace.notes,
+  });
 
   const switchingDisabled =
     workspace.loadingIdentities || workspace.loadingNote || workspace.saving;
@@ -35,6 +46,8 @@ export function App({ api }: AppProps) {
         sort={workspace.sort}
         resultCount={workspace.notesTotal}
         loadingNotes={workspace.loadingNotes}
+        view={view}
+        onViewChange={setView}
         onQueryChange={workspace.setSearchQuery}
         onSortChange={workspace.setSort}
         onSelectIdentity={workspace.selectIdentity}
@@ -54,6 +67,18 @@ export function App({ api }: AppProps) {
       <main className="app__main">
         {workspace.loadingIdentities ? (
           <p className="workspace__loading">Connecting to the backend…</p>
+        ) : view === "board" ? (
+          <BoardView
+            boards={boards}
+            notes={workspace.notes}
+            noteDetail={workspace.noteDetail}
+            requestNoteDetail={workspace.requestNoteDetail}
+            folders={workspace.folders}
+            onOpenNote={(noteId) => {
+              setView("list");
+              workspace.selectNote(noteId);
+            }}
+          />
         ) : (
           <NoteWorkspace workspace={workspace} />
         )}

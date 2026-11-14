@@ -1,4 +1,5 @@
 import type { CurrentUser, DemoIdentity, NoteSort } from "../api/types";
+import type { AppView } from "../App";
 import { IdentitySwitcher } from "./IdentitySwitcher";
 import { SearchBar } from "./SearchBar";
 
@@ -11,6 +12,9 @@ interface AppHeaderProps {
   sort: NoteSort;
   resultCount: number;
   loadingNotes: boolean;
+  /** The active top-level presentation. */
+  view: AppView;
+  onViewChange: (view: AppView) => void;
   onQueryChange: (query: string) => void;
   onSortChange: (sort: NoteSort) => void;
   onSelectIdentity: (userId: string) => void;
@@ -31,6 +35,8 @@ export function AppHeader({
   sort,
   resultCount,
   loadingNotes,
+  view,
+  onViewChange,
   onQueryChange,
   onSortChange,
   onSelectIdentity,
@@ -49,6 +55,24 @@ export function AppHeader({
             Demo mode
           </span>
         ) : null}
+        <div className="app-header__view-toggle" role="group" aria-label="Choose view">
+          <button
+            type="button"
+            className={`app-header__view${view === "list" ? " app-header__view--active" : ""}`}
+            aria-pressed={view === "list"}
+            onClick={() => onViewChange("list")}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            className={`app-header__view${view === "board" ? " app-header__view--active" : ""}`}
+            aria-pressed={view === "board"}
+            onClick={() => onViewChange("board")}
+          >
+            Board
+          </button>
+        </div>
       </div>
 
       <div className="app-header__search">
