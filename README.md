@@ -1,5 +1,58 @@
 # Bluestaq Notes Service
 
+For the Bluestaq take-home exercise, I would focus on three design decisions that consumed the most engineering thought. Authentication absolutely belongs in that list—not simply because security matters, but because it influenced the design of the entire application.
+1. Three design choices I spent the most time on
+1. Authentication and authorization as first-class architectural concerns
+This was one of the most consequential decisions because the application is a shared-notes system. Identity determines who owns a note, who can access it, and what actions they are permitted to perform.
+
+I deliberately separated authentication from authorization and introduced provider boundaries rather than embedding identity assumptions in API endpoints or business logic.
+
+The design emphasizes:
+- A replaceable identity provider, with a demo implementation for the exercise.
+- Explicit authorization rules enforced by the backend.
+- Private-by-default notes and deny-by-default access.
+- Distinct owner, READ, and WRITE permissions.
+- Immediate enforcement of revoked permissions.
+Why I spent so much time here: Authentication is not just a login feature. It establishes the trusted identity context on which every security decision depends. Getting that boundary wrong creates security problems throughout the application and makes future integration with enterprise identity systems more difficult.
+
+I wanted to demonstrate that the application could evolve toward an enterprise identity provider without rewriting its domain or application layers.
+2. Domain-driven design and Hexagonal Architecture
+I spent considerable time establishing clear boundaries between the domain, application, infrastructure, and presentation layers.
+
+The domain should not know about FastAPI, SQLAlchemy, HTTP, or the underlying database. Application use cases coordinate business operations through ports, while infrastructure adapters implement those ports.
+
+Why I chose this: I wanted the business rules to remain independently testable and the infrastructure replaceable. This also makes the system easier to extend without allowing framework or persistence concerns to leak into the domain.
+
+I chose a modular monolith rather than introducing microservices. The problem did not justify distributed-system complexity.
+3. Data ownership, sharing, and consistency
+The note-sharing model required more thought than simply creating CRUD endpoints.
+
+I focused on:
+- Clear ownership and permission relationships.
+- Repository and Unit of Work boundaries.
+- Private-by-default behavior.
+- Preventing unauthorized users from manipulating notes.
+- Optimistic concurrency to prevent one user from silently overwriting another user's changes.
+Why I spent time here: These decisions establish the integrity of the application's core business behavior. A sharing model that works only in the happy path is not sufficient. It needs to remain correct when multiple users interact with the same resource, permissions change, or requests conflict.
+
+2. What would I change, add, or stop doing with more time?
+I would frame this as improving production readiness rather than changing the fundamental architecture.
+Area	What I would do
+Authentication	Implement a production identity adapter using an enterprise identity provider, potentially OIDC or CAC/PKI integration depending on the environment.
+Security	Conduct a more formal threat model and expand negative authorization and abuse-case testing.
+Testing	Add broader end-to-end tests covering multiple users, permission changes, concurrency, and failure scenarios.
+Observability	Add more comprehensive structured audit events, tracing, and operational metrics.
+Persistence	Run the application against PostgreSQL in integration testing rather than relying primarily on SQLite.
+Documentation	Expand deployment, configuration, security, and operational documentation.
+
+What I would stop doing
+I would stop adding features once the core architectural and security requirements were satisfied.
+
+For this exercise, I would resist expanding the product surface just to demonstrate more functionality. I would prioritize validating the security boundaries, API contracts, and failure behavior over adding additional UI features or infrastructure.
+
+I would also avoid introducing abstractions that don't solve a demonstrated problem. Good architecture is not about maximizing the number of patterns; it's about establishing the right boundaries for the problem.
+
+---
 A secure, multi-user REST backend for a note-taking service shared across small
 teams, with a Google Drive-inspired React workspace. Notes are **private by
 default**; an owner may organise notes into folders, star them, and share a note
