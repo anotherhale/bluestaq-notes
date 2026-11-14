@@ -19,6 +19,7 @@ wins.
 - [12. Optimistic concurrency](#12-optimistic-concurrency)
 - [13. CORS](#13-cors)
 - [14. Capability rules the UI mirrors](#14-capability-rules-the-ui-mirrors)
+- [15. Whiteboard view](#15-whiteboard-view)
 
 ---
 
@@ -419,3 +420,70 @@ The UI mirrors these so it does not offer actions that would fail, but the
 - Folder rename/delete controls are shown only on the caller's own folders
   (the folder list already contains only their folders).
 - Switching identity clears all user-specific state.
+
+---
+
+## 15. Whiteboard view
+
+The whiteboard (the header's **List / Board** toggle) arranges existing notes
+spatially. It is deliberately **not** a new backend contract.
+
+### What the whiteboard does *not* do
+
+- It does **not** add, read, or mutate any note through its own path. A board
+  renders notes the workspace already returned for the current user; opening a
+  card calls the existing `selectNote` and the existing `GET /notes/{id}`.
+- It does **not** add endpoints, tables, or authorization rules.
+- It does **not** grant access to any note. If the workspace did not return a
+  note for this user, the note cannot appear on a board.
+
+### Where board data lives
+
+Boards are a per-user spatial annotation, stored client-side behind a
+`BoardStore` interface:
+
+```ts
+interface BoardStore {
+  load(userKey: string): Board[];
+  save(userKey: string, boards: Board[]): void;
+}
+```
+
+- Prototype implementation: `LocalStorageBoardStore`, keyed
+  `bluestaq.notes.boards.v1.<userId>` (users are isolated).
+- Tests: `MemoryBoardStore`.
+- **Migration path:** an `ApiBoardStore` can replace it at the composition point
+  (`frontend/src/App.tsx`) with no component changes. The proposed backend shape
+  is in `docs/WHITEBOARD_DESIGN.md` § G4 and `docs/ADR/ADR-010`.
+
+`localStorage` contents are untrusted: `parseBoards` validates every field and
+drops malformed entries. See ADR-010 for why this is not "simulating a persistent
+feature".
+
+### Contract surface used
+
+| Concern | Source |
+|---|---|
+| The notes on a board | `useWorkspace().notes` (existing `GET /notes`) |
+| A note's content (card preview) | `useWorkspace().noteDetail` / `requestNoteDetail` — the same `GET /notes/{id}` the editor uses |
+| Open a card | existing `selectNote(noteId)` |
+| Folders (board's optional folder link) | `useWorkspace().folders` (existing `GET /folders`) |
+| Board persistence | `BoardStore` (client-side prototype) |
+
+### Authorization
+
+Unchanged. The board adds no capability the user did not already have:
+
+- A READ collaborator's shared note can be placed on their own board and opened
+  read-only; they still cannot edit, delete, move, or share it.
+- A recipient's board never affects the owner's folders or sharing.
+- Removing a card removes only the local placement.
+
+### DEF-03 (why drops silently fail)
+
+dnd-kit resolves `useDraggable`/`useDroppable` through React context. A droppable
+registered **above** the `DndContext` can never receive a drop, and it fails
+**silently**. `BoardView` owns exactly one `DndContext` and renders
+`BoardCanvas` (the `useDroppable`) inside it. This is pinned by
+`frontend/src/board/dragDrop.test.tsx`, which performs a real drag and asserts
+the persisted card.

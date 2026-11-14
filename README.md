@@ -257,15 +257,31 @@ pass.**
 
 ```bash
 cd frontend
-npm test            # vitest, 45 tests (component + hook + client)
-npm run typecheck   # tsc --noEmit
+npm test            # vitest, 125 tests (component + hook + client + board)
+npm run typecheck   # tsc -b --force
 npm run lint        # eslint
 npm run build       # tsc -b && vite build
 ```
 
 The component tests drive the real `App` against an in-memory `FakeApiClient`
 that mirrors the backend's authorization rules (folders, stars, search, sharing,
-READ/WRITE, revocation, optimistic concurrency).
+READ/WRITE, revocation, optimistic concurrency). The whiteboard adds unit tests
+for the pure geometry and the persistence store, hook tests for board state and
+per-user isolation, component tests for board management and card controls, and a
+**DEF-03 regression test** that performs a real drag from the tray onto the canvas
+through dnd-kit's pointer pipeline (see `docs/WHITEBOARD_DESIGN.md`).
+
+| Suite | File | Tests |
+|---|---|---|
+| Board geometry (pure) | `src/board/layout.test.ts` | 34 |
+| Board store (pure + localStorage) | `src/board/store.test.ts` | 16 |
+| Board state + per-user isolation | `src/board/useBoards.test.tsx` | 16 |
+| Board UI (management, cards) | `src/board/BoardView.test.tsx` | 11 |
+| **DEF-03** drag tray → canvas | `src/board/dragDrop.test.tsx` | 1 |
+| App (identity, notes, folders, stars, search, sharing, board) | `src/App.test.tsx` | 21 |
+| Workspace hook | `src/hooks/useWorkspace.test.tsx` | 12 |
+| API client | `src/api/client.test.ts` | 11 |
+| Identity switcher | `src/components/IdentitySwitcher.test.tsx` | 3 |
 
 ## 10. Use the REST API
 
@@ -445,6 +461,12 @@ are normalised to timezone-aware UTC on both (see
   validator is implemented and unit-tested with locally generated keys.
 - **OIDC users are not auto-provisioned**; an unknown `sub` is rejected by
   design.
+- **Whiteboards are client-side and per-user.** A board is a spatial view of the
+  caller's existing notes; layout is stored in `localStorage`, so boards do not
+  sync across devices and are lost if storage is cleared. Boards are not shared.
+  This is deliberate (the board adds no domain state and grants no access) and
+  reversible behind the `BoardStore` interface — see
+  [ADR-010](docs/ADR/ADR-010-whiteboard-client-side.md).
 
 ## 17. Deliberately deferred capabilities
 
@@ -454,6 +476,10 @@ are normalised to timezone-aware UTC on both (see
 - Metrics/tracing and an audit-log sink.
 - Soft-delete/trash and note history beyond the single `version` counter.
 - Auto-provisioning of OIDC users.
+- Server-backed whiteboards (boards currently persist client-side behind the
+  `BoardStore` interface; an `ApiBoardStore` is the documented next step, see
+  [ADR-010](docs/ADR/ADR-010-whiteboard-client-side.md)).
+- Board sharing/collaboration and board connectors/arrows.
 
 Each is an extension point behind an existing port rather than a fake.
 
@@ -605,9 +631,40 @@ presentation-oriented client: every rule is enforced by the backend.
   stars, debounced server-side search/filter/sort, and the full sharing dialog.
   Owners see Move/Share/Delete; READ collaborators get a read-only editor.
 
+### Whiteboard view
+
+The header's **List / Board** toggle switches to a whiteboard: multiple boards,
+a tray of the user's notes, and sticky cards that can be dragged from the tray,
+moved, resized, recoloured, reshaped, pinned, stacked, and auto-arranged
+(by grid, colour, folder, or recency). The canvas supports pan and zoom and four
+cosmetic surfaces.
+
+- **A board is a per-user spatial view of existing notes, not a new kind of
+  note.** A card holds only placement (`x`, `y`, colour, shape, size, z, pinned);
+  the note itself is unchanged and still comes from the workspace. Removing a
+  card removes the placement, never the note.
+- **Boards are keyed by the current user**, like a star or a folder, so switching
+  demo users shows a different board set and no boards leak between users.
+- **Persistence is behind a `BoardStore` interface.** The prototype uses
+  `localStorage` (`LocalStorageBoardStore`); boards are therefore client-side and
+  do not sync across devices. Everything that is *domain* state — notes, folders,
+  stars, sharing, permissions, content, concurrency — remains backend-owned and
+  backend-enforced; the board grants no new access and can only show notes the
+  workspace already returned for that user.
+- **Structure:** `frontend/src/board/` — `types.ts` and `layout.ts` are pure and
+  framework-free; `store.ts` is the persistence seam; `useBoards.ts` owns state;
+  `BoardView` owns the single `DndContext` and renders `NoteTray` + `BoardCanvas`
+  (a `useDroppable`) **inside** it (see DEF-03 below).
+
+The decision and its migration path are recorded in
+[ADR-010](docs/ADR/ADR-010-whiteboard-client-side.md) and
+[`docs/WHITEBOARD_DESIGN.md`](docs/WHITEBOARD_DESIGN.md).
+
 Full API contract and integration assumptions:
 [`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md). Design decisions:
-[ADR-009](docs/ADR/ADR-009-folders-stars-search-rich-text.md).
+[ADR-009](docs/ADR/ADR-009-folders-stars-search-rich-text.md) (folders, stars,
+search, rich text) and [ADR-010](docs/ADR/ADR-010-whiteboard-client-side.md)
+(whiteboard).
 
 ---
 
@@ -621,10 +678,10 @@ src/notes_service/
 ├── presentation/    # FastAPI routers, schemas, middleware, error handlers
 ├── bootstrap/       # settings, composition root, app factory, logging
 └── cli.py           # serve / init-db / seed
-frontend/            # React + TypeScript + Vite workspace (TipTap editor)
+frontend/            # React + TypeScript + Vite workspace (TipTap editor, whiteboard)
 migrations/          # Alembic
 tests/               # domain, application, authentication, security, persistence, api, architecture
-docs/                # ARCHITECTURE, DOMAIN_MODEL, SECURITY, API, FRONTEND_INTEGRATION, ADR/
+docs/                # ARCHITECTURE, DOMAIN_MODEL, SECURITY, API, FRONTEND_INTEGRATION, WHITEBOARD_DESIGN, ADR/
 Dockerfile           # backend image (multi-stage, non-root)
 docker-compose.yml   # db + api + web
 docker/              # api entrypoint + smoke-test.py

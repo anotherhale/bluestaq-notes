@@ -353,3 +353,55 @@ describe("App — error handling", () => {
     expect(await screen.findByText(/demo identity selection is disabled/i)).toBeInTheDocument();
   });
 });
+
+describe("App — whiteboard view", () => {
+  it("toggles between the list view and the board view", async () => {
+    const api = new FakeApiClient();
+    const user = await boot(api);
+
+    // The list workspace is the default.
+    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Board" }));
+    expect(screen.getByRole("button", { name: "Board" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // With no boards yet, the board view shows its empty state.
+    expect(screen.getByText("No boards yet")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "List" }));
+    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("places a note on a board and opens it back in the editor", async () => {
+    const api = new FakeApiClient();
+    api.seedNote(FAKE_ALICE, "Alpha note", "<p>hello</p>");
+    const user = await boot(api);
+
+    await user.click(screen.getByRole("button", { name: "Board" }));
+    await user.click(screen.getByRole("button", { name: "New board" }));
+
+    // Add the tray note to the board, then open it from the card.
+    await user.click(await screen.findByRole("button", { name: "Add Alpha note to board" }));
+    const canvas = screen.getByTestId("board-canvas");
+    await waitFor(() => {
+      expect(within(canvas).getByText("Alpha note")).toBeInTheDocument();
+    });
+
+    // Opening the card body returns to the list view with the note selected.
+    await user.click(within(canvas).getByRole("button", { name: /hello/ }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "List" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+  });
+});

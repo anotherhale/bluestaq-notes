@@ -69,6 +69,16 @@ export interface Workspace {
   draft: NoteDraft;
   isDirty: boolean;
 
+  /**
+   * A cache of fully-loaded notes (with content), keyed by id.
+   *
+   * The board reads previews from this cache. It is populated whenever a note
+   * is fetched and can be warmed on demand via `requestNoteDetail`, so board
+   * components never issue their own requests.
+   */
+  noteDetail: (noteId: string) => Note | undefined;
+  requestNoteDetail: (noteId: string) => void;
+
   // Sharing (owner view)
   permissions: Permission[];
   shareCandidates: User[];
@@ -135,6 +145,10 @@ export function useWorkspace(api: NotesApi): Workspace {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [draft, setDraft] = useState<NoteDraft>({ title: "", content: "" });
+
+  // Fully-loaded notes (with content), so the board can show previews without
+  // issuing its own requests. Never persisted; cleared on identity change.
+  const [noteCache, setNoteCache] = useState<Record<string, Note>>({});
 
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [shareCandidates, setShareCandidates] = useState<User[]>([]);
@@ -288,6 +302,7 @@ export function useWorkspace(api: NotesApi): Workspace {
         setSelectedNote(note);
         setSelectedNoteId(note.id);
         setDraft({ title: note.title, content: note.content });
+        setNoteCache((prev) => ({ ...prev, [note.id]: note }));
         setConflict(null);
         // Only the owner may list permissions; others would receive 403/404.
         if (currentUser && note.owner_id === currentUser.id) {
@@ -375,6 +390,8 @@ export function useWorkspace(api: NotesApi): Workspace {
       setNotesTotal(0);
       setFolders([]);
       setSelectedFolderId(null);
+      setNoteCache({});
+      requestedDetailRef.current.clear();
       setViewState("drive");
       setSearchQueryState("");
       setDebouncedQuery("");
@@ -700,6 +717,26 @@ export function useWorkspace(api: NotesApi): Workspace {
 
   const dismissError = useCallback(() => setError(null), []);
 
+  const noteDetail = useCallback((noteId: string) => noteCache[noteId], [noteCache]);
+
+  // Track ids we have already fetched (or are fetching) so a card can warm its
+  // preview once without triggering a request on every render.
+  const requestedDetailRef = useRef<Set<string>>(new Set());
+  const requestNoteDetail = useCallback(
+    (noteId: string) => {
+      if (requestedDetailRef.current.has(noteId)) return;
+      requestedDetailRef.current.add(noteId);
+      void api
+        .getNote(noteId)
+        .then((note) => setNoteCache((prev) => ({ ...prev, [note.id]: note })))
+        .catch(() => {
+          // Allow a later retry if this fetch failed.
+          requestedDetailRef.current.delete(noteId);
+        });
+    },
+    [api],
+  );
+
   // Auto-dismiss transient notices.
   useEffect(() => {
     if (!notice) return;
@@ -723,6 +760,8 @@ export function useWorkspace(api: NotesApi): Workspace {
     selectedNote,
     draft,
     isDirty,
+    noteDetail,
+    requestNoteDetail,
     permissions,
     shareCandidates,
     loadingIdentities,

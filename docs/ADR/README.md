@@ -14,3 +14,5 @@ and immutable; superseding a decision means adding a new ADR.
 | [ADR-006](ADR-006-sqlite-default-postgresql.md) | SQLite default with PostgreSQL compatibility |
 | [ADR-007](ADR-007-optimistic-concurrency.md) | Optimistic concurrency strategy |
 | [ADR-008](ADR-008-http-error-semantics.md) | HTTP error and inaccessible-resource semantics |
+| [ADR-009](ADR-009-folders-stars-search-rich-text.md) | Folders, per-user stars, search and rich-text content |
+| [ADR-010](ADR-010-whiteboard-client-side.md) | Whiteboards are a client-side spatial view, not a new domain aggregate |

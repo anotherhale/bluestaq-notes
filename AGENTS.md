@@ -101,6 +101,27 @@ things that are easy to get wrong and expensive to rediscover.
   the API only exposes permission lists to owners, so a collaborator cannot know
   its own level. It shows Owned/Shared and lets the backend enforce. Do not
   "fix" this by guessing a level — it would be a lie.
+
+### Whiteboard
+
+- `src/board/` holds the whiteboard. `types.ts` and `layout.ts` are **pure**
+  (no React, no DOM) and are where the geometry lives; keep them that way so they
+  stay unit-testable.
+- **DEF-03 (silent failure):** dnd-kit resolves `useDraggable`/`useDroppable`
+  through React context. A droppable registered **above** the `DndContext` can
+  never receive a drop — with no error and no warning. `BoardView` owns the one
+  `DndContext` and renders `BoardCanvas` (the `useDroppable`) *inside* it. Pinned
+  by `src/board/dragDrop.test.tsx`; if that test is deleted, the bug can return
+  silently.
+- Boards are **per-user, client-side** (`BoardStore` → `LocalStorageBoardStore`),
+  and a card never mutates a note. This is deliberate: see ADR-010. Do not add
+  board endpoints or board sharing without reading it first.
+- A completed drag leaves dnd-kit's global pointer state behind, which breaks
+  later tests in the *same file*. Keep real-drag tests in their own file
+  (`dragDrop.test.tsx`) and use `userEvent`'s pointer API.
+- `npm run typecheck` was once `tsc --noEmit`, which is a **no-op** with this
+  project-references config (it checks zero files). It is now `tsc -b --force`.
+  If type errors slip through, check this script first.
 - All application state lives in `frontend/src/hooks/useWorkspace.ts` (current
   user, view, folder, notes, selection, search, filters, sort, stars,
   permissions). Components are presentational; do not add a second state store.
