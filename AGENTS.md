@@ -126,9 +126,15 @@ things that are easy to get wrong and expensive to rediscover.
   `alembic upgrade head`, seeds demo users (`SEED_DEMO_USERS=true`), then execs
   uvicorn. Compose gates `web` on the API's healthcheck.
 - The frontend image is built with `VITE_API_BASE_URL=""`, which the client
-  treats as **same origin**; nginx (`frontend/docker/nginx.conf`) proxies `/api`,
-  `/health`, `/readiness` to the `api` service. So there is no CORS and no baked
-  hostname. Keep that contract if you change `resolveBaseUrl()`.
+  treats as **same origin**; nginx (`frontend/docker/nginx.conf.template`) proxies
+  `/api`, `/health`, `/readiness` to the `api` service. So there is no CORS and no
+  baked hostname. Keep that contract if you change `resolveBaseUrl()`.
+- Ports are configurable, never hard-coded. Host ports: `API_PORT` / `WEB_PORT`.
+  Container-internal ports: `API_INTERNAL_PORT` (uvicorn) / `WEB_INTERNAL_PORT`
+  (nginx). The nginx config is a `.template` rendered by the nginx image's
+  envsubst step; it substitutes only `${WEB_INTERNAL_PORT}` and `${API_UPSTREAM}`
+  (both from compose) and leaves nginx runtime vars (`$host`, `$remote_addr`, …)
+  untouched. The backend healthcheck reads `$PORT`.
 - Copy `.env.docker.example` → `.env` to override ports/credentials. `.env` is
   git-ignored; `.env.docker.example` is intentionally tracked (it has no secrets).
 - `python3 docker/smoke-test.py` runs 26 end-to-end checks through the proxy

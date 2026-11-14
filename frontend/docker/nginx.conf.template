@@ -1,11 +1,15 @@
-# nginx configuration for the Bluestaq Notes web client.
+# nginx configuration template for the Bluestaq Notes web client.
 #
 # Serves the built SPA and reverse-proxies the API so the browser uses a single
 # origin. Because the API is same-origin, no CORS configuration is required on
 # the backend for this deployment path.
+#
+# This file is processed by the official nginx image's envsubst step at startup,
+# so ${WEB_INTERNAL_PORT} and ${API_UPSTREAM} come from the environment (see
+# docker-compose.yml). Do not hard-code ports here.
 
 server {
-    listen 80;
+    listen ${WEB_INTERNAL_PORT};
     server_name _;
 
     root /usr/share/nginx/html;
@@ -23,10 +27,10 @@ server {
                application/x-javascript text/javascript image/svg+xml;
     gzip_min_length 1024;
 
-    # Forward API calls to the backend service. "api" is the compose service
-    # name, resolved by Docker's embedded DNS.
+    # Forward API calls to the backend service. The upstream host:port comes from
+    # API_UPSTREAM, so a changed backend port needs no edit here.
     location /api/ {
-        proxy_pass http://api:8000;
+        proxy_pass http://${API_UPSTREAM};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -39,10 +43,10 @@ server {
     # Health/readiness probes are also proxied so the whole stack can be checked
     # from a single origin.
     location = /health {
-        proxy_pass http://api:8000/health;
+        proxy_pass http://${API_UPSTREAM}/health;
     }
     location = /readiness {
-        proxy_pass http://api:8000/readiness;
+        proxy_pass http://${API_UPSTREAM}/readiness;
     }
 
     # Long-lived caching for hashed build assets.

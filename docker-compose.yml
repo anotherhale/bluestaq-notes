@@ -70,10 +70,13 @@ services:
       LOG_JSON: ${LOG_JSON:-true}
 
       SEED_DEMO_USERS: "true"
-      PORT: "8000"
+      # Port uvicorn binds inside the container. Published to the host on
+      # API_PORT; the two may differ so you can dodge a host-port collision
+      # without touching anything else.
+      PORT: "${API_INTERNAL_PORT:-8000}"
     # Published for direct API access (curl, OpenAPI docs at /docs).
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-8000}:${API_INTERNAL_PORT:-8000}"
     networks:
       - notes
 
@@ -85,8 +88,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      # Port nginx listens on inside the container (published on WEB_PORT), and
+      # the upstream the SPA's /api requests are proxied to. Both are injected
+      # into nginx.conf.template at container start by the nginx image.
+      WEB_INTERNAL_PORT: "${WEB_INTERNAL_PORT:-80}"
+      API_UPSTREAM: "api:${API_INTERNAL_PORT:-8000}"
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_PORT:-8080}:${WEB_INTERNAL_PORT:-80}"
     networks:
       - notes
 

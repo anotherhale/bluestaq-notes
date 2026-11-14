@@ -509,11 +509,11 @@ orders the startup so `web` only starts once the API is healthy.
 
 ### How the browser talks to the API
 
-The web tier is served by nginx ([`frontend/docker/nginx.conf`](frontend/docker/nginx.conf)),
-which serves the SPA and **reverse-proxies `/api`, `/health`, and `/readiness`
-to the `api` service**. The frontend is built with an empty `VITE_API_BASE_URL`,
-which the client interprets as "same origin", so requests go to `/api/v1/...` on
-the page's own origin. This means:
+The web tier is served by nginx (`frontend/docker/nginx.conf.template`, rendered
+at container start), which serves the SPA and **reverse-proxies `/api`,
+`/health`, and `/readiness` to the `api` service**. The frontend is built with an
+empty `VITE_API_BASE_URL`, which the client interprets as "same origin", so
+requests go to `/api/v1/...` on the page's own origin. This means:
 
 - no CORS configuration is required for the bundled UI, and
 - no backend hostname is baked into the image — the same build works anywhere.
@@ -533,13 +533,21 @@ Common overrides:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `WEB_PORT` | `8080` | Host port for the web client |
-| `API_PORT` | `8000` | Host port for the API |
+| `WEB_PORT` | `8080` | **Host** port for the web client |
+| `API_PORT` | `8000` | **Host** port for the API |
+| `WEB_INTERNAL_PORT` | `80` | Port nginx listens on *inside* the web container |
+| `API_INTERNAL_PORT` | `8000` | Port uvicorn listens on *inside* the api container |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `notes` | Database credentials |
 | `ENVIRONMENT` | `development` | `production` disables demo auth (startup fails if demo auth is on) |
 | `AUTH_DEMO_ENABLED` | `true` | Toggles the demo identity mechanism |
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `120` / `60` | Rate limit |
 | `LOG_LEVEL` / `LOG_JSON` | `INFO` / `true` | Logging |
+
+Host and container-internal ports are separate so a host-port collision can be
+worked around without touching any file — for example `API_PORT=18000` publishes
+the API on `18000` while the container keeps listening on `8000`. If you change
+`API_INTERNAL_PORT`, the web tier's nginx proxy follows automatically (it is
+rendered from `frontend/docker/nginx.conf.template` at container start).
 
 The compose stack runs the API against **PostgreSQL** (not SQLite) to exercise
 the same production-style provider.
