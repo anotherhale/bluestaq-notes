@@ -51,6 +51,8 @@ class ExternalIdentityRepository(Protocol):
 
     def list_for_user(self, user_id: UserId) -> list[ExternalIdentity]: ...
 
+    def list_by_provider(self, provider: str) -> list[ExternalIdentity]: ...
+
 
 @runtime_checkable
 class NoteRepository(Protocol):

@@ -67,6 +67,29 @@ def enforce_rate_limit(principal: PrincipalDep, container: ContainerDep) -> None
 RateLimitDep = Depends(enforce_rate_limit)
 
 
+def enforce_anonymous_rate_limit(request: Request, container: ContainerDep) -> None:
+    """Rate limit an unauthenticated endpoint, keyed by client address.
+
+    The demo-identity discovery endpoint cannot key on a principal (it exists to
+    bootstrap authentication), so it keys on the client address instead. This is
+    best-effort: behind a proxy the address is the proxy's unless a trusted
+    ``X-Forwarded-For`` is configured, which is acceptable for a development
+    affordance.
+    """
+    settings = container.settings
+    if not settings.rate_limit_enabled:
+        return
+    client = request.client.host if request.client else "unknown"
+    decision = container.rate_limiter.check(f"anon:{client}")
+    if not decision.allowed:
+        raise RateLimited(
+            "rate limit exceeded; please retry later", retry_after=decision.retry_after
+        )
+
+
+AnonymousRateLimitDep = Depends(enforce_anonymous_rate_limit)
+
+
 def require_authentication(principal: PrincipalDep) -> Principal:
     """Dependency that guarantees a principal is present (fails closed)."""
     if principal is None:  # pragma: no cover - get_principal already raises

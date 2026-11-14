@@ -26,7 +26,11 @@ from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.base import UseCase
-from notes_service.application.use_cases.identity import GetCurrentUser, ListUsers
+from notes_service.application.use_cases.identity import (
+    GetCurrentUser,
+    ListDemoIdentities,
+    ListUsers,
+)
 from notes_service.application.use_cases.notes import (
     CreateNote,
     DeleteNote,
@@ -68,6 +72,7 @@ class Container:
     # use-case class rather than a bare ``partial``.
     get_current_user: Callable[[], GetCurrentUser]
     list_users: Callable[[], ListUsers]
+    list_demo_identities: Callable[[], ListDemoIdentities]
     create_note: Callable[[], CreateNote]
     get_note: Callable[[], GetNote]
     list_notes: Callable[[], ListNotes]
@@ -141,6 +146,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         clock=clock,
         get_current_user=make(GetCurrentUser),
         list_users=make(ListUsers),
+        list_demo_identities=make(ListDemoIdentities),
         create_note=make(CreateNote),
         get_note=make(GetNote),
         list_notes=make(ListNotes),

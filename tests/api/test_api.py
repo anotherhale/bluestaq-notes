@@ -331,3 +331,37 @@ class TestUsersEndpoint:
 
     def test_users_requires_authentication(self, client: TestClient) -> None:
         assert client.get("/api/v1/users").status_code == 401
+
+
+class TestDemoIdentitiesEndpoint:
+    """The demo-identity discovery endpoint bootstraps the demo selector."""
+
+    def test_lists_active_demo_users_without_authentication(self, client: TestClient) -> None:
+        response = client.get("/api/v1/demo/identities")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["enabled"] is True
+        assert body["header"] == "X-Demo-User-ID"
+        ids = {item["id"] for item in body["items"]}
+        # Alice, Bob, Carol are active; Dave is suspended and must be excluded.
+        assert ALICE in ids
+        assert BOB in ids
+        assert "44444444-4444-4444-4444-444444444444" not in ids
+
+    def test_exposes_only_selection_fields(self, client: TestClient) -> None:
+        body = client.get("/api/v1/demo/identities").json()
+        assert set(body["items"][0]) == {"id", "email", "display_name"}
+
+    def test_hidden_when_demo_auth_disabled(self, app: object, client: TestClient) -> None:
+        container = app.state.container  # type: ignore[attr-defined]
+        container.settings.auth_demo_enabled = False
+        # Hidden, not forbidden: 404 so its existence is not advertised.
+        assert client.get("/api/v1/demo/identities").status_code == 404
+
+    def test_announced_identities_are_usable_for_authentication(self, client: TestClient) -> None:
+        # Every identity the endpoint advertises must actually authenticate.
+        body = client.get("/api/v1/demo/identities").json()
+        for item in body["items"]:
+            me = client.get("/api/v1/me", headers=auth_headers(item["id"]))
+            assert me.status_code == 200
+            assert me.json()["id"] == item["id"]

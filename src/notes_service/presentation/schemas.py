@@ -193,6 +193,38 @@ class UserListResponse(BaseModel):
     meta: PageMeta
 
 
+class DemoIdentityResponse(ResponseModel):
+    """A selectable development demo identity.
+
+    Deliberately the same shape as :class:`UserResponse` (id, email, display
+    name) so the client can treat a demo identity and a shareable user
+    uniformly. It exposes nothing beyond what is needed to pick an identity.
+    """
+
+    id: uuid.UUID
+    email: str
+    display_name: str
+
+    @classmethod
+    def from_domain(cls, user: User) -> DemoIdentityResponse:
+        return cls(
+            id=uuid.UUID(str(user.id)), email=str(user.email), display_name=user.display_name
+        )
+
+
+class DemoIdentityListResponse(BaseModel):
+    """The set of demo identities a client may select, with a header hint.
+
+    ``header`` tells the client exactly which request header selects an
+    identity, so the frontend never hardcodes it.
+    """
+
+    enabled: bool
+    header: str
+    items: list[DemoIdentityResponse]
+    meta: PageMeta
+
+
 class PermissionListResponse(BaseModel):
     items: list[PermissionResponse]
     meta: PageMeta

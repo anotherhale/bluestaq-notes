@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from notes_service.application.ports.identity import DEMO_PROVIDER_NAME
 from notes_service.domain.identity.entities import ExternalIdentity, User
 from notes_service.domain.identity.value_objects import Email, UserId, UserStatus
 from notes_service.infrastructure.db.models import UserRow
@@ -31,7 +32,7 @@ class DemoUserSpec:
     status: UserStatus = UserStatus.ACTIVE
 
 
-DEMO_PROVIDER = "demo"
+DEMO_PROVIDER = DEMO_PROVIDER_NAME
 
 DEMO_USERS: tuple[DemoUserSpec, ...] = (
     DemoUserSpec(

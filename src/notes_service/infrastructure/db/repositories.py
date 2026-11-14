@@ -164,6 +164,18 @@ class SqlAlchemyExternalIdentityRepository:
         )
         return [self._row_to_domain(row) for row in rows]
 
+    def list_by_provider(self, provider: str) -> list[ExternalIdentity]:
+        rows = (
+            self._session.execute(
+                select(ExternalIdentityRow)
+                .where(ExternalIdentityRow.provider == provider)
+                .order_by(ExternalIdentityRow.created_at, ExternalIdentityRow.id)
+            )
+            .scalars()
+            .all()
+        )
+        return [self._row_to_domain(row) for row in rows]
+
     @staticmethod
     def _row_to_domain(row: ExternalIdentityRow) -> ExternalIdentity:
         return ExternalIdentity(

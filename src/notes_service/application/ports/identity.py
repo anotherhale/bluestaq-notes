@@ -11,6 +11,10 @@ from typing import Protocol, runtime_checkable
 
 from notes_service.domain.identity.principal import Principal
 
+#: Provider name used by the development demo identity mechanism. Both the
+#: seeder and the demo identity directory agree on this value.
+DEMO_PROVIDER_NAME = "demo"
+
 
 class AuthenticationContext(Protocol):
     """The transport-neutral view of a request that authentication may inspect.
