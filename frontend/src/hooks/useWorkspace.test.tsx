@@ -24,6 +24,11 @@ describe("useWorkspace", () => {
     const { result } = renderHook(() => useWorkspace(api));
 
     await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    // "My Drive" (the default) shows only owned notes.
+    await waitFor(() => expect(result.current.notes.map((n) => n.id)).toEqual([aliceNote.id]));
+
+    // "All notes" shows owned plus shared.
+    act(() => result.current.setView("all"));
     await waitFor(() => expect(result.current.notes).toHaveLength(2));
 
     const owned = result.current.notes.filter((n) => n.owner_id === FAKE_ALICE);
@@ -110,5 +115,97 @@ describe("useWorkspace", () => {
     });
 
     expect(result.current.error?.status).toBe(0);
+  });
+
+  it("creates a folder and selects it", async () => {
+    const api = new FakeApiClient();
+    const { result } = renderHook(() => useWorkspace(api));
+
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+
+    await act(async () => {
+      await result.current.createFolder("Project Alpha");
+    });
+
+    expect(result.current.folders.map((folder) => folder.name)).toContain("Project Alpha");
+    const created = result.current.folders.find((folder) => folder.name === "Project Alpha");
+    expect(result.current.selectedFolderId).toBe(created?.id);
+  });
+
+  it("scopes notes to the selected folder", async () => {
+    const api = new FakeApiClient();
+    const folder = api.seedFolder(FAKE_ALICE, "F");
+    api.seedNote(FAKE_ALICE, "Inside", "", folder.id);
+    api.seedNote(FAKE_ALICE, "Outside");
+
+    const { result } = renderHook(() => useWorkspace(api));
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    await waitFor(() => expect(result.current.notes).toHaveLength(2));
+
+    act(() => result.current.selectFolder(folder.id));
+    await waitFor(() => expect(result.current.notes.map((n) => n.title)).toEqual(["Inside"]));
+  });
+
+  it("toggles a star optimistically and persists it", async () => {
+    const api = new FakeApiClient();
+    const note = api.seedNote(FAKE_ALICE, "Star me");
+    const { result } = renderHook(() => useWorkspace(api));
+
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    await waitFor(() => expect(result.current.notes).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.toggleStar(note.id, true);
+    });
+
+    expect(result.current.notes[0]?.is_starred).toBe(true);
+    expect(api.isStarredSync(note.id, FAKE_ALICE)).toBe(true);
+  });
+
+  it("rolls back a star when the request fails", async () => {
+    const api = new FakeApiClient();
+    const note = api.seedNote(FAKE_ALICE, "Star me");
+    const { result } = renderHook(() => useWorkspace(api));
+
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    await waitFor(() => expect(result.current.notes).toHaveLength(1));
+
+    api.failNetwork = true;
+    await act(async () => {
+      await result.current.toggleStar(note.id, true);
+    });
+
+    // The optimistic flip was rolled back and an error surfaced.
+    expect(result.current.notes[0]?.is_starred).toBe(false);
+    expect(result.current.error?.status).toBe(0);
+  });
+
+  it("filters notes by the search query (debounced)", async () => {
+    const api = new FakeApiClient();
+    api.seedNote(FAKE_ALICE, "Quarterly Report");
+    api.seedNote(FAKE_ALICE, "Groceries");
+    const { result } = renderHook(() => useWorkspace(api));
+
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    await waitFor(() => expect(result.current.notes).toHaveLength(2));
+
+    act(() => result.current.setSearchQuery("quarter"));
+    await waitFor(() => expect(result.current.notes.map((n) => n.title)).toEqual(["Quarterly Report"]));
+  });
+
+  it("moves a note to a folder and reflects the change", async () => {
+    const api = new FakeApiClient();
+    const folder = api.seedFolder(FAKE_ALICE, "Archive");
+    const note = api.seedNote(FAKE_ALICE, "Movable");
+    const { result } = renderHook(() => useWorkspace(api));
+
+    await waitFor(() => expect(result.current.currentUser?.id).toBe(FAKE_ALICE));
+    await waitFor(() => expect(result.current.notes).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.moveNote(note.id, folder.id);
+    });
+
+    expect(api.getNoteSync(note.id)?.folder_id).toBe(folder.id);
   });
 });

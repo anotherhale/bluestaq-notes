@@ -1,0 +1,98 @@
+# Docker Compose stack for the Bluestaq Notes service.
+#
+# Brings up the whole system with one command:
+#
+#     docker compose up --build
+#
+# Services:
+#   db   - PostgreSQL 16 (the database dependency, runs in its own container)
+#   api  - the FastAPI backend, built from ./Dockerfile
+#   web  - the built React SPA served by nginx, which also proxies /api to api
+#
+# The stack is self-contained: migrations and demo-user seeding run
+# automatically inside the api container on startup, so no manual setup step is
+# required. Everything is configurable through the environment / a .env file
+# (see .env.docker.example).
+
+name: bluestaq-notes
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-notes}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-notes}
+      POSTGRES_DB: ${POSTGRES_DB:-notes}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      # Ready only once the server accepts connections to our database.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-notes} -d ${POSTGRES_DB:-notes}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - notes
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Development mode keeps the demo identity mechanism available so the UI
+      # can switch users. Switch ENVIRONMENT to production (and disable demo
+      # auth) for a hardened deployment; the app refuses to start with an
+      # insecure production configuration.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: "false"
+
+      DATABASE_PROVIDER: postgresql
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-notes}:${POSTGRES_PASSWORD:-notes}@db:5432/${POSTGRES_DB:-notes}
+
+      AUTH_DEMO_ENABLED: ${AUTH_DEMO_ENABLED:-true}
+
+      # Same-origin requests arrive via the nginx proxy, so CORS is not needed
+      # for the bundled frontend. Kept configurable for direct API access.
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+
+      SECURITY_HEADERS_ENABLED: "true"
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-120}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-true}
+
+      SEED_DEMO_USERS: "true"
+      PORT: "8000"
+    # Published for direct API access (curl, OpenAPI docs at /docs).
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks:
+      - notes
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    networks:
+      - notes
+
+volumes:
+  db_data:
+
+networks:
+  notes:
+    driver: bridge

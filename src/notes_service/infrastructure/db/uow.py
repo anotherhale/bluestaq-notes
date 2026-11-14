@@ -16,15 +16,19 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.repositories import (
     ExternalIdentityRepository,
+    FolderRepository,
     NotePermissionRepository,
     NoteRepository,
+    NoteStarRepository,
     UnitOfWork,
     UserRepository,
 )
 from notes_service.infrastructure.db.repositories import (
     SqlAlchemyExternalIdentityRepository,
+    SqlAlchemyFolderRepository,
     SqlAlchemyNotePermissionRepository,
     SqlAlchemyNoteRepository,
+    SqlAlchemyNoteStarRepository,
     SqlAlchemyUserRepository,
 )
 
@@ -40,6 +44,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     external_identities: ExternalIdentityRepository
     notes: NoteRepository
     permissions: NotePermissionRepository
+    folders: FolderRepository
+    stars: NoteStarRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -57,6 +63,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.external_identities = SqlAlchemyExternalIdentityRepository(self._session)
         self.notes = SqlAlchemyNoteRepository(self._session)
         self.permissions = SqlAlchemyNotePermissionRepository(self._session)
+        self.folders = SqlAlchemyFolderRepository(self._session)
+        self.stars = SqlAlchemyNoteStarRepository(self._session)
         return self
 
     def __exit__(

@@ -59,6 +59,34 @@ things that are easy to get wrong and expensive to rediscover.
   allowed via `CORS_ALLOW_ORIGINS`. This trips people up when wiring the
   frontend; the error looks like a network/CORS failure in the browser console.
 
+### Folders, stars, search, rich text (added on top of the above)
+
+- **Folders are flat and owner-scoped** (`domain/notes/folder.py`). No parent
+  hierarchy. A folder is *organisation only*, never a sharing boundary: sharing
+  a note never shares its folder, and a folder never grants access to the notes
+  in it. Deleting a folder reassigns its notes to the root — it never deletes
+  notes.
+- **Only the note owner may move a note** (`PATCH /notes/{id}/folder`). A WRITE
+  collaborator gets **403** (they can read it, so it is not 404). A move never
+  changes the owner or the permission set.
+- **Stars are per-user** (`domain/notes/star.py`, `NoteStarRow`), not a boolean
+  on the note. Note responses expose the *caller's own* `is_starred`. Any reader
+  may star.
+- **Rich text is sanitised HTML, as a domain invariant**: `NoteContent`
+  sanitises via `nh3` on construction (`domain/notes/rich_text.py`), so it runs
+  on write *and* read. Plain text is valid HTML, so no content migration was
+  needed. Never trust client HTML; never add `dangerouslySetInnerHTML`.
+- **Search/filter/sort is server-side** on `GET /notes` via
+  `q`/`view`/`folder_id`/`starred`/`sort`/`limit`/`offset`, applied to the
+  caller's authorized set (SQL `LIKE`). The frontend debounces and never fetches
+  unauthorized notes to filter them.
+- Note responses include `folder_id`, `is_starred`, and `caller_permission`
+  (the caller's own effective level: `"write"` for owner, `"read"`/`"write"` for
+  a collaborator, `null` if unreadable). `caller_permission` is how the client
+  learns whether a collaborator may edit without the server leaking the full
+  permission list to non-owners.
+- Full contract: `docs/FRONTEND_INTEGRATION.md`; design: `docs/ADR/ADR-009`.
+
 ## Frontend
 
 - Only `frontend/src/api/client.ts` calls `fetch`. Components depend on the
@@ -73,3 +101,39 @@ things that are easy to get wrong and expensive to rediscover.
   the API only exposes permission lists to owners, so a collaborator cannot know
   its own level. It shows Owned/Shared and lets the backend enforce. Do not
   "fix" this by guessing a level — it would be a lie.
+- All application state lives in `frontend/src/hooks/useWorkspace.ts` (current
+  user, view, folder, notes, selection, search, filters, sort, stars,
+  permissions). Components are presentational; do not add a second state store.
+- The editor is TipTap (`@tiptap/react` + `starter-kit`, `underline`, `link`,
+  `placeholder`), producing sanitised HTML. Save is **explicit** and uses the
+  backend's `version`; a `409` must preserve the user's draft and show a conflict
+  banner — never silently overwrite. READ collaborators get a read-only editor.
+- Search/filter/sort are server-side (the hook passes `q`/`view`/`folder_id`/
+  `starred`/`sort` to `listNotes` and renders what returns). The search box is
+  debounced; do not fetch unauthorized notes and filter in the browser.
+- Component tests run against `src/test/fakeApiClient.ts`, which mirrors the
+  backend's authorization rules. Keep the fake honest: it is what proves the UI
+  works against a correct backend.
+- `styles.css` holds the base design tokens/layout; `styles.workspace.css`
+  (imported after it in `main.tsx`) holds the Drive-style workspace styles.
+
+## Docker
+
+- `docker compose up --build` starts the whole stack: `db` (postgres:16-alpine),
+  `api` (root `Dockerfile`), `web` (frontend/Dockerfile → nginx). Web is on
+  `:8080`, API on `:8000`.
+- The API entrypoint (`docker/api-entrypoint.sh`) waits for the DB, runs
+  `alembic upgrade head`, seeds demo users (`SEED_DEMO_USERS=true`), then execs
+  uvicorn. Compose gates `web` on the API's healthcheck.
+- The frontend image is built with `VITE_API_BASE_URL=""`, which the client
+  treats as **same origin**; nginx (`frontend/docker/nginx.conf`) proxies `/api`,
+  `/health`, `/readiness` to the `api` service. So there is no CORS and no baked
+  hostname. Keep that contract if you change `resolveBaseUrl()`.
+- Copy `.env.docker.example` → `.env` to override ports/credentials. `.env` is
+  git-ignored; `.env.docker.example` is intentionally tracked (it has no secrets).
+- `python3 docker/smoke-test.py` runs 26 end-to-end checks through the proxy
+  (needs only stdlib + a running stack). Use it to verify the stack after changes.
+- Gotcha: the container runs as non-root, so scripts copied in must be
+  world-readable/executable — the Dockerfile uses explicit `chmod 0755` (a bare
+  `chmod +x` on a `0600` context file yields `0700` and the non-root user cannot
+  read it).

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from notes_service.presentation.api.routers import (
     demo,
+    folders,
     identity,
     notes,
     permissions,
@@ -16,6 +17,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(demo.router)
 api_router.include_router(identity.router)
 api_router.include_router(users.router)
+api_router.include_router(folders.router)
 api_router.include_router(notes.router)
 api_router.include_router(permissions.router)
 

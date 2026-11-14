@@ -1,55 +1,48 @@
 import type { NoteSummary } from "../api/types";
-import { noteDisplayTitle } from "../lib/noteDisplayTitle";
-import { formatRelative } from "../lib/formatDate";
+import { NoteRow, type NoteRowActions } from "./NoteRow";
+
+export type { NoteRowActions };
 
 interface NoteListProps {
   notes: NoteSummary[];
   selectedId: string | null;
   currentUserId: string | null;
-  onSelect: (noteId: string) => void;
+  emptyMessage: string;
+  actions: NoteRowActions;
 }
 
 /**
- * The note list. Each row shows whether the note is owned by the current user
- * or shared with them. It does not claim a permission *level*: the backend only
- * exposes the level to the owner, so inventing one would be a lie.
+ * The note list (the default "My Drive" style list view).
+ *
+ * Ownership is derived from the current user's id against each note's owner_id —
+ * the same rule the backend enforces. Editability uses the note's own
+ * `caller_permission`, which the backend computes for the caller only.
  */
-export function NoteList({ notes, selectedId, currentUserId, onSelect }: NoteListProps) {
+export function NoteList({
+  notes,
+  selectedId,
+  currentUserId,
+  emptyMessage,
+  actions,
+}: NoteListProps) {
   if (notes.length === 0) {
-    return (
-      <p className="note-list__empty">
-        No notes here yet. Create one, or switch users to see notes shared with someone else.
-      </p>
-    );
+    return <p className="note-list__empty">{emptyMessage}</p>;
   }
 
   return (
     <ul className="note-list" role="list">
       {notes.map((note) => {
         const isOwner = currentUserId !== null && note.owner_id === currentUserId;
-        const isSelected = note.id === selectedId;
+        const canEdit = isOwner || note.caller_permission === "write";
         return (
-          <li key={note.id}>
-            <button
-              type="button"
-              className={`note-list__item${isSelected ? " note-list__item--selected" : ""}`}
-              onClick={() => onSelect(note.id)}
-              aria-current={isSelected ? "true" : undefined}
-            >
-              <span className="note-list__item-title">{noteDisplayTitle(note.title)}</span>
-              <span className="note-list__item-meta">
-                <span
-                  className={`badge badge--${isOwner ? "owner" : "shared"}`}
-                  title={isOwner ? "You own this note" : "Shared with you"}
-                >
-                  {isOwner ? "Owned" : "Shared"}
-                </span>
-                <span className="note-list__item-updated">
-                  v{note.version} · {formatRelative(note.updated_at)}
-                </span>
-              </span>
-            </button>
-          </li>
+          <NoteRow
+            key={note.id}
+            note={note}
+            selected={note.id === selectedId}
+            isOwner={isOwner}
+            canEdit={canEdit}
+            actions={actions}
+          />
         );
       })}
     </ul>

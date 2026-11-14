@@ -23,6 +23,7 @@ class DefaultAuthorizationProvider:
     * ``UPDATE`` — owner, or a WRITE collaborator.
     * ``DELETE`` — owner only.
     * ``MANAGE_PERMISSIONS`` — owner only.
+    * ``MOVE``   — owner only.
 
     Anything not explicitly granted is denied.
     """
@@ -51,6 +52,7 @@ class DefaultAuthorizationProvider:
                 if level.includes(PermissionLevel.WRITE):
                     return Decision.allow(f"collaborator_{level.value}")
                 return Decision.deny("insufficient_permission")
-            case Action.DELETE | Action.MANAGE_PERMISSIONS:
-                # Shared users never delete or manage sharing, even with WRITE.
+            case Action.DELETE | Action.MANAGE_PERMISSIONS | Action.MOVE:
+                # Shared users never delete, manage sharing, or reorganise the
+                # owner's drive, even with WRITE.
                 return Decision.deny("owner_only")

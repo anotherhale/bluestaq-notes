@@ -8,6 +8,10 @@
  * It deliberately contains NO authorization logic. It may *hide* controls the
  * backend would reject (for usability), but every action is still enforced by
  * the backend, and backend errors are surfaced verbatim.
+ *
+ * Navigation, search, filtering and sorting are all resolved server-side: the
+ * hook sends the active view/folder/query/sort to the API and renders exactly
+ * what comes back, so it can never display a note the caller may not read.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -17,14 +21,19 @@ import { ApiError, isApiError } from "../api/errors";
 import type {
   CurrentUser,
   DemoIdentity,
+  Folder,
   Note,
+  NoteListQuery,
+  NoteSort,
+  NotesView,
   NoteSummary,
   Permission,
   PermissionLevel,
   User,
 } from "../api/types";
 
-export type WorkspaceView = "mine" | "shared";
+/** The top-level navigation destinations shown in the sidebar. */
+export type NavView = "drive" | "all" | "starred" | "shared";
 
 export interface NoteDraft {
   title: string;
@@ -35,6 +44,9 @@ export interface ConflictState {
   message: string;
 }
 
+/** Delay before a keystroke becomes a search request. */
+const SEARCH_DEBOUNCE_MS = 250;
+
 export interface Workspace {
   // Demo identity
   demoEnabled: boolean;
@@ -42,9 +54,16 @@ export interface Workspace {
   identities: DemoIdentity[];
   currentUser: CurrentUser | null;
 
+  // Navigation and filters
+  view: NavView;
+  selectedFolderId: string | null;
+  searchQuery: string;
+  sort: NoteSort;
+  folders: Folder[];
+
   // Notes
-  view: WorkspaceView;
   notes: NoteSummary[];
+  notesTotal: number;
   selectedNoteId: string | null;
   selectedNote: Note | null;
   draft: NoteDraft;
@@ -58,6 +77,7 @@ export interface Workspace {
   loadingIdentities: boolean;
   loadingNotes: boolean;
   loadingNote: boolean;
+  loadingFolders: boolean;
   saving: boolean;
   deleting: boolean;
   sharing: boolean;
@@ -68,14 +88,22 @@ export interface Workspace {
   // Actions
   selectIdentity: (userId: string) => void;
   refresh: () => void;
-  setView: (view: WorkspaceView) => void;
+  setView: (view: NavView) => void;
+  selectFolder: (folderId: string | null) => void;
+  setSearchQuery: (query: string) => void;
+  setSort: (sort: NoteSort) => void;
   selectNote: (noteId: string) => void;
   clearSelection: () => void;
   updateDraft: (patch: Partial<NoteDraft>) => void;
-  createNote: (input: NoteDraft) => Promise<boolean>;
+  createNote: (input: NoteDraft, folderId?: string | null) => Promise<boolean>;
   saveNote: () => Promise<boolean>;
-  deleteNote: () => Promise<boolean>;
+  deleteNote: (noteId?: string) => Promise<boolean>;
   reloadSelectedNote: () => Promise<void>;
+  toggleStar: (noteId: string, starred: boolean) => Promise<boolean>;
+  moveNote: (noteId: string, folderId: string | null) => Promise<boolean>;
+  createFolder: (name: string) => Promise<boolean>;
+  renameFolder: (folderId: string, name: string) => Promise<boolean>;
+  deleteFolder: (folderId: string) => Promise<boolean>;
   grantPermission: (userId: string, level: PermissionLevel) => Promise<boolean>;
   revokePermission: (userId: string) => Promise<boolean>;
   dismissError: () => void;
@@ -95,8 +123,15 @@ export function useWorkspace(api: NotesApi): Workspace {
   const [identities, setIdentities] = useState<DemoIdentity[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
-  const [view, setViewState] = useState<WorkspaceView>("mine");
+  const [view, setViewState] = useState<NavView>("drive");
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [searchQuery, setSearchQueryState] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [sort, setSortState] = useState<NoteSort>("-updated_at");
+  const [folders, setFolders] = useState<Folder[]>([]);
+
   const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [notesTotal, setNotesTotal] = useState(0);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [draft, setDraft] = useState<NoteDraft>({ title: "", content: "" });
@@ -107,6 +142,7 @@ export function useWorkspace(api: NotesApi): Workspace {
   const [loadingIdentities, setLoadingIdentities] = useState(true);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [loadingNote, setLoadingNote] = useState(false);
+  const [loadingFolders, setLoadingFolders] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -123,6 +159,8 @@ export function useWorkspace(api: NotesApi): Workspace {
     if (!selectedNote) return draft.title.trim().length > 0 || draft.content.length > 0;
     return draft.title !== selectedNote.title || draft.content !== selectedNote.content;
   }, [selectedNote, draft]);
+
+  // -- bootstrap ----------------------------------------------------------
 
   const loadIdentities = useCallback(async () => {
     setLoadingIdentities(true);
@@ -154,20 +192,73 @@ export function useWorkspace(api: NotesApi): Workspace {
     }
   }, [api]);
 
-  const loadNotes = useCallback(async () => {
+  // -- queries ------------------------------------------------------------
+
+  const buildQuery = useCallback(
+    (overrides: { view?: NavView; folderId?: string | null; query?: string; sort?: NoteSort } = {}) => {
+      const activeView = overrides.view ?? view;
+      const folderId = overrides.folderId !== undefined ? overrides.folderId : selectedFolderId;
+      const q = overrides.query !== undefined ? overrides.query : debouncedQuery;
+      const activeSort = overrides.sort ?? sort;
+
+      const viewMap: Record<NavView, NotesView> = {
+        drive: "owned",
+        all: "all",
+        starred: "all",
+        shared: "shared",
+      };
+      // Build the query incrementally so absent filters are omitted entirely
+      // (the client treats a missing key and an undefined value the same, but
+      // building it this way keeps `exactOptionalPropertyTypes` happy).
+      const result: NoteListQuery = { view: viewMap[activeView], sort: activeSort };
+      const trimmed = q.trim();
+      if (trimmed) result.q = trimmed;
+      // A folder selection implies an owned-notes folder filter. Starred and
+      // shared views ignore the folder selection (folders are per-owner).
+      if (activeView === "drive" && folderId) result.folder_id = folderId;
+      if (activeView === "starred") result.starred = true;
+      return result;
+    },
+    [view, selectedFolderId, debouncedQuery, sort],
+  );
+
+  const loadNotes = useCallback(
+    async (overrides: Parameters<typeof buildQuery>[0] = {}) => {
+      if (!api.selectedIdentity()) {
+        setNotes([]);
+        setNotesTotal(0);
+        return;
+      }
+      setLoadingNotes(true);
+      try {
+        const result = await api.listNotes(buildQuery(overrides));
+        setNotes(result.items);
+        setNotesTotal(result.meta.total);
+      } catch (caught) {
+        setNotes([]);
+        setNotesTotal(0);
+        setError(toApiError(caught));
+      } finally {
+        setLoadingNotes(false);
+      }
+    },
+    [api, buildQuery],
+  );
+
+  const loadFolders = useCallback(async () => {
     if (!api.selectedIdentity()) {
-      setNotes([]);
+      setFolders([]);
       return;
     }
-    setLoadingNotes(true);
+    setLoadingFolders(true);
     try {
-      const result = await api.listNotes();
-      setNotes(result.items);
+      const result = await api.listFolders();
+      setFolders(result.items);
     } catch (caught) {
-      setNotes([]);
+      setFolders([]);
       setError(toApiError(caught));
     } finally {
-      setLoadingNotes(false);
+      setLoadingFolders(false);
     }
   }, [api]);
 
@@ -244,9 +335,29 @@ export function useWorkspace(api: NotesApi): Workspace {
   useEffect(() => {
     if (currentUser) {
       void loadNotes();
+      void loadFolders();
       void loadShareCandidates();
     }
-  }, [currentUser, loadNotes, loadShareCandidates]);
+    // loadNotes depends on the active filters; those changes trigger their own
+    // effect below, so this effect intentionally keys on identity only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, loadFolders, loadShareCandidates]);
+
+  // Debounce the search box so a request is not sent on every keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Re-query whenever the resolved filters change (and once the user exists).
+  useEffect(() => {
+    if (currentUser) {
+      void loadNotes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, view, selectedFolderId, debouncedQuery, sort]);
+
+  // -- identity -----------------------------------------------------------
 
   const selectIdentity = useCallback(
     (userId: string) => {
@@ -261,6 +372,12 @@ export function useWorkspace(api: NotesApi): Workspace {
       setError(null);
       setNotice(null);
       setNotes([]);
+      setNotesTotal(0);
+      setFolders([]);
+      setSelectedFolderId(null);
+      setViewState("drive");
+      setSearchQueryState("");
+      setDebouncedQuery("");
       setCurrentUser(null);
       void loadCurrentUser();
     },
@@ -270,13 +387,31 @@ export function useWorkspace(api: NotesApi): Workspace {
   const refresh = useCallback(() => {
     void loadCurrentUser();
     void loadNotes();
+    void loadFolders();
     if (selectedNoteId) {
       void loadNote(selectedNoteId);
     }
-  }, [loadCurrentUser, loadNotes, loadNote, selectedNoteId]);
+  }, [loadCurrentUser, loadNotes, loadFolders, loadNote, selectedNoteId]);
 
-  const setView = useCallback((next: WorkspaceView) => {
+  // -- navigation ---------------------------------------------------------
+
+  const setView = useCallback((next: NavView) => {
     setViewState(next);
+    // Folder selection only applies to the "My Drive" destination.
+    setSelectedFolderId(null);
+  }, []);
+
+  const selectFolder = useCallback((folderId: string | null) => {
+    setSelectedFolderId(folderId);
+    setViewState("drive");
+  }, []);
+
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryState(query);
+  }, []);
+
+  const setSort = useCallback((next: NoteSort) => {
+    setSortState(next);
   }, []);
 
   const selectNote = useCallback(
@@ -298,15 +433,21 @@ export function useWorkspace(api: NotesApi): Workspace {
     setDraft((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // -- mutations ----------------------------------------------------------
+
   const createNote = useCallback(
-    async (input: NoteDraft): Promise<boolean> => {
+    async (input: NoteDraft, folderId?: string | null): Promise<boolean> => {
       if (busyRef.current) return false;
       busyRef.current = true;
       setSaving(true);
       setError(null);
       setConflict(null);
       try {
-        const created = await api.createNote({ title: input.title, content: input.content });
+        const created = await api.createNote({
+          title: input.title,
+          content: input.content,
+          folder_id: folderId ?? null,
+        });
         await loadNotes();
         await loadNote(created.id);
         setNotice("Note created.");
@@ -355,31 +496,163 @@ export function useWorkspace(api: NotesApi): Workspace {
     }
   }, [api, selectedNote, draft, loadNotes]);
 
-  const deleteNote = useCallback(async (): Promise<boolean> => {
-    if (!selectedNote || busyRef.current) return false;
-    busyRef.current = true;
-    setDeleting(true);
-    setError(null);
-    try {
-      await api.deleteNote(selectedNote.id);
-      clearSelection();
-      await loadNotes();
-      setNotice("Note deleted.");
-      return true;
-    } catch (caught) {
-      setError(toApiError(caught));
-      return false;
-    } finally {
-      setDeleting(false);
-      busyRef.current = false;
-    }
-  }, [api, selectedNote, clearSelection, loadNotes]);
+  const deleteNote = useCallback(
+    async (noteId?: string): Promise<boolean> => {
+      const targetId = noteId ?? selectedNote?.id;
+      if (!targetId || busyRef.current) return false;
+      busyRef.current = true;
+      setDeleting(true);
+      setError(null);
+      try {
+        await api.deleteNote(targetId);
+        if (selectedNote?.id === targetId) {
+          clearSelection();
+        }
+        await loadNotes();
+        setNotice("Note deleted.");
+        return true;
+      } catch (caught) {
+        setError(toApiError(caught));
+        return false;
+      } finally {
+        setDeleting(false);
+        busyRef.current = false;
+      }
+    },
+    [api, selectedNote, clearSelection, loadNotes],
+  );
 
   const reloadSelectedNote = useCallback(async () => {
     if (!selectedNoteId) return;
     setConflict(null);
     await loadNote(selectedNoteId);
   }, [selectedNoteId, loadNote]);
+
+  const toggleStar = useCallback(
+    async (noteId: string, starred: boolean): Promise<boolean> => {
+      // Optimistic update: flip the star locally, roll back on failure.
+      const snapshot = notes;
+      setNotes((prev) =>
+        prev.map((note) => (note.id === noteId ? { ...note, is_starred: starred } : note)),
+      );
+      if (selectedNote?.id === noteId) {
+        setSelectedNote({ ...selectedNote, is_starred: starred });
+      }
+      try {
+        const updated = starred ? await api.starNote(noteId) : await api.unstarNote(noteId);
+        if (selectedNote?.id === noteId) {
+          setSelectedNote(updated);
+        }
+        // A star change can add/remove the note from the Starred view.
+        if (view === "starred") {
+          await loadNotes();
+        } else {
+          setNotes((prev) =>
+            prev.map((note) => (note.id === noteId ? { ...note, is_starred: updated.is_starred } : note)),
+          );
+        }
+        return true;
+      } catch (caught) {
+        setNotes(snapshot); // roll back
+        if (selectedNote?.id === noteId) {
+          setSelectedNote(selectedNote);
+        }
+        setError(toApiError(caught));
+        return false;
+      }
+    },
+    [api, notes, selectedNote, view, loadNotes],
+  );
+
+  const moveNote = useCallback(
+    async (noteId: string, folderId: string | null): Promise<boolean> => {
+      if (busyRef.current) return false;
+      busyRef.current = true;
+      setError(null);
+      try {
+        const updated = await api.moveNote(noteId, { folder_id: folderId });
+        if (selectedNote?.id === noteId) {
+          setSelectedNote(updated);
+        }
+        // A move changes which folder view the note belongs to.
+        await loadNotes();
+        setNotice("Note moved.");
+        return true;
+      } catch (caught) {
+        setError(toApiError(caught));
+        return false;
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [api, selectedNote, loadNotes],
+  );
+
+  const createFolder = useCallback(
+    async (name: string): Promise<boolean> => {
+      if (busyRef.current) return false;
+      busyRef.current = true;
+      setError(null);
+      try {
+        const folder = await api.createFolder({ name });
+        await loadFolders();
+        setSelectedFolderId(folder.id);
+        setViewState("drive");
+        setNotice("Folder created.");
+        return true;
+      } catch (caught) {
+        setError(toApiError(caught));
+        return false;
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [api, loadFolders],
+  );
+
+  const renameFolder = useCallback(
+    async (folderId: string, name: string): Promise<boolean> => {
+      if (busyRef.current) return false;
+      busyRef.current = true;
+      setError(null);
+      try {
+        await api.renameFolder(folderId, { name });
+        await loadFolders();
+        setNotice("Folder renamed.");
+        return true;
+      } catch (caught) {
+        setError(toApiError(caught));
+        return false;
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [api, loadFolders],
+  );
+
+  const deleteFolder = useCallback(
+    async (folderId: string): Promise<boolean> => {
+      if (busyRef.current) return false;
+      busyRef.current = true;
+      setError(null);
+      try {
+        await api.deleteFolder(folderId);
+        if (selectedFolderId === folderId) {
+          setSelectedFolderId(null);
+        }
+        await loadFolders();
+        await loadNotes();
+        setNotice("Folder deleted; its notes moved to My Drive.");
+        return true;
+      } catch (caught) {
+        setError(toApiError(caught));
+        return false;
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [api, selectedFolderId, loadFolders, loadNotes],
+  );
 
   const grantPermission = useCallback(
     async (userId: string, level: PermissionLevel): Promise<boolean> => {
@@ -440,7 +713,12 @@ export function useWorkspace(api: NotesApi): Workspace {
     identities,
     currentUser,
     view,
+    selectedFolderId,
+    searchQuery,
+    sort,
+    folders,
     notes,
+    notesTotal,
     selectedNoteId,
     selectedNote,
     draft,
@@ -450,6 +728,7 @@ export function useWorkspace(api: NotesApi): Workspace {
     loadingIdentities,
     loadingNotes,
     loadingNote,
+    loadingFolders,
     saving,
     deleting,
     sharing,
@@ -459,6 +738,9 @@ export function useWorkspace(api: NotesApi): Workspace {
     selectIdentity,
     refresh,
     setView,
+    selectFolder,
+    setSearchQuery,
+    setSort,
     selectNote,
     clearSelection,
     updateDraft,
@@ -466,6 +748,11 @@ export function useWorkspace(api: NotesApi): Workspace {
     saveNote,
     deleteNote,
     reloadSelectedNote,
+    toggleStar,
+    moveNote,
+    createFolder,
+    renameFolder,
+    deleteFolder,
     grantPermission,
     revokePermission,
     dismissError,

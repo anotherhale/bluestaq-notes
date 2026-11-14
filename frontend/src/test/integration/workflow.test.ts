@@ -169,6 +169,106 @@ describe("integration: real backend contract", () => {
   });
 });
 
+describe("integration: folders, stars, search and rich text", () => {
+  // A unique suffix keeps repeated runs against a shared database independent.
+  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  let folderId: string;
+  let noteId: string;
+
+  afterAll(async () => {
+    if (noteId) await alice.deleteNote(noteId).catch(() => undefined);
+    if (folderId) await alice.deleteFolder(folderId).catch(() => undefined);
+  });
+
+  it("creates a folder and a note inside it", async () => {
+    const folder = await alice.createFolder({ name: `Integration ${suffix}` });
+    folderId = folder.id;
+    expect(folder.owner_id).toBe(ALICE);
+
+    const note = await alice.createNote({
+      title: `Folder note ${suffix}`,
+      content: "<h1>Q4</h1><p><strong>bold</strong></p><ul><li>one</li></ul>",
+      folder_id: folderId,
+    });
+    noteId = note.id;
+    expect(note.folder_id).toBe(folderId);
+    // Rich text survives the round trip.
+    expect(note.content).toContain("<h1>Q4</h1>");
+    expect(note.content).toContain("<ul>");
+  });
+
+  it("stores only sanitised HTML", async () => {
+    const note = await alice.createNote({
+      title: `Sanitise ${suffix}`,
+      content: "<script>alert(1)</script><p onclick='x()'>safe</p><a href='javascript:evil()'>x</a>",
+    });
+    expect(note.content).not.toContain("<script");
+    expect(note.content).not.toContain("onclick");
+    expect(note.content).not.toContain("javascript:");
+    expect(note.content).toContain("safe");
+    await alice.deleteNote(note.id);
+  });
+
+  it("stars a note and finds it via the starred filter", async () => {
+    const starred = await alice.starNote(noteId);
+    expect(starred.is_starred).toBe(true);
+
+    const list = await alice.listNotes({ starred: true });
+    expect(list.items.some((note) => note.id === noteId)).toBe(true);
+  });
+
+  it("finds the note by title and by content", async () => {
+    const byTitle = await alice.listNotes({ q: `Folder note ${suffix}` });
+    expect(byTitle.items.some((note) => note.id === noteId)).toBe(true);
+
+    const byContent = await alice.listNotes({ q: "bold" });
+    expect(byContent.items.some((note) => note.id === noteId)).toBe(true);
+  });
+
+  it("filters by folder", async () => {
+    const list = await alice.listNotes({ folder_id: folderId });
+    expect(list.items.some((note) => note.id === noteId)).toBe(true);
+    expect(list.items.every((note) => note.folder_id === folderId)).toBe(true);
+  });
+
+  it("moves a note back to the root without changing its owner", async () => {
+    const moved = await alice.moveNote(noteId, { folder_id: null });
+    expect(moved.folder_id).toBeNull();
+    expect(moved.owner_id).toBe(ALICE);
+  });
+
+  it("rejects a move by a non-owner with 403", async () => {
+    await alice.grantPermission(noteId, { user_id: BOB, permission: "write" });
+    const error = await bob.moveNote(noteId, { folder_id: null }).catch((c: unknown) => c);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(403);
+    await alice.revokePermission(noteId, BOB);
+  });
+
+  it("reports another user's folder as 404", async () => {
+    const error = await bob
+      .renameFolder(folderId, { name: "hijacked" })
+      .catch((c: unknown) => c);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(404);
+  });
+
+  it("deletes a folder but keeps its notes (moved to root)", async () => {
+    const folder = await alice.createFolder({ name: `Temp ${suffix}` });
+    const note = await alice.createNote({
+      title: `Survivor ${suffix}`,
+      content: "kept",
+      folder_id: folder.id,
+    });
+
+    await alice.deleteFolder(folder.id);
+
+    const after = await alice.getNote(note.id);
+    expect(after.folder_id).toBeNull();
+    await alice.deleteNote(note.id);
+  });
+});
+
 afterAll(() => {
   // Best-effort cleanup if a test failed before deleting the note.
   if (createdNoteId) {

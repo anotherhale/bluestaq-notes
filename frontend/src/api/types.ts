@@ -38,6 +38,9 @@ export interface NoteSummary {
   owner_id: string;
   title: string;
   version: number;
+  folder_id: string | null;
+  is_starred: boolean;
+  caller_permission: PermissionLevel | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,7 +50,39 @@ export interface Note extends NoteSummary {
   content: string;
 }
 
+/** A folder owned by the current user. */
+export interface Folder {
+  id: string;
+  owner_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type PermissionLevel = "read" | "write";
+
+/** The list scopes the backend understands (`view` query parameter). */
+export type NotesView = "all" | "owned" | "shared";
+
+/** Sort keys accepted by `GET /notes?sort=`. */
+export type NoteSort =
+  | "updated_at"
+  | "-updated_at"
+  | "created_at"
+  | "-created_at"
+  | "title"
+  | "-title";
+
+/** Query parameters accepted by `GET /api/v1/notes`. */
+export interface NoteListQuery {
+  q?: string;
+  view?: NotesView;
+  folder_id?: string | null;
+  starred?: boolean;
+  sort?: NoteSort;
+  limit?: number;
+  offset?: number;
+}
 
 /** A permission grant (`PermissionResponse`). */
 export interface Permission {
@@ -78,10 +113,16 @@ export interface PermissionList {
   meta: PageMeta;
 }
 
+export interface FolderList {
+  items: Folder[];
+  meta: PageMeta;
+}
+
 /** Request body for creating a note. */
 export interface NoteCreateInput {
   title: string;
   content: string;
+  folder_id?: string | null;
 }
 
 /** Request body for updating a note (includes the expected version). */
@@ -89,6 +130,16 @@ export interface NoteUpdateInput {
   title: string;
   content: string;
   version: number;
+}
+
+/** Request body for moving a note (`null` moves it to the root). */
+export interface NoteMoveInput {
+  folder_id: string | null;
+}
+
+/** Request body for creating/renaming a folder. */
+export interface FolderInput {
+  name: string;
 }
 
 /** Request body for granting/upgrading a permission. */

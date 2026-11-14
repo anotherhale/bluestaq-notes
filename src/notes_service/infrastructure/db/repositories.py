@@ -10,7 +10,7 @@ import uuid
 from typing import Any, cast
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
@@ -24,9 +24,12 @@ from notes_service.domain.identity.value_objects import (
     UserId,
     UserStatus,
 )
+from notes_service.domain.notes.folder import Folder
 from notes_service.domain.notes.note import Note
 from notes_service.domain.notes.permission import NotePermission, NotePermissionId
 from notes_service.domain.notes.value_objects import (
+    FolderId,
+    FolderName,
     NoteContent,
     NoteId,
     NoteTitle,
@@ -35,8 +38,10 @@ from notes_service.domain.notes.value_objects import (
 )
 from notes_service.infrastructure.db.models import (
     ExternalIdentityRow,
+    FolderRow,
     NotePermissionRow,
     NoteRow,
+    NoteStarRow,
     UserRow,
 )
 
@@ -78,6 +83,17 @@ def _note_to_domain(row: NoteRow, permissions: list[NotePermission]) -> Note:
         created_at=row.created_at,
         updated_at=row.updated_at,
         permissions=permissions,
+        folder_id=FolderId(str(row.folder_id)) if row.folder_id is not None else None,
+    )
+
+
+def _folder_to_domain(row: FolderRow) -> Folder:
+    return Folder(
+        id=FolderId(str(row.id)),
+        owner_id=UserId(str(row.owner_id)),
+        name=FolderName(row.name),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
@@ -198,6 +214,7 @@ class SqlAlchemyNoteRepository:
                 title=str(note.title),
                 content=str(note.content),
                 version=int(note.version),
+                folder_id=_as_uuid(note.folder_id) if note.folder_id is not None else None,
                 created_at=note.created_at,
                 updated_at=note.updated_at,
             )
@@ -208,15 +225,7 @@ class SqlAlchemyNoteRepository:
         row = self._session.get(NoteRow, _as_uuid(note_id))
         if row is None:
             return None
-        permissions = [
-            _permission_to_domain(p)
-            for p in self._session.execute(
-                select(NotePermissionRow).where(NotePermissionRow.note_id == row.id)
-            )
-            .scalars()
-            .all()
-        ]
-        return _note_to_domain(row, permissions)
+        return self._hydrate(row)
 
     def save(self, note: Note, *, expected_version: int | None = None) -> None:
         """Atomically update a note's scalar fields under optimistic concurrency.
@@ -229,6 +238,7 @@ class SqlAlchemyNoteRepository:
             "title": str(note.title),
             "content": str(note.content),
             "version": int(note.version),
+            "folder_id": _as_uuid(note.folder_id) if note.folder_id is not None else None,
             "updated_at": note.updated_at,
         }
         stmt = update(NoteRow).where(NoteRow.id == _as_uuid(note.id))
@@ -244,37 +254,73 @@ class SqlAlchemyNoteRepository:
                 actual=int(current) if current is not None else int(note.version),
             )
 
+    def save_placement(self, note: Note) -> None:
+        """Persist only folder placement + ``updated_at``; never touch version.
+
+        Placement is not a content revision, so this write is deliberately
+        version-free: a move must never make a concurrent content edit's version
+        check fail, and vice versa.
+        """
+        self._session.execute(
+            update(NoteRow)
+            .where(NoteRow.id == _as_uuid(note.id))
+            .values(
+                folder_id=_as_uuid(note.folder_id) if note.folder_id is not None else None,
+                updated_at=note.updated_at,
+            )
+        )
+
     def delete(self, note: Note) -> None:
         row = self._session.get(NoteRow, _as_uuid(note.id))
         if row is not None:
             self._session.delete(row)
 
-    def list_accessible(self, user_id: UserId, *, limit: int, offset: int, sort: str) -> list[Note]:
+    def list_accessible(
+        self,
+        user_id: UserId,
+        *,
+        limit: int,
+        offset: int,
+        sort: str,
+        query: str | None = None,
+        view: str = "all",
+        folder_id: FolderId | None = None,
+        starred_only: bool = False,
+    ) -> list[Note]:
         uid = _as_uuid(user_id)
         # A note is accessible if the user owns it or holds any permission.
         # DISTINCT collapses the (owner + redundant grant) case so a note never
-        # appears twice.
+        # appears twice. The permission join is used *only* to widen visibility
+        # for the caller; it is scoped to the caller's own user id, so another
+        # user's grants can never surface a note here.
         accessible = (
             select(NoteRow.id)
             .outerjoin(NotePermissionRow, NotePermissionRow.note_id == NoteRow.id)
             .where((NoteRow.owner_id == uid) | (NotePermissionRow.user_id == uid))
             .distinct()
         )
-        order = self._order_by(sort)
+        stmt = select(NoteRow).where(NoteRow.id.in_(accessible))
+        stmt = self._apply_filters(
+            stmt, uid=uid, query=query, view=view, folder_id=folder_id, starred_only=starred_only
+        )
         rows = (
-            self._session.execute(
-                select(NoteRow)
-                .where(NoteRow.id.in_(accessible))
-                .order_by(*order)
-                .limit(limit)
-                .offset(offset)
-            )
+            self._session.execute(stmt.order_by(*self._order_by(sort)).limit(limit).offset(offset))
             .scalars()
             .all()
         )
-        return [self._hydrate(row) for row in rows]
+        notes = [self._hydrate(row) for row in rows]
+        self._annotate_stars(notes, uid)
+        return notes
 
-    def count_accessible(self, user_id: UserId) -> int:
+    def count_accessible(
+        self,
+        user_id: UserId,
+        *,
+        query: str | None = None,
+        view: str = "all",
+        folder_id: FolderId | None = None,
+        starred_only: bool = False,
+    ) -> int:
         uid = _as_uuid(user_id)
         accessible = (
             select(NoteRow.id)
@@ -282,11 +328,72 @@ class SqlAlchemyNoteRepository:
             .where((NoteRow.owner_id == uid) | (NotePermissionRow.user_id == uid))
             .distinct()
         )
-        return int(
-            self._session.execute(
-                select(func.count()).select_from(accessible.subquery())
-            ).scalar_one()
+        # ``view``/``query``/``folder``/``starred`` filters must apply to the
+        # *outer* query over NoteRow, so build the filtered note query and count
+        # its rows. Counting must use the same filters as listing, or pagination
+        # metadata would disagree with the page contents.
+        filtered = select(NoteRow).where(NoteRow.id.in_(accessible))
+        filtered = self._apply_filters(
+            filtered,
+            uid=uid,
+            query=query,
+            view=view,
+            folder_id=folder_id,
+            starred_only=starred_only,
         )
+        count_stmt = select(func.count()).select_from(filtered.subquery())
+        return int(self._session.execute(count_stmt).scalar_one())
+
+    def _apply_filters(
+        self,
+        stmt: Any,
+        *,
+        uid: uuid.UUID,
+        query: str | None,
+        view: str,
+        folder_id: FolderId | None,
+        starred_only: bool,
+    ) -> Any:
+        if view == "owned":
+            stmt = stmt.where(NoteRow.owner_id == uid)
+        elif view == "shared":
+            stmt = stmt.where(NoteRow.owner_id != uid)
+        if folder_id is not None:
+            # Folder membership is meaningful only for the owner's own notes.
+            stmt = stmt.where(NoteRow.owner_id == uid, NoteRow.folder_id == _as_uuid(folder_id))
+        if starred_only:
+            starred = select(NoteStarRow.note_id).where(NoteStarRow.user_id == uid)
+            stmt = stmt.where(NoteRow.id.in_(starred))
+        if query:
+            # Case-insensitive substring match on title OR content. SQLite's LIKE
+            # is case-insensitive for ASCII by default; lower() makes it explicit
+            # and portable to PostgreSQL.
+            needle = f"%{query.lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(NoteRow.title).like(needle),
+                    func.lower(NoteRow.content).like(needle),
+                )
+            )
+        return stmt
+
+    def _annotate_stars(self, notes: list[Note], uid: uuid.UUID) -> None:
+        """Fill ``is_starred`` for the caller on the given notes, in one query."""
+        if not notes:
+            return
+        ids = [_as_uuid(note.id) for note in notes]
+        starred_ids = {
+            str(row)
+            for row in self._session.execute(
+                select(NoteStarRow.note_id).where(
+                    NoteStarRow.user_id == uid, NoteStarRow.note_id.in_(ids)
+                )
+            )
+            .scalars()
+            .all()
+        }
+        for note in notes:
+            note.is_starred = str(note.id) in starred_ids
 
     def _hydrate(self, row: NoteRow) -> Note:
         permissions = [
@@ -311,6 +418,92 @@ class SqlAlchemyNoteRepository:
         ordered: ColumnElement[Any] = column.desc() if descending else column.asc()
         # Secondary key keeps pagination stable when the primary key ties.
         return [ordered, NoteRow.id.asc()]
+
+
+class SqlAlchemyFolderRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, folder: Folder) -> None:
+        self._session.add(
+            FolderRow(
+                id=_as_uuid(folder.id),
+                owner_id=_as_uuid(folder.owner_id),
+                name=str(folder.name),
+                created_at=folder.created_at,
+                updated_at=folder.updated_at,
+            )
+        )
+        self._session.flush()
+
+    def get(self, folder_id: FolderId) -> Folder | None:
+        row = self._session.get(FolderRow, _as_uuid(folder_id))
+        return _folder_to_domain(row) if row else None
+
+    def save(self, folder: Folder) -> None:
+        self._session.execute(
+            update(FolderRow)
+            .where(FolderRow.id == _as_uuid(folder.id))
+            .values(name=str(folder.name), updated_at=folder.updated_at)
+        )
+
+    def delete(self, folder: Folder) -> None:
+        row = self._session.get(FolderRow, _as_uuid(folder.id))
+        if row is not None:
+            self._session.delete(row)
+
+    def list_for_owner(self, owner_id: UserId) -> list[Folder]:
+        rows = (
+            self._session.execute(
+                select(FolderRow)
+                .where(FolderRow.owner_id == _as_uuid(owner_id))
+                .order_by(func.lower(FolderRow.name), FolderRow.id)
+            )
+            .scalars()
+            .all()
+        )
+        return [_folder_to_domain(row) for row in rows]
+
+    def name_exists(self, owner_id: UserId, name: str) -> bool:
+        return (
+            self._session.execute(
+                select(FolderRow.id).where(
+                    FolderRow.owner_id == _as_uuid(owner_id),
+                    func.lower(FolderRow.name) == name.lower(),
+                )
+            ).scalar_one_or_none()
+            is not None
+        )
+
+
+class SqlAlchemyNoteStarRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, note_id: NoteId, user_id: UserId) -> None:
+        if self.exists(note_id, user_id):
+            return
+        self._session.add(NoteStarRow(note_id=_as_uuid(note_id), user_id=_as_uuid(user_id)))
+
+    def remove(self, note_id: NoteId, user_id: UserId) -> bool:
+        result = self._session.execute(
+            sql_delete(NoteStarRow).where(
+                NoteStarRow.note_id == _as_uuid(note_id),
+                NoteStarRow.user_id == _as_uuid(user_id),
+            )
+        )
+        return cast(CursorResult[Any], result).rowcount > 0
+
+    def exists(self, note_id: NoteId, user_id: UserId) -> bool:
+        return (
+            self._session.execute(
+                select(NoteStarRow.note_id).where(
+                    NoteStarRow.note_id == _as_uuid(note_id),
+                    NoteStarRow.user_id == _as_uuid(user_id),
+                )
+            ).scalar_one_or_none()
+            is not None
+        )
 
 
 class SqlAlchemyNotePermissionRepository:
@@ -375,7 +568,9 @@ class SqlAlchemyNotePermissionRepository:
 
 __all__ = [
     "SqlAlchemyExternalIdentityRepository",
+    "SqlAlchemyFolderRepository",
     "SqlAlchemyNotePermissionRepository",
     "SqlAlchemyNoteRepository",
+    "SqlAlchemyNoteStarRepository",
     "SqlAlchemyUserRepository",
 ]

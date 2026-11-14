@@ -67,6 +67,14 @@ class NoteRow(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Null means the note lives in its owner's root ("My Drive"). SET NULL on
+    # folder deletion so a deleted folder can never orphan a note.
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType,
+        ForeignKey("folders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow
@@ -80,7 +88,45 @@ class NoteRow(Base):
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint("length(title) >= 1", name="title_not_empty"),
         Index("ix_notes_owner_id_updated_at", "owner_id", "updated_at"),
+        Index("ix_notes_owner_id_folder_id", "owner_id", "folder_id"),
     )
+
+
+class FolderRow(Base):
+    __tablename__ = "folders"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    __table_args__ = (
+        CheckConstraint("length(name) >= 1", name="name_not_empty"),
+        # Folder names are unique per owner: two folders with the same name would
+        # be indistinguishable in the navigation tree.
+        UniqueConstraint("owner_id", "name", name="uq_folders_owner_id_name"),
+    )
+
+
+class NoteStarRow(Base):
+    """A per-user star on a note. Composite primary key; no surrogate id needed."""
+
+    __tablename__ = "note_stars"
+
+    note_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (Index("ix_note_stars_user_id_note_id", "user_id", "note_id"),)
 
 
 class NotePermissionRow(Base):
@@ -109,4 +155,11 @@ class NotePermissionRow(Base):
     )
 
 
-__all__ = ["ExternalIdentityRow", "NotePermissionRow", "NoteRow", "UserRow"]
+__all__ = [
+    "ExternalIdentityRow",
+    "FolderRow",
+    "NotePermissionRow",
+    "NoteRow",
+    "NoteStarRow",
+    "UserRow",
+]

@@ -31,6 +31,12 @@ export function App({ api }: AppProps) {
         demoEnabled={workspace.demoEnabled}
         demoHeader={workspace.demoHeader}
         identities={workspace.identities}
+        searchQuery={workspace.searchQuery}
+        sort={workspace.sort}
+        resultCount={workspace.notesTotal}
+        loadingNotes={workspace.loadingNotes}
+        onQueryChange={workspace.setSearchQuery}
+        onSortChange={workspace.setSort}
         onSelectIdentity={workspace.selectIdentity}
         onRefresh={workspace.refresh}
         switchingDisabled={switchingDisabled}

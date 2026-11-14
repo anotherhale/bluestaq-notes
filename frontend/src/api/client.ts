@@ -16,9 +16,14 @@ import { ApiError, type ValidationDetail } from "./errors";
 import type {
   CurrentUser,
   DemoIdentityList,
+  Folder,
+  FolderInput,
+  FolderList,
   Note,
   NoteCreateInput,
   NoteList,
+  NoteListQuery,
+  NoteMoveInput,
   NoteUpdateInput,
   Permission,
   PermissionGrantInput,
@@ -40,11 +45,18 @@ export interface NotesApi {
   /** The currently selected demo identity id, if any. */
   selectedIdentity(): string | null;
   listUsers(): Promise<UserList>;
-  listNotes(): Promise<NoteList>;
+  listNotes(query?: NoteListQuery): Promise<NoteList>;
   createNote(input: NoteCreateInput): Promise<Note>;
   getNote(noteId: string): Promise<Note>;
   updateNote(noteId: string, input: NoteUpdateInput): Promise<Note>;
   deleteNote(noteId: string): Promise<void>;
+  moveNote(noteId: string, input: NoteMoveInput): Promise<Note>;
+  starNote(noteId: string): Promise<Note>;
+  unstarNote(noteId: string): Promise<Note>;
+  listFolders(): Promise<FolderList>;
+  createFolder(input: FolderInput): Promise<Folder>;
+  renameFolder(folderId: string, input: FolderInput): Promise<Folder>;
+  deleteFolder(folderId: string): Promise<void>;
   listPermissions(noteId: string): Promise<PermissionList>;
   grantPermission(noteId: string, input: PermissionGrantInput): Promise<Permission>;
   revokePermission(noteId: string, userId: string): Promise<void>;
@@ -55,8 +67,15 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 
 function resolveBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL;
-  const base = (configured && configured.trim()) || DEFAULT_BASE_URL;
-  return base.replace(/\/+$/, "");
+  // An explicitly-provided value always wins. The empty string means "same
+  // origin": requests go to /api/v1/... on the page's own origin. That is how
+  // the Docker image serves the SPA behind a reverse proxy that forwards /api
+  // to the backend, so no hostname is baked into the build and no CORS is
+  // needed. When the variable is unset, fall back to the local dev default.
+  if (configured !== undefined) {
+    return configured.trim().replace(/\/+$/, "");
+  }
+  return DEFAULT_BASE_URL;
 }
 
 /** Parse the backend error envelope into an ApiError. */
@@ -203,8 +222,17 @@ export class HttpNotesApi implements NotesApi {
     return this.request<UserList>("GET", "/api/v1/users");
   }
 
-  listNotes(): Promise<NoteList> {
-    return this.request<NoteList>("GET", "/api/v1/notes");
+  listNotes(query: NoteListQuery = {}): Promise<NoteList> {
+    const params = new URLSearchParams();
+    if (query.q) params.set("q", query.q);
+    if (query.view) params.set("view", query.view);
+    if (query.folder_id) params.set("folder_id", query.folder_id);
+    if (query.starred) params.set("starred", "true");
+    if (query.sort) params.set("sort", query.sort);
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.offset !== undefined) params.set("offset", String(query.offset));
+    const suffix = params.toString();
+    return this.request<NoteList>("GET", `/api/v1/notes${suffix ? `?${suffix}` : ""}`);
   }
 
   createNote(input: NoteCreateInput): Promise<Note> {
@@ -223,6 +251,38 @@ export class HttpNotesApi implements NotesApi {
 
   deleteNote(noteId: string): Promise<void> {
     return this.request<void>("DELETE", `/api/v1/notes/${encodeURIComponent(noteId)}`);
+  }
+
+  moveNote(noteId: string, input: NoteMoveInput): Promise<Note> {
+    return this.request<Note>("PATCH", `/api/v1/notes/${encodeURIComponent(noteId)}/folder`, {
+      body: input,
+    });
+  }
+
+  starNote(noteId: string): Promise<Note> {
+    return this.request<Note>("PUT", `/api/v1/notes/${encodeURIComponent(noteId)}/star`);
+  }
+
+  unstarNote(noteId: string): Promise<Note> {
+    return this.request<Note>("DELETE", `/api/v1/notes/${encodeURIComponent(noteId)}/star`);
+  }
+
+  listFolders(): Promise<FolderList> {
+    return this.request<FolderList>("GET", "/api/v1/folders");
+  }
+
+  createFolder(input: FolderInput): Promise<Folder> {
+    return this.request<Folder>("POST", "/api/v1/folders", { body: input });
+  }
+
+  renameFolder(folderId: string, input: FolderInput): Promise<Folder> {
+    return this.request<Folder>("PATCH", `/api/v1/folders/${encodeURIComponent(folderId)}`, {
+      body: input,
+    });
+  }
+
+  deleteFolder(folderId: string): Promise<void> {
+    return this.request<void>("DELETE", `/api/v1/folders/${encodeURIComponent(folderId)}`);
   }
 
   listPermissions(noteId: string): Promise<PermissionList> {

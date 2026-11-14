@@ -120,4 +120,90 @@ describe("HttpNotesApi", () => {
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe("http://backend.test/api/v1/notes");
   });
+
+  it("uses a same-origin (relative) base URL when VITE_API_BASE_URL is empty", async () => {
+    // This is the Docker case: the SPA is served by a reverse proxy that
+    // forwards /api to the backend, so requests must be same-origin.
+    vi.stubEnv("VITE_API_BASE_URL", "");
+    fetchMock.mockResolvedValue(jsonResponse(200, { items: [], meta: { total: 0, limit: 20, offset: 0 } }));
+    const api = new HttpNotesApi();
+    api.selectIdentity("u1");
+
+    await api.listNotes();
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("/api/v1/notes");
+  });
+
+  it("encodes search, filter and sort parameters on the list endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { items: [], meta: { total: 0, limit: 20, offset: 0 } }),
+    );
+    const api = new HttpNotesApi("http://backend.test");
+    api.selectIdentity("u1");
+
+    await api.listNotes({
+      q: "quarterly report",
+      view: "shared",
+      folder_id: "folder-1",
+      starred: true,
+      sort: "title",
+    });
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe("/api/v1/notes");
+    expect(parsed.searchParams.get("q")).toBe("quarterly report");
+    expect(parsed.searchParams.get("view")).toBe("shared");
+    expect(parsed.searchParams.get("folder_id")).toBe("folder-1");
+    expect(parsed.searchParams.get("starred")).toBe("true");
+    expect(parsed.searchParams.get("sort")).toBe("title");
+  });
+
+  it("omits empty query parameters entirely", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { items: [], meta: { total: 0, limit: 20, offset: 0 } }),
+    );
+    const api = new HttpNotesApi("http://backend.test");
+    api.selectIdentity("u1");
+
+    await api.listNotes({});
+
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("http://backend.test/api/v1/notes");
+  });
+
+  it("calls the star and folder endpoints with the right verbs and paths", async () => {
+    // A fresh Response per call: a single mocked Response cannot be read twice.
+    fetchMock.mockImplementation(async () => jsonResponse(200, {}));
+    const api = new HttpNotesApi("http://backend.test");
+    api.selectIdentity("u1");
+
+    await api.starNote("note-1");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://backend.test/api/v1/notes/note-1/star");
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("PUT");
+
+    await api.unstarNote("note-1");
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("DELETE");
+
+    await api.moveNote("note-1", { folder_id: null });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://backend.test/api/v1/notes/note-1/folder");
+    expect((fetchMock.mock.calls[2]?.[1] as RequestInit).method).toBe("PATCH");
+    expect((fetchMock.mock.calls[2]?.[1] as RequestInit).body).toBe(
+      JSON.stringify({ folder_id: null }),
+    );
+
+    await api.listFolders();
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://backend.test/api/v1/folders");
+
+    await api.createFolder({ name: "Alpha" });
+    expect((fetchMock.mock.calls[4]?.[1] as RequestInit).method).toBe("POST");
+
+    await api.renameFolder("f1", { name: "Beta" });
+    expect(fetchMock.mock.calls[5]?.[0]).toBe("http://backend.test/api/v1/folders/f1");
+    expect((fetchMock.mock.calls[5]?.[1] as RequestInit).method).toBe("PATCH");
+
+    await api.deleteFolder("f1");
+    expect((fetchMock.mock.calls[6]?.[1] as RequestInit).method).toBe("DELETE");
+  });
 });

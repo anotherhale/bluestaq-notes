@@ -55,9 +55,20 @@ ownership from anything except `principal.user_id`.**
 |---|---|---|
 | `NoteId` | `uuid.UUID` subclass | `new()`, `parse()` |
 | `NoteTitle` | `str` subclass | trimmed, non-blank, ≤ `MAX_TITLE_LENGTH` (200), no NUL |
-| `NoteContent` | `str` subclass | may be empty, ≤ `MAX_CONTENT_BYTES` (64 KiB UTF-8), no NUL |
+| `NoteContent` | `str` subclass | **sanitised HTML** (see below); may be empty, ≤ `MAX_CONTENT_BYTES` (64 KiB UTF-8), no NUL |
 | `NoteVersion` | `int` subclass | ≥ 1, `next()` increments by one |
+| `FolderId` | `uuid.UUID` subclass | `new()`, `parse()` |
+| `FolderName` | `str` subclass | trimmed, non-blank, ≤ `MAX_FOLDER_NAME_LENGTH` (100), no NUL |
 | `PermissionLevel` | `StrEnum`: `read`, `write` | ordered via `rank`; `includes()`; `parse()` |
+
+`NoteContent` is the sanitisation boundary. Every value is run through
+`sanitize_html` (`notes/rich_text.py`, backed by `nh3`) **on construction**, so
+the invariant holds on both write and read and cannot be bypassed by a new
+transport. The allowlist is exactly the editor's vocabulary (`p`, `br`, `hr`,
+`h1`–`h3`, `strong`/`b`, `em`/`i`, `u`, `s`, `ul`/`ol`/`li`, `blockquote`,
+`code`/`pre`, `a[href]`); scripts, iframes, event handlers and
+`javascript:`/`data:` URLs are removed. Plain text remains valid input, so the
+move from plain text to HTML needs no migration.
 
 ### `NotePermission` (`notes/permission.py`)
 
@@ -75,8 +86,9 @@ Note
 ├── id: NoteId
 ├── owner_id: UserId            # exactly one owner, fixed at creation
 ├── title: NoteTitle
-├── content: NoteContent
+├── content: NoteContent        # sanitised HTML
 ├── version: NoteVersion        # optimistic concurrency
+├── folder_id: FolderId | None  # owner-scoped organisation only
 ├── created_at / updated_at
 └── permissions: list[NotePermission]
 ```
@@ -87,22 +99,53 @@ Note
 2. The owner is never represented by a `NotePermission` (implicitly full
    access) — no self-grant.
 3. A user holds at most one permission; `WRITE` supersedes `READ`.
-4. Only the owner may `update_content`, `grant_permission`, or
-   `revoke_permission`.
+4. Only the owner may `update_content`, `grant_permission`,
+   `revoke_permission`, or change `folder_id`.
 5. At most `MAX_PERMISSIONS_PER_NOTE` (100) grants.
-6. Content mutations bump `version`; sharing changes touch `updated_at` only.
+6. Content mutations bump `version`; sharing and folder changes touch
+   `updated_at` only.
 
 **Behavioural methods:**
 
-- `Note.create(owner_id, title, content, note_id=None)` — factory.
+- `Note.create(owner_id, title, content, folder_id=None, note_id=None)` — factory.
 - `update_content(actor_id, title, content, expected_version, now=None)` —
   owner-only; checks the expected version and increments it.
+- `move_to_folder(actor_id, folder_id, now=None)` — owner-only; sets the folder
+  (or the root). Never changes the owner or the permission set.
 - `grant_permission(actor_id, target_user_id, level, now=None)` — owner-only;
   inserts or upgrades a grant.
 - `revoke_permission(actor_id, target_user_id, now=None) -> bool` — owner-only;
   returns whether a grant was removed.
 - Queries: `is_owned_by`, `effective_level`, `can_read`, `can_write`,
   `can_manage`.
+
+### `Folder` aggregate root (`notes/folder.py`)
+
+A flat, owner-scoped container. There is deliberately **no** parent/child
+hierarchy — the need is "group my notes", and a flat model keeps move/delete
+semantics unambiguous (ADR-009).
+
+```
+Folder
+├── id: FolderId
+├── owner_id: UserId
+├── name: FolderName            # unique per owner
+└── created_at / updated_at
+```
+
+- `Folder.create(owner_id, name, folder_id=None)` — factory.
+- `rename(actor_id, name, now=None)` — owner-only.
+- `assert_owned_by(actor_id)` — raises `InvariantViolation` otherwise.
+
+Folders are **not** a sharing boundary: sharing a note never grants access to
+its folder, and deleting a folder reassigns its notes to the root rather than
+deleting them.
+
+### `NoteStar` (`notes/star.py`)
+
+A per-user bookmark: `(note_id, user_id)`. It is intentionally **not** a field
+on `Note`, so one collaborator starring a note does not star it for everyone.
+Any user who may read a note may star it.
 
 ## Error taxonomy (`domain/errors.py`)
 
@@ -125,5 +168,5 @@ policy replaceable while the invariants stay in the domain.
 
 The domain knows nothing about SQLAlchemy. The mapping lives entirely in
 `infrastructure/db/repositories.py`, which translates `UserRow`/`NoteRow`/
-`NotePermissionRow` rows to and from these domain objects. See
-`docs/ADR/ADR-005-sqlalchemy-repository-uow.md`.
+`NotePermissionRow`/`FolderRow`/`NoteStarRow` rows to and from these domain
+objects. See `docs/ADR/ADR-005-sqlalchemy-repository-uow.md`.

@@ -14,10 +14,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from notes_service.domain.identity.entities import User
+from notes_service.domain.identity.value_objects import UserId
+from notes_service.domain.notes.folder import Folder
 from notes_service.domain.notes.note import Note
 from notes_service.domain.notes.permission import NotePermission
 from notes_service.domain.notes.value_objects import (
     MAX_CONTENT_BYTES,
+    MAX_FOLDER_NAME_LENGTH,
     MAX_TITLE_LENGTH,
     PermissionLevel,
 )
@@ -70,12 +73,23 @@ class CurrentUserResponse(ResponseModel):
         )
 
 
+# -- shared ---------------------------------------------------------------
+
+
+class PageMeta(BaseModel):
+    total: int
+    limit: int
+    offset: int
+
+
 # -- notes ----------------------------------------------------------------
 
 
 class NoteCreateRequest(StrictModel):
     title: str = Field(min_length=1, max_length=MAX_TITLE_LENGTH)
     content: str = Field(default="", max_length=MAX_CONTENT_BYTES)
+    # Optional placement at creation; omitted means the owner's root.
+    folder_id: uuid.UUID | None = None
 
     @field_validator("title")
     @classmethod
@@ -99,23 +113,38 @@ class NoteUpdateRequest(StrictModel):
         return value
 
 
+class NoteMoveRequest(StrictModel):
+    """Move a note into a folder (``folder_id``) or to the root (``null``)."""
+
+    folder_id: uuid.UUID | None = None
+
+
 class NoteResponse(ResponseModel):
     id: uuid.UUID
     owner_id: uuid.UUID
     title: str
     content: str
     version: int
+    folder_id: uuid.UUID | None
+    is_starred: bool
+    # The caller's *own* effective level. Exposing only the caller's level (not
+    # the full collaborator list) is what lets a collaborator know they can edit
+    # without leaking who else the note is shared with.
+    caller_permission: PermissionLevel | None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, note: Note) -> NoteResponse:
+    def from_domain(cls, note: Note, *, caller_id: uuid.UUID) -> NoteResponse:
         return cls(
             id=uuid.UUID(str(note.id)),
             owner_id=uuid.UUID(str(note.owner_id)),
             title=str(note.title),
             content=str(note.content),
             version=int(note.version),
+            folder_id=uuid.UUID(str(note.folder_id)) if note.folder_id is not None else None,
+            is_starred=note.is_starred,
+            caller_permission=note.effective_level(UserId(str(caller_id))),
             created_at=note.created_at,
             updated_at=note.updated_at,
         )
@@ -128,19 +157,73 @@ class NoteSummaryResponse(ResponseModel):
     owner_id: uuid.UUID
     title: str
     version: int
+    folder_id: uuid.UUID | None
+    is_starred: bool
+    caller_permission: PermissionLevel | None
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, note: Note) -> NoteSummaryResponse:
+    def from_domain(cls, note: Note, *, caller_id: uuid.UUID) -> NoteSummaryResponse:
         return cls(
             id=uuid.UUID(str(note.id)),
             owner_id=uuid.UUID(str(note.owner_id)),
             title=str(note.title),
             version=int(note.version),
+            folder_id=uuid.UUID(str(note.folder_id)) if note.folder_id is not None else None,
+            is_starred=note.is_starred,
+            caller_permission=note.effective_level(UserId(str(caller_id))),
             created_at=note.created_at,
             updated_at=note.updated_at,
         )
+
+
+# -- folders --------------------------------------------------------------
+
+
+class FolderCreateRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=MAX_FOLDER_NAME_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name must not be blank")
+        return value
+
+
+class FolderRenameRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=MAX_FOLDER_NAME_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name must not be blank")
+        return value
+
+
+class FolderResponse(ResponseModel):
+    id: uuid.UUID
+    owner_id: uuid.UUID
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, folder: Folder) -> FolderResponse:
+        return cls(
+            id=uuid.UUID(str(folder.id)),
+            owner_id=uuid.UUID(str(folder.owner_id)),
+            name=str(folder.name),
+            created_at=folder.created_at,
+            updated_at=folder.updated_at,
+        )
+
+
+class FolderListResponse(BaseModel):
+    items: list[FolderResponse]
+    meta: PageMeta
 
 
 # -- permissions ----------------------------------------------------------
@@ -175,12 +258,6 @@ class PermissionResponse(ResponseModel):
 
 
 # -- envelopes ------------------------------------------------------------
-
-
-class PageMeta(BaseModel):
-    total: int
-    limit: int
-    offset: int
 
 
 class NoteListResponse(BaseModel):

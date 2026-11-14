@@ -108,12 +108,23 @@ Query: `limit` (1–100, default 20), `offset` (≥ 0, default 0).
 
 ### `GET /api/v1/notes`
 
-List notes the caller owns or has been granted access to (de-duplicated).
+List notes the caller owns or has been granted access to (de-duplicated), or a
+filtered view of them.
 
-Query: `limit` (1–100, default 20), `offset` (≥ 0, default 0), `sort`
-(one of `updated_at`, `-updated_at`, `created_at`, `-created_at`, `title`,
-`-title`; default `-updated_at`). An unrecognised `sort` falls back to the
-default.
+Query parameters:
+
+| Param | Values | Meaning |
+|---|---|---|
+| `limit` | 1–100 (default 20) | Page size |
+| `offset` | ≥ 0 (default 0) | Page offset |
+| `sort` | `updated_at` \| `-updated_at` \| `created_at` \| `-created_at` \| `title` \| `-title` (default `-updated_at`) | Ordering; `-` = descending; unknown falls back to the default |
+| `q` | free text | Case-insensitive match against title **or** content |
+| `view` | `all` \| `owned` \| `shared` | All readable / owned by caller / shared *with* caller |
+| `folder_id` | uuid | Only notes in that folder (must be a folder the caller owns) |
+| `starred` | `true` | Only the caller's starred notes |
+
+Search and filtering are applied to the caller's **authorized** set, so an
+unauthorized note can never be returned even if it matches `q`.
 
 **200** — items are summaries (no `content`):
 ```json
@@ -121,6 +132,9 @@ default.
   "items": [
     {
       "id": "…", "owner_id": "…", "title": "…", "version": 1,
+      "folder_id": "… | null",
+      "is_starred": false,
+      "caller_permission": "read | write | null",
       "created_at": "2026-11-14T15:53:25.351155Z",
       "updated_at": "2026-11-14T15:53:25.351160Z"
     }
@@ -129,6 +143,10 @@ default.
 }
 ```
 
+`is_starred` and `caller_permission` are the **caller's own** values;
+`caller_permission` is `"write"` for the owner and `null` only if the caller
+cannot read the note (in which case it would not be listed).
+
 ### `POST /api/v1/notes`
 
 Create a note owned by the caller. Ownership is taken from the principal, never
@@ -136,10 +154,12 @@ from the body.
 
 Request:
 ```json
-{ "title": "Meeting notes", "content": "…" }
+{ "title": "Meeting notes", "content": "<p>…</p>", "folder_id": "… | null" }
 ```
-`title` is required, 1–200 chars, non-blank. `content` is optional, ≤ 64 KiB.
-Unknown fields are rejected (`422`).
+`title` is required, 1–200 chars, non-blank. `content` is optional sanitised HTML
+(≤ 64 KiB; see [rich text](#rich-text-content)). `folder_id` is optional and must
+be a folder the caller owns (`422` otherwise). Unknown fields are rejected
+(`422`).
 
 **201** — the created note (full representation).
 
@@ -150,7 +170,11 @@ Retrieve one note. `note_id` must be a UUID (`422` otherwise).
 **200** — the note (full representation):
 ```json
 {
-  "id": "…", "owner_id": "…", "title": "…", "content": "…", "version": 2,
+  "id": "…", "owner_id": "…", "title": "…", "content": "<h1>…</h1>",
+  "version": 2,
+  "folder_id": "… | null",
+  "is_starred": false,
+  "caller_permission": "read | write | null",
   "created_at": "…Z", "updated_at": "…Z"
 }
 ```
@@ -162,7 +186,7 @@ Update title/content with optimistic concurrency control.
 
 Request:
 ```json
-{ "title": "…", "content": "…", "version": 2 }
+{ "title": "…", "content": "<p>…</p>", "version": 2 }
 ```
 `version` is the version the client last read and is **required** (`≥ 1`).
 
@@ -171,12 +195,118 @@ Request:
 `404` if not readable.
 `409` if `version` is stale.
 
+### `PATCH /api/v1/notes/{note_id}/folder`
+
+Move a note into a folder, or back to the root. **Owner only** — a WRITE
+collaborator may edit content but not reorganise the owner's drive.
+
+Request:
+```json
+{ "folder_id": "uuid | null" }
+```
+`null` moves the note to the root. A non-null `folder_id` must be a folder the
+caller owns.
+
+**200** — the updated note. `403` if the caller can read but is not the owner.
+`404` if not readable. `422` if `folder_id` is not a folder the caller owns.
+Moving a note does **not** change its owner or its sharing permissions.
+
+### `PUT /api/v1/notes/{note_id}/star`
+
+Star the note **for the caller** (per-user). Idempotent.
+
+**200** — the updated note with `is_starred: true`. `404` if not readable.
+
+### `DELETE /api/v1/notes/{note_id}/star`
+
+Unstar the note for the caller. Idempotent.
+
+**200** — the updated note with `is_starred: false`. `404` if not readable.
+
 ### `DELETE /api/v1/notes/{note_id}`
 
 Delete a note. **Owner only.**
 
 **204** on success. `403` if the caller can read but is not the owner
 (e.g. a WRITE collaborator). `404` if not readable.
+
+---
+
+## Folders
+
+Folders are flat and owner-scoped. They organise a user's own notes; they are
+never a sharing boundary, and a folder never grants access to the notes inside
+it.
+
+### `GET /api/v1/folders`
+
+List the caller's folders.
+
+**200**:
+```json
+{
+  "items": [
+    { "id": "…", "owner_id": "…", "name": "Project Alpha",
+      "created_at": "…Z", "updated_at": "…Z" }
+  ],
+  "meta": { "total": 1, "limit": 20, "offset": 0 }
+}
+```
+
+### `POST /api/v1/folders`
+
+Create a folder owned by the caller.
+
+Request:
+```json
+{ "name": "Project Alpha" }
+```
+`name` is required, 1–100 chars, non-blank. Names are unique **per owner**.
+
+**201** — the created folder. `409` if the caller already has a folder with that
+name.
+
+### `PATCH /api/v1/folders/{folder_id}`
+
+Rename a folder. **Owner only.**
+
+Request:
+```json
+{ "name": "Project Beta" }
+```
+**200** — the updated folder. `404` if it does not exist or the caller is not the
+owner. `409` on a duplicate name.
+
+### `DELETE /api/v1/folders/{folder_id}`
+
+Delete a folder. **Owner only.** Notes inside are **not deleted** — they are
+moved to the root (`folder_id` becomes `null`).
+
+**204** on success. `404` if it does not exist or the caller is not the owner.
+
+---
+
+## Rich text content
+
+Note `content` is a **sanitised HTML fragment**. The frontend editor (TipTap)
+produces this HTML, but the backend never trusts it:
+
+- Content is sanitised with `nh3` **in the domain** (`NoteContent`), on write
+  **and** on read. Plain-text content from before this feature is valid HTML and
+  is preserved unchanged (no migration was needed).
+- Allowed tags: `p`, `br`, `hr`, `h1`–`h3`, `strong`, `b`, `em`, `i`, `u`, `s`,
+  `ul`, `ol`, `li`, `blockquote`, `code`, `pre`, `a[href]`.
+- Removed: `<script>`, `<style>`, `<iframe>`, all event-handler attributes
+  (`onclick`, `onerror`, …), and `javascript:`/`data:` URLs.
+- Safe external links gain `rel="noopener noreferrer"`.
+
+Example round-trip:
+
+```json
+{ "title": "Plan", "content": "<h1>Q4</h1><p><strong>bold</strong></p><ul><li>one</li></ul>" }
+```
+
+Submitting `<script>alert(1)</script><p>ok</p>` stores and returns `<p>ok</p>`.
 
 ---
 

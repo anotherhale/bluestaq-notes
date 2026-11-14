@@ -1,22 +1,57 @@
 # Bluestaq Notes Service
 
 A secure, multi-user REST backend for a note-taking service shared across small
-teams. Notes are **private by default**; an owner may share a note with other
-users at `read` or `write` level, and only the owner may delete or manage
-sharing.
+teams, with a Google Drive-inspired React workspace. Notes are **private by
+default**; an owner may organise notes into folders, star them, and share a note
+with other users at `read` or `write` level. Only the owner may delete, move, or
+manage sharing.
 
 This is a small, deliberately well-engineered service. It favours clear
 architecture, correct security behaviour, and honest documentation over feature
 breadth.
 
 - **Stack:** Python 3.12 · FastAPI · Pydantic v2 · SQLAlchemy 2.x · Alembic ·
-  SQLite (default) / PostgreSQL (alternative)
+  SQLite (default) / PostgreSQL (alternative); React · TypeScript · Vite ·
+  TipTap
 - **Architecture:** modular monolith, hexagonal (ports & adapters), DDD-aligned
 - **Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
   [`docs/DOMAIN_MODEL.md`](docs/DOMAIN_MODEL.md),
   [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/API.md`](docs/API.md),
+  [`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md),
   [`docs/ADR/`](docs/ADR/), [`OPENHANDS_SPEC.md`](OPENHANDS_SPEC.md),
   [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
+
+---
+
+## 0. Quickest start — Docker Compose
+
+The whole stack (PostgreSQL, the API, and the web client) starts with a single
+command. No Python, Node, or database installation is required — only Docker.
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+| Service | URL | Notes |
+|---|---|---|
+| Web client | http://localhost:8080 | The React workspace, talking to the API same-origin |
+| API docs (Swagger UI) | http://localhost:8000/docs | OpenAPI is at `/openapi.json` |
+| Health / readiness | http://localhost:8080/health · `/readiness` | Proxied through the web tier too |
+
+On startup the API container waits for PostgreSQL, applies Alembic migrations,
+seeds the demo users, and only then serves traffic — so the stack is usable the
+moment `up` finishes. To stop it:
+
+```bash
+docker compose down          # stop, keep the database volume
+docker compose down -v       # stop and delete all data
+```
+
+Everything is configurable via a `.env` file next to `docker-compose.yml`
+(copy [`.env.docker.example`](.env.docker.example)). Sensible defaults mean no
+`.env` is needed to run. See [§19 Docker](#19-docker) for details.
 
 ---
 
@@ -28,11 +63,19 @@ The service exposes the following endpoints under `/api/v1`:
 |---|---|---|
 | `GET` | `/api/v1/me` | Resolve the authenticated caller |
 | `GET` | `/api/v1/users` | List users available for sharing |
-| `GET` | `/api/v1/notes` | List notes owned by or shared with the caller |
+| `GET` | `/api/v1/demo/identities` | Discover demo identities (unauthenticated; `404` when disabled) |
+| `GET` | `/api/v1/notes` | List/filter/sort notes (see §10) |
 | `POST` | `/api/v1/notes` | Create a private note |
 | `GET` | `/api/v1/notes/{note_id}` | Retrieve a note |
 | `PUT` | `/api/v1/notes/{note_id}` | Update a note (optimistic concurrency) |
 | `DELETE` | `/api/v1/notes/{note_id}` | Delete a note (owner only) |
+| `PATCH` | `/api/v1/notes/{note_id}/folder` | Move a note to a folder / the root (owner only) |
+| `PUT` | `/api/v1/notes/{note_id}/star` | Star a note for the caller |
+| `DELETE` | `/api/v1/notes/{note_id}/star` | Unstar a note for the caller |
+| `GET` | `/api/v1/folders` | List the caller's folders |
+| `POST` | `/api/v1/folders` | Create a folder |
+| `PATCH` | `/api/v1/folders/{folder_id}` | Rename a folder (owner only) |
+| `DELETE` | `/api/v1/folders/{folder_id}` | Delete a folder (owner only; notes move to root) |
 | `GET` | `/api/v1/notes/{note_id}/permissions` | List collaborators (owner only) |
 | `POST` | `/api/v1/notes/{note_id}/permissions` | Grant/upgrade access (owner only) |
 | `DELETE` | `/api/v1/notes/{note_id}/permissions/{user_id}` | Revoke access (owner only) |
@@ -195,18 +238,34 @@ mypy
 | Suite | File | Tests |
 |---|---|---|
 | Domain — notes | `tests/domain/test_note.py` | 25 |
-| Domain — identity | `tests/domain/test_identity.py` | 15 |
+| Domain — folders & rich text | `tests/domain/test_folder_and_rich_text.py` | 12 |
+| Domain — identity | `tests/domain/test_identity.py` | 11 |
 | Application — use cases | `tests/application/test_use_cases.py` | 20 |
 | Application — transactions | `tests/application/test_transactions.py` | 1 |
 | Authentication | `tests/authentication/test_identity_provider.py` | 19 |
 | Security / authorization | `tests/security/test_authorization.py` | 18 |
 | Persistence (contract, UoW, constraints) | `tests/persistence/test_repositories.py` | 21 |
-| API (validation, codes, pagination, concurrency, rate limit) | `tests/api/test_api.py` | 37 |
-| Architecture (layering) | `tests/architecture/test_layering.py` | 5 |
+| API (validation, codes, pagination, concurrency, rate limit) | `tests/api/test_api.py` | 41 |
+| API — folders, stars, search, move | `tests/api/test_folders_stars_search.py` | 27 |
+| Architecture (layering) | `tests/architecture/test_layering.py` | 4 |
 
-**Result (SQLite): `157 passed, 4 skipped`** — the 4 skipped are the PostgreSQL
+**Result (SQLite): `205 passed, 4 skipped`** — the 4 skipped are the PostgreSQL
 integration tests. **With `TEST_POSTGRESQL_URL` set: the 4 PostgreSQL tests
-pass.** (161 tests collected.)
+pass.**
+
+### Frontend tests
+
+```bash
+cd frontend
+npm test            # vitest, 45 tests (component + hook + client)
+npm run typecheck   # tsc --noEmit
+npm run lint        # eslint
+npm run build       # tsc -b && vite build
+```
+
+The component tests drive the real `App` against an in-memory `FakeApiClient`
+that mirrors the backend's authorization rules (folders, stars, search, sharing,
+READ/WRITE, revocation, optimistic concurrency).
 
 ## 10. Use the REST API
 
@@ -415,6 +474,135 @@ Each is an extension point behind an existing port rather than a fake.
 
 ---
 
+## 19. Docker
+
+The repository is fully containerised. One command brings up the complete,
+self-contained system:
+
+```bash
+docker compose up --build
+```
+
+### Services
+
+| Service | Image | Host port | Role |
+|---|---|---|---|
+| `db` | `postgres:16-alpine` | — (internal) | PostgreSQL 16 with a named volume `db_data` |
+| `api` | built from [`Dockerfile`](Dockerfile) | `8000` | FastAPI backend (multi-stage build, non-root) |
+| `web` | built from [`frontend/Dockerfile`](frontend/Dockerfile) | `8080` | Static React build served by nginx |
+
+### Startup sequence
+
+The API container's entrypoint ([`docker/api-entrypoint.sh`](docker/api-entrypoint.sh))
+runs, in order:
+
+1. **Wait for the database** — polls `SELECT 1` with a bounded timeout
+   (`DB_WAIT_TIMEOUT_SECONDS`, default 60s) so a slow PostgreSQL start is not a
+   crash-loop.
+2. **Apply migrations** — `alembic upgrade head`.
+3. **Seed demo users** — idempotent, controlled by `SEED_DEMO_USERS` (default
+   `true`).
+4. **Serve** — `exec`s uvicorn as PID 1.
+
+`db` and `api` declare healthchecks, and `depends_on: condition: service_healthy`
+orders the startup so `web` only starts once the API is healthy.
+
+### How the browser talks to the API
+
+The web tier is served by nginx ([`frontend/docker/nginx.conf`](frontend/docker/nginx.conf)),
+which serves the SPA and **reverse-proxies `/api`, `/health`, and `/readiness`
+to the `api` service**. The frontend is built with an empty `VITE_API_BASE_URL`,
+which the client interprets as "same origin", so requests go to `/api/v1/...` on
+the page's own origin. This means:
+
+- no CORS configuration is required for the bundled UI, and
+- no backend hostname is baked into the image — the same build works anywhere.
+
+The API is also published directly on `:8000` for `curl` and the Swagger UI.
+
+### Configuration
+
+All settings are environment-driven; copy
+[`.env.docker.example`](.env.docker.example) to `.env` to override defaults:
+
+```bash
+cp .env.docker.example .env
+```
+
+Common overrides:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `WEB_PORT` | `8080` | Host port for the web client |
+| `API_PORT` | `8000` | Host port for the API |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `notes` | Database credentials |
+| `ENVIRONMENT` | `development` | `production` disables demo auth (startup fails if demo auth is on) |
+| `AUTH_DEMO_ENABLED` | `true` | Toggles the demo identity mechanism |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | `120` / `60` | Rate limit |
+| `LOG_LEVEL` / `LOG_JSON` | `INFO` / `true` | Logging |
+
+The compose stack runs the API against **PostgreSQL** (not SQLite) to exercise
+the same production-style provider.
+
+### Verifying the running stack
+
+A dependency-free smoke test exercises the full multi-user workflow *through the
+nginx proxy* — the exact path the browser uses:
+
+```bash
+python3 docker/smoke-test.py
+```
+
+It checks identity resolution, cross-user isolation, READ/WRITE sharing,
+revocation, `409` concurrency conflicts and input validation (26 checks). It
+requires only a running stack and the Python standard library.
+
+### Building the images individually
+
+```bash
+docker build -t bluestaq-notes-api .            # backend
+docker build -t bluestaq-notes-web ./frontend   # frontend
+```
+
+The backend image is a two-stage build (a wheel is built, then installed into a
+slim runtime) and runs as a non-root user. The frontend image builds the SPA with
+Node and serves it from nginx.
+
+### Running without Docker
+
+Docker is a convenience, not a requirement. The manual (SQLite) workflow in
+[§4](#4-install-dependencies)–[§8](#8-start-the-service) remains the primary
+development path and needs no containers.
+
+---
+
+## Frontend workspace
+
+A Google Drive-inspired React workspace lives in `frontend/`. It is a thin,
+presentation-oriented client: every rule is enforced by the backend.
+
+- **Layout:** header (logo, search, current user, demo indicator, identity
+  switcher) · left sidebar (New note / New folder, My Drive, All notes, Starred,
+  Shared with me, folder list) · main workspace (breadcrumbs, view title, sort,
+  note list, editor).
+- **State:** a single layer, `src/hooks/useWorkspace.ts`, owns the current user,
+  view, folder, notes, selection, search, filters, sort, star state and
+  permissions. Components are presentational and receive data via props.
+- **HTTP:** only `src/api/client.ts` calls `fetch`; components depend on the
+  `NotesApi` interface, not on HTTP.
+- **Editor:** TipTap (`StarterKit` + Underline, Link, Placeholder) producing
+  sanitised HTML. Explicit **Save** with the backend's optimistic-concurrency
+  `version`; a `409` keeps the draft and shows a conflict banner.
+- **Capabilities:** folders (create/rename/delete/select, move notes), per-user
+  stars, debounced server-side search/filter/sort, and the full sharing dialog.
+  Owners see Move/Share/Delete; READ collaborators get a read-only editor.
+
+Full API contract and integration assumptions:
+[`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md). Design decisions:
+[ADR-009](docs/ADR/ADR-009-folders-stars-search-rich-text.md).
+
+---
+
 ## Project layout
 
 ```
@@ -425,9 +613,15 @@ src/notes_service/
 ├── presentation/    # FastAPI routers, schemas, middleware, error handlers
 ├── bootstrap/       # settings, composition root, app factory, logging
 └── cli.py           # serve / init-db / seed
+frontend/            # React + TypeScript + Vite workspace (TipTap editor)
 migrations/          # Alembic
 tests/               # domain, application, authentication, security, persistence, api, architecture
-docs/                # ARCHITECTURE, DOMAIN_MODEL, SECURITY, API, ADR/
+docs/                # ARCHITECTURE, DOMAIN_MODEL, SECURITY, API, FRONTEND_INTEGRATION, ADR/
+Dockerfile           # backend image (multi-stage, non-root)
+docker-compose.yml   # db + api + web
+docker/              # api entrypoint + smoke-test.py
+frontend/Dockerfile  # frontend image (build → nginx)
+frontend/docker/     # nginx.conf (SPA + /api reverse proxy)
 ```
 
 ## License

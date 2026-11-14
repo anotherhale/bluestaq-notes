@@ -15,6 +15,7 @@ from notes_service.domain.errors import InvariantViolation, ValidationError, Ver
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.permission import NotePermission, NotePermissionId
 from notes_service.domain.notes.value_objects import (
+    FolderId,
     NoteContent,
     NoteId,
     NoteTitle,
@@ -53,6 +54,12 @@ class Note:
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
     permissions: list[NotePermission] = field(default_factory=list)
+    # The folder this note lives in, or ``None`` for the owner's root ("My Drive").
+    folder_id: FolderId | None = None
+    # Whether the *requesting* user has starred this note. This is a projection
+    # filled by the repository for the caller, not an intrinsic note property:
+    # stars are personal and must never leak between collaborators.
+    is_starred: bool = False
 
     # -- construction -----------------------------------------------------
 
@@ -64,6 +71,7 @@ class Note:
         title: str,
         content: str,
         note_id: NoteId | None = None,
+        folder_id: FolderId | None = None,
     ) -> Note:
         """Create a new, private note owned by ``owner_id``."""
         return cls(
@@ -71,6 +79,7 @@ class Note:
             owner_id=owner_id,
             title=NoteTitle(title),
             content=NoteContent(content),
+            folder_id=folder_id,
         )
 
     # -- queries ----------------------------------------------------------
@@ -124,6 +133,26 @@ class Note:
         self.title = NoteTitle(title)
         self.content = NoteContent(content)
         self._bump(now)
+
+    def move_to_folder(
+        self,
+        *,
+        actor_id: UserId,
+        folder_id: FolderId | None,
+        now: datetime | None = None,
+    ) -> None:
+        """Move this note into ``folder_id`` (or to the root when ``None``).
+
+        Only the owner may reorganise a note: a collaborator must never be able
+        to change where the owner's note lives. Moving does **not** touch the
+        permission set, so sharing is unaffected by a move. Because the note's
+        *location* is not its *content*, this does not advance the content
+        version used for optimistic concurrency — but it does refresh
+        ``updated_at``.
+        """
+        self.assert_owned_by(actor_id)
+        self.folder_id = folder_id
+        self._touch(now)
 
     def grant_permission(
         self,

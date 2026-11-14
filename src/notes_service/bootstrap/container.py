@@ -26,6 +26,12 @@ from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.base import UseCase
+from notes_service.application.use_cases.folders import (
+    CreateFolder,
+    DeleteFolder,
+    ListFolders,
+    RenameFolder,
+)
 from notes_service.application.use_cases.identity import (
     GetCurrentUser,
     ListDemoIdentities,
@@ -36,6 +42,9 @@ from notes_service.application.use_cases.notes import (
     DeleteNote,
     GetNote,
     ListNotes,
+    MoveNote,
+    StarNote,
+    UnstarNote,
     UpdateNote,
 )
 from notes_service.application.use_cases.permissions import (
@@ -78,6 +87,13 @@ class Container:
     list_notes: Callable[[], ListNotes]
     update_note: Callable[[], UpdateNote]
     delete_note: Callable[[], DeleteNote]
+    move_note: Callable[[], MoveNote]
+    star_note: Callable[[], StarNote]
+    unstar_note: Callable[[], UnstarNote]
+    create_folder: Callable[[], CreateFolder]
+    list_folders: Callable[[], ListFolders]
+    rename_folder: Callable[[], RenameFolder]
+    delete_folder: Callable[[], DeleteFolder]
     share_note: Callable[[], ShareNote]
     revoke_permission: Callable[[], RevokePermission]
     list_permissions: Callable[[], ListPermissions]
@@ -152,6 +168,13 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         list_notes=make(ListNotes),
         update_note=make(UpdateNote),
         delete_note=make(DeleteNote),
+        move_note=make(MoveNote),
+        star_note=make(StarNote),
+        unstar_note=make(UnstarNote),
+        create_folder=make(CreateFolder),
+        list_folders=make(ListFolders),
+        rename_folder=make(RenameFolder),
+        delete_folder=make(DeleteFolder),
         share_note=make(ShareNote),
         revoke_permission=make(RevokePermission),
         list_permissions=make(ListPermissions),

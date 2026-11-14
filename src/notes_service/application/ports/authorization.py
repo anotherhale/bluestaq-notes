@@ -27,6 +27,10 @@ class Action(StrEnum):
     UPDATE = "update"
     DELETE = "delete"
     MANAGE_PERMISSIONS = "manage_permissions"
+    # Reorganising a note (folder placement) is an owner-only concern that is
+    # distinct from content UPDATE: a WRITE collaborator may edit a note but may
+    # not move it within the owner's drive.
+    MOVE = "move"
 
 
 @dataclass(frozen=True, slots=True)

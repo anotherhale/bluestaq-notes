@@ -1,0 +1,39 @@
+# Keep the build context small and reproducible.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Local databases and secrets
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# VCS / editors
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Frontend (built by its own image)
+frontend/node_modules/
+frontend/dist/
+
+# Docs and tests are not needed to build the runtime image
+tests/
+docs/
+*.md
+!README.md

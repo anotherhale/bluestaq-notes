@@ -17,9 +17,10 @@ from notes_service.domain.identity.value_objects import (
     ProviderSubject,
     UserId,
 )
+from notes_service.domain.notes.folder import Folder
 from notes_service.domain.notes.note import Note
 from notes_service.domain.notes.permission import NotePermission
-from notes_service.domain.notes.value_objects import NoteId
+from notes_service.domain.notes.value_objects import FolderId, NoteId
 
 
 @runtime_checkable
@@ -78,6 +79,15 @@ class NoteRepository(Protocol):
         """
         ...
 
+    def save_placement(self, note: Note) -> None:
+        """Persist only the note's folder placement (and ``updated_at``).
+
+        Placement is not a content revision, so this must not touch ``version``
+        nor enforce optimistic concurrency; it is a separate write so that a
+        move can never clobber a concurrent content edit.
+        """
+        ...
+
     def delete(self, note: Note) -> None: ...
 
     def list_accessible(
@@ -87,9 +97,58 @@ class NoteRepository(Protocol):
         limit: int,
         offset: int,
         sort: str,
-    ) -> list[Note]: ...
+        query: str | None = None,
+        view: str = "all",
+        folder_id: FolderId | None = None,
+        starred_only: bool = False,
+    ) -> list[Note]:
+        """List notes the caller may read, filtered and ordered for a view.
 
-    def count_accessible(self, user_id: UserId) -> int: ...
+        ``view`` is one of ``all`` (owned + shared), ``owned``, ``shared``.
+        ``folder_id`` restricts to one folder; it is only meaningful for owned
+        notes because a collaborator has no view of the owner's folders.
+        ``starred_only`` restricts to notes the caller has personally starred.
+        ``query`` performs a case-insensitive title/content substring match.
+        """
+        ...
+
+    def count_accessible(
+        self,
+        user_id: UserId,
+        *,
+        query: str | None = None,
+        view: str = "all",
+        folder_id: FolderId | None = None,
+        starred_only: bool = False,
+    ) -> int: ...
+
+
+@runtime_checkable
+class FolderRepository(Protocol):
+    """Persistence port for the :class:`Folder` aggregate."""
+
+    def add(self, folder: Folder) -> None: ...
+
+    def get(self, folder_id: FolderId) -> Folder | None: ...
+
+    def save(self, folder: Folder) -> None: ...
+
+    def delete(self, folder: Folder) -> None: ...
+
+    def list_for_owner(self, owner_id: UserId) -> list[Folder]: ...
+
+    def name_exists(self, owner_id: UserId, name: str) -> bool: ...
+
+
+@runtime_checkable
+class NoteStarRepository(Protocol):
+    """Persistence port for per-user note stars."""
+
+    def add(self, note_id: NoteId, user_id: UserId) -> None: ...
+
+    def remove(self, note_id: NoteId, user_id: UserId) -> bool: ...
+
+    def exists(self, note_id: NoteId, user_id: UserId) -> bool: ...
 
 
 @runtime_checkable
@@ -125,6 +184,8 @@ class UnitOfWork(Protocol):
     external_identities: ExternalIdentityRepository
     notes: NoteRepository
     permissions: NotePermissionRepository
+    folders: FolderRepository
+    stars: NoteStarRepository
 
     def __enter__(self) -> Self: ...
 

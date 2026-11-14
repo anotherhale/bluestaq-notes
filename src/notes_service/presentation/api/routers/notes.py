@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
-from notes_service.domain.notes.value_objects import NoteId, NoteVersion
+from notes_service.domain.notes.value_objects import FolderId, NoteId, NoteVersion
 from notes_service.presentation.dependencies import (
     ContainerDep,
     PaginationDep,
@@ -17,6 +17,7 @@ from notes_service.presentation.dependencies import (
 from notes_service.presentation.schemas import (
     NoteCreateRequest,
     NoteListResponse,
+    NoteMoveRequest,
     NoteResponse,
     NoteSummaryResponse,
     NoteUpdateRequest,
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/notes", tags=["notes"])
 @router.get(
     "",
     response_model=NoteListResponse,
-    summary="List notes owned by or shared with the caller",
+    summary="List notes the caller can read, filtered and sorted",
     dependencies=[RateLimitDep],
 )
 def list_notes(
@@ -37,10 +38,32 @@ def list_notes(
     container: ContainerDep,
     page: PaginationDep,
     sort: Annotated[str, Query()] = "-updated_at",
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    view: Annotated[str, Query()] = "all",
+    folder_id: Annotated[UUID | None, Query()] = None,
+    starred: Annotated[bool, Query()] = False,
 ) -> NoteListResponse:
-    result = container.list_notes().run(principal, limit=page.limit, offset=page.offset, sort=sort)
+    """List notes, filtered by view/folder/starred and a title/content search.
+
+    All filtering is applied server-side against the caller's authorized set:
+    the client never receives a note it cannot read, so it cannot filter
+    unauthorized notes in the browser.
+    """
+    result = container.list_notes().run(
+        principal,
+        limit=page.limit,
+        offset=page.offset,
+        sort=sort,
+        query=q,
+        view=view,
+        folder_id=FolderId(str(folder_id)) if folder_id is not None else None,
+        starred=starred,
+    )
     return NoteListResponse(
-        items=[NoteSummaryResponse.from_domain(note) for note in result.items],
+        items=[
+            NoteSummaryResponse.from_domain(note, caller_id=principal.user_id)
+            for note in result.items
+        ],
         meta=PageMeta(total=result.total, limit=page.limit, offset=page.offset),
     )
 
@@ -55,8 +78,13 @@ def list_notes(
 def create_note(
     payload: NoteCreateRequest, principal: PrincipalDep, container: ContainerDep
 ) -> NoteResponse:
-    note = container.create_note().run(principal, title=payload.title, content=payload.content)
-    return NoteResponse.from_domain(note)
+    note = container.create_note().run(
+        principal,
+        title=payload.title,
+        content=payload.content,
+        folder_id=FolderId(str(payload.folder_id)) if payload.folder_id is not None else None,
+    )
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
 
 
 @router.get(
@@ -67,7 +95,7 @@ def create_note(
 )
 def get_note(note_id: UUID, principal: PrincipalDep, container: ContainerDep) -> NoteResponse:
     note = container.get_note().run(principal, note_id=NoteId(str(note_id)))
-    return NoteResponse.from_domain(note)
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
 
 
 @router.put(
@@ -89,7 +117,49 @@ def update_note(
         content=payload.content,
         expected_version=NoteVersion(payload.version),
     )
-    return NoteResponse.from_domain(note)
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
+
+
+@router.patch(
+    "/{note_id}/folder",
+    response_model=NoteResponse,
+    summary="Move a note into a folder, or to the root (owner only)",
+    dependencies=[RateLimitDep],
+)
+def move_note(
+    note_id: UUID,
+    payload: NoteMoveRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> NoteResponse:
+    note = container.move_note().run(
+        principal,
+        note_id=NoteId(str(note_id)),
+        folder_id=FolderId(str(payload.folder_id)) if payload.folder_id is not None else None,
+    )
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
+
+
+@router.put(
+    "/{note_id}/star",
+    response_model=NoteResponse,
+    summary="Star a note for the caller (idempotent)",
+    dependencies=[RateLimitDep],
+)
+def star_note(note_id: UUID, principal: PrincipalDep, container: ContainerDep) -> NoteResponse:
+    note = container.star_note().run(principal, note_id=NoteId(str(note_id)))
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
+
+
+@router.delete(
+    "/{note_id}/star",
+    response_model=NoteResponse,
+    summary="Remove the caller's star from a note (idempotent)",
+    dependencies=[RateLimitDep],
+)
+def unstar_note(note_id: UUID, principal: PrincipalDep, container: ContainerDep) -> NoteResponse:
+    note = container.unstar_note().run(principal, note_id=NoteId(str(note_id)))
+    return NoteResponse.from_domain(note, caller_id=principal.user_id)
 
 
 @router.delete(

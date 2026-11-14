@@ -1,0 +1,16 @@
+# Keep the build context small: never send dependencies or build output.
+node_modules/
+dist/
+dist-ssr/
+
+# Local env and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Tooling / editors
+.vscode/
+.idea/
+.DS_Store
+*.tsbuildinfo

@@ -18,9 +18,14 @@ import type { NotesApi } from "../api/client";
 import type {
   CurrentUser,
   DemoIdentityList,
+  Folder,
+  FolderInput,
+  FolderList,
   Note,
   NoteCreateInput,
   NoteList,
+  NoteListQuery,
+  NoteMoveInput,
   NoteUpdateInput,
   Permission,
   PermissionGrantInput,
@@ -49,8 +54,23 @@ interface FakeNote {
   title: string;
   content: string;
   version: number;
+  folder_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface FakeFolder {
+  id: string;
+  owner_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A per-user star: (note, user). */
+interface FakeStar {
+  note_id: string;
+  user_id: string;
 }
 
 export const FAKE_ALICE = "11111111-1111-1111-1111-111111111111";
@@ -79,6 +99,8 @@ export class FakeApiClient implements NotesApi {
   private users: FakeUser[];
   private notes: FakeNote[] = [];
   private permissions: FakePermission[] = [];
+  private folders: FakeFolder[] = [];
+  private stars: FakeStar[] = [];
   private selected: string | null = null;
   private demoEnabled: boolean;
 
@@ -99,18 +121,39 @@ export class FakeApiClient implements NotesApi {
   // -- test helpers -----------------------------------------------------
 
   /** Seed a note directly, as if it already existed in the backend. */
-  seedNote(ownerId: string, title: string, content = ""): FakeNote {
+  seedNote(ownerId: string, title: string, content = "", folderId: string | null = null): FakeNote {
     const note: FakeNote = {
       id: nextId("note"),
       owner_id: ownerId,
       title,
       content,
       version: 1,
+      folder_id: folderId,
       created_at: ISO,
       updated_at: ISO,
     };
     this.notes.push(note);
     return note;
+  }
+
+  /** Seed a folder directly. */
+  seedFolder(ownerId: string, name: string): FakeFolder {
+    const folder: FakeFolder = {
+      id: nextId("folder"),
+      owner_id: ownerId,
+      name,
+      created_at: ISO,
+      updated_at: ISO,
+    };
+    this.folders.push(folder);
+    return folder;
+  }
+
+  /** Seed a per-user star directly. */
+  seedStar(noteId: string, userId: string): void {
+    if (!this.stars.some((s) => s.note_id === noteId && s.user_id === userId)) {
+      this.stars.push({ note_id: noteId, user_id: userId });
+    }
   }
 
   /** Seed a permission grant directly. */
@@ -129,6 +172,21 @@ export class FakeApiClient implements NotesApi {
     const note = this.requireNote(noteId);
     note.content = content;
     note.version += 1;
+  }
+
+  /** Synchronous read of a note's persisted state, for assertions. */
+  getNoteSync(noteId: string): FakeNote | null {
+    return this.notes.find((note) => note.id === noteId) ?? null;
+  }
+
+  /** Synchronous read of all persisted notes, for assertions. */
+  listNotesSync(): FakeNote[] {
+    return [...this.notes];
+  }
+
+  /** Synchronous read of a star, for assertions. */
+  isStarredSync(noteId: string, userId: string): boolean {
+    return this.isStarred(noteId, userId);
   }
 
   private guard(): void {
@@ -155,6 +213,16 @@ export class FakeApiClient implements NotesApi {
     const note = this.notes.find((candidate) => candidate.id === noteId);
     if (!note) throw notFound();
     return note;
+  }
+
+  private isStarred(noteId: string, userId: string): boolean {
+    return this.stars.some((s) => s.note_id === noteId && s.user_id === userId);
+  }
+
+  private callerPermission(noteId: string, userId: string): "read" | "write" | null {
+    const note = this.requireNote(noteId);
+    if (note.owner_id === userId) return "write";
+    return this.levelFor(noteId, userId);
   }
 
   private levelFor(noteId: string, userId: string): "read" | "write" | null {
@@ -216,19 +284,54 @@ export class FakeApiClient implements NotesApi {
     return { items, meta: { total: items.length, limit: 20, offset: 0 } };
   }
 
-  async listNotes(): Promise<NoteList> {
+  async listNotes(query: NoteListQuery = {}): Promise<NoteList> {
     this.guard();
     const userId = this.currentUserId();
-    const items = this.notes
-      .filter((note) => this.canRead(note.id, userId))
-      .map((note) => ({
-        id: note.id,
-        owner_id: note.owner_id,
-        title: note.title,
-        version: note.version,
-        created_at: note.created_at,
-        updated_at: note.updated_at,
-      }));
+    let candidates = this.notes.filter((note) => this.canRead(note.id, userId));
+
+    const view = query.view ?? "all";
+    if (view === "owned") {
+      candidates = candidates.filter((note) => note.owner_id === userId);
+    } else if (view === "shared") {
+      candidates = candidates.filter((note) => note.owner_id !== userId);
+    }
+    if (query.folder_id) {
+      candidates = candidates.filter((note) => note.folder_id === query.folder_id);
+    }
+    if (query.starred) {
+      candidates = candidates.filter((note) => this.isStarred(note.id, userId));
+    }
+    if (query.q) {
+      const needle = query.q.toLowerCase();
+      candidates = candidates.filter(
+        (note) =>
+          note.title.toLowerCase().includes(needle) ||
+          note.content.toLowerCase().includes(needle),
+      );
+    }
+
+    const sort = query.sort ?? "-updated_at";
+    const desc = sort.startsWith("-");
+    const key = desc ? sort.slice(1) : sort;
+    candidates = [...candidates].sort((a, b) => {
+      let cmp = 0;
+      if (key === "title") cmp = a.title.localeCompare(b.title);
+      else if (key === "created_at") cmp = a.created_at.localeCompare(b.created_at);
+      else cmp = a.updated_at.localeCompare(b.updated_at);
+      return desc ? -cmp : cmp;
+    });
+
+    const items = candidates.map((note) => ({
+      id: note.id,
+      owner_id: note.owner_id,
+      title: note.title,
+      version: note.version,
+      folder_id: note.folder_id,
+      is_starred: this.isStarred(note.id, userId),
+      caller_permission: this.callerPermission(note.id, userId),
+      created_at: note.created_at,
+      updated_at: note.updated_at,
+    }));
     return { items, meta: { total: items.length, limit: 20, offset: 0 } };
   }
 
@@ -238,7 +341,11 @@ export class FakeApiClient implements NotesApi {
     const note = this.requireNote(noteId);
     // Unreadable notes are hidden as 404, matching the backend.
     if (!this.canRead(noteId, userId)) throw notFound();
-    return { ...note };
+    return {
+      ...note,
+      is_starred: this.isStarred(noteId, userId),
+      caller_permission: this.callerPermission(noteId, userId),
+    };
   }
 
   async createNote(input: NoteCreateInput): Promise<Note> {
@@ -247,17 +354,29 @@ export class FakeApiClient implements NotesApi {
     if (!input.title.trim()) {
       throw new ApiError({ message: "title must not be empty", status: 422, code: "invalid_input" });
     }
+    const folderId = input.folder_id ?? null;
+    if (folderId) {
+      const folder = this.folders.find((f) => f.id === folderId);
+      if (!folder || folder.owner_id !== userId) {
+        throw new ApiError({
+          message: "folder does not exist or is not owned by you",
+          status: 422,
+          code: "invalid_input",
+        });
+      }
+    }
     const note: FakeNote = {
       id: nextId("note"),
       owner_id: userId,
       title: input.title.trim(),
       content: input.content,
       version: 1,
+      folder_id: folderId,
       created_at: ISO,
       updated_at: ISO,
     };
     this.notes.push(note);
-    return { ...note };
+    return { ...note, is_starred: false, caller_permission: "write" };
   }
 
   async updateNote(noteId: string, input: NoteUpdateInput): Promise<Note> {
@@ -279,7 +398,11 @@ export class FakeApiClient implements NotesApi {
     note.content = input.content;
     note.version += 1;
     note.updated_at = ISO;
-    return { ...note };
+    return {
+      ...note,
+      is_starred: this.isStarred(noteId, userId),
+      caller_permission: this.callerPermission(noteId, userId),
+    };
   }
 
   async deleteNote(noteId: string): Promise<void> {
@@ -292,6 +415,7 @@ export class FakeApiClient implements NotesApi {
     }
     this.notes = this.notes.filter((candidate) => candidate.id !== noteId);
     this.permissions = this.permissions.filter((permission) => permission.note_id !== noteId);
+    this.stars = this.stars.filter((star) => star.note_id !== noteId);
   }
 
   async listPermissions(noteId: string): Promise<PermissionList> {
@@ -357,6 +481,110 @@ export class FakeApiClient implements NotesApi {
       granted_by: userId,
       created_at: ISO,
     };
+  }
+
+  async moveNote(noteId: string, input: NoteMoveInput): Promise<Note> {
+    this.guard();
+    const userId = this.currentUserId();
+    const note = this.requireNote(noteId);
+    if (!this.canRead(noteId, userId)) throw notFound();
+    // Only the owner may reorganise a note; a WRITE collaborator may not.
+    if (note.owner_id !== userId) {
+      throw forbidden("only the note owner may move this note");
+    }
+    if (input.folder_id !== null) {
+      const folder = this.folders.find((f) => f.id === input.folder_id);
+      if (!folder || folder.owner_id !== userId) {
+        throw new ApiError({
+          message: "folder does not exist or is not owned by you",
+          status: 422,
+          code: "invalid_input",
+        });
+      }
+    }
+    note.folder_id = input.folder_id;
+    note.updated_at = ISO;
+    return {
+      ...note,
+      is_starred: this.isStarred(noteId, userId),
+      caller_permission: this.callerPermission(noteId, userId),
+    };
+  }
+
+  async starNote(noteId: string): Promise<Note> {
+    this.guard();
+    const userId = this.currentUserId();
+    if (!this.canRead(noteId, userId)) throw notFound();
+    this.seedStar(noteId, userId);
+    return this.getNote(noteId);
+  }
+
+  async unstarNote(noteId: string): Promise<Note> {
+    this.guard();
+    const userId = this.currentUserId();
+    if (!this.canRead(noteId, userId)) throw notFound();
+    this.stars = this.stars.filter((s) => !(s.note_id === noteId && s.user_id === userId));
+    return this.getNote(noteId);
+  }
+
+  async listFolders(): Promise<FolderList> {
+    this.guard();
+    const userId = this.currentUserId();
+    const items: Folder[] = this.folders
+      .filter((folder) => folder.owner_id === userId)
+      .map((folder) => ({ ...folder }));
+    return { items, meta: { total: items.length, limit: 20, offset: 0 } };
+  }
+
+  async createFolder(input: FolderInput): Promise<Folder> {
+    this.guard();
+    const userId = this.currentUserId();
+    const name = input.name.trim();
+    if (!name) {
+      throw new ApiError({ message: "name must not be empty", status: 422, code: "invalid_input" });
+    }
+    if (this.folders.some((f) => f.owner_id === userId && f.name === name)) {
+      throw new ApiError({
+        message: "a folder with that name already exists",
+        status: 409,
+        code: "conflict",
+      });
+    }
+    return { ...this.seedFolder(userId, name) };
+  }
+
+  async renameFolder(folderId: string, input: FolderInput): Promise<Folder> {
+    this.guard();
+    const userId = this.currentUserId();
+    const folder = this.folders.find((f) => f.id === folderId);
+    // A folder that is not yours is hidden as 404, matching the backend.
+    if (!folder || folder.owner_id !== userId) throw notFound();
+    const name = input.name.trim();
+    if (!name) {
+      throw new ApiError({ message: "name must not be empty", status: 422, code: "invalid_input" });
+    }
+    if (this.folders.some((f) => f.owner_id === userId && f.name === name && f.id !== folderId)) {
+      throw new ApiError({
+        message: "a folder with that name already exists",
+        status: 409,
+        code: "conflict",
+      });
+    }
+    folder.name = name;
+    folder.updated_at = ISO;
+    return { ...folder };
+  }
+
+  async deleteFolder(folderId: string): Promise<void> {
+    this.guard();
+    const userId = this.currentUserId();
+    const folder = this.folders.find((f) => f.id === folderId);
+    if (!folder || folder.owner_id !== userId) throw notFound();
+    // Notes in the folder move to the root; they are never deleted with it.
+    for (const note of this.notes) {
+      if (note.folder_id === folderId) note.folder_id = null;
+    }
+    this.folders = this.folders.filter((f) => f.id !== folderId);
   }
 
   async revokePermission(noteId: string, userId: string): Promise<void> {
