@@ -228,10 +228,16 @@ production, wildcard CORS in production) fail fast.
 For a quick local start you can let the app create the schema directly:
 
 ```bash
-notes-service init-db --seed     # creates tables (SQLite) and seeds demo users
+notes-service init-db --seed     # creates tables (SQLite) and seeds the demo dataset
 ```
 
 For a real setup, prefer migrations (next section) and seed separately.
+
+`--seed` / `notes-service seed` populate a **realistic demo dataset**: 13 users
+across 4 teams, ~400 notes (each active user owns 20–50), folders, READ/WRITE
+shares, and personal stars. The data is generated deterministically (see
+[§11](#11-demo-authentication)) and seeding is **idempotent**, so it is safe to
+re-run. Add `--users-only` to seed just the users without the generated content.
 
 ## 7. Run migrations
 
@@ -349,14 +355,45 @@ tests. It is **not production authentication**.
   and provider construction).
 
 Seeded demo users (created by `notes-service init-db --seed` or
-`notes-service seed`):
+`notes-service seed`). The first four keep fixed, documented ids; the rest are
+generated from the same roster and are grouped into demo teams. All active users
+are discoverable via `GET /api/v1/demo/identities`, which is the source of truth
+for the demo selector.
 
-| Name | `X-Demo-User-ID` | Status |
-|---|---|---|
-| Alice Anderson | `11111111-1111-1111-1111-111111111111` | active |
-| Bob Baker | `22222222-2222-2222-2222-222222222222` | active |
-| Carol Chen | `33333333-3333-3333-3333-333333333333` | active |
-| Dave Diaz | `44444444-4444-4444-4444-444444444444` | suspended (cannot authenticate) |
+| Name | `X-Demo-User-ID` | Team | Status |
+|---|---|---|---|
+| Alice Anderson | `11111111-1111-1111-1111-111111111111` | Engineering | active |
+| Bob Baker | `22222222-2222-2222-2222-222222222222` | Engineering | active |
+| Carol Chen | `33333333-3333-3333-3333-333333333333` | Product | active |
+| Dave Diaz | `44444444-4444-4444-4444-444444444444` | — | suspended (cannot authenticate) |
+| Priya Patel | `55555555-5555-5555-5555-555555555555` | Engineering | active |
+| Miguel Rivera | `66666666-6666-6666-6666-666666666666` | Product | active |
+| Sofia Rossi | `77777777-7777-7777-7777-777777777777` | Product | active |
+| Dana Kim | `88888888-8888-8888-8888-888888888888` | Design | active |
+| Lena Novak | `eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee` | Design | active |
+| Tariq Hassan | `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa` | Design | active |
+| Omar Farouk | `bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb` | Operations | active |
+| Grace Lee | `cccccccc-cccc-cccc-cccc-cccccccccccc` | Operations | active |
+| Yuki Tanaka | `dddddddd-dddd-dddd-dddd-dddddddddddd` | Operations | active |
+
+### The demo dataset
+
+Beyond the users, seeding generates a realistic, internally consistent graph so
+the service looks like a real multi-team deployment:
+
+- **Teams** are a *data grouping*, not a domain entity (the schema has no teams
+  table — see ADR-002). A team is expressed through sharing: each team lead owns
+  a `"<Team> — team hub"` note shared **WRITE** with every member, plus assorted
+  1:1 shares in both directions, and a few cross-team shares.
+- **Notes**: each active user owns 20–50 notes (meeting notes, design docs,
+  runbooks, retros, 1:1s) with HTML bodies drawn from realistic templates.
+- **Folders**: three per user (e.g. Meetings, Runbooks, Roadmap).
+- **Stars**: a few personal stars per user.
+
+The generator (`infrastructure/db/demo_content.py`) is **deterministic**: every
+id is derived with `uuid5` and every choice from a SHA-256 counter, so the same
+data appears on every machine and reseeding never duplicates rows. Suspended
+users (Dave) own no content and cannot authenticate.
 
 For production, disable demo auth and enable OIDC
 (`AUTH_OIDC_ENABLED=true`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`) and
@@ -553,8 +590,8 @@ runs, in order:
    (`DB_WAIT_TIMEOUT_SECONDS`, default 60s) so a slow PostgreSQL start is not a
    crash-loop.
 2. **Apply migrations** — `alembic upgrade head`.
-3. **Seed demo users** — idempotent, controlled by `SEED_DEMO_USERS` (default
-   `true`).
+3. **Seed the demo dataset** — users + generated content, idempotent, controlled
+   by `SEED_DEMO_USERS` (default `true`).
 4. **Serve** — `exec`s uvicorn as PID 1.
 
 `db` and `api` declare healthchecks, and `depends_on: condition: service_healthy`

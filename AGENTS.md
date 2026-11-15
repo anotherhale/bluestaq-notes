@@ -39,6 +39,11 @@ things that are easy to get wrong and expensive to rediscover.
   - Alice `11111111-1111-1111-1111-111111111111`
   - Bob   `22222222-2222-2222-2222-222222222222`
   - Carol `33333333-3333-3333-3333-333333333333`
+- `seed`/`init-db --seed` also generate a deterministic demo dataset (13 users
+  across 4 teams, ~400 notes, folders, READ/WRITE shares, stars) via
+  `infrastructure/db/demo_content.py`. Use `--users-only` to skip it. The
+  generator is deterministic (uuid5 + SHA-256) and seeding is idempotent; do not
+  assign demo UUIDs that collide with the test sentinels (`99999999-…`).
 - `GET /api/v1/demo/identities` is an **unauthenticated** discovery endpoint: a
   client must learn which identities exist *before* it can authenticate, and it
   must not hardcode UUIDs. It returns `404` when demo mode is disabled
@@ -123,8 +128,8 @@ things that are easy to get wrong and expensive to rediscover.
   `api` (root `Dockerfile`), `web` (frontend/Dockerfile → nginx). Web is on
   `:8080`, API on `:8000`.
 - The API entrypoint (`docker/api-entrypoint.sh`) waits for the DB, runs
-  `alembic upgrade head`, seeds demo users (`SEED_DEMO_USERS=true`), then execs
-  uvicorn. Compose gates `web` on the API's healthcheck.
+  `alembic upgrade head`, seeds the demo dataset (`SEED_DEMO_USERS=true`), then
+  execs uvicorn. Compose gates `web` on the API's healthcheck.
 - The frontend image is built with `VITE_API_BASE_URL=""`, which the client
   treats as **same origin**; nginx (`frontend/docker/nginx.conf.template`) proxies
   `/api`, `/health`, `/readiness` to the `api` service. So there is no CORS and no
