@@ -7,17 +7,19 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (starting) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway landed) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `4c5a6ef` |
+| Base commit (run start) | `e5f1bb4` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-**NEX-003 — Agent identity and token exchange.** Status: **TESTED** (all local
-gates green), committed and pushed this run. See `EXECUTION_LOG.md`.
+**NEX-005 — Tool gateway.** Status: **TESTED** (all local gates green,
+migration applied to a fresh SQLite database), committed as `bf70f40` and
+pushed. HTTP/router exposure was deliberately deferred. See `EXECUTION_LOG.md`.
+
 
 ## Last completed task
 
@@ -107,17 +109,24 @@ None currently. The following are known open items, not blockers:
   sampling. This is stronger for the current delegable universe but would not
   scale if the capability set grew substantially; revisit if capabilities
   multiply.
+- **R5 (medium):** The tool gateway has no HTTP/router exposure. It is reachable
+  only from application code, so no API contract test covers it.
+- **R6 (medium):** The tool gateway has no dedicated test file. It is covered
+  only indirectly, by the full suite passing and by the migration test. Idempotent
+  replay and deny-path auditing are unproven by a focused assertion.
+
 
 ## Next best actions
 
-1. **NEX-005 — Tool gateway**: one governed path for agent tool invocation with
-   schema validation, authorization checks, audit records, and idempotency keys.
-   (P2, depends on NEX-003 — now unblocked; this is the next capability the agent
-   platform needs before agents can act on anything.)
+1. **NEX-005-followup — Tool gateway tests + HTTP exposure**: add focused tests
+   for idempotent replay, deny-path auditing, and digest stability (R6), then
+   expose the gateway through the API layer. (P2, the gateway is the seam every
+   agent action will flow through; it currently has no direct test and no route.)
 2. **NEX-004 — Update PR #3** description and checklist to reflect the verified
-   organization + OIDC + tenant-access + agent-identity work, and refresh
-   tracking issue #2. (P4 hygiene, safe and immediate; also mitigates R1.)
+   organization + OIDC + tenant-access + agent-identity + tool-gateway work, and
+   refresh tracking issue #2. (P4 hygiene, safe and immediate; also mitigates R1.)
 3. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
    membership themselves. (P1, builds on NEX-006.)
+

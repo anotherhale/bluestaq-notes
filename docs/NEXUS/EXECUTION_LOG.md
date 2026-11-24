@@ -208,3 +208,86 @@ NEX-005 — tool gateway: one governed path for agent tool invocation with schem
 validation, authorization, audit, and idempotency. NEX-003 unblocks it: agents
 now have attenuated, revocable identity to act through.
 
+
+---
+
+## Run NEX-2026-11-24-03 — NEX-005 governed tool gateway
+
+**Timestamp:** 2026-11-24T15:51Z–15:54Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `e5f1bb4`
+**Ending commit:** `bf70f40` (NEX-005) + this state-file commit
+**Phase:** Phase 2 — Agent identity & delegation
+
+### Task completed
+
+**NEX-005 — Governed tool gateway.** Status: **TESTED**, **COMMITTED**,
+**PUSHED**. Not yet **CI PASSED** and not exposed over HTTP.
+
+One governed path for agent tool invocation. No agent tool can act without
+passing schema validation, authorization, an idempotency key, and an audit
+record. The ordered sequence is resolve token → validate arguments against the
+tool schema → authorize → idempotency claim → audit `STARTED` → dispatch handler
+→ finalize audit.
+
+### Files changed (8 files, +1168)
+
+- `domain/agent/tools.py` (new, 373 lines): `TOOL_CATALOG` and `Capability`.
+  The catalog is the single source of truth for which tools exist and which
+  require approval (`delete_note`).
+- `application/use_cases/tools.py` (new, 494 lines): the `InvokeTool` gateway.
+- `application/ports/agents.py` (+41), `application/ports/repositories.py` (+2):
+  `ToolInvocationRepository` protocol, `UnitOfWork.tool_invocations`.
+- `infrastructure/db/agent_repositories.py` (+111), `models.py` (+45),
+  `uow.py` (+4): `ToolInvocationRow`, SQLAlchemy repository, UoW wiring.
+- `migrations/versions/5d0b71f8ac34_tool_invocations.py` (new, 98 lines).
+
+### Decisions
+
+- **Arguments are never persisted raw.** Only a sha256 digest is stored, so the
+  audit trail cannot become a content leak. This keeps the audit table safe to
+  read by a wider audience than the note itself.
+- **Idempotency is enforced in the database, not only in the use case.** A
+  `UNIQUE(agent_id, idempotency_key)` constraint means a replay cannot create a
+  second invocation row even under concurrency; the use case then returns the
+  recorded outcome rather than re-executing the handler.
+- **The migration carries its invariants as constraints**, not as comments: a
+  `status` CHECK and a `length(arguments_digest) = 64` CHECK. A bug that wrote a
+  truncated digest or an unknown status would fail at the database.
+- **Router exposure deferred.** Adding HTTP surface for the gateway is a
+  separate contract decision (route shape, error mapping, approval interaction
+  for `delete_note`). Bundling it into this slice would have shipped an
+  under-tested API contract; it is recorded as NEX-005-followup instead.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format` | clean |
+| `ruff check` | clean |
+| `mypy` | clean, 93 source files |
+| `pytest` (full) | 585 passed, 4 skipped |
+| architecture layering test | passed (within full suite) |
+| `alembic upgrade head` | applied to a fresh SQLite database; chain `a7da300eb2d4 → 8b0debcd0ebc → 189c359206d3 → 8417cdf22d66 → 5d0b71f8ac34`; all three constraints present |
+
+CI was **not** observed (R3). Local gates are not CI evidence.
+
+### Risks identified
+
+- **R5 (new, medium):** no HTTP/router exposure, so no API contract test.
+- **R6 (new, medium):** no dedicated test file for the gateway. Idempotent
+  replay and deny-path auditing are unproven by a focused assertion; only
+  indirect coverage exists.
+
+### Process note
+
+The commit message was initially written through a shell heredoc and was
+corrupted (the repo's known terminal defect). Because the commit had not been
+pushed, it was amended from a file instead. **Amend only before a push**; after
+a push the rule is a follow-up commit.
+
+### Next action
+
+NEX-005-followup — focused gateway tests (idempotent replay, deny-path audit,
+digest stability), then HTTP exposure. See `CHECKPOINT.json`.
+
