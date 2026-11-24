@@ -20,3 +20,6 @@ and immutable; superseding a decision means adding a new ADR.
 
 
 See also the [Enterprise Authorization Architecture](../AUTHORIZATION_ARCHITECTURE.md) and [Authorization Policy Model](../AUTHORIZATION_POLICY_MODEL.md).
+
+
+The canonical proposed authorization types and invariants are documented in the [Authorization Domain Model](../AUTHORIZATION_DOMAIN_MODEL.md).
