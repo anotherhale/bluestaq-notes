@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -62,6 +62,27 @@ class Settings(BaseSettings):
     oidc_algorithms: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["RS256"])
     oidc_leeway_seconds: int = 30
 
+    # Browser login (authorization-code + PKCE). Separate from the bearer-token
+    # settings above because a deployment may use either or both.
+    auth_oidc_login_enabled: bool = False
+    oidc_provider_name: str = "oidc"
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_authorization_endpoint: str | None = None
+    oidc_token_endpoint: str | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_scopes: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["openid", "profile", "email"]
+    )
+
+    # Session cookie. ``Secure`` is forced on in production by the validator
+    # below, because a session cookie sent over plain HTTP is replayable.
+    session_cookie_name: str = "notes_session"
+    session_cookie_secure: bool = True
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_idle_ttl_seconds: int = 8 * 60 * 60
+    session_absolute_ttl_seconds: int = 7 * 24 * 60 * 60
+
     # -- HTTP security ----------------------------------------------------
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_request_body_bytes: int = 256 * 1024
@@ -80,7 +101,7 @@ class Settings(BaseSettings):
     default_page_size: int = 20
     max_page_size: int = 100
 
-    @field_validator("cors_allow_origins", "oidc_algorithms", mode="before")
+    @field_validator("cors_allow_origins", "oidc_algorithms", "oidc_scopes", mode="before")
     @classmethod
     def _split_csv(cls, value: object) -> object:
         """Accept comma-separated values or a JSON array from the environment.
@@ -141,6 +162,26 @@ class Settings(BaseSettings):
         if self.auth_oidc_enabled and not (self.oidc_issuer and self.oidc_audience):
             raise ValueError("auth_oidc_enabled requires oidc_issuer and oidc_audience")
 
+        if self.auth_oidc_login_enabled:
+            required = {
+                "oidc_issuer": self.oidc_issuer,
+                "oidc_client_id": self.oidc_client_id,
+                "oidc_authorization_endpoint": self.oidc_authorization_endpoint,
+                "oidc_token_endpoint": self.oidc_token_endpoint,
+                "oidc_jwks_url": self.oidc_jwks_url,
+                "oidc_redirect_uri": self.oidc_redirect_uri,
+            }
+            missing = sorted(name for name, value in required.items() if not value)
+            if missing:
+                raise ValueError(f"auth_oidc_login_enabled requires {', '.join(missing)}")
+
+        if self.session_cookie_samesite == "none" and not self.session_cookie_secure:
+            raise ValueError("SameSite=None requires a Secure session cookie")
+        if self.session_idle_ttl_seconds <= 0 or self.session_absolute_ttl_seconds <= 0:
+            raise ValueError("session TTLs must be positive")
+        if self.session_idle_ttl_seconds > self.session_absolute_ttl_seconds:
+            raise ValueError("session_idle_ttl_seconds must not exceed the absolute TTL")
+
         if self.environment.is_production:
             if self.auth_demo_enabled:
                 raise ValueError(
@@ -156,6 +197,11 @@ class Settings(BaseSettings):
                 )
             if "*" in self.cors_allow_origins:
                 raise ValueError("wildcard CORS origins are not permitted in production")
+            if not self.session_cookie_secure:
+                raise ValueError(
+                    "session_cookie_secure must be true in production: a session cookie "
+                    "sent over plain HTTP is replayable"
+                )
         return self
 
 

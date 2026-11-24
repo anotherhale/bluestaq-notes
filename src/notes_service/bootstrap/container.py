@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TypeVar
 
 from sqlalchemy import Engine
@@ -27,6 +28,13 @@ from notes_service.application.ports.organization_authorization import (
 )
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
+from notes_service.application.use_cases.authentication import (
+    BeginLogin,
+    CompleteLogin,
+    EndSession,
+    OidcUseCase,
+    ResolveSession,
+)
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.base import UseCase
 from notes_service.application.use_cases.folders import (
@@ -85,11 +93,14 @@ from notes_service.infrastructure.db.engine import create_db_engine, create_sess
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.identity.demo_provider import DemoIdentityProvider
 from notes_service.infrastructure.identity.oidc_provider import OidcIdentityProvider
+from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRelyingParty
 from notes_service.infrastructure.identity.routing_provider import RoutingIdentityProvider
+from notes_service.infrastructure.identity.session_provider import SessionIdentityProvider
 from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 
 UseCaseT = TypeVar("UseCaseT", bound=UseCase)
+LoginUseCaseT = TypeVar("LoginUseCaseT", bound=OidcUseCase)
 # Organization use cases need the second policy port, so they are bound to their
 # own base class. This is what makes mypy reject a factory that forgets to pass
 # ``organization_authorization`` — the omission that silently broke every org
@@ -108,6 +119,15 @@ class Container:
     authorization_provider: AuthorizationProvider
     rate_limiter: RateLimiter
     clock: SystemClock
+
+    # Browser login (authorization-code + PKCE). These are ``None`` unless
+    # ``auth_oidc_login_enabled`` is set, and the login router returns 404 when
+    # they are absent — a deployment without browser login must not expose a
+    # half-wired login endpoint.
+    relying_party: HttpOidcRelyingParty | None
+    begin_login: Callable[[], BeginLogin] | None
+    complete_login: Callable[[], CompleteLogin] | None
+    end_session: Callable[[], EndSession] | None
 
     # Use-case factories: call with no arguments to obtain a fresh use case,
     # each backed by its own Unit of Work. Typed so callers get the concrete
@@ -187,8 +207,61 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             leeway_seconds=settings.oidc_leeway_seconds,
         )
 
+    clock = SystemClock()
+
+    # Browser login wiring. The relying party and the login use cases exist only
+    # when explicitly enabled; otherwise the router 404s, so a deployment that
+    # never configured an IdP cannot accidentally expose a login endpoint.
+    relying_party: HttpOidcRelyingParty | None = None
+    begin_login: Callable[[], BeginLogin] | None = None
+    complete_login: Callable[[], CompleteLogin] | None = None
+    end_session: Callable[[], EndSession] | None = None
+    session_provider: IdentityProvider | None = None
+
+    if settings.auth_oidc_login_enabled:
+        relying_party = HttpOidcRelyingParty(
+            provider_name=settings.oidc_provider_name,
+            issuer=settings.oidc_issuer or "",
+            client_id=settings.oidc_client_id or "",
+            client_secret=settings.oidc_client_secret,
+            authorization_endpoint=settings.oidc_authorization_endpoint or "",
+            token_endpoint=settings.oidc_token_endpoint or "",
+            jwks_url=settings.oidc_jwks_url or "",
+            redirect_uri=settings.oidc_redirect_uri or "",
+            scopes=tuple(settings.oidc_scopes),
+            algorithms=tuple(settings.oidc_algorithms),
+            leeway_seconds=settings.oidc_leeway_seconds,
+        )
+        idle_ttl = timedelta(seconds=settings.session_idle_ttl_seconds)
+        absolute_ttl = timedelta(seconds=settings.session_absolute_ttl_seconds)
+
+        def _login_use_case(use_case_type: type[LoginUseCaseT]) -> Callable[[], LoginUseCaseT]:
+            def factory() -> LoginUseCaseT:
+                return use_case_type(
+                    uow_factory=uow_factory,
+                    clock=clock,
+                    relying_party=relying_party,
+                    session_idle_ttl=idle_ttl,
+                    session_absolute_ttl=absolute_ttl,
+                )
+
+            return factory
+
+        begin_login = _login_use_case(BeginLogin)
+        complete_login = _login_use_case(CompleteLogin)
+        end_session = _login_use_case(EndSession)
+        resolve_session = _login_use_case(ResolveSession)
+
+        session_provider = SessionIdentityProvider(
+            cookie_name=settings.session_cookie_name,
+            resolve_session=resolve_session,
+            context_token=lambda context: context.session_cookie,
+        )
+
     identity_provider = RoutingIdentityProvider(
-        oidc_provider=oidc_provider, demo_provider=demo_provider
+        oidc_provider=oidc_provider,
+        demo_provider=demo_provider,
+        session_provider=session_provider,
     )
     authorization_provider = DefaultAuthorizationProvider()
     # Administration authority is a separate policy from content access: an org
@@ -196,7 +269,6 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     organization_authorization_provider: OrganizationAuthorizationProvider = (
         DefaultOrganizationAuthorizationProvider()
     )
-    clock = SystemClock()
 
     rate_limiter = InMemoryRateLimiter(
         limit=settings.rate_limit_requests,
@@ -236,6 +308,10 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         authorization_provider=authorization_provider,
         rate_limiter=rate_limiter,
         clock=clock,
+        relying_party=relying_party,
+        begin_login=begin_login,
+        complete_login=complete_login,
+        end_session=end_session,
         get_current_user=make(GetCurrentUser),
         list_users=make(ListUsers),
         list_demo_identities=make(ListDemoIdentities),

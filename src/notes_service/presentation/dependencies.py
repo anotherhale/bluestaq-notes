@@ -34,7 +34,9 @@ def get_principal(request: Request, container: ContainerDep) -> Principal:
     request body.
     """
     provider: IdentityProvider = container.identity_provider
-    context = HeaderAuthenticationContext.from_headers(dict(request.headers))
+    context = HeaderAuthenticationContext.from_headers(
+        dict(request.headers), cookie_name=container.settings.session_cookie_name
+    )
     principal = provider.authenticate(context)
     request.state.user_id = str(principal.user_id)
     request.state.auth_provider = principal.provider
