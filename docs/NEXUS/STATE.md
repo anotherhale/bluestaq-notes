@@ -7,23 +7,26 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 1 — Organization & Identity foundation (in progress) |
+| Project phase | Phase 2 — Agent identity & delegation (starting) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `e76e9c0` |
+| Base commit (run start) | `4c5a6ef` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-**NEX-006 — Tenant access enforcement.** Status: **TESTED** (all local gates
-green), pending commit in this run. See `EXECUTION_LOG.md`.
+**NEX-003 — Agent identity and token exchange.** Status: **TESTED** (all local
+gates green), committed and pushed this run. See `EXECUTION_LOG.md`.
 
 ## Last completed task
 
-**NEX-002 — OIDC authentication** (authorization-code + PKCE, state/nonce,
-JWKS-validated ID tokens, session cookies). **IMPLEMENTED and on the branch**;
-the login-use-case and identity-provider suites cover it.
+**NEX-006 — Tenant access enforcement** (`4c5a6ef`). Authentication proves
+identity; tenant access is a separate deterministic check that the caller still
+belongs to an operational tenant, so a suspended or deprovisioned membership
+stops working on the next request rather than at session expiry. Enforced at one
+shared seam (`ensure_tenant_access`) across all three identity-establishing
+paths: `CompleteLogin`, `ResolveSession`, and `OidcIdentityProvider.authenticate`.
 
 Previously, **NEX-001** fixed two defects that blocked the organization slice:
 
@@ -73,11 +76,11 @@ The organization slice is implemented across all layers:
 
 | Gate | Result (run `NEX-2026-11-24-01`) |
 | --- | --- |
-| `pytest` (full) | **409 passed, 4 skipped** |
+| `pytest` (full) | **585 passed, 4 skipped** |
 | `pytest tests/architecture` | passed (layering invariant intact) |
-| `ruff format` | clean |
+| `ruff format --check` | clean (175 files) |
 | `ruff check` | clean |
-| `mypy` | clean (82 source files) |
+| `mypy` | clean (92 source files) |
 | Frontend `typecheck`/`lint`/`test`/`build` | not run this run — no frontend files touched |
 
 > Local gates are **not** CI evidence. CI for this commit set has not been
@@ -87,9 +90,8 @@ The organization slice is implemented across all layers:
 
 None currently. The following are known open items, not blockers:
 
-- OIDC, agent identity/token exchange, delegated authority, tool gateway, Jev
-  integration, and the admin console UI are **not yet implemented** — they are
-  sequenced in `ROADMAP.md`, not regressions.
+- Tool gateway, Jev integration, and the admin console UI are **not yet
+  implemented** — they are sequenced in `ROADMAP.md`, not regressions.
 
 ## Risks
 
@@ -100,18 +102,22 @@ None currently. The following are known open items, not blockers:
   frontend testing requirements cannot be satisfied until that work lands.
 - **R3 (low):** CI on the feature branch has not been observed for this commit
   set at the time of writing; local gates are green but that is not CI evidence.
+- **R4 (low):** `hypothesis` is not a project dependency, so the attenuation
+  invariant is proved by exhaustive enumeration rather than property-based
+  sampling. This is stronger for the current delegable universe but would not
+  scale if the capability set grew substantially; revisit if capabilities
+  multiply.
 
 ## Next best actions
 
-1. **NEX-003 — Agent identity & token exchange**: agent principals, delegated
-   token attenuation (delegation never exceeds the delegator's authority),
-   revocation. (P1/P2, depends on NEX-002 — now unblocked. An agent token
-   resolves through the same bearer provider, so it inherits
-   revocation-on-next-request automatically.)
+1. **NEX-005 — Tool gateway**: one governed path for agent tool invocation with
+   schema validation, authorization checks, audit records, and idempotency keys.
+   (P2, depends on NEX-003 — now unblocked; this is the next capability the agent
+   platform needs before agents can act on anything.)
 2. **NEX-004 — Update PR #3** description and checklist to reflect the verified
-   organization + OIDC + tenant-access work, and refresh tracking issue #2.
-   (P4 hygiene, safe and immediate; also mitigates R1.)
+   organization + OIDC + tenant-access + agent-identity work, and refresh
+   tracking issue #2. (P4 hygiene, safe and immediate; also mitigates R1.)
 3. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
-   membership themselves. (P1, builds directly on this slice.)
+   membership themselves. (P1, builds on NEX-006.)

@@ -138,7 +138,7 @@ mypy clean. Detail in `EXECUTION_LOG.md`.
 | --- | --- |
 | Phase | 2 |
 | Priority | P1 |
-| Status | TODO |
+| Status | **TESTED** (local gates green); pending commit in this run |
 | Dependencies | NEX-002 |
 
 **Objective:** make agents first-class actors whose authority is derived by
@@ -161,6 +161,41 @@ denial.
 Enforcement must be deterministic application code, never model output.
 
 **Complexity:** large.
+
+**Outcome (NEX-2026-11-24-01):** IMPLEMENTED and TESTED.
+
+- **Domain** — `domain/agent/{entities,value_objects,delegation,token}.py`.
+  `DelegatedAuthorization` is the source of authority; `AgentToken` is a derived
+  credential stored as a SHA-256 hash only (no raw secret column). Attenuation is
+  a pure function that refuses to grow authority at any hop.
+- **Application** — `use_cases/agents.py`: register/list/get, grant/revoke
+  delegation, issue token, `ResolveAgentToken`, approval request open/decide/list.
+  `ResolveAgentToken.run()` re-checks token expiry, delegation revocation, and
+  agent suspension on every call, so revocation takes effect on the next request.
+- **Persistence** — migration `c3f1a9d47e02` (`agent_identity_delegations_tokens`),
+  verified to apply on a fresh database and to round-trip through downgrade.
+  `ON DELETE CASCADE` from both `agents` and `agent_delegations` confirmed
+  empirically.
+- **API** — `presentation/api/routers/agents.py`; `POST /tokens/resolve` requires
+  an authenticated human principal (unauthenticated introspection answers 401),
+  so an agent cannot introspect its own token.
+- **Tests** — `tests/agent/{test_agent_identity,test_delegation}.py` and
+  `tests/api/test_agents_api.py`. Attenuation is covered by **exhaustive
+  enumeration** of every capability subset and every parent/child pair rather
+  than by a `hypothesis` property test: `hypothesis` is not a project dependency
+  and this run did not add one. Enumeration over the delegable universe is
+  strictly stronger than sampling for this invariant.
+
+**Defect found and fixed during validation (this run):** `POST /tokens/resolve`
+returned `AgentResponse`, which includes the agent's full capability *ceiling*
+plus `max_token_ttl_seconds`, `version`, and timestamps — strictly more authority
+than the token under inspection carried, disclosed to any token holder. The
+schema's own docstring states `AgentResponse` is "only ever returned to the
+owner". Introspection now returns the narrower `ResolvedAgentIdentity`
+(`id`, `display_name`, `runtime_identity`, `status`) and the token's own
+capabilities. Pinned by two regression tests:
+`test_introspection_is_refused_without_an_authenticated_caller` and
+`test_introspection_never_discloses_the_agents_capability_ceiling`.
 
 ---
 

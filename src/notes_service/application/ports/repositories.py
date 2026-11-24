@@ -10,6 +10,12 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol, Self, runtime_checkable
 
+from notes_service.application.ports.agents import (
+    AgentRepository,
+    AgentTokenRepository,
+    ApprovalRequestRepository,
+    DelegationRepository,
+)
 from notes_service.application.ports.organization_repositories import (
     OrganizationMembershipRepository,
     OrganizationRepository,
@@ -204,6 +210,10 @@ class UnitOfWork(Protocol):
     team_memberships: TeamMembershipRepository
     sessions: UserSessionRepository
     login_transactions: LoginTransactionRepository
+    agents: AgentRepository
+    delegations: DelegationRepository
+    agent_tokens: AgentTokenRepository
+    approvals: ApprovalRequestRepository
 
     def __enter__(self) -> Self: ...
 

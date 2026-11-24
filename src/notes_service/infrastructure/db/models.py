@@ -413,7 +413,129 @@ class UserSessionRow(Base):
     )
 
 
+class AgentRow(Base):
+    """A registered service principal and its capability ceiling.
+
+    ``capabilities`` is stored as a comma-separated string rather than a JSON
+    column so the same DDL works unchanged on SQLite and PostgreSQL; the set is
+    small, fixed vocabulary and is validated by the domain on the way out.
+    """
+
+    __tablename__ = "agents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    runtime_identity: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    capabilities: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    max_token_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=300)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('active','suspended','revoked')", name="status_valid"),
+        CheckConstraint(
+            "max_token_ttl_seconds > 0 AND max_token_ttl_seconds <= 3600",
+            name="ttl_bounded",
+        ),
+        Index("ix_agents_owner_status", "owner_user_id", "status"),
+    )
+
+
+class DelegationRow(Base):
+    """One user's consent for one agent to act, narrowed to a capability set."""
+
+    __tablename__ = "agent_delegations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    delegator_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    capabilities: Mapped[str] = mapped_column(String(1024), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('active','revoked')", name="status_valid"),
+        Index("ix_agent_delegations_delegator_status", "delegator_user_id", "status"),
+    )
+
+
+class AgentTokenRow(Base):
+    """An issued agent access token.
+
+    Only the SHA-256 hash of the secret is stored, matching the session-cookie
+    convention: a database disclosure cannot be replayed as a live credential.
+    """
+
+    __tablename__ = "agent_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    delegation_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType,
+        ForeignKey("agent_delegations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    audience: Mapped[str] = mapped_column(String(32), nullable=False)
+    capabilities: Mapped[str] = mapped_column(String(1024), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    issued_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("length(token_hash) = 64", name="token_hash_sha256"),
+        CheckConstraint("audience IN ('notes-api','tool-gateway')", name="audience_valid"),
+        CheckConstraint("expires_at > issued_at", name="expiry_after_issue"),
+        Index("ix_agent_tokens_agent_revoked_at", "agent_id", "revoked_at"),
+    )
+
+
+class ApprovalRequestRow(Base):
+    """A human decision on one sensitive action an agent wants to take."""
+
+    __tablename__ = "agent_approval_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    capability: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_ref: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    requested_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    decided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','approved','denied')", name="status_valid"),
+        Index("ix_agent_approval_requests_agent_status", "agent_id", "status"),
+    )
+
+
 __all__ = [
+    "AgentRow",
+    "AgentTokenRow",
+    "ApprovalRequestRow",
+    "DelegationRow",
     "ExternalIdentityRow",
     "FolderRow",
     "LoginTransactionRow",

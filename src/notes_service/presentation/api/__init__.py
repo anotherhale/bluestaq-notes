@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from notes_service.presentation.api.routers import (
+    agents,
     auth,
     demo,
     folders,
@@ -24,5 +25,6 @@ api_router.include_router(folders.router)
 api_router.include_router(notes.router)
 api_router.include_router(permissions.router)
 api_router.include_router(organizations.router)
+api_router.include_router(agents.router)
 
 __all__ = ["api_router"]

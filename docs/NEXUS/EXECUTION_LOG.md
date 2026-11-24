@@ -99,3 +99,112 @@ Completed this run:
 NEX-003 — agent identity and token exchange (delegated-token attenuation), which
 this slice unblocks: an agent token will resolve to a principal through the same
 bearer provider, so it inherits revocation-on-next-request for free.
+
+---
+
+## Run NEX-2026-11-24-02
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-24-02` |
+| Timestamp | 2026-11-24T04:31Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `4c5a6ef` |
+| Ending commit | see checkpoint |
+| Phase | 2 — Agent identity & delegation (starting) |
+
+### Tasks completed
+
+**NEX-003 — Agent identity and token exchange.**
+
+Resumed interrupted work. The prior session had implemented the full slice but
+stopped mid-validation while probing whether its new regression test genuinely
+failed against the pre-fix schema. That probe was invalid: `git stash` of
+`schemas.py` alone reverts to a state predating `AgentListResponse`, so the
+router fails to import (`ImportError`) rather than the assertion failing. The
+leak was already proved empirically before the fix (a token carrying
+`['read_note']` was shown the agent ceiling `['read_note', 'update_note']`), and
+the regression test passes with the fix in place.
+
+Completed this run:
+
+- Deleted the leftover probe file `tests/api/test_probe_tmp.py`.
+- Re-ran the full gate set on the integrated tree: **585 passed, 4 skipped**;
+  `ruff format --check` clean (175 files); `ruff check` clean; `mypy` clean
+  (92 source files).
+- Reconciled `BACKLOG.md` (NEX-003 → TESTED with the full outcome and the
+  disclosure defect), `STATE.md` (phase, active/last-completed task, gates,
+  risks R4, next best actions), and this log.
+
+### What was implemented (slice summary)
+
+- **Domain** — `domain/agent/{entities,value_objects,delegation,token}.py`.
+  `DelegatedAuthorization` is the root of authority. `AgentToken` stores only a
+  SHA-256 hash; there is no raw-secret column to leak. Attenuation is a pure
+  function that refuses to grow authority at any hop.
+- **Application** — `use_cases/agents.py`: register/list/get agent, grant and
+  revoke delegation, issue token, `ResolveAgentToken`, and approval
+  request open/decide/list. `ResolveAgentToken.run()` re-checks token expiry,
+  delegation revocation, and agent suspension on **every** call.
+- **Persistence** — migration `c3f1a9d47e02_agent_identity_delegations_tokens.py`.
+- **API** — `presentation/api/routers/agents.py`.
+
+### Validation evidence
+
+| Gate | Result |
+| --- | --- |
+| `pytest` (full) | **585 passed, 4 skipped** |
+| `ruff format --check` | clean |
+| `ruff check` | clean |
+| `mypy` | clean (92 files) |
+
+Acceptance criteria coverage:
+
+- Agent principal registered with owner + capability set — `test_agents_api.py`.
+- Issued token scopes are a strict subset of the delegator's authority;
+  over-broad requests denied — `tests/agent/test_delegation.py`,
+  `test_agents_api.py`.
+- Chains cannot amplify at any hop — exhaustive enumeration of every capability
+  subset and every parent/child pair (not `hypothesis`; see R4).
+- Revocation is immediate — `TestRevocationIsImmediate` resolves the token again
+  after revoking the delegation and expects refusal.
+- An agent cannot approve its own action — self-approval denied in the approval
+  use case, pinned by test.
+
+### Security findings
+
+- **Fixed (real over-disclosure):** `POST /tokens/resolve` returned
+  `AgentResponse`, which carries the agent's full capability *ceiling*,
+  `max_token_ttl_seconds`, `version`, and timestamps — strictly more authority
+  than the token being inspected, handed to any token holder. `AgentResponse`'s
+  own docstring says it is "only ever returned to the owner". Introspection now
+  returns the narrower `ResolvedAgentIdentity` (`id`, `display_name`,
+  `runtime_identity`, `status`) plus the token's own capabilities.
+- **Verified correct:** unauthenticated `POST /tokens/resolve` answers **401**,
+  so an agent cannot introspect its own token without a human principal.
+- **Deliberate:** tokens are stored hashed; a database read cannot mint a working
+  credential.
+
+### Decisions
+
+- Prove attenuation by exhaustive enumeration rather than adding `hypothesis`.
+  Adding a dependency for one invariant is not justified when the delegable
+  universe is small and finite; enumeration is strictly stronger than sampling
+  over that universe. Recorded as R4 for when capabilities multiply.
+- Introspection discloses only what the token confers. A credential should never
+  reveal more authority than it holds — the recipient may be less trusted than
+  the agent's owner.
+
+### Risks
+
+- **R3:** CI on this branch has not been observed for this commit set; local
+  gates are green, which is not CI evidence.
+- **R4:** Enumeration-based attenuation proof does not scale to a much larger
+  capability universe.
+
+### Next action
+
+NEX-005 — tool gateway: one governed path for agent tool invocation with schema
+validation, authorization, audit, and idempotency. NEX-003 unblocks it: agents
+now have attenuated, revocable identity to act through.
+

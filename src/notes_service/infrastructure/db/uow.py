@@ -14,6 +14,12 @@ from typing import Self
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from notes_service.application.ports.agents import (
+    AgentRepository,
+    AgentTokenRepository,
+    ApprovalRequestRepository,
+    DelegationRepository,
+)
 from notes_service.application.ports.organization_repositories import (
     OrganizationMembershipRepository,
     OrganizationRepository,
@@ -33,6 +39,12 @@ from notes_service.application.ports.repositories import (
 from notes_service.application.ports.sessions import (
     LoginTransactionRepository,
     UserSessionRepository,
+)
+from notes_service.infrastructure.db.agent_repositories import (
+    SqlAlchemyAgentRepository,
+    SqlAlchemyAgentTokenRepository,
+    SqlAlchemyApprovalRequestRepository,
+    SqlAlchemyDelegationRepository,
 )
 from notes_service.infrastructure.db.organization_repositories import (
     SqlAlchemyOrganizationMembershipRepository,
@@ -73,6 +85,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     team_memberships: TeamMembershipRepository
     sessions: UserSessionRepository
     login_transactions: LoginTransactionRepository
+    agents: AgentRepository
+    delegations: DelegationRepository
+    agent_tokens: AgentTokenRepository
+    approvals: ApprovalRequestRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -99,6 +115,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.team_memberships = SqlAlchemyTeamMembershipRepository(self._session)
         self.sessions = SqlAlchemyUserSessionRepository(self._session)
         self.login_transactions = SqlAlchemyLoginTransactionRepository(self._session)
+        self.agents = SqlAlchemyAgentRepository(self._session)
+        self.delegations = SqlAlchemyDelegationRepository(self._session)
+        self.agent_tokens = SqlAlchemyAgentTokenRepository(self._session)
+        self.approvals = SqlAlchemyApprovalRequestRepository(self._session)
         return self
 
     def __exit__(

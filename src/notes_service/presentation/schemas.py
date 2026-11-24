@@ -13,7 +13,17 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.organization import OrganizationView
+from notes_service.domain.agent.delegation import DelegatedAuthorization
+from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
+from notes_service.domain.agent.value_objects import (
+    AgentStatus,
+    ApprovalStatus,
+    Capability,
+    DelegationStatus,
+    TokenAudience,
+)
 from notes_service.domain.identity.entities import User
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
@@ -502,6 +512,251 @@ class TeamMembershipResponse(ResponseModel):
 
 class TeamMembershipListResponse(BaseModel):
     items: list[TeamMembershipResponse]
+    meta: PageMeta
+
+
+# -- agents ---------------------------------------------------------------
+
+
+class AgentRegisterRequest(StrictModel):
+    """Register an agent owned by the caller.
+
+    There is no owner field: the owner is always the authenticated principal, so
+    a caller cannot register an agent on someone else's behalf.
+    """
+
+    display_name: str = Field(min_length=1, max_length=120)
+    runtime_identity: str = Field(min_length=3, max_length=64)
+    capabilities: list[Capability] = Field(min_length=1)
+    max_token_ttl_seconds: int | None = Field(default=None, ge=1, le=3600)
+
+
+class AgentResponse(ResponseModel):
+    """An agent as its owner sees it.
+
+    The capability set here is the agent's *ceiling*, not a grant. It is only
+    ever returned to the owner; a non-owner receives 404.
+    """
+
+    id: uuid.UUID
+    display_name: str
+    runtime_identity: str
+    capabilities: list[Capability]
+    status: AgentStatus
+    max_token_ttl_seconds: int
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    revoked_at: datetime | None = None
+
+    @classmethod
+    def from_domain(cls, agent: AgentIdentity) -> AgentResponse:
+        return cls(
+            id=uuid.UUID(str(agent.id)),
+            display_name=agent.display_name,
+            runtime_identity=str(agent.runtime_identity),
+            capabilities=sorted(agent.capabilities),
+            status=agent.status,
+            max_token_ttl_seconds=agent.max_token_ttl_seconds,
+            version=agent.version,
+            created_at=agent.created_at,
+            updated_at=agent.updated_at,
+            revoked_at=agent.revoked_at,
+        )
+
+
+class AgentListResponse(BaseModel):
+    items: list[AgentResponse]
+    meta: PageMeta
+
+
+class DelegationGrantRequest(StrictModel):
+    """Ask a delegator's consent to be narrowed to these capabilities.
+
+    The request is attenuated against the agent's ceiling by the application
+    layer, so asking for more than the agent holds is rejected rather than
+    quietly trimmed.
+    """
+
+    capabilities: list[Capability] = Field(min_length=1)
+
+
+class DelegationResponse(ResponseModel):
+    """One user's consent for one agent to act, with the narrowed capability set."""
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    capabilities: list[Capability]
+    status: DelegationStatus
+    created_at: datetime
+    revoked_at: datetime | None = None
+
+    @classmethod
+    def from_domain(cls, delegation: DelegatedAuthorization) -> DelegationResponse:
+        return cls(
+            id=uuid.UUID(str(delegation.id)),
+            agent_id=uuid.UUID(str(delegation.agent_id)),
+            capabilities=sorted(delegation.capabilities),
+            status=delegation.status,
+            created_at=delegation.created_at,
+            revoked_at=delegation.revoked_at,
+        )
+
+
+class AgentTokenIssueRequest(StrictModel):
+    """Exchange a delegation for a short-lived, narrower token.
+
+    ``capabilities`` must be a subset of the delegation's set; the TTL is bounded
+    by the agent's own maximum, so a caller cannot mint a long-lived credential.
+    """
+
+    capabilities: list[Capability] = Field(min_length=1)
+    audience: TokenAudience
+    ttl_seconds: int = Field(ge=1, le=3600)
+
+
+class AgentTokenResponse(ResponseModel):
+    """A freshly issued token.
+
+    ``secret`` is the raw bearer value. It is returned exactly once, at issuance,
+    and never persisted — only its SHA-256 hash is stored — so a later read can
+    never recover it. ``token_hash`` is deliberately absent from every response.
+    """
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    delegation_id: uuid.UUID
+    audience: TokenAudience
+    capabilities: list[Capability]
+    issued_at: datetime
+    expires_at: datetime
+    secret: str
+
+    @classmethod
+    def from_issued(cls, issued: IssuedToken) -> AgentTokenResponse:
+        token = issued.token
+        return cls(
+            id=uuid.UUID(str(token.id)),
+            agent_id=uuid.UUID(str(token.agent_id)),
+            delegation_id=uuid.UUID(str(token.delegation_id)),
+            audience=token.audience,
+            capabilities=sorted(token.capabilities),
+            issued_at=token.issued_at,
+            expires_at=token.expires_at,
+            secret=issued.secret,
+        )
+
+
+class AgentTokenResolveRequest(StrictModel):
+    """Resolve a presented token secret for a given audience.
+
+    The audience is part of the token's identity, so a token minted for the tool
+    gateway is rejected by the Notes API and vice versa.
+    """
+
+    secret: str = Field(min_length=1, max_length=512)
+    audience: TokenAudience
+
+
+class ResolvedAgentIdentity(BaseModel):
+    """The agent a token belongs to, as an introspecting caller may see it.
+
+    Deliberately narrower than :class:`AgentResponse`: a token holder is not
+    necessarily the agent's owner, and the owner-only view carries the agent's
+    *ceiling* — strictly more authority than this token was granted. Echoing it
+    here would tell a token holder which capabilities exist to escalate towards.
+    """
+
+    id: uuid.UUID
+    display_name: str
+    runtime_identity: str
+    status: AgentStatus
+
+    @classmethod
+    def from_domain(cls, agent: AgentIdentity) -> ResolvedAgentIdentity:
+        return cls(
+            id=uuid.UUID(str(agent.id)),
+            display_name=agent.display_name,
+            runtime_identity=str(agent.runtime_identity),
+            status=agent.status,
+        )
+
+
+class ResolvedAgentTokenResponse(BaseModel):
+    """The actor a valid token resolves to, with its effective capabilities.
+
+    ``capabilities`` is what this token carries — never the agent's ceiling.
+    """
+
+    agent: ResolvedAgentIdentity
+    delegation_id: uuid.UUID
+    audience: TokenAudience
+    capabilities: list[Capability]
+    expires_at: datetime
+
+    @classmethod
+    def from_resolved(cls, resolved: ResolvedToken) -> ResolvedAgentTokenResponse:
+        return cls(
+            agent=ResolvedAgentIdentity.from_domain(resolved.agent),
+            delegation_id=uuid.UUID(str(resolved.delegation.id)),
+            audience=resolved.token.audience,
+            capabilities=sorted(resolved.token.capabilities),
+            expires_at=resolved.token.expires_at,
+        )
+
+
+class ApprovalRequestOpenRequest(StrictModel):
+    """Ask a human to authorise one sensitive action.
+
+    The agent must already hold the capability; approval gates its *use*, it does
+    not grant it.
+    """
+
+    capability: Capability
+    resource_ref: str = Field(min_length=1, max_length=512)
+
+
+class ApprovalDecisionRequest(StrictModel):
+    """A human's decision on a pending approval request."""
+
+    approve: bool
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class ApprovalRequestResponse(ResponseModel):
+    """A pending or decided approval request for one sensitive agent action."""
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    capability: Capability
+    resource_ref: str
+    status: ApprovalStatus
+    requested_at: datetime
+    decided_at: datetime | None = None
+    decided_by_user_id: uuid.UUID | None = None
+    reason: str | None = None
+
+    @classmethod
+    def from_domain(cls, request: ApprovalRequest) -> ApprovalRequestResponse:
+        return cls(
+            id=uuid.UUID(str(request.id)),
+            agent_id=uuid.UUID(str(request.agent_id)),
+            capability=request.capability,
+            resource_ref=request.resource_ref,
+            status=request.status,
+            requested_at=request.requested_at,
+            decided_at=request.decided_at,
+            decided_by_user_id=(
+                uuid.UUID(str(request.decided_by_user_id))
+                if request.decided_by_user_id is not None
+                else None
+            ),
+            reason=request.reason,
+        )
+
+
+class ApprovalRequestListResponse(BaseModel):
+    items: list[ApprovalRequestResponse]
     meta: PageMeta
 
 

@@ -28,6 +28,19 @@ from notes_service.application.ports.organization_authorization import (
 )
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
+from notes_service.application.use_cases.agents import (
+    DecideApprovalRequest,
+    GetAgent,
+    GrantDelegation,
+    IssueAgentToken,
+    ListAgents,
+    ListApprovalRequests,
+    OpenApprovalRequest,
+    RegisterAgent,
+    ResolveAgentToken,
+    RevokeAgent,
+    RevokeDelegation,
+)
 from notes_service.application.use_cases.authentication import (
     BeginLogin,
     CompleteLogin,
@@ -173,6 +186,22 @@ class Container:
     add_team_member: Callable[[], AddTeamMember]
     remove_team_member: Callable[[], RemoveTeamMember]
     list_team_members: Callable[[], ListTeamMembers]
+
+    # Agent identity. Authority here is a chain — agent ceiling, then a user's
+    # delegation, then a short-lived token — and every hop only narrows the one
+    # above it. ``resolve_agent_token`` is the only entry point that turns a
+    # presented secret back into an actor.
+    register_agent: Callable[[], RegisterAgent]
+    list_agents: Callable[[], ListAgents]
+    get_agent: Callable[[], GetAgent]
+    revoke_agent: Callable[[], RevokeAgent]
+    grant_delegation: Callable[[], GrantDelegation]
+    revoke_delegation: Callable[[], RevokeDelegation]
+    issue_agent_token: Callable[[], IssueAgentToken]
+    resolve_agent_token: Callable[[], ResolveAgentToken]
+    open_approval_request: Callable[[], OpenApprovalRequest]
+    decide_approval_request: Callable[[], DecideApprovalRequest]
+    list_approval_requests: Callable[[], ListApprovalRequests]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -349,4 +378,15 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         add_team_member=make_organization(AddTeamMember),
         remove_team_member=make_organization(RemoveTeamMember),
         list_team_members=make_organization(ListTeamMembers),
+        register_agent=make(RegisterAgent),
+        list_agents=make(ListAgents),
+        get_agent=make(GetAgent),
+        revoke_agent=make(RevokeAgent),
+        grant_delegation=make(GrantDelegation),
+        revoke_delegation=make(RevokeDelegation),
+        issue_agent_token=make(IssueAgentToken),
+        resolve_agent_token=make(ResolveAgentToken),
+        open_approval_request=make(OpenApprovalRequest),
+        decide_approval_request=make(DecideApprovalRequest),
+        list_approval_requests=make(ListApprovalRequests),
     )
