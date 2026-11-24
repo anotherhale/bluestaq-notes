@@ -54,7 +54,11 @@ A missing or invalid credential yields `401` with `WWW-Authenticate: Bearer`.
 
 Authentication and authorization are separate responsibilities. Every protected
 use case calls an `AuthorizationProvider` port and treats the result as
-authoritative (deny by default). See ADR-004 for the full matrix.
+authoritative (deny by default). ADR-004 describes the current implemented
+owner/collaborator matrix. The enterprise target model is documented in
+[Authorization Architecture](AUTHORIZATION_ARCHITECTURE.md),
+[Authorization Policy Model](AUTHORIZATION_POLICY_MODEL.md), and proposed
+[ADR-011](ADR/ADR-011-unified-authorization-model.md).
 
 | Operation | Owner | WRITE | READ |
 |---|---|---|---|
@@ -159,3 +163,15 @@ cannot exhaust another's budget. Limits are configurable
 - CSRF tokens (not applicable: the API is token/header-based, not cookie-based).
 - Audit log persistence (permission `granted_by`/`created_at` are the only
   audit trail).
+
+
+## Enterprise authorization target (proposed, not implemented)
+
+The target model combines RBAC, scoped RBAC, ABAC, resource ACLs, capabilities,
+scoped administrative privileges, and constrained delegation through one policy
+system. Mandatory tenant/trust constraints and applicable explicit denies
+override ordinary grants; missing grants default to deny. Admin roles do not
+automatically provide access to private note content. Agent and service actors
+use the same policy semantics with authority attenuation and re-authorization.
+These are architecture decisions being documented for future implementation,
+not claims about current runtime behavior.
