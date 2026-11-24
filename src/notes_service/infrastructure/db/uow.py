@@ -14,6 +14,13 @@ from typing import Self
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from notes_service.application.ports.organization_repositories import (
+    OrganizationMembershipRepository,
+    OrganizationRepository,
+    OrganizationUnitRepository,
+    TeamMembershipRepository,
+    TeamRepository,
+)
 from notes_service.application.ports.repositories import (
     ExternalIdentityRepository,
     FolderRepository,
@@ -22,6 +29,13 @@ from notes_service.application.ports.repositories import (
     NoteStarRepository,
     UnitOfWork,
     UserRepository,
+)
+from notes_service.infrastructure.db.organization_repositories import (
+    SqlAlchemyOrganizationMembershipRepository,
+    SqlAlchemyOrganizationRepository,
+    SqlAlchemyOrganizationUnitRepository,
+    SqlAlchemyTeamMembershipRepository,
+    SqlAlchemyTeamRepository,
 )
 from notes_service.infrastructure.db.repositories import (
     SqlAlchemyExternalIdentityRepository,
@@ -46,6 +60,11 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     permissions: NotePermissionRepository
     folders: FolderRepository
     stars: NoteStarRepository
+    organizations: OrganizationRepository
+    organization_units: OrganizationUnitRepository
+    teams: TeamRepository
+    organization_memberships: OrganizationMembershipRepository
+    team_memberships: TeamMembershipRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -65,6 +84,11 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.permissions = SqlAlchemyNotePermissionRepository(self._session)
         self.folders = SqlAlchemyFolderRepository(self._session)
         self.stars = SqlAlchemyNoteStarRepository(self._session)
+        self.organizations = SqlAlchemyOrganizationRepository(self._session)
+        self.organization_units = SqlAlchemyOrganizationUnitRepository(self._session)
+        self.teams = SqlAlchemyTeamRepository(self._session)
+        self.organization_memberships = SqlAlchemyOrganizationMembershipRepository(self._session)
+        self.team_memberships = SqlAlchemyTeamMembershipRepository(self._session)
         return self
 
     def __exit__(

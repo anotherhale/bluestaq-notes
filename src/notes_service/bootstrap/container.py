@@ -22,6 +22,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.identity import IdentityProvider
+from notes_service.application.ports.organization_authorization import (
+    OrganizationAuthorizationProvider,
+)
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
@@ -47,6 +50,31 @@ from notes_service.application.use_cases.notes import (
     UnstarNote,
     UpdateNote,
 )
+from notes_service.application.use_cases.organization import (
+    AddTeamMember,
+    ChangeMemberRole,
+    CreateOrganization,
+    CreateOrganizationUnit,
+    CreateTeam,
+    DeprovisionMember,
+    GetOrganization,
+    InviteOrganizationMember,
+    ListMyOrganizations,
+    ListOrganizationMembers,
+    ListOrganizationUnits,
+    ListTeamMembers,
+    ListTeams,
+    MoveOrganizationUnit,
+    OrganizationUseCase,
+    ReactivateMember,
+    RemoveTeamMember,
+    SetMemberManager,
+    SuspendMember,
+    UpdateOrganization,
+)
+from notes_service.application.use_cases.organization_policy import (
+    DefaultOrganizationAuthorizationProvider,
+)
 from notes_service.application.use_cases.permissions import (
     ListPermissions,
     RevokePermission,
@@ -62,6 +90,11 @@ from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 
 UseCaseT = TypeVar("UseCaseT", bound=UseCase)
+# Organization use cases need the second policy port, so they are bound to their
+# own base class. This is what makes mypy reject a factory that forgets to pass
+# ``organization_authorization`` — the omission that silently broke every org
+# endpoint at runtime while the generic ``**kwargs`` signature hid it.
+OrganizationUseCaseT = TypeVar("OrganizationUseCaseT", bound=OrganizationUseCase)
 
 
 @dataclass
@@ -97,6 +130,29 @@ class Container:
     share_note: Callable[[], ShareNote]
     revoke_permission: Callable[[], RevokePermission]
     list_permissions: Callable[[], ListPermissions]
+
+    # Organization administration. These are the only entry points the admin
+    # console uses; each enforces its own capability check in the application
+    # layer, so the router never decides authorization.
+    create_organization: Callable[[], CreateOrganization]
+    list_my_organizations: Callable[[], ListMyOrganizations]
+    get_organization: Callable[[], GetOrganization]
+    update_organization: Callable[[], UpdateOrganization]
+    create_organization_unit: Callable[[], CreateOrganizationUnit]
+    list_organization_units: Callable[[], ListOrganizationUnits]
+    move_organization_unit: Callable[[], MoveOrganizationUnit]
+    create_team: Callable[[], CreateTeam]
+    list_teams: Callable[[], ListTeams]
+    invite_organization_member: Callable[[], InviteOrganizationMember]
+    list_organization_members: Callable[[], ListOrganizationMembers]
+    change_member_role: Callable[[], ChangeMemberRole]
+    set_member_manager: Callable[[], SetMemberManager]
+    suspend_member: Callable[[], SuspendMember]
+    reactivate_member: Callable[[], ReactivateMember]
+    deprovision_member: Callable[[], DeprovisionMember]
+    add_team_member: Callable[[], AddTeamMember]
+    remove_team_member: Callable[[], RemoveTeamMember]
+    list_team_members: Callable[[], ListTeamMembers]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -135,6 +191,11 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         oidc_provider=oidc_provider, demo_provider=demo_provider
     )
     authorization_provider = DefaultAuthorizationProvider()
+    # Administration authority is a separate policy from content access: an org
+    # admin must never gain the ability to read members' notes.
+    organization_authorization_provider: OrganizationAuthorizationProvider = (
+        DefaultOrganizationAuthorizationProvider()
+    )
     clock = SystemClock()
 
     rate_limiter = InMemoryRateLimiter(
@@ -147,6 +208,21 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             return use_case_type(
                 uow_factory=uow_factory,
                 authorization=authorization_provider,
+                clock=clock,
+            )
+
+        return factory
+
+    def make_organization(
+        use_case_type: type[OrganizationUseCaseT],
+    ) -> Callable[[], OrganizationUseCaseT]:
+        """Build an organization use case, which needs the second policy port."""
+
+        def factory() -> OrganizationUseCaseT:
+            return use_case_type(
+                uow_factory=uow_factory,
+                authorization=authorization_provider,
+                organization_authorization=organization_authorization_provider,
                 clock=clock,
             )
 
@@ -178,4 +254,23 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         share_note=make(ShareNote),
         revoke_permission=make(RevokePermission),
         list_permissions=make(ListPermissions),
+        create_organization=make_organization(CreateOrganization),
+        list_my_organizations=make_organization(ListMyOrganizations),
+        get_organization=make_organization(GetOrganization),
+        update_organization=make_organization(UpdateOrganization),
+        create_organization_unit=make_organization(CreateOrganizationUnit),
+        list_organization_units=make_organization(ListOrganizationUnits),
+        move_organization_unit=make_organization(MoveOrganizationUnit),
+        create_team=make_organization(CreateTeam),
+        list_teams=make_organization(ListTeams),
+        invite_organization_member=make_organization(InviteOrganizationMember),
+        list_organization_members=make_organization(ListOrganizationMembers),
+        change_member_role=make_organization(ChangeMemberRole),
+        set_member_manager=make_organization(SetMemberManager),
+        suspend_member=make_organization(SuspendMember),
+        reactivate_member=make_organization(ReactivateMember),
+        deprovision_member=make_organization(DeprovisionMember),
+        add_team_member=make_organization(AddTeamMember),
+        remove_team_member=make_organization(RemoveTeamMember),
+        list_team_members=make_organization(ListTeamMembers),
     )

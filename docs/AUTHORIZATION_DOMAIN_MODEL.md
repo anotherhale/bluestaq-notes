@@ -87,7 +87,7 @@ Conceptual fields:
 @dataclass(frozen=True)
 class CapabilityDefinition:
     id: CapabilityId
-    name: str                 # e.g. "team.members.remove"
+    name: str  # e.g. "team.members.remove"
     allowed_scope_types: frozenset[ScopeType]
     inheritable: bool
     delegable: bool

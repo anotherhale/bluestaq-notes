@@ -13,6 +13,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.domain.identity.entities import User
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
@@ -24,6 +25,30 @@ from notes_service.domain.notes.value_objects import (
     MAX_TITLE_LENGTH,
     PermissionLevel,
 )
+from notes_service.domain.organization.entities import (
+    OrganizationMembership,
+    OrganizationUnit,
+    Team,
+    TeamMembership,
+)
+from notes_service.domain.organization.value_objects import (
+    MAX_NAME_LENGTH,
+    MAX_SLUG_LENGTH,
+    MembershipStatus,
+    OrganizationRole,
+    OrganizationStatus,
+    OrgPermission,
+    OrgUnitType,
+    TeamRole,
+    TeamStatus,
+    UnitStatus,
+)
+
+MAX_ORGANIZATION_NAME_LENGTH = MAX_NAME_LENGTH
+
+# Optional free-text field (a person's job title). Not a domain value object, so
+# the bound lives here purely to reject pathological payloads.
+MAX_TITLE_FIELD_LENGTH = 120
 
 
 class StrictModel(BaseModel):
@@ -255,6 +280,229 @@ class PermissionResponse(ResponseModel):
             granted_by=uuid.UUID(str(permission.granted_by)),
             created_at=permission.created_at,
         )
+
+
+# -- organizations ---------------------------------------------------------
+
+
+class OrganizationCreateRequest(StrictModel):
+    """Create an organization. The caller becomes its owner."""
+
+    name: str = Field(min_length=1, max_length=MAX_ORGANIZATION_NAME_LENGTH)
+    slug: str = Field(min_length=1, max_length=MAX_SLUG_LENGTH)
+    title: str | None = Field(default=None, max_length=MAX_TITLE_FIELD_LENGTH)
+
+
+class OrganizationUpdateRequest(StrictModel):
+    """Rename and/or change status. ``version`` enables optimistic concurrency."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=MAX_ORGANIZATION_NAME_LENGTH)
+    status: OrganizationStatus | None = None
+    version: int | None = Field(default=None, ge=1)
+
+
+class OrganizationResponse(ResponseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    status: OrganizationStatus
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    # The caller's own role and capabilities in this organization. Only the
+    # caller's own view is exposed, never the full membership list.
+    caller_role: OrganizationRole
+    caller_capabilities: list[OrgPermission]
+
+    @classmethod
+    def from_view(cls, view: OrganizationView) -> OrganizationResponse:
+        organization = view.organization
+        return cls(
+            id=uuid.UUID(str(organization.id)),
+            slug=str(organization.slug),
+            name=str(organization.name),
+            status=organization.status,
+            version=organization.version,
+            created_at=organization.created_at,
+            updated_at=organization.updated_at,
+            caller_role=view.membership.role,
+            caller_capabilities=sorted(view.capabilities),
+        )
+
+
+class OrganizationListResponse(BaseModel):
+    items: list[OrganizationResponse]
+    meta: PageMeta
+
+
+class OrganizationUnitCreateRequest(StrictModel):
+    name: str = Field(min_length=1, max_length=MAX_ORGANIZATION_NAME_LENGTH)
+    slug: str = Field(min_length=1, max_length=MAX_SLUG_LENGTH)
+    unit_type: OrgUnitType = OrgUnitType.DEPARTMENT
+    parent_id: uuid.UUID | None = None
+
+
+class OrganizationUnitMoveRequest(StrictModel):
+    """Re-parent a unit. ``null`` promotes it to the organization root."""
+
+    parent_id: uuid.UUID | None = None
+
+
+class OrganizationUnitResponse(ResponseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    name: str
+    slug: str
+    unit_type: OrgUnitType
+    parent_id: uuid.UUID | None
+    status: UnitStatus
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, unit: OrganizationUnit) -> OrganizationUnitResponse:
+        return cls(
+            id=uuid.UUID(str(unit.id)),
+            organization_id=uuid.UUID(str(unit.organization_id)),
+            name=str(unit.name),
+            slug=str(unit.slug),
+            unit_type=unit.unit_type,
+            parent_id=uuid.UUID(str(unit.parent_id)) if unit.parent_id else None,
+            status=unit.status,
+            version=unit.version,
+            created_at=unit.created_at,
+            updated_at=unit.updated_at,
+        )
+
+
+class OrganizationUnitListResponse(BaseModel):
+    items: list[OrganizationUnitResponse]
+    meta: PageMeta
+
+
+class TeamCreateRequest(StrictModel):
+    unit_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=MAX_ORGANIZATION_NAME_LENGTH)
+    slug: str = Field(min_length=1, max_length=MAX_SLUG_LENGTH)
+    parent_team_id: uuid.UUID | None = None
+
+
+class TeamResponse(ResponseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    unit_id: uuid.UUID
+    name: str
+    slug: str
+    parent_team_id: uuid.UUID | None
+    status: TeamStatus
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, team: Team) -> TeamResponse:
+        return cls(
+            id=uuid.UUID(str(team.id)),
+            organization_id=uuid.UUID(str(team.organization_id)),
+            unit_id=uuid.UUID(str(team.unit_id)),
+            name=str(team.name),
+            slug=str(team.slug),
+            parent_team_id=uuid.UUID(str(team.parent_team_id)) if team.parent_team_id else None,
+            status=team.status,
+            version=team.version,
+            created_at=team.created_at,
+            updated_at=team.updated_at,
+        )
+
+
+class TeamListResponse(BaseModel):
+    items: list[TeamResponse]
+    meta: PageMeta
+
+
+class MemberInviteRequest(StrictModel):
+    """Invite an existing user into the organization with an organization role."""
+
+    user_id: uuid.UUID
+    role: OrganizationRole = OrganizationRole.ORG_MEMBER
+    manager_user_id: uuid.UUID | None = None
+    title: str | None = Field(default=None, max_length=MAX_TITLE_FIELD_LENGTH)
+
+
+class MemberRoleChangeRequest(StrictModel):
+    role: OrganizationRole
+
+
+class MemberManagerRequest(StrictModel):
+    """Set or clear the reporting line. ``null`` removes the manager."""
+
+    manager_user_id: uuid.UUID | None = None
+
+
+class MembershipResponse(ResponseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    user_id: uuid.UUID
+    role: OrganizationRole
+    status: MembershipStatus
+    manager_user_id: uuid.UUID | None
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, membership: OrganizationMembership) -> MembershipResponse:
+        return cls(
+            id=uuid.UUID(str(membership.id)),
+            organization_id=uuid.UUID(str(membership.organization_id)),
+            user_id=uuid.UUID(str(membership.user_id)),
+            role=membership.role,
+            status=membership.status,
+            manager_user_id=(
+                uuid.UUID(str(membership.manager_user_id)) if membership.manager_user_id else None
+            ),
+            title=membership.title,
+            created_at=membership.created_at,
+            updated_at=membership.updated_at,
+        )
+
+
+class MembershipListResponse(BaseModel):
+    items: list[MembershipResponse]
+    meta: PageMeta
+
+
+class TeamMemberAddRequest(StrictModel):
+    user_id: uuid.UUID
+    role: TeamRole = TeamRole.TEAM_MEMBER
+
+
+class TeamMembershipResponse(ResponseModel):
+    id: uuid.UUID
+    team_id: uuid.UUID
+    user_id: uuid.UUID
+    role: TeamRole
+    status: MembershipStatus
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_domain(cls, membership: TeamMembership) -> TeamMembershipResponse:
+        return cls(
+            id=uuid.UUID(str(membership.id)),
+            team_id=uuid.UUID(str(membership.team_id)),
+            user_id=uuid.UUID(str(membership.user_id)),
+            role=membership.role,
+            status=membership.status,
+            created_at=membership.created_at,
+            updated_at=membership.updated_at,
+        )
+
+
+class TeamMembershipListResponse(BaseModel):
+    items: list[TeamMembershipResponse]
+    meta: PageMeta
 
 
 # -- envelopes ------------------------------------------------------------

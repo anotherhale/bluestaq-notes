@@ -10,6 +10,13 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol, Self, runtime_checkable
 
+from notes_service.application.ports.organization_repositories import (
+    OrganizationMembershipRepository,
+    OrganizationRepository,
+    OrganizationUnitRepository,
+    TeamMembershipRepository,
+    TeamRepository,
+)
 from notes_service.domain.identity.entities import ExternalIdentity, User
 from notes_service.domain.identity.value_objects import (
     Email,
@@ -186,6 +193,11 @@ class UnitOfWork(Protocol):
     permissions: NotePermissionRepository
     folders: FolderRepository
     stars: NoteStarRepository
+    organizations: OrganizationRepository
+    organization_units: OrganizationUnitRepository
+    teams: TeamRepository
+    organization_memberships: OrganizationMembershipRepository
+    team_memberships: TeamMembershipRepository
 
     def __enter__(self) -> Self: ...
 
