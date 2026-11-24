@@ -25,6 +25,11 @@ from notes_service.application.use_cases.authentication import (
 )
 from notes_service.domain.identity.entities import ExternalIdentity
 from notes_service.domain.identity.value_objects import UserId, UserStatus
+from notes_service.domain.organization.entities import Organization, OrganizationMembership
+from notes_service.domain.organization.value_objects import (
+    MembershipStatus,
+    OrganizationStatus,
+)
 from notes_service.infrastructure.db.models import UserRow
 from notes_service.infrastructure.db.seed import DEMO_USERS
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -394,3 +399,111 @@ class TestEndSession:
     def test_logout_of_unknown_token_is_silent(self, use_cases: dict[str, object]) -> None:
         use_cases["end"].run(session_token="never-issued")  # type: ignore[attr-defined]
         use_cases["end"].run(session_token="")  # type: ignore[attr-defined]
+
+
+def _give_membership(
+    session_factory: sessionmaker[Session],
+    *,
+    user_id: UserId,
+    status: MembershipStatus,
+) -> Organization:
+    """Attach ``user_id`` to a fresh organization with the given status."""
+    organization = Organization.create(slug=f"org-{uuid.uuid4().hex[:8]}", name="Acme")
+    with SqlAlchemyUnitOfWork(session_factory) as uow:
+        uow.organizations.add(organization)
+        uow.organization_memberships.add(
+            OrganizationMembership.grant(
+                organization_id=organization.id, user_id=user_id, status=status
+            )
+        )
+        uow.commit()
+    return organization
+
+
+class TestTenantAccess:
+    """A verified identity is not an entitlement; membership still gates access."""
+
+    def test_active_membership_can_log_in(
+        self, use_cases: dict[str, object], session_factory: sessionmaker[Session]
+    ) -> None:
+        _give_membership(session_factory, user_id=ALICE, status=MembershipStatus.ACTIVE)
+        link_identity(session_factory, user_id=ALICE, subject="subject-alice")
+
+        token = login(use_cases)
+
+        principal = use_cases["resolve"].run(session_token=token)  # type: ignore[attr-defined]
+        assert principal.user_id == ALICE
+
+    def test_unaffiliated_user_can_log_in_to_bootstrap(
+        self, use_cases: dict[str, object], session_factory: sessionmaker[Session]
+    ) -> None:
+        """No membership yet must still work, or a new tenant could never form."""
+        link_identity(session_factory, user_id=ALICE, subject="subject-alice")
+
+        token = login(use_cases)
+
+        use_cases["resolve"].run(session_token=token)  # type: ignore[attr-defined]
+
+    @pytest.mark.parametrize("status", [MembershipStatus.SUSPENDED, MembershipStatus.DEPROVISIONED])
+    def test_inactive_membership_cannot_log_in(
+        self,
+        use_cases: dict[str, object],
+        session_factory: sessionmaker[Session],
+        status: MembershipStatus,
+    ) -> None:
+        _give_membership(session_factory, user_id=ALICE, status=status)
+        link_identity(session_factory, user_id=ALICE, subject="subject-alice")
+
+        with pytest.raises(AuthenticationError):
+            login(use_cases)
+
+    def test_suspended_organization_blocks_login(
+        self, use_cases: dict[str, object], session_factory: sessionmaker[Session]
+    ) -> None:
+        organization = Organization.create(slug="suspended-co", name="Suspended Co")
+        with SqlAlchemyUnitOfWork(session_factory) as uow:
+            uow.organizations.add(organization)
+            uow.organization_memberships.add(
+                OrganizationMembership.grant(
+                    organization_id=organization.id,
+                    user_id=ALICE,
+                    status=MembershipStatus.ACTIVE,
+                )
+            )
+            uow.commit()
+        # Suspend the tenant after the membership exists.
+        with SqlAlchemyUnitOfWork(session_factory) as uow:
+            loaded = uow.organizations.get(organization.id)
+            assert loaded is not None
+            loaded.change_status(status=OrganizationStatus.SUSPENDED)
+            uow.organizations.save(loaded)
+            uow.commit()
+        link_identity(session_factory, user_id=ALICE, subject="subject-alice")
+
+        with pytest.raises(AuthenticationError):
+            login(use_cases)
+
+    def test_revocation_takes_effect_on_next_request(
+        self, use_cases: dict[str, object], session_factory: sessionmaker[Session]
+    ) -> None:
+        """The core property: an existing session stops working once revoked."""
+        organization = _give_membership(
+            session_factory, user_id=ALICE, status=MembershipStatus.ACTIVE
+        )
+        link_identity(session_factory, user_id=ALICE, subject="subject-alice")
+        token = login(use_cases)
+
+        # The session works while the membership is active...
+        use_cases["resolve"].run(session_token=token)  # type: ignore[attr-defined]
+
+        # ...and stops the moment the membership is revoked, without waiting for
+        # the session to expire.
+        with SqlAlchemyUnitOfWork(session_factory) as uow:
+            membership = uow.organization_memberships.get_for_user(organization.id, ALICE)
+            assert membership is not None
+            membership.deprovision()
+            uow.organization_memberships.save(membership)
+            uow.commit()
+
+        with pytest.raises(AuthenticationError):
+            use_cases["resolve"].run(session_token=token)  # type: ignore[attr-defined]

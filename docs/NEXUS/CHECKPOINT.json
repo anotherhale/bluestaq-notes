@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "run_id": "NEX-2026-11-24-01",
+  "timestamp": "2026-11-24T04:30:00Z",
+  "branch": "feature/agentic-enterprise-platform",
+  "commit": "e76e9c0",
+  "commit_note": "starting commit for this run; the run's own commit is recorded in EXECUTION_LOG.md",
+  "project_phase": "Phase 1 - Organization & Identity foundation (in progress)",
+  "active_task": "NEX-006",
+  "task_statuses": {
+    "NEX-001": "VERIFIED",
+    "NEX-002": "IMPLEMENTED",
+    "NEX-006": "TESTED",
+    "NEX-003": "TODO",
+    "NEX-004": "TODO",
+    "NEX-007": "TODO"
+  },
+  "completed_tasks": ["NEX-006"],
+  "validation": {
+    "pytest_full": "409 passed, 4 skipped",
+    "pytest_architecture": "passed",
+    "ruff_format": "clean",
+    "ruff_check": "clean",
+    "mypy": "clean (82 source files)",
+    "ci_observed": false
+  },
+  "uncommitted_work": "none",
+  "pr_state": {
+    "pr": 3,
+    "state": "draft",
+    "merged": false,
+    "note": "description predates OIDC and tenant-access work; see NEX-004"
+  },
+  "tracking_issue": {"number": 2, "state": "open"},
+  "blockers": [],
+  "risks": [
+    "R1: PR #3 description is stale relative to branch contents (NEX-004)",
+    "R3: CI not observed for this commit set; local gates only"
+  ],
+  "next_task": "NEX-003",
+  "next_action": "Implement agent identity and token exchange with delegated-token attenuation. The bearer provider already enforces tenant access, so agent tokens inherit revocation-on-next-request.",
+  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it."
+}

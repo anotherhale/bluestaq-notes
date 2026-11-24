@@ -80,6 +80,56 @@ fail closed on any validation error.
 
 **Complexity:** large. **Blocks:** NEX-003, all agent identity work.
 
+**Outcome (NEX-2026-11-24-01):** IMPLEMENTED — authorization-code + PKCE with
+state/nonce, JWKS-validated ID tokens, session cookies, and subject→user linkage
+via `external_identities` (never auto-provisions). Covered by
+`tests/authentication/{test_login_use_cases,test_identity_provider,test_login_router,test_session_domain}.py`.
+
+---
+
+## NEX-006 — Tenant access enforcement
+
+| Field | Value |
+| --- | --- |
+| Phase | 1 |
+| Priority | P1 |
+| Status | **TESTED** (local gates green) |
+| Dependencies | NEX-002 |
+
+**Objective:** close the offboarding gap. Authentication proves identity; it must
+not, on its own, keep granting access after the caller's membership is suspended
+or deprovisioned. Revocation must take effect on the next request, not at session
+expiry.
+
+**Scope:** a pure domain rule over the caller's memberships and their
+organizations; one shared application seam; enforcement on all three
+identity-establishing paths (OIDC callback, per-request session resolution,
+bearer tokens).
+
+**Acceptance criteria**
+
+- An active membership in an operational organization grants access.
+- A suspended or deprovisioned membership denies access.
+- A membership in an archived/suspended organization denies access, so
+  suspending a tenant revokes access for everyone in it at once.
+- A user with several tenants keeps access while *any* one still grants it.
+- A user with no memberships is `UNAFFILIATED` and allowed through, so a new
+  identity can create its first organization — granting nothing in any existing
+  tenant.
+- A revoked membership is rejected on the bearer path, not only on the session
+  path.
+- The refusal message is uniform (no account-existence oracle).
+
+**Required tests:** domain rule branch coverage; login use-case tenant cases;
+bearer path with a real signed RS256 JWT against a real unit of work.
+
+**Security considerations:** deterministic application-layer enforcement, never
+model output. Default-deny. No caching, by design — that is what makes revocation
+immediate.
+
+**Complexity:** medium. **Outcome:** `pytest` 409 passed / 4 skipped; ruff and
+mypy clean. Detail in `EXECUTION_LOG.md`.
+
 ---
 
 ## NEX-003 — Agent identity and token exchange

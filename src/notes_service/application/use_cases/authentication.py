@@ -15,6 +15,9 @@ The security properties live here, not in the router:
   auto-provisioning: an unknown or inactive subject is denied. A successful
   login establishes a session whose raw cookie secret is returned to the caller
   once and never persisted.
+* Both ``CompleteLogin`` and ``ResolveSession`` additionally require the user to
+  still hold tenant access, so a suspended or deprovisioned membership cannot
+  authenticate and an existing session stops working on the next request.
 * ``ResolveSession`` and ``EndSession`` cover the session lifecycle; resolution
   is fail-closed and slides the idle window.
 
@@ -31,6 +34,7 @@ from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.oidc import OidcRelyingParty
 from notes_service.application.use_cases.base import UnitOfWorkFactory
+from notes_service.application.use_cases.tenant_access import ensure_tenant_access
 from notes_service.domain.errors import DomainError
 from notes_service.domain.identity.entities import User
 from notes_service.domain.identity.principal import Principal
@@ -191,6 +195,9 @@ class CompleteLogin(OidcUseCase):
             user = uow.users.get(identity.user_id)
             if user is None or not user.is_active:
                 raise AuthenticationError("linked account is missing or inactive")
+            # A verified identity is not by itself an entitlement: a suspended
+            # or deprovisioned membership must not be able to start a session.
+            ensure_tenant_access(uow, user_id=str(user.id))
             return user
 
 
@@ -209,6 +216,9 @@ class ResolveSession(OidcUseCase):
             user = uow.users.get(session.user_id)
             if user is None or not user.is_active:
                 raise AuthenticationError("session owner is missing or inactive")
+            # Re-checked on every request, not only at login: this is what makes
+            # a revocation take effect immediately instead of at session expiry.
+            ensure_tenant_access(uow, user_id=str(user.id))
             session.touch(now, idle_ttl=self._session_idle_ttl)
             uow.sessions.save(session)
             uow.commit()
