@@ -303,9 +303,11 @@ class TestMembershipLifecycle:
             headers=auth_headers(ALICE),
         )
 
-        # Offboarding is terminal: the domain invariant refuses to revive it,
-        # which the error layer surfaces as 403 "operation not permitted".
-        assert response.status_code == 403, response.text
+        # Offboarding is terminal, but this is a rejected state change rather
+        # than a permission failure: Alice is allowed to manage memberships.
+        # Like the last-admin guards above, it is reported as 422, not 403.
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == "invalid_input"
         assert (
             client.get(f"/api/v1/organizations/{org['id']}", headers=auth_headers(BOB)).status_code
             == 404
