@@ -356,9 +356,67 @@ class TeamMembershipRow(Base):
     )
 
 
+class LoginTransactionRow(Base):
+    """One pending OIDC login attempt, keyed by its single-use ``state``.
+
+    Rows are short-lived (minutes) and are deleted once consumed, so the table
+    stays small. ``state`` is unique because it is the lookup key the callback
+    arrives with; a duplicate would be ambiguous and is rejected by the schema.
+    """
+
+    __tablename__ = "login_transactions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    state: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    nonce: Mapped[str] = mapped_column(String(255), nullable=False)
+    code_verifier: Mapped[str] = mapped_column(String(255), nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String(2048), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("length(state) >= 1", name="state_not_empty"),
+        CheckConstraint("length(nonce) >= 1", name="nonce_not_empty"),
+        CheckConstraint("length(code_verifier) >= 1", name="code_verifier_not_empty"),
+        Index("ix_login_transactions_expires_at_consumed_at", "expires_at", "consumed_at"),
+    )
+
+
+class UserSessionRow(Base):
+    """An established authenticated session.
+
+    Only the SHA-256 hash of the cookie secret is stored, so a database
+    disclosure cannot be replayed as a live session. ``token_hash`` is unique so
+    one cookie maps to exactly one session row.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    idle_expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+    absolute_expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("length(token_hash) = 64", name="token_hash_sha256"),
+        CheckConstraint("absolute_expires_at >= created_at", name="absolute_after_created"),
+        Index("ix_user_sessions_user_id_revoked_at", "user_id", "revoked_at"),
+    )
+
+
 __all__ = [
     "ExternalIdentityRow",
     "FolderRow",
+    "LoginTransactionRow",
     "NotePermissionRow",
     "NoteRow",
     "NoteStarRow",
@@ -368,4 +426,5 @@ __all__ = [
     "TeamMembershipRow",
     "TeamRow",
     "UserRow",
+    "UserSessionRow",
 ]

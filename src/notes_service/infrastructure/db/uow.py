@@ -30,6 +30,10 @@ from notes_service.application.ports.repositories import (
     UnitOfWork,
     UserRepository,
 )
+from notes_service.application.ports.sessions import (
+    LoginTransactionRepository,
+    UserSessionRepository,
+)
 from notes_service.infrastructure.db.organization_repositories import (
     SqlAlchemyOrganizationMembershipRepository,
     SqlAlchemyOrganizationRepository,
@@ -40,10 +44,12 @@ from notes_service.infrastructure.db.organization_repositories import (
 from notes_service.infrastructure.db.repositories import (
     SqlAlchemyExternalIdentityRepository,
     SqlAlchemyFolderRepository,
+    SqlAlchemyLoginTransactionRepository,
     SqlAlchemyNotePermissionRepository,
     SqlAlchemyNoteRepository,
     SqlAlchemyNoteStarRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyUserSessionRepository,
 )
 
 
@@ -65,6 +71,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     teams: TeamRepository
     organization_memberships: OrganizationMembershipRepository
     team_memberships: TeamMembershipRepository
+    sessions: UserSessionRepository
+    login_transactions: LoginTransactionRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -89,6 +97,8 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.teams = SqlAlchemyTeamRepository(self._session)
         self.organization_memberships = SqlAlchemyOrganizationMembershipRepository(self._session)
         self.team_memberships = SqlAlchemyTeamMembershipRepository(self._session)
+        self.sessions = SqlAlchemyUserSessionRepository(self._session)
+        self.login_transactions = SqlAlchemyLoginTransactionRepository(self._session)
         return self
 
     def __exit__(

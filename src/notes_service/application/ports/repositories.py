@@ -17,6 +17,10 @@ from notes_service.application.ports.organization_repositories import (
     TeamMembershipRepository,
     TeamRepository,
 )
+from notes_service.application.ports.sessions import (
+    LoginTransactionRepository,
+    UserSessionRepository,
+)
 from notes_service.domain.identity.entities import ExternalIdentity, User
 from notes_service.domain.identity.value_objects import (
     Email,
@@ -198,6 +202,8 @@ class UnitOfWork(Protocol):
     teams: TeamRepository
     organization_memberships: OrganizationMembershipRepository
     team_memberships: TeamMembershipRepository
+    sessions: UserSessionRepository
+    login_transactions: LoginTransactionRepository
 
     def __enter__(self) -> Self: ...
 

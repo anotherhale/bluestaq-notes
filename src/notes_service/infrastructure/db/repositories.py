@@ -7,6 +7,7 @@ commit; the :class:`SqlAlchemyUnitOfWork` owns transaction boundaries.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import delete as sql_delete
@@ -17,10 +18,13 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from notes_service.domain.errors import VersionConflict
 from notes_service.domain.identity.entities import ExternalIdentity, User
+from notes_service.domain.identity.session import LoginTransaction, UserSession
 from notes_service.domain.identity.value_objects import (
     Email,
     ExternalIdentityId,
+    LoginTransactionId,
     ProviderSubject,
+    SessionId,
     UserId,
     UserStatus,
 )
@@ -39,10 +43,12 @@ from notes_service.domain.notes.value_objects import (
 from notes_service.infrastructure.db.models import (
     ExternalIdentityRow,
     FolderRow,
+    LoginTransactionRow,
     NotePermissionRow,
     NoteRow,
     NoteStarRow,
     UserRow,
+    UserSessionRow,
 )
 
 
@@ -566,11 +572,148 @@ class SqlAlchemyNotePermissionRepository:
         return cast(CursorResult[Any], result).rowcount > 0
 
 
+def _login_transaction_to_domain(row: LoginTransactionRow) -> LoginTransaction:
+    return LoginTransaction(
+        id=LoginTransactionId(str(row.id)),
+        state=row.state,
+        nonce=row.nonce,
+        code_verifier=row.code_verifier,
+        redirect_uri=row.redirect_uri,
+        created_at=row.created_at,
+        expires_at=row.expires_at,
+        consumed_at=row.consumed_at,
+    )
+
+
+class SqlAlchemyLoginTransactionRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, transaction: LoginTransaction) -> None:
+        self._session.add(
+            LoginTransactionRow(
+                id=_as_uuid(transaction.id),
+                state=transaction.state,
+                nonce=transaction.nonce,
+                code_verifier=transaction.code_verifier,
+                redirect_uri=transaction.redirect_uri,
+                created_at=transaction.created_at,
+                expires_at=transaction.expires_at,
+                consumed_at=transaction.consumed_at,
+            )
+        )
+
+    def get_by_state(self, state: str) -> LoginTransaction | None:
+        row = self._session.execute(
+            select(LoginTransactionRow).where(LoginTransactionRow.state == state)
+        ).scalar_one_or_none()
+        return _login_transaction_to_domain(row) if row else None
+
+    def save(self, transaction: LoginTransaction) -> None:
+        row = self._session.get(LoginTransactionRow, _as_uuid(transaction.id))
+        if row is None:
+            self.add(transaction)
+            return
+        row.consumed_at = transaction.consumed_at
+
+    def delete(self, transaction: LoginTransaction) -> None:
+        self._session.execute(
+            sql_delete(LoginTransactionRow).where(
+                LoginTransactionRow.id == _as_uuid(transaction.id)
+            )
+        )
+
+    def purge_expired(self, *, before: datetime) -> int:
+        result = self._session.execute(
+            sql_delete(LoginTransactionRow).where(LoginTransactionRow.expires_at < before)
+        )
+        return cast(CursorResult[Any], result).rowcount
+
+
+def _session_to_domain(row: UserSessionRow) -> UserSession:
+    return UserSession(
+        id=SessionId(str(row.id)),
+        user_id=UserId(str(row.user_id)),
+        provider=row.provider,
+        subject=row.subject,
+        token_hash=row.token_hash,
+        created_at=row.created_at,
+        last_seen_at=row.last_seen_at,
+        idle_expires_at=row.idle_expires_at,
+        absolute_expires_at=row.absolute_expires_at,
+        revoked_at=row.revoked_at,
+    )
+
+
+class SqlAlchemyUserSessionRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, session: UserSession) -> None:
+        self._session.add(
+            UserSessionRow(
+                id=_as_uuid(session.id),
+                user_id=_as_uuid(session.user_id),
+                provider=session.provider,
+                subject=session.subject,
+                token_hash=session.token_hash,
+                created_at=session.created_at,
+                last_seen_at=session.last_seen_at,
+                idle_expires_at=session.idle_expires_at,
+                absolute_expires_at=session.absolute_expires_at,
+                revoked_at=session.revoked_at,
+            )
+        )
+
+    def get_by_token_hash(self, token_hash: str) -> UserSession | None:
+        row = self._session.execute(
+            select(UserSessionRow).where(UserSessionRow.token_hash == token_hash)
+        ).scalar_one_or_none()
+        return _session_to_domain(row) if row else None
+
+    def save(self, session: UserSession) -> None:
+        row = self._session.get(UserSessionRow, _as_uuid(session.id))
+        if row is None:
+            self.add(session)
+            return
+        row.last_seen_at = session.last_seen_at
+        row.idle_expires_at = session.idle_expires_at
+        row.revoked_at = session.revoked_at
+
+    def list_active_for_user(self, user_id: UserId, *, now: datetime) -> list[UserSession]:
+        rows = (
+            self._session.execute(
+                select(UserSessionRow).where(
+                    UserSessionRow.user_id == _as_uuid(user_id),
+                    UserSessionRow.revoked_at.is_(None),
+                    UserSessionRow.idle_expires_at > now,
+                    UserSessionRow.absolute_expires_at > now,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [_session_to_domain(row) for row in rows]
+
+    def revoke_all_for_user(self, user_id: UserId, *, now: datetime) -> int:
+        result = self._session.execute(
+            update(UserSessionRow)
+            .where(
+                UserSessionRow.user_id == _as_uuid(user_id),
+                UserSessionRow.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        return cast(CursorResult[Any], result).rowcount
+
+
 __all__ = [
     "SqlAlchemyExternalIdentityRepository",
     "SqlAlchemyFolderRepository",
+    "SqlAlchemyLoginTransactionRepository",
     "SqlAlchemyNotePermissionRepository",
     "SqlAlchemyNoteRepository",
     "SqlAlchemyNoteStarRepository",
     "SqlAlchemyUserRepository",
+    "SqlAlchemyUserSessionRepository",
 ]
