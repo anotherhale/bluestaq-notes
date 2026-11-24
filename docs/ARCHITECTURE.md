@@ -161,3 +161,16 @@ These checks fail the build if the boundaries erode.
   A deeper check can be added behind the same endpoint.
 - There is no event/audit bus; `granted_by`/`created_at` on permissions are the
   only audit trail.
+
+
+## Enterprise authorization target
+
+The existing `AuthorizationProvider` remains the application-layer policy port.
+The target enterprise model (proposed in ADR-011) evolves it to support structured
+context and decisions with capability resolution, scoped roles, ABAC, resource
+grants, delegation, and obligations. Policy Decision Point, Policy Enforcement
+Point, Policy Information Point, and Policy Administration Point are logical
+components within the modular monolith initially. See
+[Authorization Architecture](AUTHORIZATION_ARCHITECTURE.md) and
+[Authorization Policy Model](AUTHORIZATION_POLICY_MODEL.md). This target design
+must not be mistaken for functionality already implemented.
