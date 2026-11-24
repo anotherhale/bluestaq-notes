@@ -531,6 +531,50 @@ class ApprovalRequestRow(Base):
     )
 
 
+class ToolInvocationRow(Base):
+    """One audited tool invocation through the governed gateway.
+
+    The row is written before the handler runs (``started``) and finalised
+    after, so a crash mid-handler is visible as an unfinished invocation rather
+    than silently vanishing. ``arguments_digest`` is stored instead of the raw
+    arguments: the audit trail must not become a second copy of note content.
+
+    ``idempotency_key`` is unique per agent — not globally — so one agent
+    reusing a key cannot block or observe another agent's invocation.
+    """
+
+    __tablename__ = "tool_invocations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("agent_tokens.id", ondelete="SET NULL"), nullable=True
+    )
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    capability: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    arguments_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_ref: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="started")
+    outcome: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("agent_approval_requests.id", ondelete="SET NULL"), nullable=True
+    )
+    invoked_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('started','succeeded','failed','denied')", name="status_valid"),
+        CheckConstraint("length(arguments_digest) = 64", name="digest_sha256"),
+        UniqueConstraint(
+            "agent_id", "idempotency_key", name="uq_tool_invocations_agent_idempotency"
+        ),
+        Index("ix_tool_invocations_agent_invoked_at", "agent_id", "invoked_at"),
+    )
+
+
 __all__ = [
     "AgentRow",
     "AgentTokenRow",
@@ -547,6 +591,7 @@ __all__ = [
     "OrganizationUnitRow",
     "TeamMembershipRow",
     "TeamRow",
+    "ToolInvocationRow",
     "UserRow",
     "UserSessionRow",
 ]

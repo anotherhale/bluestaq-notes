@@ -15,6 +15,7 @@ from notes_service.application.ports.agents import (
     AgentTokenRepository,
     ApprovalRequestRepository,
     DelegationRepository,
+    ToolInvocationRepository,
 )
 from notes_service.application.ports.organization_repositories import (
     OrganizationMembershipRepository,
@@ -214,6 +215,7 @@ class UnitOfWork(Protocol):
     delegations: DelegationRepository
     agent_tokens: AgentTokenRepository
     approvals: ApprovalRequestRepository
+    tool_invocations: ToolInvocationRepository
 
     def __enter__(self) -> Self: ...
 

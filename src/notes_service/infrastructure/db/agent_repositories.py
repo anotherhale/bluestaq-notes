@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.token import AgentToken
+from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
     AgentId,
     AgentStatus,
@@ -40,6 +41,7 @@ from notes_service.infrastructure.db.models import (
     AgentTokenRow,
     ApprovalRequestRow,
     DelegationRow,
+    ToolInvocationRow,
 )
 
 
@@ -108,6 +110,26 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
         decided_at=row.decided_at,
         decided_by_user_id=UserId.parse(row.decided_by_user_id) if row.decided_by_user_id else None,
         reason=row.reason,
+    )
+
+
+def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
+    return ToolInvocation(
+        id=ToolInvocationId.parse(row.id),
+        agent_id=AgentId.parse(row.agent_id),
+        token_id=AgentTokenId.parse(row.token_id) if row.token_id else None,
+        tool_name=row.tool_name,
+        capability=Capability(row.capability),
+        idempotency_key=row.idempotency_key,
+        arguments_digest=row.arguments_digest,
+        resource_ref=row.resource_ref,
+        status=InvocationStatus(row.status),
+        outcome=row.outcome,
+        approval_request_id=(
+            ApprovalRequestId.parse(row.approval_request_id) if row.approval_request_id else None
+        ),
+        invoked_at=row.invoked_at,
+        completed_at=row.completed_at,
     )
 
 
@@ -336,6 +358,18 @@ class SqlAlchemyApprovalRequestRepository:
         )
         return [_approval_to_domain(row) for row in rows]
 
+    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
+        rows = (
+            self._session.execute(
+                select(ApprovalRequestRow)
+                .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
+                .order_by(ApprovalRequestRow.requested_at)
+            )
+            .scalars()
+            .all()
+        )
+        return [_approval_to_domain(row) for row in rows]
+
     def save(self, request: ApprovalRequest) -> None:
         row = self._session.get(ApprovalRequestRow, _as_uuid(request.id))
         if row is None:
@@ -349,9 +383,86 @@ class SqlAlchemyApprovalRequestRepository:
         row.reason = request.reason
 
 
+class SqlAlchemyToolInvocationRepository:
+    """SQLAlchemy adapter for the tool-invocation audit trail."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, invocation: ToolInvocation) -> None:
+        self._session.add(
+            ToolInvocationRow(
+                id=_as_uuid(invocation.id),
+                agent_id=_as_uuid(invocation.agent_id),
+                token_id=(
+                    _as_uuid(invocation.token_id) if invocation.token_id is not None else None
+                ),
+                tool_name=invocation.tool_name,
+                capability=invocation.capability.value,
+                idempotency_key=invocation.idempotency_key,
+                arguments_digest=invocation.arguments_digest,
+                resource_ref=invocation.resource_ref,
+                status=invocation.status.value,
+                outcome=invocation.outcome,
+                approval_request_id=(
+                    _as_uuid(invocation.approval_request_id)
+                    if invocation.approval_request_id is not None
+                    else None
+                ),
+                invoked_at=invocation.invoked_at,
+                completed_at=invocation.completed_at,
+            )
+        )
+
+    def save(self, invocation: ToolInvocation) -> None:
+        row = self._session.get(ToolInvocationRow, _as_uuid(invocation.id))
+        if row is None:
+            self.add(invocation)
+            return
+        row.status = invocation.status.value
+        row.outcome = invocation.outcome
+        row.completed_at = invocation.completed_at
+
+    def get(self, invocation_id: ToolInvocationId) -> ToolInvocation | None:
+        row = self._session.get(ToolInvocationRow, _as_uuid(invocation_id))
+        return _invocation_to_domain(row) if row else None
+
+    def find_by_idempotency_key(
+        self, agent_id: AgentId, idempotency_key: str
+    ) -> ToolInvocation | None:
+        row = (
+            self._session.execute(
+                select(ToolInvocationRow).where(
+                    ToolInvocationRow.agent_id == _as_uuid(agent_id),
+                    ToolInvocationRow.idempotency_key == idempotency_key,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        return _invocation_to_domain(row) if row else None
+
+    def list_for_agent(
+        self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
+    ) -> list[ToolInvocation]:
+        rows = (
+            self._session.execute(
+                select(ToolInvocationRow)
+                .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
+                .order_by(ToolInvocationRow.invoked_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+        return [_invocation_to_domain(row) for row in rows]
+
+
 __all__ = [
     "SqlAlchemyAgentRepository",
     "SqlAlchemyAgentTokenRepository",
     "SqlAlchemyApprovalRequestRepository",
     "SqlAlchemyDelegationRepository",
+    "SqlAlchemyToolInvocationRepository",
 ]

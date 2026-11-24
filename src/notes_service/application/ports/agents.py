@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.token import AgentToken
+from notes_service.domain.agent.tools import ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
     AgentId,
     ApprovalRequestId,
@@ -96,7 +97,46 @@ class ApprovalRequestRepository(Protocol):
 
     def list_pending_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]: ...
 
+    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
+        """Every approval request for an agent, newest state included.
+
+        The tool gateway needs *approved* requests, not only pending ones, so
+        this is broader than :meth:`list_pending_for_agent`.
+        """
+        ...
+
     def save(self, request: ApprovalRequest) -> None: ...
+
+
+@runtime_checkable
+class ToolInvocationRepository(Protocol):
+    """Persistence port for the tool-invocation audit trail.
+
+    A record is written before the handler runs and finalised afterwards, so
+    this repository must support an insert followed by an in-place update within
+    one transaction. Lookups are scoped by agent: an invocation is never
+    readable across agents.
+    """
+
+    def add(self, invocation: ToolInvocation) -> None: ...
+
+    def save(self, invocation: ToolInvocation) -> None: ...
+
+    def get(self, invocation_id: ToolInvocationId) -> ToolInvocation | None: ...
+
+    def find_by_idempotency_key(
+        self, agent_id: AgentId, idempotency_key: str
+    ) -> ToolInvocation | None:
+        """The invocation recorded for this agent under this key, if any.
+
+        Scoped to the agent, not global: one agent reusing a key must not be
+        able to observe or block another agent's invocation.
+        """
+        ...
+
+    def list_for_agent(
+        self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
+    ) -> list[ToolInvocation]: ...
 
 
 __all__ = [
@@ -104,4 +144,5 @@ __all__ = [
     "AgentTokenRepository",
     "ApprovalRequestRepository",
     "DelegationRepository",
+    "ToolInvocationRepository",
 ]
