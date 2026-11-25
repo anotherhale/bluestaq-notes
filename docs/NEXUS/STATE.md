@@ -7,15 +7,59 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-025 all VERIFIED.** NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4); NEX-024 abort-orphaned audit link **VERIFIED** (`eaaae23`, CI 4/4) — R27 closed on both settle paths; **NEX-025 approval revocation on delegation/agent revoke VERIFIED (`d481bd0`, CI 4/4)** — R28 closed on both revocation paths. The compare-and-set audit of `infrastructure/db/` is **closed**. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-025 VERIFIED; NEX-026 TESTED.** NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4); NEX-024 abort-orphaned audit link **VERIFIED** (`eaaae23`, CI 4/4) — R27 closed on both settle paths; NEX-025 approval revocation on delegation/agent revoke **VERIFIED (`d481bd0`, CI 4/4)** — R28 closed on both revocation paths; **NEX-026 two-clock approval judgement TESTED (`b46e2e3`, pushed, CI not yet observed)** — R29 closed at the aggregate and the gateway, pending CI. The compare-and-set audit of `infrastructure/db/` is **closed**. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `24f1e20` — the docs-only checkpoint head left by run `NEX-2026-11-25-27`. |
-| Head commit (run end) | `ea80cfd` — docs-only commits after the slice: `7229b73` checkpoint, `ae64d4c` promotion, `f393733` scope fix, `fd223f4` execution log, `ea80cfd` PR-refresh record. The slice itself is `d481bd0` (code + tests + state files in one commit, so its CI run covers the whole tree). |
-| Last CI result | **`d481bd0` (NEX-025): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z.** A run at the slice's own commit, not descendant-CI. Local gates on the same tree: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **748 passed / 4 skipped**, negative control verified (3 positive tests red against a no-op adapter, 3 guard tests still green). |
+| Base commit (run start) | `855becb` — the docs-only checkpoint head left by run `NEX-2026-11-25-28`. |
+| Head commit (run end) | `b46e2e3` — the NEX-026 slice (code + tests + a clean commit message), pushed to `origin/feature/agentic-enterprise-platform`. Verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, which returned `b46e2e3` — the local remote-tracking ref in this grafted clone is stale and must not be trusted without `ls-remote`. |
+| Last CI result | **`d481bd0` (NEX-025): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z.** **No CI claim is made for `b46e2e3` (NEX-026)** — its runs had not been observed when this file was written. Local gates on the NEX-026 tree: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **754 passed / 4 skipped**, negative control verified (5 of 6 new tests red against the pre-slice `entities.py`). |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Head `fd223f4`, body refreshed 2026-11-25T13:21Z at head `fd223f4` and verified byte-equal after the PATCH. It now reads 32,161 additions / 10 deletions / 112 files / 126 commits, 752 tests, eleven migrations, eleven routers, and names NEX-023 (`c367746`), NEX-024 (`eaaae23`) and NEX-025 (`d481bd0`) among the CI-verified commits. Counters come from the pull-request object, never a local diff. |
-| CI status | **`d481bd0` (NEX-025 code slice): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and state landed in this one commit, the run covers the whole tree. Prior: **`e511fc9` (docs-only head): 4/4 `completed/success`, every run reporting `head_sha` `e511fc9`, read 12:41Z.** Prior: **`eaaae23` (NEX-024): 4/4 `completed/success`, polled 12:16Z.** Earlier observations, all `completed/success` with matching `head_sha`: `c367746` 4/4 (11:50Z), `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| CI status | **`d481bd0` (NEX-025 code slice): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and state landed in this one commit, the run covers the whole tree. **`b46e2e3` (NEX-026): not observed — no claim.** Prior: **`e511fc9` (docs-only head): 4/4 `completed/success`, every run reporting `head_sha` `e511fc9`, read 12:41Z.** Prior: **`eaaae23` (NEX-024): 4/4 `completed/success`, polled 12:16Z.** Earlier observations, all `completed/success` with matching `head_sha`: `c367746` 4/4 (11:50Z), `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-026 (run `NEX-2026-11-25-29`) — an approval must be judged against the clock that stamped it
+
+The approval gate compared two different clocks. `ApprovalRequest.open` derives `expires_at`
+from the timestamp it is handed, and every production use case passes its own `Clock` port —
+but the decision path asked `is_expired`, which reads the module-level wall clock. So the
+bound was written by one clock and read by another, and the answer is wrong in both
+directions whenever they disagree:
+
+- opened on a clock **behind** the wall clock, a live request is judged already lapsed and a
+  human cannot decide it. The gate refuses consent it should accept.
+- opened on a clock **ahead** of the wall clock, a lapsed request is judged still valid, so an
+  approval outlives the bound it was issued under. Consent survives longer than it was
+  granted for.
+
+This is the failure mode the whole `Clock` port exists to prevent, and it was invisible for
+one specific reason: every existing expiry test used the same clock for opening and deciding,
+so the two readings always agreed. A defect that requires *disagreement* to appear is exactly
+the kind a single-clock test suite cannot see.
+
+The repository adapter was already correct — `SqlAlchemyApprovalRequestRepository` compares
+`expires_at > now` on the caller's clock and treats NULL as expired. The defect was confined
+to the aggregate's own decision path, which is why no integration test caught it either.
+
+**The fix is subtraction, not addition.** `expired_at(*, now)` becomes the one honest
+comparison: a single instant against a single bound. `is_expired` survives as the wall-clock
+convenience for callers that genuinely have no clock, and now *delegates* to `expired_at`, so
+the NULL-means-lapsed rule is written once instead of twice. `approve`/`deny` take the
+caller's instant and use it for **both** the decidability check and `decided_at` — previously
+those were two separate readings of the wall clock, so the recorded decision timestamp could
+name a different instant from the one that was actually checked.
+
+**What to carry forward (R29).** A validity bound is meaningless unless you can name the clock
+that stamped it, and the same clock must judge it. The general question for any bound: *who
+writes this, and does the reader use the same one?* A new expiry-like field that reads a module
+clock instead of the caller's reopens this class.
+
+Status: **TESTED.** Committed and pushed at `b46e2e3`; CI had not been observed when this was
+written, so it is not VERIFIED. Local gates: `ruff format` clean, `ruff check` clean, `mypy`
+clean over 98 sources, full `pytest` **754 passed / 4 skipped** (was 748; the delta is exactly
+the 6 new tests in `tests/agent/test_approval_clock.py`). Negative control: reverting only
+`entities.py` to its pre-slice version turns 5 of those 6 red; the sixth asserts the wall-clock
+property and must keep passing.
+
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
 

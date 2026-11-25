@@ -3532,3 +3532,96 @@ Read `docs/NEXUS/ROADMAP.md` Phase 5, pick the next dependency-ready slice from
 `BACKLOG.md`, and implement it as one vertical slice. Also refresh PR #3's body from the
 PR object's counters — it still describes the tree at `88926ec` and does not mention
 NEX-025 (`d481bd0`) or R28.
+
+---
+
+## Run `NEX-2026-11-25-29` — NEX-026: an approval must be judged against the clock that stamped it
+
+**Run ID:** `NEX-2026-11-25-29` · **Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `855becb` (docs-only checkpoint head from run 28) · **Ending commit:** `b46e2e3` (NEX-026 slice)
+**Slice:** NEX-026 (new) · **Phase:** 5 (durable runtime) / approval governance
+
+**Recovery.** HEAD was `855becb`, a docs-only commit after `d481bd0` (NEX-025), with a clean
+tree. The checkpoint named `d481bd0` and described NEX-001..NEX-025 all VERIFIED, which matched
+`git log`. The run inherited one unfinished piece of work from its predecessor: the NEX-026
+slice existed as a local commit whose message had been corrupted by a heredoc. Reconciled
+first — the commit was amended from a message file written with the editor tool, and the body
+was byte-compared against that file (identical apart from the trailing newline git appends).
+
+**Task completed:** NEX-026 — one validity bound, one clock.
+
+`ApprovalRequest.open` stamped `expires_at` from the caller's `Clock` port, but the decision
+path called `is_expired`, which reads the module wall clock. Two clocks, one comparison, and the
+answer is wrong in both directions whenever they disagree: a request opened on a clock behind
+the wall clock is judged already lapsed (a human cannot decide a live request), and a request
+opened on a clock ahead of the wall clock is judged still valid after its bound passed (consent
+outlives the bound it was granted under). Every existing expiry test opened and decided on the
+same clock, so the two readings always agreed and the defect was structurally invisible.
+
+**Files changed** (`b46e2e3`):
+- `src/notes_service/domain/agent/entities.py` — `expired_at(*, now)` is the single comparison;
+  `is_expired` delegates to it so NULL-means-lapsed is stated once; `is_usable`,
+  `_assert_decidable`, `approve` and `deny` take the caller's instant, and `approve`/`deny` use
+  that one instant for both the check and `decided_at`.
+- `src/notes_service/application/use_cases/agents.py` — `OpenApprovalRequest` passes its clock.
+- `src/notes_service/application/use_cases/tools.py` — `_open_or_reuse_approval_request` takes
+  `now` and uses it for both the reuse test and a new request's bound.
+- `tests/agent/test_approval_clock.py` — new, 6 tests.
+
+**Migrations:** none. `expires_at` was already persisted; only the judging clock changed.
+
+**Tests executed (local, on the `b46e2e3` tree):**
+- `pytest tests/agent/test_approval_clock.py` — **6 passed**.
+- Full suite — **754 passed, 4 skipped, 1 warning**, exit 0. Baseline was 748; the delta is
+  exactly the 6 new tests.
+- `ruff format` clean, `ruff check` clean, `mypy` clean over 98 source files.
+- **Negative control:** reverting only `entities.py` to its pre-slice version turns 5 of the 6
+  new tests red — including `test_a_request_opened_in_the_past_is_still_decidable` and
+  `test_a_lapsed_request_is_refused_even_when_the_wall_clock_disagrees`. The sixth asserts that
+  `is_expired` still reads the wall clock, so the fix cannot be "delete the check"; it stays
+  green under the mutation, which is the point.
+
+**Security:** this is a governance control, not a cosmetic fix. R29 is closed at the aggregate
+and the gateway. The invariant to carry forward: *for every bound, name the clock that writes it
+and assert the reader uses the same one* — and test the disagreement, because a single-clock
+suite cannot see this class at all.
+
+**Decisions:** `is_expired` was kept rather than removed. Deleting it would have been tidier and
+would have silently changed the contract for callers with no clock; delegating keeps the
+fail-closed NULL rule in one place while leaving those callers working. Recorded in
+`DECISIONS.md`.
+
+**Commit created:** `b46e2e3` — `fix(agent): judge an approval against the clock that stamped it`.
+
+**Push status:** **PUSHED.** `git push origin feature/agentic-enterprise-platform` reported
+`855becb..b46e2e3`. Verified independently with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, which returned
+`b46e2e30ea61f00a1401f4441840d35b56af39c9`. Note: the local remote-tracking ref read `855becb`
+after the push and `git fetch` did not move it — this grafted clone's tracking refs are stale,
+so `ls-remote` is the only trustworthy confirmation here. The ref was corrected with
+`git update-ref` and re-read as `b46e2e3`.
+
+**CI results:** **NOT OBSERVED** for `b46e2e3`. No claim is made. The last observed green is
+`d481bd0` (NEX-025), 4/4 `completed/success` with every `head_sha` equal to `d481bd0`, polled
+2026-11-25T13:18Z.
+
+**Task statuses:** NEX-026 = **TESTED** (committed, pushed, local gates green, negative control
+verified). **Not VERIFIED** — verification requires an observed 4/4 `completed/success` whose
+`head_sha` is `b46e2e3`.
+
+**Risks identified:** R29 (new) — a validity bound written by one clock and read by another.
+Also reconfirmed R12 (heredocs corrupt in this environment): a `python3 - <<'PY'` block spliced
+its own payload into fragments and hung. The BACKLOG file was verified byte-identical to HEAD
+by checksum afterwards, so nothing was corrupted on disk; all docs for this run were then
+written with the editor tool.
+
+**Checkpoint status:** updated — `docs/NEXUS/CHECKPOINT.json` records run `NEX-2026-11-25-29`,
+`commit` `b46e2e3`, NEX-026 in `in_progress_tasks` (not in `completed_tasks`/`verified_tasks`),
+and R29 at the head of the risk list. Written to a temp file in the same directory, re-parsed,
+then `os.replace`d.
+
+**Next action:** poll CI at `b46e2e3` and promote NEX-026 to VERIFIED only on an observed 4/4
+`completed/success` whose `head_sha` is that commit. Then refresh PR #3's body from the
+pull-request object to include NEX-026 (`b46e2e3`) and R29 — the body still describes the tree
+before this slice.
+

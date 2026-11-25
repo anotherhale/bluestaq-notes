@@ -1476,3 +1476,59 @@ seal their invocations in the same transaction."
 
 **Next action:** poll CI at the pushed head; promote to VERIFIED only on an observed
 4/4 `completed/success` whose `head_sha` is that commit.
+
+## NEX-026 — An approval must be judged against the clock that stamped it
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) / approval governance |
+| Priority | P0 (R29: the approval control returns the wrong answer in both directions whenever the deciding clock differs from the opening clock) |
+| Status | **TESTED** — committed and pushed at `b46e2e3`. Local gates green: `ruff format`/`ruff check` clean, `mypy` 98 files clean, full `pytest` **754 passed / 4 skipped** (baseline 748; delta is exactly the 6 new tests). Negative control verified. CI **not yet observed** at `b46e2e3` — not VERIFIED. |
+| Dependencies | NEX-013 (the expiry bound), NEX-016 (approve-then-continue), NEX-020 (stale-decision authority), NEX-025 (revocation) |
+
+**Objective:** close R29 — compare one instant against another, never two clocks.
+
+`ApprovalRequest.open` derives `expires_at` from the timestamp it is given, and every
+production use case passes its own `Clock` port. The decision path then asked `is_expired`,
+which reads the module-level wall clock. Two clocks, one comparison:
+
+- opened on a clock **behind** the wall clock, a live request is judged already lapsed, so a
+  human cannot decide a request that is in fact still valid — the gate refuses consent it
+  should accept;
+- opened on a clock **ahead** of the wall clock, a lapsed request is judged still valid, so an
+  approval outlives the bound it was issued under — consent survives longer than granted.
+
+Neither failure is visible when the wall clock is the only clock in play, which is why every
+existing expiry test passed throughout. The repository adapter was already correct (it
+compares `expires_at > now` on the caller's clock, fail-closed on NULL); the defect was
+confined to the aggregate's own decision path.
+
+**Change:**
+- `domain/agent/entities.py`: `expired_at(*, now)` becomes the single honest test. `is_expired`
+  is kept as the wall-clock convenience for callers with no clock and now *delegates* to it,
+  so NULL-means-lapsed is stated once. `is_usable`, `_assert_decidable`, `approve` and `deny`
+  take the caller's instant. `approve`/`deny` use that one instant for both the decidability
+  check and `decided_at`; previously they were two separate readings, so the recorded
+  timestamp could disagree with the instant that was actually checked.
+- `application/use_cases/agents.py`: `OpenApprovalRequest` passes `now=self._clock.now()`.
+- `application/use_cases/tools.py`: `_open_or_reuse_approval_request` takes `now` and uses it
+  for **both** the reuse test and a new request's bound.
+
+**Tests** (`tests/agent/test_approval_clock.py`, +6): a request opened on a past clock is
+still decidable; a lapsed request is refused even when the wall clock disagrees (approve and
+deny); `decided_at` is the supplied instant; plus two cases pinning that `is_expired` still
+reads the wall clock and a NULL bound is expired at any instant — so the fix cannot be
+"delete the check".
+
+**Negative control:** reverting only `entities.py` to the pre-slice version turns 5 of the 6
+tests red (the sixth asserts the wall-clock property, which must keep passing).
+
+**No migration.** `expires_at` was already persisted; only the judging clock changed.
+
+**R29 status:** closed at the aggregate and the gateway. Invariant to carry forward: any
+validity bound must be judged against the clock that stamped it; a new bound that reads a
+module clock reopens this.
+
+**Next action:** poll CI at `b46e2e3`; promote to VERIFIED only on an observed 4/4
+`completed/success` whose `head_sha` is that commit.
+
