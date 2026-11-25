@@ -273,7 +273,7 @@ surfacing `InvariantViolation` as a 500). Both fixed in `74d3d98`.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | TESTED (run `NEX-2026-11-25-05`, `c18bac7`; CI pending) |
+| Status | VERIFIED (run `NEX-2026-11-25-05`, `c18bac7`; CI green on that commit) |
 | Dependencies | NEX-005 |
 
 **Objective:** make the gateway reachable through the API layer, so agents can

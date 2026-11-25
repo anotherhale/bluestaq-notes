@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED + HTTP surface TESTED) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `3f1d855` |
 | Tracking issue | #2 (open) |
@@ -16,10 +16,10 @@ truth; this file records intent and reconciliation.
 
 ## Active task
 
-None in flight. **NEX-005-HTTP** is **TESTED** at `c18bac7` (committed and pushed;
-CI not yet observed on that commit). NEX-005 itself is **VERIFIED** at `a3ef9d7`.
-The gateway is now reachable over HTTP, which closes R5. Next run starts with
-NEX-007 (see Next best actions).
+None in flight. **NEX-005-HTTP** is **VERIFIED** at `c18bac7` (committed, pushed,
+and CI green on that commit — all four check runs completed/success). NEX-005
+itself is **VERIFIED** at `a3ef9d7`. The gateway is now reachable over HTTP, which
+closes R5. Next run starts with NEX-007 (see Next best actions).
 
 
 ## Last completed task
@@ -160,9 +160,9 @@ None currently. The following are known open items, not blockers:
 - **R5 (closed 2026-11-25, run `NEX-2026-11-25-05`):** The tool gateway had no
   HTTP/router exposure, so no API contract test covered it and no client could
   call it. `POST /api/v1/agents/tools/invoke` now exposes it, pinned by
-  `tests/api/test_tool_gateway_api.py` (9 tests). Closed on TESTED evidence
-  (committed and pushed at `c18bac7`); CI has not yet run on that commit, so the
-  residual is CI confirmation, not missing coverage.
+  `tests/api/test_tool_gateway_api.py` (9 tests). Closed on **VERIFIED** evidence:
+  committed and pushed at `c18bac7`, and CI is green on that exact commit (four
+  check runs, all completed/success).
 - **R6 (closed 2026-11-25):** the tool gateway now has a dedicated test file,
   `tests/agent/test_tool_gateway.py` (18 tests). Writing it found two real
   defects, both fixed in `74d3d98`: a retried *denial* hit the
@@ -178,12 +178,11 @@ None currently. The following are known open items, not blockers:
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
    membership themselves. (P1, builds on NEX-006; dependency-ready.)
-2. **Confirm CI green on `c18bac7`**, then promote NEX-005-HTTP from TESTED to
-   VERIFIED. The gateway's HTTP edge is the first agent-facing route, so a red
-   run there is a real signal about the agent-token path.
-3. **NEX-006 — Durable agentic runtime**: runs checkpoint progress and resume
+2. **NEX-006 — Durable agentic runtime**: runs checkpoint progress and resume
    after interruption without repeating completed side effects. NEX-005 is done,
    so this is dependency-ready, but it is *large* — scope the first slice to
    run-checkpoint persistence plus a resume test rather than attempting the whole
    task. (P2.)
+3. **Update draft PR #3** with the tool gateway HTTP surface and the CI-green
+   evidence at `c18bac7`, so the PR body stops understating what it carries.
 

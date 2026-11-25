@@ -724,11 +724,19 @@ a malformed header; a Notes-API token refused; a capability refusal; an unknown
 tool; replay of a recorded outcome; a reused idempotency key with different
 arguments returning `409`; and the token never appearing in a response.
 
-### Verification status — deliberately not VERIFIED
+### Verification status — VERIFIED
 
-Local gates pass, but **CI has not run on `c18bac7`**. The slice is TESTED, not
-VERIFIED, and the checkpoint says so. CI is green at `3f1d855` (runs `45531483962`,
-`45531492783`). Confirming `c18bac7` is the first action of the next run.
+Local gates passed at `c18bac7`, and CI has since been confirmed green on that
+exact commit: `gh api repos/anotherhale/bluestaq-notes/commits/c18bac7/check-runs`
+returns 4 check runs, all `completed/success` (Backend ruff+mypy+pytest+migrations,
+Frontend typecheck+lint+test+build). NEX-005-HTTP is therefore **VERIFIED**, not
+merely TESTED.
+
+The earlier version of this entry recorded TESTED, because at the time the docs
+were first committed CI had not yet reported on `c18bac7`. That was correct when
+written and is corrected here rather than quietly edited away — the distinction
+between "local gates pass" and "CI confirms it" is the whole point of the status
+vocabulary.
 
 ### Decisions
 
@@ -753,6 +761,6 @@ verified with `git ls-remote` — both refs resolve to `c18bac7`.
 
 ### Next action
 
-Confirm CI green on `c18bac7`, promote NEX-005-HTTP to VERIFIED, then start NEX-007
-(tenant-scoped capability checks). See `CHECKPOINT.json.next_action`.
+NEX-007 (tenant-scoped capability checks) is dependency-ready and is the highest
+priority P1 item. See `CHECKPOINT.json.next_action` for the exact scope.
 
