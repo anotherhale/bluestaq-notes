@@ -4135,3 +4135,57 @@ response; nothing counts them across advisories. Decide first whether the count 
 a structured log line or a metric port; do not add a metrics dependency without a
 demonstrated need. This is a monitoring slice — the security invariant already holds in the
 safe direction.
+
+## Run `NEX-2026-11-25-35` — NEX-033: withholding becomes a measured rate
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-35` |
+| Timestamp | 2026-11-25T17:05Z |
+| Starting commit | `617d33e` |
+| Ending commit | `bf84a7c` (implementation); docs follow |
+| Branch | `feature/agentic-enterprise-platform` |
+| Tasks completed | NEX-033 |
+| Tasks started | none (single slice, budget exhausted) |
+
+### What was built
+
+NEX-032 made a single advisory report which fields it withheld. Nothing counted how
+often that happened, so a note title routinely over the context cap degraded every
+advisory and no single response looked wrong enough to notice. The failure is a rate.
+
+- `application/ports/withholding.py` — `WithholdingRecorder` port. Counts field *names*,
+  never values; the port lets a shared store replace the in-memory adapter without
+  touching a use case.
+- `infrastructure/security/withholding_recorder.py` — `InMemoryWithholdingRecorder`.
+- `RecommendApprovalDecision` counts each advisory and logs running totals. WARNING only
+  when the call was actually degraded: an always-on WARNING for healthy advisories
+  trains a reader to ignore the signal.
+- `JsonFormatter` built its payload from a fixed six-key allowlist and silently discarded
+  every other `extra={...}` field. A caller could attach a structured field, see the log
+  call succeed, and never find it in the output. Now a denylist of reserved attributes.
+- `redact()` had **zero callers** — the module's "sensitive data must never be logged" was
+  unenforced. It is now on the formatting path and recurses into nested mappings and
+  sequences, because `{"auth": {"token": ...}}` is the common shape.
+
+### Validation
+
+Local gates: `ruff format` clean, `ruff check` clean, `mypy` 107 files clean,
+`pytest` **877 passed / 0 failed / 4 skipped**.
+
+Negative control, run on disk and restored byte-exact (`diff -q` clean):
+- Restoring the six-key allowlist turns `test_formatter_emits_an_arbitrary_structured_field`
+  and `test_formatter_redacts_a_sensitive_field` red.
+- Removing the recorder call from `RecommendApprovalDecision` turns all three aggregation
+  tests red.
+
+### CI
+
+Not yet polled for `bf84a7c`. Push confirmed at the remote by `git ls-remote`
+(`bf84a7c52dca…`, 2026-11-25T17:04Z) — the local `origin/*` ref is not evidence.
+
+### Next action
+
+**NEX-034.** First, poll CI for `bf84a7c` and record the result in
+`task_statuses.NEX-033`; a docs commit that is superseded reads `completed/cancelled` and
+is never evidence. Then select NEX-034 from the backlog.

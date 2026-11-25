@@ -7,11 +7,11 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-032 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-033 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `f5825ff` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-33`. |
-| Head commit (run end) | `fe5eadc` is NEX-032's product commit (see `git log -1` for the docs promotion above it). |
-| Last CI result | **`fe5eadc` (NEX-032): 4/4 `completed/success`, every `head_sha` = `fe5eadca918b…`, completed 2026-11-25T16:44:33–16:45:13Z, polled 16:47Z.** Prior: `240a446` (NEX-031), 4/4, polled 16:22Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Base commit (run start) | `617d33e` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-34`. |
+| Head commit (run end) | `bf84a7c` is NEX-033's product commit (see `git log -1` for the docs promotion above it). |
+| Last CI result | **`bf84a7c` (NEX-033): not yet polled.** Prior: `fe5eadc` (NEX-032), 4/4 `completed/success`, polled 16:47Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |

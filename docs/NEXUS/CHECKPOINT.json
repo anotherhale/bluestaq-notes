@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-34",
-  "timestamp": "2026-11-25T16:54Z",
+  "run_id": "NEX-2026-11-25-35",
+  "timestamp": "2026-11-25T17:05Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "fe5eadc",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-032 all VERIFIED. NEX-032 closes R32: withholding is now observable, not merely auditable - ContextEnvelope.withheld_fields reports (name, reason) pairs, distinguishing a deliberate ceiling exclusion from an over-cap degradation, and the reason is carried end to end to ApprovalAdvisoryResponse.over_cap_context_fields.",
+  "commit": "bf84a7c",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-033 all VERIFIED. NEX-033 makes advisory context withholding a measured rate rather than a per-response detail: a WithholdingRecorder port counts withheld field names against a full denominator, so a note title that is routinely over the context cap is now visible as a rate instead of degrading each advisory invisibly. It also repairs two observability defects: JsonFormatter silently discarded every extra={...} field outside a six-key allowlist, and redact() had zero callers, so the module's sensitive-data rule was unenforced.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -31,7 +31,7 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
     "NEX-025": "VERIFIED - 4/4 completed/success at d481bd0, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z",
@@ -41,7 +41,8 @@
     "NEX-029": "VERIFIED",
     "NEX-030": "VERIFIED",
     "NEX-031": "VERIFIED - CI 4/4 completed/success at 240a446, every head_sha equal to 240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25 (see ci_status). Local gates: ruff format/check clean, mypy 105 files clean, pytest 850 passed / 4 skipped. Negative control verified: reverting from_candidates fails the max-title test with 'a context field value may be at most 50 characters'.",
-    "NEX-032": "VERIFIED - local gates green: ruff format/check clean, mypy 105 files clean, pytest 860 passed / 4 skipped (baseline 850, +10 net). Product commit fe5eadc. CI pending at time of writing; poll fe5eadc before treating as CI-verified."
+    "NEX-032": "VERIFIED - local gates green: ruff format/check clean, mypy 105 files clean, pytest 860 passed / 4 skipped (baseline 850, +10 net). Product commit fe5eadc. CI pending at time of writing; poll fe5eadc before treating as CI-verified.",
+    "NEX-033": "VERIFIED - local gates green: ruff format clean, ruff check clean, mypy 107 files clean, pytest 877 passed / 0 failed / 4 skipped. Negative control verified on disk: restoring the six-key allowlist in JsonFormatter turns test_formatter_emits_an_arbitrary_structured_field and test_formatter_redacts_a_sensitive_field red; removing the recorder call from RecommendApprovalDecision turns all three aggregation tests red (test_an_over_cap_advisory_is_counted, test_a_healthy_advisory_counts_only_in_the_denominator, test_repeated_advisories_accumulate). Both files restored byte-exact (diff -q clean). Pushed bf84a7c, confirmed via git ls-remote (2026-11-25T17:04Z). CI not yet polled."
   },
   "completed_tasks": [
     "NEX-001",
@@ -87,7 +88,7 @@
     "negative_control_nex032": "The validation-bypass test fails on the pre-fix code: an over-cap candidate with a non-DataClassification classification is silently accepted without the isinstance check in from_candidates.",
     "functional_guard_proof": "withheld_fields reports names only, never values. An input both over-cap and above ceiling is reported once (as OVER_CAP), so telemetry never double-counts. over_cap_context_fields is enforced as a subset of excluded_context_fields on DecisionRequest, so two records cannot disagree about what was withheld."
   },
-  "uncommitted_work": null,
+  "uncommitted_work": false,
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -151,8 +152,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing."
+      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
     },
     {
       "id": "R23",
@@ -223,9 +224,9 @@
       "status": "closed by NEX-032 (per-field observability); aggregation is a separate follow-up"
     }
   ],
-  "next_task": "NEX-033",
+  "next_task": "NEX-034",
   "next_action": "Aggregate over-cap context withholdings into a count so a routinely-thin advisory is visible without a caller inspecting every response. NEX-032 surfaces the names per response; nothing counts them across advisories. Decide first whether the count belongs in a structured log line or a metric port - do not add a metrics dependency without a demonstrated need. This is a monitoring slice: the security invariant already holds in the safe direction.",
-  "recovery_instructions": "Tree is clean and pushed at fe5eadc. NEX-032 product commit is fe5eadc; the docs promotion and checkpoint bookkeeping commits follow it. R32 is closed by NEX-032 for per-field observability; aggregation remains a follow-up. R31 is closed by NEX-030 plus NEX-031. Do not reopen either without reading ADR-012 and the ContextHash docstring. PR #3 and issue #2 need NEX-032 evidence before new code starts.",
+  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit is bf84a7c on feature/agentic-enterprise-platform; docs follow in a separate commit, so the true head is git ls-remote origin refs/heads/feature/agentic-enterprise-platform, never this field. First action: poll CI for bf84a7c; if green, record it in task_statuses.NEX-033 and STATE.md. Then select NEX-034 from the backlog.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
     "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
@@ -275,5 +276,6 @@
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "commit names the last commit carrying real implementation (fe5eadc, NEX-032). The docs promotion above it is a13365d. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
   "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
-  "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them."
+  "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
+  "validation_status": "Local: ruff format/check clean, mypy 107 files clean, pytest 877 passed / 4 skipped. CI: not yet observed for bf84a7c."
 }
