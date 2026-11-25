@@ -274,7 +274,7 @@
     }
   ],
   "next_task": "NEX-038",
-  "next_action": "NEX-038: NEX-037's CI is now GREEN at 5c0575b (4/4, polled 18:57Z), so step 1 is already done - do not re-do it. Remaining: PATCH PR #3's body with a NEX-037 section and POST one issue #2 comment (lists, never a table). After that, the first real DecisionProvider adapter is the largest dependency-ready unlock, because NEX-035's conformance suite now exists to police it. Verify any premise against the code before acting: the last five next_action fields each needed correcting.",
+  "next_action": "NEX-038: NEX-037 is now VERIFIED end to end and fully delivered - CI 4/4 green at 5c0575b, PR #3 body PATCHed, issue #2 comment 7171861451 posted. Do not re-poll or re-post any of it. Next implementation slice: the first real DecisionProvider adapter. NEX-035's conformance suite exists to police it and already found four real defects in the identity seam, so a new adapter has something to fail against; make_decision_evaluator() is still a stub. Verify any premise against the code before acting - the last five next_action fields each needed correcting.",
   "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-037 is 5c0575b on feature/agentic-enterprise-platform; docs commits 7ac893c and above follow it, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-037 is fully CI-verified (4/4 green at 5c0575b). NEX-037 is the first slice in this programme to add an allowlist-gated platform-operations route: read the R34 entry and the NEX-037 section of STATE.md before changing any access rule on /api/v1/ops.",
   "ci_status": {
     "product_slice_sha": "5c0575b",
@@ -332,7 +332,7 @@
   "commit_scope": "commit names the last commit carrying real IMPLEMENTATION (90eea0c, NEX-036). The docs promotion above it is separate. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
   "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local: ruff format clean, ruff check clean, mypy 109 source files clean, pytest 920 passed / 4 skipped. CI: 4/4 completed/success at 5c0575b, polled 2026-11-25T18:57Z, every head_sha equal to that SHA. PR #3 body and issue #2 comment were NOT updated this run; both owe a NEX-037 section.",
+  "validation_status": "Local gates green; CI 4/4 completed/success at 5c0575b (polled 18:57Z, every head_sha equal to that SHA). Delivery cleared: PR #3 body PATCHed byte-equal (59,330 chars), issue #2 comment 7171861451 posted byte-equal. NEX-037 is VERIFIED end to end.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -346,17 +346,18 @@
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
     "5c0575b": "NEX-037 product slice - operator-gated withholding aggregate (implementation)",
-    "7ac893c": "docs - NEX-037 promoted, R34 closed, R36 opened, NEX-038 planned"
+    "7ac893c": "docs - NEX-037 promoted, R34 closed, R36 opened, NEX-038 planned",
+    "ff10f21": "docs - NEX-037 CI green recorded, R34 closure evidence, next-actions superseded"
   },
   "delivery_state": {
-    "pr_3_body": "NOT updated this run. Carries NEX-036 as of c37037f (56,759 chars, read back byte-equal at 2026-11-25T18:47Z). NEX-037 section is owed.",
-    "issue_2_comment": "NOT updated this run. Last comment id 7171412980 carries NEX-036. NEX-037 comment is owed.",
-    "owed": "PR #3 body section for NEX-037, and one issue #2 comment. Use lists, never a markdown table, in an issue comment on this repository. This is NEX-038 steps 2 and 3."
+    "pr_3_body": "PATCHed 2026-11-25T18:59Z with a NEX-037 section; read back byte-equal at 59,330 chars (was 56,759). PR #3 remains DRAFT and UNMERGED - human review required.",
+    "issue_2_comment": "POSTed 2026-11-25T18:59Z, id 7171861451, 3,103 chars, read back byte-equal. Lists only - no markdown table.",
+    "owed": "Nothing outstanding for NEX-037. Both items cleared inside this run."
   },
   "run_summary": {
     "run_id": "NEX-2026-11-25-37",
     "started_commit": "5d2792b",
-    "ending_commit": "7ac893c",
+    "ending_commit": "ff10f21",
     "slices_completed": 1,
     "slices_promoted": [
       "NEX-037"
