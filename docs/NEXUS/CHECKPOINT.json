@@ -85,8 +85,8 @@
     "functional_guard_proof": "ContextHash('a'*64) raises; DecisionRequest(context_hash='a'*64) raises; envelope-minted hash works, isinstance(str) holds, JSON serialises as the plain digest."
   },
   "uncommitted_work": "none - all product and docs changes committed and pushed",
-  "pr_state": "#3 open, draft, unmerged (human review required). Body not refreshed this run; it still describes an earlier head. Re-measure counters from the PR object before quoting them.",
-  "tracking_issue": "#2 open, not updated this run.",
+  "pr_state": "#3 open, draft, unmerged (human review required). Body refreshed THIS RUN at head 3fc6464 (PATCH 2026-11-25T15:5xZ) and read back byte-equal at 33,895 chars; it now covers NEX-029 and NEX-030 and quotes 35,701 additions / 10 deletions / 127 files / 142 commits, measured from the PR object, not from memory. Re-measure before quoting - the body goes stale on the next product commit.",
+  "tracking_issue": "#2 open. Commented THIS RUN (id 7167365125, 3,062 chars, read back and asserted on specific substrings) recording NEX-029 and NEX-030 as VERIFIED with their distinct evidence bases, the negative control, R31 closure, and the remaining note-text observation.",
   "blockers": [],
   "risks": [
     {
@@ -192,9 +192,9 @@
       "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
     }
   ],
-  "next_task": "Refresh PR #3 body at the current head (counters re-measured from the PR object, not from memory) and update tracking issue #2 with NEX-029 and NEX-030 as VERIFIED. Then select the next dependency-ready slice: the decisioning path's next honest gap is that ContextEnvelope bounds have never met real note text.",
-  "next_action": "PATCH /pulls/3 with a body quoting the current head, then comment on issue #2 recording NEX-029 VERIFIED (descendant-CI at e3b8517) and NEX-030 VERIFIED (4/4 success at 0727628).",
-  "recovery_instructions": "Tree is clean and pushed. HEAD is a small docs commit on top of 3fc6464 (the run's content head); `git log --oneline -3` confirms the ordering 0727628 (NEX-030 product) -> 3fc6464 (docs promotion) -> HEAD. R31 is closed; do not reopen it without reading ADR-012 and the stated limit in the ContextHash docstring (str.__new__ still bypasses the guard by design). First action next run: refresh PR #3, whose body is stale.",
+  "next_task": "NEX-031: the ContextEnvelope bounds (32 fields, 200 chars/field) have met real approval data but never real NOTE text. Exercise envelope assembly against real stored note bodies so the bounds are validated by production data, not only by approval titles.",
+  "next_action": "Start NEX-031: add a use case that assembles a ContextEnvelope from real note content, and test the bounds against note-sized text (long bodies, many fields) rather than approval metadata.",
+  "recovery_instructions": "Tree is clean and pushed. HEAD is a small docs commit on top of 3fc6464 (the run's content head); `git log --oneline -3` confirms the ordering 0727628 (NEX-030 product) -> 3fc6464 (docs promotion) -> HEAD. R31 is closed; do not reopen it without reading ADR-012 and the stated limit in the ContextHash docstring (str.__new__ still bypasses the guard by design). PR #3 and issue #2 are both current as of this run, so go straight to NEX-031.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
     "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
@@ -239,5 +239,6 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "`commit` names the last commit carrying real content: 3fc6464, the docs promotion for run NEX-2026-11-25-33. The checkpoint cannot name its own containing commit, so a follow-up 'checkpoint self-reference' commit sits on top of it; read `git log --oneline -1` for the true HEAD. Verify `git merge-base --is-ancestor 3fc6464 HEAD` rather than string-comparing.",
-  "head_at_checkpoint": "3fc6464"
+  "head_at_checkpoint": "3fc6464",
+  "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them."
 }
