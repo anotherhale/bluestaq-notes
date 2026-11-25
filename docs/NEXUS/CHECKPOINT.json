@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-34",
-  "timestamp": "2026-11-25T16:50Z",
+  "timestamp": "2026-11-25T16:54Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "fe5eadc",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-032 all VERIFIED. NEX-032 closes R32: withholding is now observable, not merely auditable - ContextEnvelope.withheld_fields reports (name, reason) pairs, distinguishing a deliberate ceiling exclusion from an over-cap degradation, and the reason is carried end to end to ApprovalAdvisoryResponse.over_cap_context_fields.",
@@ -92,7 +92,6 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "a13365d41391738658d88fbb559361c3e28f61f3",
     "counters": {
       "additions": 36587,
       "deletions": 10,
@@ -101,7 +100,9 @@
     },
     "counters_measured_at": "2026-11-25T16:46Z, from the PR object (not from any doc)",
     "body_updated": "PATCH 2026-11-25T16:49Z, body 43,921 chars, read back byte-equal. Adds the NEX-032 section, closes R31 and R32 in Known risks, refreshes the Phase 5 row and the Next steps item.",
-    "note": "Counters are pre-docs-commit values. Re-measure from the PR object before quoting."
+    "note": "Counters are pre-docs-commit values. Re-measure from the PR object before quoting.",
+    "head_read_from": "Read the PR head from GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) or `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never from this file: every commit that records a head becomes a new head, so the field is stale by construction. Last observed 2026-11-25T16:53Z at 8925dd2b3205585c2cf8f0dfd7758424fba64efd.",
+    "last_observed": "2026-11-25T16:53Z"
   },
   "tracking_issue": {
     "number": 2,
