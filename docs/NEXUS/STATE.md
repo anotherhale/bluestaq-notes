@@ -13,7 +13,7 @@ truth; this file records intent and reconciliation.
 | Head commit (run end) | `d1b1105` — docs promotion commit; product head `f50a78d` |
 | Last CI result | **4/4 green on `f50a78d`** (NEX-011): backend + frontend, push and pull_request, all `completed/success` |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required) |
+| Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:24Z: 24,283 insertions / 98 files / 674 collected / CI-verified at `f50a78d` |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
@@ -323,18 +323,21 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Refresh the PR #3 body.** Measured on `f50a78d`: **24,087 insertions / 98
-   files**. The body still claims 21,310 / 91 / 639 and names `0fcc078` as
-   CI-verified. It has understated this branch on every run — always recompute
-   with `git diff --shortstat main...HEAD` plus a fresh pytest collect, never copy
-   the last number forward.
-2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
+1. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
    over HTTP and its audit trail is now readable, so the remaining Phase-5 work is
    what *consumes* those two surfaces. Re-read the Phase 5 section of `ROADMAP.md`
    before choosing; do not invent a slice from the last run's summary alone.
+2. **Keep the PR #3 body measured, not remembered.** It was refreshed this run
+   (24,283 / 98 / 674 at `f50a78d`) after understating the branch for several runs
+   running. Recompute with `git diff --shortstat main...HEAD` and
+   `pytest --collect-only -o addopts=""` — the repo's `addopts = "-q"` hides the
+   count line, and a plain `pytest --collect-only -q | grep -c ::` returns 0.
+3. **Re-check the tool-invocation trail's caller_permission shape.** NEX-011
+   returns the trail owner-scoped with 404 for non-owners; confirm the response
+   contract matches `docs/FRONTEND_INTEGRATION.md` before any UI consumes it.
 
 **Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP and
-NEX-011 all reached TESTED on local runs and only two have gone on to VERIFIED,
-each when CI went green on the commit. A local green suite is not evidence;
-R9/R10 exist because that conflation happened before.
+NEX-011 each reached TESTED on local runs and then VERIFIED only when CI went
+green on the commit (`0e74d4f`, `e817d04`, `f50a78d`). A local green suite is not
+evidence; R9/R10 exist because that conflation happened before.
 

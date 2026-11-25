@@ -1409,3 +1409,20 @@ records the evidence that changed it.
 
 This is the third slice to reach VERIFIED on observed CI: NEX-009 slice 1
 (`0e74d4f`), NEX-009-HTTP (`e817d04`), NEX-011 (`f50a78d`).
+
+### Run NEX-2026-11-25-12 — PR #3 body refresh
+
+Recomputed the branch size instead of copying the previous body's figures, which
+had understated it for several runs: `git diff --shortstat main...HEAD` gives
+**24,283 insertions across 98 files**, and `pytest --collect-only -o addopts=""`
+gives **674 collected**. Refreshed PR #3's body with those numbers, replaced the
+stale `e817d04` CI claim with `f50a78d` (4/4 `completed/success`), and added a note
+that the figures are measured per run.
+
+One error caught before publishing: the first patch wrote "six database migrations,
+six new API routers". The diff shows **five of each** — NEX-011 added a route to the
+existing `routers/agents.py` and no migration at all. The count was corrected to
+five/five, and the PR body now says so. Writing a number that sounds right is the
+same defect as copying one forward; both are why this body rots.
+
+PR #3 remains **open, draft, unmerged** for human review. No merge performed.
