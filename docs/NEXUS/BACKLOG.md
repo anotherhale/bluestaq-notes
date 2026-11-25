@@ -1532,3 +1532,78 @@ module clock reopens this.
 **Next action:** poll CI at `b46e2e3`; promote to VERIFIED only on an observed 4/4
 `completed/success` whose `head_sha` is that commit.
 
+
+## NEX-027 — Provider-neutral judgment that cannot grant authority
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) / agent decisioning (M2.6) |
+| Priority | P2 (unblocks the agentic platform; the security property is P0-grade but nothing regresses without it) |
+| Status | **VERIFIED** — CI observed at `fb8d5bd`: **4/4 `completed/success`**, every check run reporting `head_sha` `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`, polled 2026-11-25T14:18Z (Backend ruff/mypy/pytest/migrations, Frontend typecheck/lint/test/build). Local gates green: `ruff format`/`ruff check` clean, `mypy` 103 files clean, full `pytest` **794 passed / 4 skipped** (baseline 754; delta is exactly the 40 new tests). Negative control verified. |
+| Dependencies | NEX-003 (agent identity), NEX-005 (tool gateway), NEX-016 (approvals). Blocks context assembly. |
+| Complexity | Medium — 5 new source modules, 2 new test files, 2 modified bootstrap files, no migration |
+
+**Objective:** give the platform a bounded way to ask a judgment service a narrow question,
+with no path from an answer to an authorization.
+
+M2.6 named "decisioning and context assembly" as its remaining work. This is the first half.
+The design problem is not "call a model" — it is that a model-driven system's most common
+security failure is letting an opinion become an authorization.
+
+**Three structural properties, each enforced by the shape of the types:**
+
+- **A decision grants nothing.** `DecisionRequest` and `Decision` carry no field that can name
+  a permission, a capability, a principal, or a resource scope. There is nothing to *hold* an
+  authorization in. The decisioning modules cannot reach the authorization provider at all,
+  and an AST test asserts that rather than trusting review.
+- **Every answer is bounded.** A choice must be one of the candidates the caller supplied; a
+  score and a confidence are floats in `[0.0, 1.0]`; the rationale is capped at 400
+  characters. There is no free-form channel, so a provider cannot smuggle an instruction back
+  into the application.
+- **Abstention is a first-class outcome.** A provider that is disabled, unsure, slow, or
+  malformed produces `ABSTAINED` with a named reason (`DISABLED`, `PROVIDER_ERROR`,
+  `MALFORMED_OUTPUT`, `LOW_CONFIDENCE`). Failing closed is expressed by *not deciding*, never
+  by deciding "allow" — which is why no binary approve verdict exists anywhere in the
+  vocabulary.
+
+**Change:**
+- `domain/agent/decisioning.py`: `DecisionKind` (closed set of seven questions, split into
+  choice kinds and score kinds so the answer shapes cannot be confused), `DecisionRequest`
+  (carries a SHA-256 context hash, never the context), `Decision` (bounded by construction),
+  `Abstention`/`AbstentionReason`, `validate_against()`.
+- `application/ports/decisioning.py`: `DecisionProvider`, one method wide and deliberately not
+  a chat port, so an adapter cannot grow an escape hatch.
+- `application/use_cases/decisioning.py`: `EvaluateDecision` — the single route to a decision.
+  Four rules apply to every provider: disabled abstains without calling it; a raised error or
+  non-`Decision` payload becomes an abstention; `validate_against` discards a wrong-kind answer
+  or an unoffered choice; confidence below the caller's threshold abstains.
+  `DecisionEvaluation` records provider name, latency, threshold, reason and context hash for
+  audit. `DEFAULT_MIN_CONFIDENCE = 0.5`.
+- `infrastructure/decisioning/stub.py`: deterministic, dependency-free `StubDecisionProvider`
+  answering at `0.1` confidence, so enabling the flag alone does not start handing out
+  opinions. Choice answers use `min(candidates)` so the result does not depend on input
+  ordering.
+- `bootstrap/config.py` (+7): `decisioning_enabled` defaults `False`,
+  `decisioning_min_confidence` defaults `0.5`.
+- `bootstrap/container.py` (+19): wires `evaluate_decision`.
+
+**Tests** (+40): `tests/agent/test_decisioning.py` (36) and
+`tests/architecture/test_decision_provider_neutrality.py` (4).
+
+**Negative control:** planting `from jev_sdk import Client` in `application/ports/` turns two
+neutrality tests red with the offending file named; probe deleted, file re-verified clean.
+
+**Security:** no decision can grant, expand, or bypass authority. `approval_recommendation` is
+a *score*, not a yes/no, precisely so no caller can read an advisory number as consent. No
+raw content leaves the process — only a hash.
+
+**Migration:** none. **New dependencies:** none.
+
+**R30 (new, low):** the stub is the only adapter, so the 400-character rationale bound and the
+50-candidate cap have only been exercised against a provider that answers cheaply. A real
+vendor response is the first genuine test of those bounds; widening either is a contract
+change, not a tweak.
+
+**Next action:** context assembly — the other half of M2.6. It decides *what* the context hash
+is computed over and what may enter a request.
+

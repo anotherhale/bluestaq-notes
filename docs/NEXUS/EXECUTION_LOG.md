@@ -3643,3 +3643,70 @@ Two facts about *when* that observation happened, because they decide how much i
 The earlier `TESTED` status was correct when written and was superseded by observation, not by
 optimism: the sequence was commit → push → poll → promote. The status files were updated only
 after the check runs were read.
+
+---
+
+## Run `NEX-2026-11-25-30` — NEX-027 (provider-neutral decisioning) + promotion
+
+- **Run ID:** `NEX-2026-11-25-30`
+- **Timestamp:** 2026-11-25T14:01Z start; slice committed `fb8d5bd`, docs promotion in this run.
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `f2f8e61` (docs head from run `NEX-2026-11-25-29`)
+- **Ending commit:** this run's docs commit (the commit that contains this entry).
+- **Project phase:** Phase 5 (durable runtime). M2.6 first half complete.
+
+**Tasks completed:** NEX-027 — provider-neutral decisioning. `EvaluateDecision` is the single
+route to a judgment; `DecisionRequest`/`Decision` carry no field that can name a permission, so
+an opinion has nowhere to become an authorization. Abstention (`DISABLED`, `PROVIDER_ERROR`,
+`MALFORMED_OUTPUT`, `LOW_CONFIDENCE`) is the fail-closed outcome; there is no binary "allow"
+verdict anywhere in the vocabulary.
+
+**Files changed (code, in `fb8d5bd`):**
+- new: `application/ports/decisioning.py`, `application/use_cases/decisioning.py`,
+  `domain/agent/decisioning.py`, `infrastructure/decisioning/{__init__,stub}.py`,
+  `tests/agent/test_decisioning.py`, `tests/architecture/test_decision_provider_neutrality.py`
+- modified: `bootstrap/config.py` (+7), `bootstrap/container.py` (+19)
+
+**Tests executed (local, on the `fb8d5bd` tree):** `ruff format` clean (154 files), `ruff check`
+passed, `mypy` clean (103 source files), full `pytest` **794 passed / 4 skipped** in 13.23s
+(baseline 754; delta is exactly the 40 new tests). Negative control: planting
+`from jev_sdk import Client` in `application/ports/` turned two neutrality tests red with the
+offending file named; probe deleted and the file re-verified clean.
+
+**CI results — observed, and the reason NEX-027 is VERIFIED:** polled
+`commits/fb8d5bd/check-runs` at 2026-11-25T14:18Z and got **4/4 `completed/success`**, every
+check run reporting `head_sha` `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`. Checked
+programmatically: the distinct `head_sha` set was exactly `{fb8d5bd…}` and all four runs were
+`completed`/`success`. An earlier poll at 14:17Z had seen them `queued`/`in_progress`; that
+reading was recorded as NOT OBSERVED GREEN at the time and was superseded by the later one, not
+by optimism. This is a run at the slice's own SHA, so no descendant-CI reasoning is needed.
+
+**Commits:** `fb8d5bd` (code + tests, pushed before this run's start) and this run's docs commit
+(promotion of NEX-027 to VERIFIED in STATE/BACKLOG/EXECUTION_LOG/CHECKPOINT, plus a PR #3 body
+refresh).
+
+**Push status:** `fb8d5bd` was confirmed on the remote at the start of this run
+(`git ls-remote --heads origin feature/agentic-enterprise-platform` →
+`fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`). The docs commit is pushed at the end of the run.
+
+**Checkpoint status:** updated — `docs/NEXUS/CHECKPOINT.json` records run `NEX-2026-11-25-30`,
+`commit` set to the NEX-027 code commit, NEX-027 in `verified_tasks` (not merely
+`in_progress_tasks`), and R30 added as a new low-severity risk.
+
+**A note on the docs head's own CI.** This docs commit will read `completed/cancelled` once the
+concurrency group supersedes it, because a docs-only commit's run gets cancelled by the next
+push (here, none, but the group also cancels superseded queued runs). `cancelled` is neither a
+pass nor a failure and is not evidence about NEX-027 — NEX-027's evidence is the `fb8d5bd` run
+above, which is green at its own SHA.
+
+**Decisions made:** none architectural. The slice was shaped by the existing M2.6 roadmap entry;
+no ADR was required because the decisioning port introduces a new bounded capability with no
+change to existing contracts.
+
+**Risks identified:** R30 (new, low) — the stub is the only adapter, so the rationale-length
+bound and candidate cap have only been exercised against a provider that answers cheaply; a real
+vendor response is the first genuine test of those bounds.
+
+**Next action:** refresh PR #3's body from the pull-request object to cover NEX-027 (`fb8d5bd`),
+then select the next dependency-ready slice: **context assembly**, the other half of M2.6.
+

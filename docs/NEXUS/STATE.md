@@ -7,15 +7,71 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-026 all VERIFIED.** NEX-026 — an approval judged against the clock that stamped it (R29) — VERIFIED at `b46e2e3`. Remaining for M2.6: decisioning and context assembly. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-027 all VERIFIED.** NEX-027 — provider-neutral decisioning, the first half of what M2.6 was waiting on — is VERIFIED at `fb8d5bd` on observed CI. Remaining for M2.6: context assembly. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `855becb` — the docs-only checkpoint head left by run `NEX-2026-11-25-28`. |
-| Head commit (run end) | `8742faa` — the docs-only checkpoint commit for run `NEX-2026-11-25-29`. The NEX-026 code slice is `b46e2e3`, which is the commit whose CI was polled. Verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` → `8742faae7fd1f7268a26faac40551e53c83a534d` (this grafted clone's local tracking ref lags and must not be trusted). |
-| Last CI result | **`b46e2e3` (NEX-026): 4/4 `completed/success`, every check run reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and the promotion are split across `b46e2e3` (code) and `8742faa` (docs), this run covers the whole NEX-026 tree. The later docs push did **not** disturb it. |
+| Base commit (run start) | `f2f8e61` — the docs-only checkpoint head left by run `NEX-2026-11-25-29`. |
+| Head commit (run end) | `fb8d5bd` — the NEX-027 code + tests commit. Its CI is polled on that exact SHA. Confirmed with `git ls-remote --heads origin feature/agentic-enterprise-platform` → `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`; the local tracking ref lags in this grafted clone and must not be trusted. |
+| Last CI result | **`fb8d5bd` (NEX-027): 4/4 `completed/success`**, every check run reporting `head_sha` `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`, polled 2026-11-25T14:18Z. Checked programmatically: the set of distinct `head_sha` values was exactly `{fb8d5bd…}` and all four runs were `completed`/`success`. Prior: `b46e2e3` (NEX-026), 4/4, polled 13:34Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `fd223f4`, body refreshed 2026-11-25T13:21Z at head `fd223f4` and verified byte-equal after the PATCH. It now reads 32,161 additions / 10 deletions / 112 files / 126 commits, 752 tests, eleven migrations, eleven routers, and names NEX-023 (`c367746`), NEX-024 (`eaaae23`) and NEX-025 (`d481bd0`) among the CI-verified commits. Counters come from the pull-request object, never a local diff. |
-| CI status | **`b46e2e3` (NEX-026): 4/4 `completed/success`, every check run reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and the promotion are split across `b46e2e3` (code) and `8742faa` (docs), this run covers the whole NEX-026 tree. The later docs push did **not** disturb it. `8742faa`'s own runs were in flight when this was written and will be superseded by the concurrency group, so that head will read `completed/cancelled` — neither a pass nor a failure. Prior: **`d481bd0` (NEX-025): 4/4 `completed/success`, polled 13:18Z.** |
+| Draft PR | #3 (draft, unmerged — human review required). Body last refreshed at head `fd223f4` (2026-11-25T13:21Z). It is now **four commits behind** (`8742faa`, `f2f8e61`, `fb8d5bd`) and does not mention NEX-027. Refresh from the PR object before quoting any counter. |
+| CI status | **`fb8d5bd` (NEX-027): 4/4 `completed/success`, polled 2026-11-25T14:18Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events, all four reporting `head_sha` `fb8d5bd`. An earlier poll at 14:17Z saw them `queued`/`in_progress`; the later green reading is what NEX-027's VERIFIED status rests on. The docs commit for this run will be superseded by the concurrency group and read `completed/cancelled` — neither pass nor fail, and not evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-027 (run `NEX-2026-11-25-30`) — judgment that cannot become authority
+
+M2.6 listed "decisioning and context assembly" as the two things it still needed. This slice
+is the first half: the platform can now ask a judgment service a narrow question and get an
+answer it can reason about, with no path from an answer to a permission.
+
+The design problem is not "call a model". It is that a model-driven system's most common
+security failure is letting an opinion become an authorization. Three properties are
+structural rather than conventional, and each is enforced by the shape of the types:
+
+- **A decision grants nothing.** `DecisionRequest` and `Decision` have no field that can name
+  a permission, a capability, a principal, or a resource scope. There is nothing to *hold* an
+  authorization in, so a decision cannot be mistaken for one. The decisioning modules do not
+  import the authorization provider and cannot reach it — asserted by an AST test, not by
+  review.
+- **Every answer is bounded.** A choice must be one of the candidates the caller supplied; a
+  score and a confidence are floats in `[0.0, 1.0]`; the rationale is capped at 400
+  characters. There is no free-form output channel, so a provider cannot smuggle an
+  instruction back into the application.
+- **Abstention is a first-class outcome, not an error.** A provider that is disabled, unsure,
+  slow, or malformed produces `ABSTAINED` with a named reason. Failing closed is expressed by
+  *not deciding*, never by deciding "allow" — which is why there is no binary approve verdict
+  anywhere in the vocabulary.
+
+`EvaluateDecision` is the single route to a decision, so four rules apply to every provider:
+the flag off abstains without calling the provider at all; a raised error or a non-`Decision`
+payload becomes an abstention; `validate_against` discards an answer of the wrong kind or a
+choice the caller never offered; and confidence below the caller's threshold abstains. The
+threshold defaults to `0.5` and the stub adapter answers at `0.1`, so **enabling the flag
+alone does not start handing out opinions** — the stub abstains under any real threshold.
+
+`DecisionRequest` carries a SHA-256 of the context, never the context. Raw note text is not
+handed to a third party by default, so there is nothing to retain, leak, or inject into. That
+is also the seam context assembly will use next: it will decide *what* to hash.
+
+Two smaller choices worth recording. The stub's choice answers use `min(candidates)` rather
+than "first", so the result does not depend on input ordering — a stub whose answer changes
+when you reorder a list is a flaky test generator. And `approval_recommendation` is a *score*,
+not a yes/no, precisely so that no caller can read an advisory number as consent; the human
+approval workflow remains the only thing that can approve an action.
+
+Status: **VERIFIED** on observed CI. Local gates green on `fb8d5bd`: `ruff format` clean,
+`ruff check` clean, `mypy` clean over 103 source files, full `pytest` **794 passed / 4
+skipped** (baseline 754; the delta is exactly the 40 new tests — 36 in
+`tests/agent/test_decisioning.py`, 4 in `tests/architecture/test_decision_provider_neutrality.py`).
+Negative control verified: planting `from jev_sdk import Client` in
+`application/ports/` turns two of the neutrality tests red with the offending file named;
+the probe was deleted and the file re-verified clean. **CI at `fb8d5bd` is 4/4
+`completed/success`, every `head_sha` equal to `fb8d5bd`, polled 2026-11-25T14:18Z** — so
+NEX-027 is VERIFIED on a run at its own SHA, not on descendant-CI.
+
+**R30 (new, low).** The stub is the only adapter, so the port's shape has been exercised
+against one implementation that always answers cheaply. A real provider will be the first to
+test whether the 400-character rationale bound and the 50-candidate cap fit a genuine vendor
+response; if either is too tight, widening it is a contract change, not a tweak.
 
 ## NEX-026 (run `NEX-2026-11-25-29`) — an approval must be judged against the clock that stamped it
 
@@ -610,18 +666,18 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-23`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-30`, bare as CI runs them) |
 | --- | --- |
-| `ruff format` | clean — 201 files unchanged (repo-wide, includes `docs/` Markdown fences) |
+| `ruff format` | clean — 154 files unchanged (`src/`, `tests/`) |
 | `ruff check` | All checks passed |
-| `mypy` | clean (98 source files) |
-| `pytest` (full) | **735 passed, 4 skipped** (was 730; the delta is exactly the 5 new NEX-021 tests) |
-| Migration chain | no migration added; head stays `f19a2c6d8b04`. Round-trip re-verified on a scratch SQLite db: upgrade → downgrade -1 → upgrade, clean |
+| `mypy` | clean (103 source files) |
+| `pytest` (full) | **794 passed, 4 skipped** (was 754; the delta is exactly the 40 new NEX-027 tests) |
+| Migration chain | no migration added; head unchanged. No schema change in this slice |
 | Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
 
 > **CI is the evidence.** Local gates above are for reproducibility, not proof (R9/R10).
-> NEX-021 is **VERIFIED** at `e459f98`: CI is 4/4 on the commit that carries
-> it. Promote only on 4/4 `completed/success` at that `head_sha`.
+> NEX-027 is **VERIFIED**: `fb8d5bd`'s four check runs are 4/4 `completed/success`,
+> every `head_sha` equal to `fb8d5bd`, polled 2026-11-25T14:18Z.
 
 ## Blockers
 
@@ -702,20 +758,17 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. ~~**Promote NEX-023 on CI.**~~ **Satisfied** — 4/4 `completed/success` at `c367746`,
-   polled 2026-11-25T11:50:20Z, with `head_sha` equal to the polled commit. NEX-023 is
-   VERIFIED on its own SHA. Do not re-derive the local result and do not re-promote it.
-   ~~**Promote NEX-024 on CI.**~~ **Also satisfied** — 4/4 `completed/success` at
-   `eaaae23`, polled 2026-11-25T12:16Z, every `head_sha` equal to the polled commit (this
-   is a run at the slice's own SHA, not descendant-CI). NEX-024 is VERIFIED. R27 is now
-   closed on both settle paths: resolve (NEX-023) and abort (NEX-024).
-2. **The CAS audit is closed — do not re-open it without new evidence.** Every
-   repository under `infrastructure/db/` has been classified (table in the NEX-021 section
-   above). `DelegatedAuthorization`, `AgentToken` and `ToolInvocation` carry no version and
-   need none: each writes a strictly monotonic field, so concurrent writers converge
-   instead of erasing authority. If a future slice makes one of them non-monotonic, that
-   is the trigger to revisit — not the absence of a `version` column on its own.
-3. **Next dependency-ready slice (P1/P2, Phase 5).** Re-read the Phase 5 section of
+1. ~~**Promote NEX-027 on CI.**~~ **Satisfied** — 4/4 `completed/success` at `fb8d5bd`,
+   polled 2026-11-25T14:18Z, every `head_sha` equal to the polled commit. This is a run at
+   the slice's own SHA, not descendant-CI. Do not re-derive the local result and do not
+   re-promote it.
+2. **Refresh PR #3.** Its body was last written at `fd223f4`; the branch is now four commits
+   ahead and the body says nothing about NEX-027. Re-measure additions/files/commits from the
+   pull-request object at the current head (never a local diff) and verify byte-equality after
+   the PATCH.
+3. **Next dependency-ready slice: context assembly** — the other half of what M2.6 named.
+   NEX-027 deliberately carries only a `context_hash`, so context assembly is the slice that
+   decides *what* is hashed and what may enter a request. Re-read the Phase 5 section of
    `ROADMAP.md` before choosing; do not invent a slice from a run summary.
 4. **Confirm whether revoking a delegation or agent invalidates approvals already
    granted under it.** `RevokeDelegation` revokes the delegation and every token
