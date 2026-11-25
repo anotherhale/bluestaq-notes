@@ -2244,8 +2244,29 @@ pushing the next commit cancels the previous run, so a docs head routinely ends
 
 **PR counters re-measured at `46496b7`** from the PR object (not a local diff,
 which is invalid on this grafted clone): **28,357 additions / 10 deletions / 106
-files / 87 commits**, **720 tests collected**. The PR body still describes
-`eab423c` and has not been rewritten, so the PR is recorded as open, draft,
-unmerged, and **stale in its description** — refreshing it with these numbers is
-the next run's first action.
+files / 87 commits**, **720 tests collected**. At that moment the PR body still
+described `eab423c`, so it was recorded as stale rather than current. It was
+refreshed later in the same run (see below).
+
+**PR #3 body refreshed (2026-11-25T08:44:59Z).** The body had been stale for
+several runs. It claimed 27,659 additions / 104 files / 75 commits / 715 tests
+measured on `038db7e`, and it named only `b9b7207` and `038db7e` as green.
+Rewritten against the PR object at head `ca15eb1`: **28,385 additions / 10
+deletions / 106 files / 88 commits / 720 tests**, and the two most recent product
+commits (`b9b7207` for NEX-016, `990557d` for NEX-017) named as the CI-verified
+state. The CI paragraph now states plainly that `ca15eb1` itself is docs-only and
+no result is claimed for it, so the body no longer implies a green docs head.
+
+Two counts in the body were also independently wrong and were re-derived from the
+tree rather than copied: it said "eight database migrations and five new API
+routers", but `migrations/versions/` holds **10** scripts and
+`presentation/api/routers/` holds **11** modules. The "Twenty files come back with
+`additions: 0`" truncation note is retained and now says those per-file sums are
+unusable, with the PR object named as the authoritative figure.
+
+The verified-slice list went from "Eight" to **Nine** with NEX-017 added.
+Post-patch checks confirmed zero residual occurrences of `27,659`, `718
+collected`, `715 tests`, `Eight product` and `038db7e`. The PR remains **open,
+draft and unmerged**.
+
 

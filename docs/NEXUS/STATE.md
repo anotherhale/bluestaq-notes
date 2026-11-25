@@ -77,10 +77,11 @@ ruff format + check clean, mypy clean, architecture 5 passed). See risk **R23**.
 
 **Next best actions**
 
-1. **Refresh the PR #3 body.** Head is `46496b7`; measured counters at that head
-   are 28,357 additions / 10 deletions / 106 files / 87 commits, 720 tests
-   collected. The body still describes `eab423c`, so it is stale — say so until
-   it is rewritten.
+1. **PR #3 body was refreshed this run** at head `ca15eb1` — 28,385 additions /
+   10 deletions / 106 files / 88 commits, 720 tests, 10 migrations, 11 routers —
+   and now names `b9b7207` and `990557d` as the CI-verified product commits while
+   stating that `ca15eb1` itself is docs-only and unclaimed. Keep it current: it
+   had been stale for several runs and carried numbers wrong in two directions.
 2. **Re-poll CI on the NEX-003 and NEX-006 SHAs.** Both are TESTED, not verified.
    Promote only on an observed 4/4 at the named SHA.
 3. **Select the next dependency-ready Phase-5 slice from `ROADMAP.md`.**
