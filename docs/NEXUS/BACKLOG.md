@@ -1813,3 +1813,61 @@ full `pytest` **850 passed, 4 skipped**.
 
 **Next action:** commit and push this slice, then refresh PR #3 and tracking issue #2.
 
+
+---
+
+## NEX-032 — Withholding is observable, not merely auditable
+
+**Status:** VERIFIED locally (CI pending at `fe5eadc`). **Phase:** 5 (durable runtime) —
+observability. **Priority:** P1 (closes R32).
+
+**Objective.** NEX-031 made an over-cap record-derived value *withheld* rather than fatal,
+which is the right failure direction — a legal note must not deny an advisory. But it made
+withholding the quiet path: `excluded_field_names` recorded *that* an input was held back and
+nothing recorded *why*. A caller reading an advisory could not tell a deliberate policy
+exclusion from a value that did not fit, and those two mean opposite things operationally.
+
+**The defect (R32).** One flat name list collapsed two distinct states:
+
+- **ABOVE_CEILING** — the caller classified the value and the envelope's ceiling excluded it.
+  The control working as designed. Nothing is wrong, nothing should change.
+- **OVER_CAP** — the value exceeded `MAX_FIELD_VALUE_LENGTH`, so it could not be represented
+  at all. Degradation: every advisory is computed on less context than the caller believes.
+
+Only the second deserves attention, and the audit record made them indistinguishable. The
+same shape as R20 (a record that cannot be read) and R24 (a note that reads as current
+forever): a signal that exists but cannot be distinguished is not a signal.
+
+**The fix.** `ContextEnvelope.withheld_fields` returns `(name, reason)` pairs;
+`over_cap_field_names` exposes the subset an operator can watch without parsing reasons. An
+input that is both over-cap and above the ceiling is reported **once**, as `OVER_CAP`, so
+telemetry never double-counts one input. Names only — never values, so a withheld value stays
+unreachable in memory. The reason travels end to end: `DecisionRequest` → `DecisionEvaluation`
+→ advisory result → `ApprovalAdvisoryResponse.over_cap_context_fields`.
+
+**Second defect found while testing.** `from_candidates` validated the classification only on
+the under-cap path. The over-cap branch skipped the check entirely because the field was never
+constructed, so a caller passing a bare string for an over-cap candidate was silently
+accepted while the identical mistake under the cap raised. The path that *discards* the value
+must not be a hole in the type check. `ContextField` still accepts `RESTRICTED` and lets the
+ceiling withhold it — that is its documented "exclusion is recorded, not silent" contract, and
+an earlier draft of this slice wrongly inverted it.
+
+**Invariant enforced.** `over_cap_context_fields` must be a subset of
+`excluded_context_fields` on `DecisionRequest`. Two records that disagree about which inputs
+were held back are worse than one, so the relation is checked at construction.
+
+**Tests.** 10 new cases: per-field reasons; the once-only rule for a doubly-withheld field; no
+value in the record; the validation-bypass regression; the subset invariant; and the API
+boundary asserting a ceiling-withheld title appears in `excluded_context_fields` but not in
+`over_cap_context_fields`. The API test creates a **real note** — a fabricated `resource_ref`
+would make the ceiling check vacuous and let the test pass while proving nothing.
+
+**Gates.** `ruff format` clean, `ruff check` clean, `mypy` clean (105 source files), full
+`pytest` **860 passed, 4 skipped** (baseline 850).
+
+**Migration:** none. **New dependencies:** none.
+
+**Remaining follow-up.** No metric aggregates over-cap withholdings across advisories. The
+per-response field makes a thin advisory visible; turning that into an alert is a separate
+monitoring task.

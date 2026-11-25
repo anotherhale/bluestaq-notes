@@ -4004,3 +4004,73 @@ VERIFIED — local gates alone are never enough (R9).
   object), then update issue #2 with NEX-031 using lists (not tables — a markdown table
   in an issue comment returns HTTP 500 on this repository), then start NEX-032.
 
+
+---
+
+## Run `NEX-2026-11-25-34` — 2026-11-25T16:31Z
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `f5825ff` (checkpoint bookkeeping from run 33)
+- **Ending commit:** `fe5eadc` (NEX-032 product)
+- **Task completed:** NEX-032 — withholding is observable with a reason per field.
+- **Status:** VERIFIED locally; CI **not yet polled** at `fe5eadc`. Do not record as
+  CI-verified until the four check runs are observed.
+
+### What changed
+
+- `domain/agent/context.py` — new `WithholdingReason` (`above_ceiling` | `over_cap`) and
+  `WithheldField(name, reason)`; `ContextEnvelope.withheld_fields` and
+  `over_cap_field_names`. An input both over-cap and above the ceiling is reported once, as
+  `OVER_CAP`, so telemetry does not double-count it. Names only, never values.
+- `domain/agent/context.py` — **defect fixed:** `from_candidates` validated the
+  classification only on the under-cap path; the over-cap branch skipped it because the
+  field was never constructed, so a bare string slipped through there while raising under
+  the cap. Now validated on both paths.
+- `domain/agent/decisioning.py` — `DecisionRequest.over_cap_context_fields`, enforced as a
+  **subset** of `excluded_context_fields`; `from_context` fills it from the envelope.
+- `application/use_cases/decisioning.py`, `use_cases/approval_advisory.py`,
+  `presentation/schemas.py` — the reason is carried to `ApprovalAdvisoryResponse`.
+
+### Why
+
+R32: NEX-031 made over-cap withholding non-fatal (correct — a legal note must not deny an
+advisory) but silent. `excluded_field_names` recorded *that* an input was held back, never
+*why*, so a deliberate ceiling exclusion and a value that did not fit were indistinguishable.
+Those are opposite operationally: one is the control working, the other is a thinner advisory
+than the caller believes. A signal that cannot be distinguished is not a signal — the same
+shape as R20 and R24.
+
+### Tests
+
+10 new cases in `tests/agent/test_context_envelope.py` and
+`tests/api/test_approval_advisory_api.py`: per-field reasons; once-only reporting for a
+doubly-withheld field; no value present in the record; the validation-bypass regression; the
+subset invariant; and the API boundary asserting a ceiling-withheld title appears in
+`excluded_context_fields` but not `over_cap_context_fields`.
+
+The API boundary test was first written against a fabricated `resource_ref` and returned
+`[]` — no real note, so no title candidate, so the assertion proved nothing. Rewritten to
+create a real note through `POST /api/v1/notes`. Worth remembering: a test that passes
+because its subject does not exist is worse than no test.
+
+### Gates
+
+`ruff format` clean (159 files), `ruff check` clean, `mypy` clean (105 source files), full
+`pytest` **860 passed / 4 skipped** (baseline 850, +10 net).
+
+### Reconciliation
+
+`CHECKPOINT.json` named `240a446` with `active_task: null` and `next_task: NEX-032`, which
+matched reality. The tree was clean at `f5825ff` and the branch was already correct.
+
+### Not done this run (clock)
+
+PR #3 and issue #2 do **not** yet carry NEX-032 evidence. That is the next run's first
+action, before any new code.
+
+### Next action
+
+Poll the four check runs for `fe5eadc`; if green, record NEX-032 as CI-verified and then
+update PR #3 (re-measure counters from the PR object, never from this file) and issue #2
+(use **lists**, not tables — a markdown table in an issue comment returns HTTP 500 on this
+repository).

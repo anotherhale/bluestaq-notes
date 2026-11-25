@@ -7,13 +7,13 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-031 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 closes the observation NEX-030 recorded by exercising the envelope bounds against real stored **note** bodies. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-032 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `4f1c95f` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-33`'s predecessor. |
-| Head commit (run end) | `240a446` is NEX-031's product commit (see `git log -1` for the docs promotion above it). |
-| Last CI result | **`240a446` (NEX-031): see `ci_status` in `CHECKPOINT.json` for the poll result and timestamp.** Prior: `0727628` (NEX-030), 4/4 `completed/success`, polled 2026-11-25T15:46Z. |
-| Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). **Stale as of `240a446`**: it does not yet cover NEX-031. Refreshing it is the next run's first action. Re-measure counters from the PR object before quoting them. |
+| Base commit (run start) | `f5825ff` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-33`. |
+| Head commit (run end) | `fe5eadc` is NEX-032's product commit (see `git log -1` for the docs promotion above it). |
+| Last CI result | **`fe5eadc` (NEX-032): NOT YET POLLED.** Prior: `240a446` (NEX-031), 4/4 `completed/success`, polled 2026-11-25T16:22Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Tracking issue | #2 (open) — **stale as of `fe5eadc`**: does not yet carry NEX-032 evidence. |
+| Draft PR | #3 (draft, unmerged — human review required). **Stale as of `fe5eadc`**: it does not yet cover NEX-032. Re-measure counters from the PR object before quoting them. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -395,9 +395,48 @@ Recorded so a later audit does not re-open it without cause.
 
 | Field | Value |
 | --- | --- |
-| Task | NEX-031 — a record-derived value over the context cap is withheld, not fatal |
-| Status | **IMPLEMENTED, TESTED, VERIFIED locally**; CI poll result recorded in `CHECKPOINT.json` → `ci_status.nex031_slice_240a446`. |
-| Next action | Refresh PR #3 body at the current head, then update tracking issue #2, then select the next dependency-ready slice. |
+| Task | NEX-032 — withholding is observable with a reason per field |
+| Status | **IMPLEMENTED, TESTED, VERIFIED locally** at `fe5eadc` (860 passed / 4 skipped). CI **not yet polled** — see `ci_status.nex032_slice_fe5eadc`. |
+| Next action | Poll the four check runs at `fe5eadc`; if green, record CI-verified, then update PR #3 and issue #2 with NEX-032 evidence before starting new code. |
+
+## NEX-032 (run `NEX-2026-11-25-34`) — a withheld field that cannot say why is not a signal
+
+NEX-031 made an over-cap record-derived value *withheld* rather than fatal, which is the right
+failure direction: a legal note must not deny an advisory. But it made withholding the quiet
+path. `excluded_field_names` recorded *that* an input was held back and nothing recorded *why*,
+so two opposite situations produced the same record:
+
+- **ABOVE_CEILING** — the caller classified the value and the envelope's ceiling excluded it.
+  The control working as designed.
+- **OVER_CAP** — the value exceeded `MAX_FIELD_VALUE_LENGTH` and could not be represented at
+  all. The advisory was computed on less context than the caller believes.
+
+Only the second deserves attention, and the flat list made a routine design decision
+indistinguishable from a quiet degradation. This is the R20/R24 shape again: a signal that
+exists but cannot be distinguished is not a signal.
+
+`ContextEnvelope.withheld_fields` now returns `(name, reason)` pairs and
+`over_cap_field_names` exposes the subset worth watching. An input that is both over-cap and
+above the ceiling is reported **once**, as `OVER_CAP`, so telemetry never double-counts one
+input. Names only, never values — keeping the withheld value would leave the raw subject text
+one refactor away from the canonical form, which is the thing withholding exists to prevent.
+The reason travels end to end to `ApprovalAdvisoryResponse.over_cap_context_fields`, and
+`DecisionRequest` enforces that the over-cap set is a **subset** of the excluded set: two
+records that disagree about what was withheld are worse than one.
+
+**Second defect found while testing.** `from_candidates` validated the classification only on
+the under-cap path; the over-cap branch skipped it because the field was never constructed, so
+a bare string slipped through there while raising under the cap. The path that *discards* the
+value must not be a hole in the type check. `ContextField` still accepts `RESTRICTED` and lets
+the ceiling withhold it — its documented "exclusion is recorded, not silent" contract, which an
+earlier draft of this slice wrongly inverted by rejecting it.
+
+**Tests.** 10 new cases, including the validation-bypass regression, the once-only rule, and an
+API boundary test that creates a **real note**. That test was first written against a
+fabricated `resource_ref` and returned `[]` — no real note, no title candidate, so the
+assertion proved nothing. A test that passes because its subject does not exist is worse than
+no test.
+
 
 ## NEX-031 (run `NEX-2026-11-25-33`) — a note is 300x the context cap, and that must not deny the advisory
 
@@ -866,17 +905,20 @@ None currently. The following are known open items, not blockers:
 3. ~~**Refresh PR #3.**~~ **Satisfied this run** — refreshed from the PR object at head
    `03ead43`, PATCH 2026-11-25T14:52:08Z, read back byte-equal (30,024 chars). Counters now
    34,700 additions / 10 deletions / 124 files / 137 commits.
-4. **Wire `ContextEnvelope` into a real caller — now NEX-029, the next scheduled slice**
-   (R31). It is currently exercised only by tests. The first production caller —
-   tool-gateway classification or the approval-recommendation path — is what proves the
-   200-char value cap and 32-field cap fit real content. Re-read the Phase 5/6 section of
-   `ROADMAP.md` before choosing; do not invent a slice from a run summary.
-5. **Confirm whether revoking a delegation or agent invalidates approvals already
-   granted under it.** `RevokeDelegation` revokes the delegation and every token
-   derived from it, immediately and ownership-checked, but this run did not establish
-   whether a *granted* `ApprovalRequest` survives that revocation. If it does, an
-   approval could outlive the authority that justified it. Read the approval and
-   revocation paths together before deciding; do not assume either answer.
+4. ~~**Wire `ContextEnvelope` into a real caller.**~~ **Satisfied** — NEX-029 (production
+   caller), NEX-030 (`ContextHash`), NEX-031 (real note bodies) and NEX-032 (per-field
+   observability) are all VERIFIED. M2.6 decisioning is complete in both halves and exercised
+   against real stored data.
+5. ~~**Confirm whether revoking a delegation or agent invalidates approvals already granted
+   under it.**~~ **Satisfied** — closed on both paths by NEX-025 (R28).
+6. **Aggregate over-cap withholdings into a count — the natural successor to NEX-032.** The
+   per-response field makes a thin advisory visible to a caller who looks; nothing counts how
+   often it happens across advisories, so a routinely over-cap note field would still be quiet
+   in aggregate. This is a monitoring slice, not a correctness one — the security invariant
+   already holds in the safe direction. Decide first whether the count belongs in a structured
+   log line or a metric port; do not invent a metrics dependency without a demonstrated need.
+7. **Re-poll CI at `fe5eadc` and promote NEX-032 to CI-verified.** Cheap, and the standing rule
+   is that a local gate result is not a CI result. Do this before new code.
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate
