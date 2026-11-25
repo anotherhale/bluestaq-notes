@@ -1871,3 +1871,104 @@ would make the ceiling check vacuous and let the test pass while proving nothing
 **Remaining follow-up.** No metric aggregates over-cap withholdings across advisories. The
 per-response field makes a thin advisory visible; turning that into an alert is a separate
 monitoring task.
+
+
+---
+
+## NEX-034 — A credential is recognised by shape, not by an exact key spelling
+
+**Status:** IMPLEMENTED + PUSHED at `e386e02` (CI in progress at time of writing).
+**Phase:** 5 (durable runtime) — observability / security hardening.
+**Priority:** P1. **Closes:** the redaction hole NEX-033 opened by wiring
+`redact()` onto the formatting path.
+
+**Objective.** Make the log redactor enforce the rule it advertises: a
+credential must not reach a log line, whatever the caller happened to name it.
+
+### The defect (two holes in one function)
+
+`redact()` in `bootstrap/logging_config.py` decided whether a key was sensitive
+by membership in a set of eleven exact strings. Anything spelled differently
+was treated as safe:
+
+- `client_secret`, `private_key`, `x-api-key`, `accessToken`,
+  `session_cookie`, `Authorization` — all emitted in full.
+
+Before NEX-033 this was latent: `redact()` had zero callers, so the module
+docstring's "sensitive data must never be logged" was an unenforced aspiration.
+NEX-033 put `redact()` on the formatting path *to enforce that rule* — which
+converted a dormant gap into an active false claim of protection. A matcher
+that covers the spellings someone thought to list is not a control; it is a
+control-shaped object.
+
+Second hole, found while testing: `_redact_value` inspected the key first but
+only replaced **scalars**. A sequence under a sensitive key leaked wholesale:
+`{"tokens": ["raw-secret-1", "raw-secret-2"]}` came out untouched.
+
+### Why this is the same shape as the bug NEX-033 fixed
+
+NEX-033 removed a six-key log **allowlist** — "emit what I listed, drop the
+rest". This is the mirror image: an eleven-key **denylist** — "redact what I
+listed, pass the rest". Both are enumerate-what-you-know. Both fail silently on
+the case nobody enumerated. Fixing one layer and leaving the other is how a
+class of defect survives a fix.
+
+### The fix
+
+`_key_words` segments a key across separators and camelCase, so `accessToken`,
+`access_token` and `ACCESS-TOKEN` reach one verdict. `_is_sensitive_key`
+then decides on words:
+
+- a credential word in any position (`client_secret`, `accessToken`, `bearer`);
+- a plural of one (`tokens`, `credentials`, `cookies`);
+- a compound where neither word is sensitive alone (`private_key`, `api_key`,
+  `signing_key`).
+
+`key` on its own stays ordinary, so `idempotency_key` and `partition_key`
+survive. `content` is sensitive but its descriptors (`content_type`,
+`content_length`) are not.
+
+A sequence under a sensitive key is replaced **whole**, not element by element:
+per-element replacement would still leak the length and the ordering of a
+secret set.
+
+### Redaction stays surgical — deliberately
+
+Over-redacting is *not* the safe default in this position. A naive substring
+matcher would swallow `idempotency_key`, `content_type` and `duration_ms`, and
+in doing so blind the withholding counter NEX-033 added — the log line exists
+precisely to make a routinely-thin advisory visible. A redactor that hides the
+telemetry is a different outage. A test pins the fields that must survive.
+
+### Tests
+
+4 new cases in `tests/bootstrap/test_logging_config.py`:
+
+1. the six credential spellings the old matcher never knew;
+2. a plural credential key;
+3. a sequence under a sensitive key replaced whole;
+4. the ordinary telemetry fields that must survive.
+
+**Negative control, run on disk:** restoring the exact-match matcher turns
+**3 of the 4 red**. The over-redaction test passes on both versions — correctly,
+because it guards a property the old matcher already had, and a test that
+asserts nothing new would be a false green.
+
+### Gates
+
+`ruff format` clean (164 files), `ruff check` clean, `mypy` clean (107 source
+files), `pytest` **873 → 877 passed / 4 skipped**. The 873 baseline was measured
+by stashing the change rather than assumed.
+
+### Migration / dependencies
+
+None. Stdlib only.
+
+### Residual
+
+`_SENSITIVE_WORD_PAIRS` and `_SENSITIVE_WORDS` are still finite lists, so a
+credential named with a word on neither list would pass. The difference from the
+predecessor is direction: the matcher now fails on *vocabulary*, not on
+*spelling*, so a new vendor's `client_secret` is caught without anyone editing a
+set. Widening vocabulary is cheap and additive; the structural hole — one
+spelling per entry — is closed.

@@ -7,11 +7,11 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-033 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-034 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `617d33e` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-34`. |
-| Head commit (run end) | `bf84a7c` is NEX-033's product commit (see `git log -1` for the docs promotion above it). |
-| Last CI result | **`bf84a7c` (NEX-033): not yet polled.** Prior: `fe5eadc` (NEX-032), 4/4 `completed/success`, polled 16:47Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Base commit (run start) | `eb1a2c8` — the NEX-033 docs promotion over product commit `bf84a7c`. |
+| Head commit (run end) | `e386e02` is NEX-034's product commit (see `git log -1` for the docs promotion above it). |
+| Last CI result | **`bf84a7c` (NEX-033): VERIFIED** — Backend `completed/success` + Frontend `completed/success`; the duplicate `pull_request` pair `completed/cancelled` by the concurrency group. Polled 2026-11-25T17:33Z. **`e386e02` (NEX-034): in progress** at time of writing — poll before quoting. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
@@ -911,16 +911,29 @@ None currently. The following are known open items, not blockers:
    against real stored data.
 5. ~~**Confirm whether revoking a delegation or agent invalidates approvals already granted
    under it.**~~ **Satisfied** — closed on both paths by NEX-025 (R28).
-6. **Aggregate over-cap withholdings into a count — the natural successor to NEX-032.** The
-   per-response field makes a thin advisory visible to a caller who looks; nothing counts how
-   often it happens across advisories, so a routinely over-cap note field would still be quiet
-   in aggregate. This is a monitoring slice, not a correctness one — the security invariant
-   already holds in the safe direction. Decide first whether the count belongs in a structured
-   log line or a metric port; do not invent a metrics dependency without a demonstrated need.
+6. ~~**Aggregate over-cap withholdings into a count — the natural successor to NEX-032.**~~
+   **Satisfied by NEX-033**, which shipped the `WithholdingRecorder` port for exactly this.
+   The checkpoint's `next_action` naming NEX-034 for this work was **stale** — written
+   before NEX-033 delivered it. Run `NEX-2026-11-25-35` found this during reconciliation
+   and re-scoped NEX-034 to a real defect rather than re-implementing a shipped feature.
+   **Lesson:** a `next_action` field is intent recorded at one moment; check it against
+   `git log` before executing it, the same way a `commit` field is checked against
+   `ls-remote`.
 7. ~~**Re-poll CI at `fe5eadc` and promote NEX-032 to CI-verified.**~~ **Satisfied.** 4/4
    `completed/success`, every `head_sha` = `fe5eadca918b…`, polled 2026-11-25T16:47Z. PR #3
    body PATCHed (43,921 chars) and issue #2 commented (7168592223) with that evidence.
-   Remaining: NEX-033, the aggregate count over withholdings.
+8. ~~**NEX-034: harden `redact()`.**~~ **Satisfied** — IMPLEMENTED, TESTED and PUSHED at
+   `e386e02`; CI poll pending. The matcher now decides on credential *shape* (separator and
+   camelCase segmentation, plurals, non-sensitive compounds) instead of eleven exact
+   strings, and a sequence under a sensitive key is replaced whole instead of leaking.
+9. **Poll CI at `e386e02` and promote NEX-034 if green.** A docs commit that follows it will
+   read `completed/cancelled` once superseded — that is the concurrency group, never evidence.
+10. **Then R30, the one live risk with no mitigation.** Every bound in the decision contract
+    (400-char rationale, `[0.0, 1.0]` confidence, the candidate choice set) has only ever
+    met the stub adapter, which always answers at 0.1 confidence with a short rationale. The
+    first real vendor adapter is the first genuine test of those bounds. R29's stated
+    `str.__new__` residual on `ContextHash` is a deliberate, documented trade-off, not a gap
+    to close.
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate

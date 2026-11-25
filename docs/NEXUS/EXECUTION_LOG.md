@@ -4189,3 +4189,104 @@ Not yet polled for `bf84a7c`. Push confirmed at the remote by `git ls-remote`
 **NEX-034.** First, poll CI for `bf84a7c` and record the result in
 `task_statuses.NEX-033`; a docs commit that is superseded reads `completed/cancelled` and
 is never evidence. Then select NEX-034 from the backlog.
+
+---
+
+## Run `NEX-2026-11-25-35` — 2026-11-25T17:31Z
+
+**Run ID:** NEX-2026-11-25-35
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `eb1a2c8` (docs promotion for NEX-033; product commit `bf84a7c`)
+**Ending commit:** `e386e02` (NEX-034 product), docs promotion above it
+**Elapsed at commit:** 562s of the 1500s window
+
+### Tasks completed
+
+- **NEX-033 promoted to CI-verified.** `bf84a7c` shows 4 check runs: Backend
+  `completed/success`, Frontend `completed/success`, and the duplicate
+  `pull_request` pair `completed/cancelled` by the CI concurrency group. The
+  cancelled pair is the standing pattern and is neither pass nor fail. Polled
+  2026-11-25T17:33Z.
+- **NEX-034 implemented, tested, committed, pushed.** `e386e02`.
+
+### The reconciliation that changed the slice
+
+The checkpoint's `next_action` named NEX-034 as "aggregate over-cap context
+withholdings into a count". That work already existed: NEX-033's
+`WithholdingRecorder` port **is** the aggregation. The `next_action` was stale,
+written before NEX-033 delivered it. Rather than re-implement a shipped feature,
+the slice became the defect found while reviewing NEX-033's own code path.
+
+### The defect (two holes in one function)
+
+`redact()` in `bootstrap/logging_config.py` matched a key against eleven exact
+strings. Every credential spelled differently passed through:
+
+- `client_secret`, `private_key`, `x-api-key`, `accessToken`,
+  `session_cookie`, `Authorization` — all emitted in full.
+
+NEX-033 put `redact()` on the formatting path specifically to enforce the
+module's "sensitive data must never be logged". So the incomplete matcher began
+*advertising* protection it did not provide — worse than the pre-NEX-033 state
+where it had no callers and the claim was merely aspirational. This is the same
+enumerate-what-you-know, treat-the-unknown-as-safe shape as the six-key
+allowlist NEX-033 removed, one layer down.
+
+Second defect, found while testing: `_redact_value` checked the key first but
+only replaced **scalars**. A sequence under a sensitive key leaked wholesale —
+`{"tokens": ["raw-secret-1", "raw-secret-2"]}` was emitted untouched.
+
+### The fix
+
+The matcher segments a key across separators and camelCase, then decides on
+words:
+
+- a credential word in any position (`client_secret`, `accessToken`);
+- a plural of one (`tokens`, `credentials`);
+- a compound where neither word is sensitive alone (`private_key`, `api_key`).
+
+`key` alone stays ordinary, so `idempotency_key` and `partition_key` survive.
+A sequence under a sensitive key is now replaced **whole** — per-element
+replacement would still leak the length and ordering of a secret set.
+
+Redaction stays surgical, deliberately. Over-redacting is not the safe default
+here: a substring matcher would swallow `idempotency_key`, `content_type` and
+`duration_ms`, and blind the withholding counter NEX-033 added — which is the
+entire point of the log line.
+
+### Tests
+
+4 new cases: the six unlisted credential spellings; plural keys; a sequence
+under a sensitive key replaced whole; and the ordinary telemetry fields that
+must survive. Negative control run on disk — restoring the exact-match matcher
+turns **3 of 4 red**; the over-redaction test passes on both, correctly, since
+it guards a property the old matcher already had.
+
+### Gates
+
+`ruff format` clean (164 files), `ruff check` clean, `mypy` clean (107 source
+files), `pytest` **873 → 877 passed / 4 skipped**. Baseline 873 was measured by
+stashing the change, not assumed.
+
+### Correction to NEX-033's recorded baseline
+
+`CHECKPOINT.json` recorded NEX-033 as "pytest 877 passed". The true NEX-033
+baseline at `bf84a7c` is **873**. The 877 figure was the count *after* adding
+this run's 4 tests, recorded against the wrong slice. An R24-class stale note:
+corrected here and in the checkpoint rather than left to mislead the next run.
+
+### Files changed
+
+- `src/notes_service/bootstrap/logging_config.py` — shape-based matcher,
+  whole-value replacement for sensitive sequences.
+- `tests/bootstrap/test_logging_config.py` — 4 new tests.
+
+### Migration / dependencies
+
+None. No new dependency; the matcher is stdlib only.
+
+### Next action
+
+Poll CI for `e386e02` and promote NEX-034 if green. Then the backlog's genuine
+remaining item: R30 (a bounded contract exercised only against a stub) and R29's
+stated `str.__new__` residual on `ContextHash`.
