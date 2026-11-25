@@ -130,6 +130,7 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
             UserId.parse(row.revoked_by_user_id) if row.revoked_by_user_id else None
         ),
         revoke_reason=row.revoke_reason,
+        version=row.version,
     )
 
 
@@ -372,8 +373,11 @@ class SqlAlchemyApprovalRequestRepository:
                     if request.revoked_by_user_id is not None
                     else None
                 ),
+                revoke_reason=request.revoke_reason,
+                version=request.version,
             )
         )
+        request.mark_persisted()
 
     def get(self, approval_id: ApprovalRequestId) -> ApprovalRequest | None:
         row = self._session.get(ApprovalRequestRow, _as_uuid(approval_id))
@@ -407,23 +411,59 @@ class SqlAlchemyApprovalRequestRepository:
         return [_approval_to_domain(row) for row in rows]
 
     def save(self, request: ApprovalRequest) -> None:
+        """Persist the decision, refusing to overwrite a newer stored version.
+
+        The compare-and-set mirrors :meth:`SqlAlchemyAgentRunRepository.save`.
+        Without it a stale writer that loaded the request before a decision
+        rewrites ``status``, ``consumed_at`` and ``revoked_at`` wholesale: an
+        ``approved`` copy saved after a revoke silently restores withdrawn
+        authority, and a pre-consumption copy clears ``consumed_at`` so a spent
+        approval can be spent twice. Both are silent re-grants, so the loser of
+        the race must reload rather than overwrite.
+        """
         row = self._session.get(ApprovalRequestRow, _as_uuid(request.id))
         if row is None:
             self.add(request)
             return
-        row.status = request.status.value
-        row.decided_at = request.decided_at
-        row.decided_by_user_id = (
-            _as_uuid(request.decided_by_user_id) if request.decided_by_user_id is not None else None
+        expected_version = request.persisted_version
+        result = self._session.execute(
+            update(ApprovalRequestRow)
+            .where(
+                ApprovalRequestRow.id == _as_uuid(request.id),
+                ApprovalRequestRow.version == expected_version,
+            )
+            .values(
+                status=request.status.value,
+                decided_at=request.decided_at,
+                decided_by_user_id=(
+                    _as_uuid(request.decided_by_user_id)
+                    if request.decided_by_user_id is not None
+                    else None
+                ),
+                reason=request.reason,
+                expires_at=request.expires_at,
+                consumed_at=request.consumed_at,
+                revoked_at=request.revoked_at,
+                revoked_by_user_id=(
+                    _as_uuid(request.revoked_by_user_id)
+                    if request.revoked_by_user_id is not None
+                    else None
+                ),
+                revoke_reason=request.revoke_reason,
+                version=request.version,
+            )
         )
-        row.reason = request.reason
-        row.expires_at = request.expires_at
-        row.consumed_at = request.consumed_at
-        row.revoked_at = request.revoked_at
-        row.revoked_by_user_id = (
-            _as_uuid(request.revoked_by_user_id) if request.revoked_by_user_id is not None else None
-        )
-        row.revoke_reason = request.revoke_reason
+        if cast(CursorResult[Any], result).rowcount != 1:
+            current = self._session.execute(
+                select(ApprovalRequestRow.version).where(
+                    ApprovalRequestRow.id == _as_uuid(request.id)
+                )
+            ).scalar_one_or_none()
+            raise VersionConflict(
+                expected=int(expected_version),
+                actual=int(current) if current is not None else int(expected_version),
+            )
+        request.mark_persisted()
 
     def consume(self, approval_id: ApprovalRequestId, *, now: datetime) -> bool:
         result = self._session.execute(
@@ -441,7 +481,7 @@ class SqlAlchemyApprovalRequestRepository:
                 # has not yet flipped the status column.
                 ApprovalRequestRow.revoked_at.is_(None),
             )
-            .values(consumed_at=now)
+            .values(consumed_at=now, version=ApprovalRequestRow.version + 1)
         )
         return cast(CursorResult[Any], result).rowcount == 1
 

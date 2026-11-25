@@ -538,6 +538,10 @@ class ApprovalRequestRow(Base):
     # Why the grant was withdrawn, kept apart from ``reason`` so the approval
     # justification is not lost when the authorisation is taken back.
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optimistic concurrency for the decision itself. A stale save would rewrite
+    # ``status``/``consumed_at`` from a pre-decision copy and silently restore
+    # authority the human already withdrew or spent.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
         CheckConstraint("status IN ('pending','approved','denied','revoked')", name="status_valid"),

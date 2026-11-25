@@ -198,6 +198,30 @@ class ApprovalRequest:
     revoked_at: datetime | None = None
     revoked_by_user_id: UserId | None = None
     revoke_reason: str | None = None
+    # Every decision changes whether this row authorises an action, so it needs
+    # the same compare-and-set that notes, organisations and runs already have.
+    # Without a version, ``save`` rewrites the whole row from whatever the caller
+    # last read: a stale ``DecideApprovalRequest`` holding a pre-revocation copy
+    # writes ``status=approved`` back over a ``revoked`` row, and a stale copy of
+    # a spent approval clears ``consumed_at`` and makes it spendable again. Both
+    # are silent re-grants of withdrawn authority, which is why this is a version
+    # and not merely a status guard.
+    version: int = 1
+    # The version this aggregate was last read from or written to storage at.
+    # ``version - 1`` is not that value: a caller may mutate several times
+    # between two saves, so persistence needs the exact stored version to build
+    # its ``UPDATE ... WHERE version = :expected``.
+    persisted_version: int = field(default=1, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.persisted_version = self.version
+
+    def mark_persisted(self) -> None:
+        """Record that ``version`` is now what storage holds."""
+        self.persisted_version = self.version
+
+    def _bump(self) -> None:
+        self.version += 1
 
     @classmethod
     def open(
@@ -300,6 +324,7 @@ class ApprovalRequest:
         self.decided_by_user_id = approver
         self.decided_at = now or _utcnow()
         self.reason = reason
+        self._bump()
 
     def deny(
         self,
@@ -314,6 +339,7 @@ class ApprovalRequest:
         self.decided_by_user_id = approver
         self.decided_at = now or _utcnow()
         self.reason = reason
+        self._bump()
 
     def revoke(
         self,
@@ -359,6 +385,7 @@ class ApprovalRequest:
         # was made, which is exactly what an auditor needs to compare against why
         # it was taken back.
         self.revoke_reason = reason
+        self._bump()
 
     def consume(self, *, now: datetime | None = None) -> None:
         """Spend this approval on exactly one action.
@@ -374,3 +401,4 @@ class ApprovalRequest:
                 f"approval request {self.id} is not usable and cannot be consumed"
             )
         self.consumed_at = now or _utcnow()
+        self._bump()
