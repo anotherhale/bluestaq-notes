@@ -14,10 +14,16 @@
     "NEX-003": "TESTED",
     "NEX-005": "VERIFIED",
     "NEX-005-followup": "VERIFIED",
-    "NEX-004": "TODO",
+    "NEX-004": "VERIFIED",
     "NEX-007": "TODO"
   },
-  "completed_tasks": ["NEX-006", "NEX-003", "NEX-005", "NEX-005-followup"],
+  "completed_tasks": [
+    "NEX-006",
+    "NEX-003",
+    "NEX-005",
+    "NEX-005-followup",
+    "NEX-004"
+  ],
   "validation": {
     "pytest_full": "603 passed, 4 skipped (607 collected)",
     "pytest_tool_gateway": "18 passed in tests/agent/test_tool_gateway.py",
@@ -33,18 +39,22 @@
     "pr": 3,
     "state": "draft",
     "merged": false,
-    "note": "description predates OIDC, tenant-access, agent-identity, and tool-gateway work; see NEX-004"
+    "description_updated": "2026-11-25T01:41:35Z",
+    "note": "description rewritten to match branch contents (phases 1-4 implemented, two gateway defects recorded). Still draft; not marked ready for review."
   },
-  "tracking_issue": {"number": 2, "state": "open"},
+  "tracking_issue": {
+    "number": 2,
+    "state": "open",
+    "last_progress_comment": "2026-11-25T01:44:10Z"
+  },
   "blockers": [],
   "risks": [
-    "R1: PR #3 description is stale relative to branch contents (NEX-004)",
     "R3: CI not observed for this commit set; local gates only",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
     "R5: NEX-005 has no HTTP/router exposure yet - the gateway is reachable only from application code. No API contract test covers it.",
     "R7: gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently."
   ],
-  "next_task": "NEX-004",
-  "next_action": "Update draft PR #3 description and checklist to reflect the verified organization + OIDC + tenant-access + agent-identity + tool-gateway work, and refresh tracking issue #2. Then NEX-005-HTTP: expose the tool gateway through the API layer with an API contract test (closes R5).",
+  "next_task": "NEX-005-HTTP",
+  "next_action": "NEX-005-HTTP: add a presentation router that invokes the tool gateway, an auth dependency resolving an agent token for TokenAudience.TOOL_GATEWAY (rejecting Notes-API tokens), and an API contract test covering a denied invocation plus a successful one. Closes risk R5.",
   "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it."
 }

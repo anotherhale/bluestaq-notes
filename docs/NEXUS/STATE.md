@@ -97,9 +97,11 @@ None currently. The following are known open items, not blockers:
 
 ## Risks
 
-- **R1 (medium):** PR #3 remains a draft while the branch carries real
-  implementation. It must be brought up to date and described accurately before
-  any human review, or reviewers will under-estimate what exists.
+- **R1 (closed 2026-11-25):** PR #3's description claimed the PR was
+  "specification/design only" while the branch carried 19,228 insertions across
+  85 files. It now reports the implemented phases, the two gateway defects, and
+  the validation evidence. The PR is still a draft: bringing it to review is a
+  human decision, not the coordinator's.
 - **R2 (low):** The frontend has no admin console yet; the expansion spec's
   frontend testing requirements cannot be satisfied until that work lands.
 - **R3 (low):** CI on the feature branch has not been observed for this commit
@@ -122,14 +124,11 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-004 — Update PR #3 and tracking issue #2**: describe the verified
-   organization + OIDC + tenant-access + agent-identity + tool-gateway work, and
-   add the validation evidence. (P4 hygiene, safe and immediate; also mitigates R1.)
-2. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
+1. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
    an auth dependency that resolves the agent token for `TokenAudience.TOOL_GATEWAY`,
    and an API contract test for a denied invocation. (P2; closes R5, the last
    gateway gap.)
-3. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
+2. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
    membership themselves. (P1, builds on NEX-006.)

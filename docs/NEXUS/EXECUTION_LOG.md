@@ -348,3 +348,35 @@ file writes here.**
 NEX-004 — update draft PR #3 and tracking issue #2. Then NEX-005-HTTP, which
 closes R5.
 
+
+---
+
+## Run NEX-2026-11-25-01 (continued) — delivery state reconciled
+
+**NEX-004 completed.** Both delivery surfaces were materially stale.
+
+- **PR #3** described itself as "specification/design only; application
+  implementation remains separately tracked" while the branch carries 19,228
+  insertions across 85 files: four migrations, four routers, and ~4,000 lines of
+  tests. The description now reports what is actually implemented, per phase,
+  with the two gateway defects called out and the validation table attached.
+  Still **draft** — it was not marked ready for review, and nothing was merged.
+- **Tracking issue #2** received a progress comment with the same evidence and
+  the two open risks (R5 no HTTP surface, R3 CI unobserved).
+
+**Risk R1 (stale PR description) is closed.** Risk R6 (no gateway test) was
+closed earlier in this run.
+
+### Process note (repeat offence)
+
+A `cat > file <<'MDEOF'` heredoc corrupted again — this time for an issue body,
+not source code. It hung and wrote nothing. The file editor was used instead.
+**Heredocs are unsafe in this terminal for any multi-line prose; use the file
+editor.** A short single-quoted `python - <<'EOF'` block with no backticks did
+work, so the defect tracks content, not merely length.
+
+### Next action
+
+NEX-005-HTTP — expose the tool gateway over HTTP with agent-token audience
+separation and a contract test. Closes R5.
+
