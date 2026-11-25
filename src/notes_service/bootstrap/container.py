@@ -101,6 +101,7 @@ from notes_service.application.use_cases.permissions import (
     RevokePermission,
     ShareNote,
 )
+from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.bootstrap.config import Settings
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -202,6 +203,9 @@ class Container:
     open_approval_request: Callable[[], OpenApprovalRequest]
     decide_approval_request: Callable[[], DecideApprovalRequest]
     list_approval_requests: Callable[[], ListApprovalRequests]
+    # The governed tool gateway. Every agent tool call goes through it, so it is
+    # the one place capability checks, approval gating, and audit are applied.
+    invoke_tool: Callable[[], InvokeTool]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -329,6 +333,23 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
 
         return factory
 
+    def make_tool_gateway() -> InvokeTool:
+        """Build the gateway, which additionally needs the token resolver.
+
+        A fresh resolver is built with each gateway, so token, delegation, and
+        agent revocation are re-checked on every invocation rather than cached.
+        """
+        return InvokeTool(
+            uow_factory=uow_factory,
+            authorization=authorization_provider,
+            clock=clock,
+            resolve_token=ResolveAgentToken(
+                uow_factory=uow_factory,
+                authorization=authorization_provider,
+                clock=clock,
+            ),
+        )
+
     return Container(
         settings=settings,
         engine=engine,
@@ -389,4 +410,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         open_approval_request=make(OpenApprovalRequest),
         decide_approval_request=make(DecideApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
+        invoke_tool=make_tool_gateway,
     )

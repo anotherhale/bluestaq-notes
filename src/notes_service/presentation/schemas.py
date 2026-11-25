@@ -15,8 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.organization import OrganizationView
+from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
+from notes_service.domain.agent.tools import InvocationStatus
 from notes_service.domain.agent.value_objects import (
     AgentStatus,
     ApprovalStatus,
@@ -758,6 +760,61 @@ class ApprovalRequestResponse(ResponseModel):
 class ApprovalRequestListResponse(BaseModel):
     items: list[ApprovalRequestResponse]
     meta: PageMeta
+
+
+# -- tool gateway ---------------------------------------------------------
+
+
+class ToolInvocationRequest(StrictModel):
+    """One governed tool invocation presented by an agent.
+
+    The agent's token is the credential and travels in the ``Authorization``
+    header, never here: no identity or authority may come from the body. The
+    idempotency key is required so a retried call replays its recorded outcome
+    instead of repeating the side effect.
+    """
+
+    tool: str = Field(min_length=1, max_length=64)
+    arguments: dict[str, object] = Field(default_factory=dict)
+    idempotency_key: str = Field(min_length=1, max_length=200)
+
+
+class ToolInvocationResponse(ResponseModel):
+    """The audited outcome of one tool invocation.
+
+    ``replayed`` distinguishes a replayed outcome from a fresh execution, so a
+    caller can tell that the side effect did not happen twice. ``output`` is the
+    handler's result and is empty for a refusal.
+    """
+
+    id: uuid.UUID
+    tool: str
+    capability: Capability
+    status: InvocationStatus
+    resource_ref: str
+    idempotency_key: str
+    invoked_at: datetime
+    completed_at: datetime | None = None
+    outcome: str | None = None
+    replayed: bool = False
+    output: dict[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def from_result(cls, result: ToolResult) -> ToolInvocationResponse:
+        invocation = result.invocation
+        return cls(
+            id=uuid.UUID(str(invocation.id)),
+            tool=invocation.tool_name,
+            capability=invocation.capability,
+            status=invocation.status,
+            resource_ref=invocation.resource_ref,
+            idempotency_key=invocation.idempotency_key,
+            invoked_at=invocation.invoked_at,
+            completed_at=invocation.completed_at,
+            outcome=invocation.outcome,
+            replayed=result.replayed,
+            output=dict(result.output),
+        )
 
 
 # -- envelopes ------------------------------------------------------------
