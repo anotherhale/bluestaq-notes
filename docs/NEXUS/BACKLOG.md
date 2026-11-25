@@ -1056,3 +1056,56 @@ fix and ran the new tests. This is not a "green at this exact SHA" claim for
 
 **Next action:** done — VERIFIED on descendant-CI at `2b3beb7`.
 
+
+---
+
+## NEX-019 — A stale write must not erase run progress
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P1 (data integrity: durable run concurrency) |
+| Status | **IMPLEMENTED + TESTED** — code at `66e8cd6`, gates run locally; CI not yet observed on that SHA |
+| Dependencies | NEX-005 (agent runtime), NEX-011 (run aggregate) |
+
+**Objective:** make the run aggregate's version meaningful on write. `AgentRun.version`
+was incremented on every mutation but the adapter never compared it, so the value only
+ever described the in-memory object. Two writers that loaded the same run both committed,
+and the second overwrote the first writer's step progress with a state derived from its
+stale copy. Nothing raised, so neither caller learned it had lost.
+
+For a note that is a lost edit. For a durable run it is worse: a stale copy committing
+after a crash can turn an `interrupted` step back into `pending`. The next resume then
+re-executes a step whose effect may already have landed — the duplicate execution the
+aggregate exists to prevent.
+
+**Root cause:** `SqlAlchemyAgentRunRepository.save` wrote `version=run.version` with no
+predicate. There was no record of which version the loaded aggregate corresponded to, so
+the adapter had nothing to compare against. `run.version - 1` cannot supply it: a caller
+may mutate several times between two saves.
+
+**Delivered:**
+
+- `domain/agent/runs.py` — the aggregate records the version it was last persisted at
+  (`persisted_version`), seeded in `__post_init__` from the version it was constructed
+  with, so a row loaded at v3 saves expecting v3. `mark_persisted()` is called by `add`
+  and after a successful `save`.
+- `infrastructure/db/agent_repositories.py` — `save` issues one
+  `UPDATE ... WHERE id = :id AND version = :expected` (the same shape
+  `SqlAlchemyNoteRepository.save` already uses) and raises `VersionConflict` when the
+  rowcount is 0. `VersionConflict` already maps to HTTP 409 in `presentation/errors.py`,
+  so the conflict is fail-closed and visible to the caller rather than silent.
+- `tests/agent/test_run_concurrency.py` — 3 tests through production's `save` path. Two
+  writers at one version cannot both commit and the winner's step survives; a
+  matching-version write still succeeds and drives the run to `COMPLETED` (so a
+  always-raising guard cannot pass the first test while breaking real advances); a stale
+  write cannot erase an `interrupted` step.
+
+**Gates (local, on the feature branch at `66e8cd6`):** `ruff format --check` clean (198
+files), `ruff check` clean, `mypy` clean (98 sources), full `pytest` **725 passed / 4
+skipped** (previous head was 722; the delta is exactly the 3 new tests).
+
+**CI:** not yet observed on `66e8cd6`. Stated as an absence, not a pass.
+
+**Next action:** poll CI for `66e8cd6` and promote to VERIFIED only on 4/4
+`completed/success` reporting that `head_sha`.

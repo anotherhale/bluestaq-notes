@@ -2449,3 +2449,71 @@ is stated as an absence, not a pass. The next run must poll it.
 Poll CI for the commit carrying this fix. Promote NEX-018 to VERIFIED only on
 4/4 `completed/success` reporting that `head_sha`. Then resume Phase-5 selection
 from `ROADMAP.md`.
+
+---
+
+## Run NEX-2026-11-25-21 — 2026-11-25T09:31Z
+
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `3c8bfd5` · **Ending commit:** `66e8cd6`
+**Run ID:** NEX-2026-11-25-21
+
+### Starting state
+
+Recovered from the previous run's checkpoint: NEX-018 VERIFIED on descendant-CI at
+`2b3beb7`, all prior tasks VERIFIED, no in-progress work, PR #3 open and unmerged. The
+working tree was clean at `3c8bfd5` on the authorized branch — verified by `git status
+-sb` before touching anything, not assumed from the checkpoint.
+
+### Task selected: NEX-019
+
+A durable run whose version is never enforced on write cannot keep its core promise. Two
+writers at the same version both committed and the loser's commit silently erased the
+winner's step progress. The concrete harm is a stale copy flipping an `interrupted` step
+back to `pending`, which makes the next resume re-execute an effect that may already have
+landed. That is a data-integrity defect on the exact invariant Phase 5 rests on, so it
+outranked new capability work.
+
+### Work completed
+
+- Domain: `AgentRun` records `persisted_version` (seeded in `__post_init__`, advanced by
+  `mark_persisted()` from `add` and after a successful `save`). A loaded row at v3 now
+  saves expecting v3.
+- Adapter: `save` is a compare-and-set — one `UPDATE ... WHERE id AND version = :expected`
+  with a rowcount check raising `VersionConflict`, mirroring `SqlAlchemyNoteRepository`.
+  `VersionConflict` already maps to HTTP 409, so the conflict is fail-closed and visible.
+- Tests: 3 new in `tests/agent/test_run_concurrency.py`, driven through production's
+  `save` path. The matching-version test exists deliberately so that a guard which always
+  raised could not pass the conflict tests while breaking every real advance.
+- Docstring correction: the repository class docstring claimed `save` "rewrites the step
+  rows rather than diffing them"; that was stale after the change and now describes the
+  in-place update plus the version precondition.
+
+### Validation
+
+- `pytest` (bare, repo-wide): **725 passed, 4 skipped**, exit 0. Previous head was 722
+  passed; the delta is exactly the 3 new tests, so nothing else regressed.
+- `ruff format --check .`: 198 files already formatted.
+- `ruff check .`: All checks passed.
+- `mypy`: clean on 98 sources.
+
+### CI
+
+**No CI result has been read for `66e8cd6`.** Recorded as an absence, not a pass. The next
+run must poll it and promote NEX-019 only on 4/4 `completed/success` reporting that
+`head_sha`.
+
+### Tooling note
+
+A `git commit -F -` heredoc corrupted its own command text, mangling the final line of the
+commit message (R12 recurring). The commit was unpushed, so the message was rewritten with
+`git commit --amend -F <file>` after writing the message with the file editor. Repository
+content was verified correct before and after; only the message text was affected. Do not
+use heredocs in this environment.
+
+### Next action
+
+1. Poll CI for `66e8cd6`; promote NEX-019 to VERIFIED on 4/4 `completed/success`.
+2. Refresh PR #3's body: counters were last measured at `fa387a9` and the body should cite
+   the current head and the NEX-019 change.
+3. Select the next Phase-5 slice from `ROADMAP.md`. Never merge PR #3.
