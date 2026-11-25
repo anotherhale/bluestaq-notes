@@ -487,7 +487,7 @@ settle such a step; an agent has no endpoint that resolves its own ambiguity.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | **TESTED** (run `NEX-2026-11-25-11`; commit `f50a78d`; CI observed in progress, not yet concluded) |
+| Status | **VERIFIED** (run `NEX-2026-11-25-11`; commit `f50a78d`; CI **4/4 `completed/success`** observed 2026-11-25T05:18Z) |
 | Dependencies | NEX-003 (governed tool gateway), NEX-005-HTTP (owner-scoped listing pattern) |
 
 **Objective:** make the gateway's own audit trail readable. The governed tool

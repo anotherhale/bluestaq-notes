@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-11",
-  "timestamp": "2026-11-25T05:15:00Z",
+  "timestamp": "2026-11-25T05:20:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "f50a78d",
-  "commit_note": "f50a78d is the last commit whose product code was verified by local gates: NEX-011, the tool-invocation audit trail HTTP surface. Its frontend CI job reported 2/2 completed/success; both backend check runs were still in_progress when the run ended, so NEX-011 is TESTED and not VERIFIED. The last commit with fully observed green CI remains e817d04 (NEX-009-HTTP, 4/4). The docs commit that contains this file is the child of f50a78d.",
-  "project_phase": "Phase 2 complete (agent identity & delegation all VERIFIED). Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 tool-invocation audit trail TESTED (f50a78d, backend CI not concluded).",
+  "commit_note": "f50a78d is the commit that contains NEX-011 (tool-invocation audit trail over HTTP), CI-verified 4/4 completed/success on 2026-11-25T05:18Z (backend + frontend, push and pull_request). The docs commit carrying this file is its child.",
+  "project_phase": "Phase 2 complete (agent identity & delegation all VERIFIED). Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 tool-invocation audit trail VERIFIED (f50a78d, CI 4/4).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -21,7 +21,7 @@
     "NEX-010": "VERIFIED",
     "NEX-009": "VERIFIED",
     "NEX-009-HTTP": "TESTED",
-    "NEX-011": "TESTED"
+    "NEX-011": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -46,10 +46,10 @@
     "mypy": "clean (97 source files)",
     "migration_chain": "unchanged this run - read path over an existing table, no new migration",
     "frontend_gates": "not run locally - no frontend files changed; CI frontend job reported 2/2 completed/success on f50a78d",
-    "ci_observed": false,
-    "ci_note": "NEX-011's commit f50a78d is NOT CI-verified: frontend 2/2 completed/success, backend 2 runs still in_progress at run end. The last observed-green commit remains e817d04 (4/4 check runs). Local gates are recorded for reproducibility only, not as CI evidence (R10).",
-    "verified_at_commit": "e817d04",
-    "verified_by_run": "NEX-2026-11-25-10",
+    "ci_observed": true,
+    "ci_note": "NEX-011 verified: commit f50a78d returned 4/4 completed/success (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, both on push and pull_request), observed 2026-11-25T05:18Z. This is the third slice to reach VERIFIED on observed CI.",
+    "verified_at_commit": "f50a78d",
+    "verified_by_run": "NEX-2026-11-25-11",
     "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote on these."
   },
   "uncommitted_work": "none",
@@ -76,9 +76,9 @@
     "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
     "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one."
   ],
-  "next_task": "NEX-011 verification (observe CI on f50a78d), then the next Phase-5 slice",
-  "next_action": "Run `gh api repos/anotherhale/bluestaq-notes/commits/f50a78d/check-runs`. If all four check runs are completed/success, promote NEX-011 from TESTED to VERIFIED in BACKLOG.md, STATE.md and this file, and record the SHA. If any job failed, read the log and fix it - do not weaken assertions. Then refresh PR #3's body: it is 24,087 insertions / 98 files at f50a78d while the body claims 21,310 / 91, and it has understated this branch on every run. Finally re-read the Phase 5 section of docs/NEXUS/ROADMAP.md before selecting the next slice.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. Everything through NEX-009-HTTP is VERIFIED with 4/4 CI green on e817d04. NEX-011 (tool-invocation audit trail over HTTP) is TESTED at f50a78d: the read path, schemas, wiring and 8 API tests are committed and pushed, the full suite is green locally, but backend CI had not concluded - check that first. Never merge PR #3. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
+  "next_task": "PR #3 body refresh, then the next Phase-5 slice",
+  "next_action": "Refresh PR #3's body. Measured on f50a78d: 24,087 insertions / 98 files, and the body still claims 21,310 / 91 / 639 with 0fcc078 named as CI-verified. Recompute with `git diff --shortstat main...HEAD` plus a fresh pytest collect on the then-current head; never copy the previous number forward. Then re-read the Phase 5 section of docs/NEXUS/ROADMAP.md and select the next dependency-ready slice - the durable runtime and its audit trail are both reachable over HTTP now, so the remaining work consumes them.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP and NEX-011 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d). No task is in flight. The next run should refresh PR #3's stale body, then pick the next Phase-5 slice from ROADMAP.md. Never merge PR #3. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,

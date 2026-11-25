@@ -1392,3 +1392,20 @@ NEX-011 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json` only if al
 four check runs are `completed/success`; if a job failed, read the log and fix it
 without weakening assertions. Then refresh PR #3's body — measured at `f50a78d`
 it is **24,087 insertions / 98 files**, while the body still claims 21,310 / 91.
+
+### Verification addendum — NEX-011 promoted to VERIFIED
+
+CI on `f50a78d` concluded **4/4 `completed/success`** (observed 2026-11-25T05:18Z):
+Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test,
+build), each on both `push` and `pull_request`. NEX-011 is therefore **VERIFIED**,
+not merely TESTED, and is promoted in `BACKLOG.md`, `STATE.md` and
+`CHECKPOINT.json`.
+
+The `Status` line earlier in this entry reads "TESTED, not VERIFIED". That was
+true when it was written, before the backend jobs concluded; the promotion above
+supersedes it. The distinction was worth keeping rather than quietly editing away:
+the earlier text records what the run actually knew at the time, and this addendum
+records the evidence that changed it.
+
+This is the third slice to reach VERIFIED on observed CI: NEX-009 slice 1
+(`0e74d4f`), NEX-009-HTTP (`e817d04`), NEX-011 (`f50a78d`).

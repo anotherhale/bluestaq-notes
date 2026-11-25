@@ -7,22 +7,20 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail TESTED |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail **VERIFIED** (`f50a78d`) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `a94d3f6` |
-| Head commit (run end) | `f50a78d` — NEX-011 pushed this run |
-| Last CI result | 4/4 green on `e817d04` (NEX-009-HTTP). On `f50a78d` (NEX-011): frontend 2/2 `completed/success`, backend 2 runs still `in_progress` — not concluded |
+| Head commit (run end) | `d1b1105` — docs promotion commit; product head `f50a78d` |
+| Last CI result | **4/4 green on `f50a78d`** (NEX-011): backend + frontend, push and pull_request, all `completed/success` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-011 is TESTED, not VERIFIED** — the tool-invocation audit
-trail is readable over HTTP and the full suite passes locally, but the backend CI
-check runs were still `in_progress` on `f50a78d` when the run ended. Local green
-runs are not CI evidence (R10); promoting on them would repeat the defect this
-project has already recorded twice.
+None in flight. **NEX-011 is VERIFIED** — the tool-invocation audit trail is
+readable over HTTP, the full suite passes locally, and CI on `f50a78d` returned
+**4/4 `completed/success`** (backend + frontend, push and pull_request).
 
 Next dependency-ready work is choosing the following Phase 5 slice — see Next
 Best Actions and the Phase 5 section of `ROADMAP.md`.
@@ -325,19 +323,12 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Observe CI on `f50a78d` (NEX-011), then promote it.** At the end of this run
-   the frontend job was 2/2 `completed/success` and both backend runs were still
-   `in_progress`. Run
-   `gh api repos/anotherhale/bluestaq-notes/commits/f50a78d/check-runs`; promote
-   NEX-011 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json` only if
-   all four are `completed/success`. If a job failed, read the log and fix it —
-   do not weaken assertions.
-2. **Refresh the PR #3 body.** Measured on `f50a78d`: **24,087 insertions / 98
+1. **Refresh the PR #3 body.** Measured on `f50a78d`: **24,087 insertions / 98
    files**. The body still claims 21,310 / 91 / 639 and names `0fcc078` as
    CI-verified. It has understated this branch on every run — always recompute
    with `git diff --shortstat main...HEAD` plus a fresh pytest collect, never copy
    the last number forward.
-3. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
+2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
    over HTTP and its audit trail is now readable, so the remaining Phase-5 work is
    what *consumes* those two surfaces. Re-read the Phase 5 section of `ROADMAP.md`
    before choosing; do not invent a slice from the last run's summary alone.
