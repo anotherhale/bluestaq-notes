@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-25-12",
   "timestamp": "2026-11-25T05:53:30Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3aade7c",
+  "commit": "b50565f1b09bd1e967fa72192a857e2f6eb7eace",
   "commit_note": "3aade7c contains NEX-012 (tamper-evident audit chain). Its gates are verified locally only; CI has not been observed for it. The docs commit carrying this file is its child.",
   "project_phase": "Phase 2 complete. Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 audit trail VERIFIED (f50a78d); NEX-012 audit chain VERIFIED (3aade7c, CI 4/4 completed/success).",
   "active_task": null,
@@ -74,7 +74,7 @@
     "R15 (new, low): the audit chain seals each invocation over its predecessor, but the chain head is not anchored outside the database. An attacker who can rewrite the whole table can produce a self-consistent chain. Anchoring the head hash externally is the next hardening step, not a regression.",
     "R15 (low, open): the audit chain head is not anchored outside the database, so an attacker able to rewrite the whole table could forge a self-consistent chain. External anchoring of the head hash is the next hardening step for NEX-012."
   ],
-  "next_task": "Observe CI on 122eb13, then select the next dependency-ready slice: NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token exchange) both read TESTED and need CI observation before promotion.",
+  "next_task": "CI was in_progress on b50565f (docs-only) at run end; confirm it, then select the next dependency-ready slice: NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token exchange) both read TESTED and need CI observation before promotion.",
   "next_action": "1) Recompute PR #3 body metrics (git diff --shortstat main...HEAD = 101 files / 25,316 insertions; pytest --collect-only -o addopts='' = 681) and update the body; it still carries the pre-NEX-012 figures. 2) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
   "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). No task is in flight. Next: refresh PR #3's body, then pick the next Phase-5 slice from ROADMAP.md. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
