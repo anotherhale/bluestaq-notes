@@ -2017,3 +2017,73 @@ the branch by ~8,000 lines. It was caught before the run ended because the PR ob
 instead of picking the more convenient number. Two lessons: quote the PR object or a full-clone
 `--shortstat`, never a per-file sum; and when two GitHub endpoints disagree, neither is
 trustworthy until a third source breaks the tie.
+
+---
+
+## Run NEX-2026-11-25-16 — 2026-11-25T07:31Z
+
+| Field | Value |
+| --- | --- |
+| Starting commit | `7ce6f8b` |
+| Ending commit | `13ed5b7` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Tasks completed | NEX-016 (coordination-truthfulness slice): PR #3 metrics corrected to verified values; clone refspec repaired |
+| Tasks started | none — docs-only run, no product slice |
+| Files changed | `docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`, `docs/NEXUS/EXECUTION_LOG.md` |
+| Migrations | none |
+| Tests executed | none locally (no product code changed); CI executed the full backend + frontend suites |
+| Test outcomes | CI 4/4 `completed/success` on `13ed5b7` |
+| Security findings | none |
+| CI status | green on `13ed5b7` (observed, not inferred) |
+| Commits | `13ed5b7` |
+| Push status | pushed; remote head confirmed equal to local via `git ls-remote` |
+| PR status | #3 body refreshed (head, metrics, CI attribution); still draft, still unmerged |
+| Checkpoint status | updated |
+
+### What was wrong, and what it cost
+
+Three different totals for the same branch were in circulation:
+
+| Source | Additions / deletions / files | Verdict |
+| --- | --- | --- |
+| PR body before this run | 19,366 / — / — | understated by ~8,200 |
+| `STATE.md` before this run | 27,487 / 943 / 109 | wrong on all three fields |
+| `git diff --shortstat origin/main...HEAD` @ `13ed5b7` | **27,579 / 10 / 104** | agrees with the PR object |
+
+The 943 deletions and 109 files were simply invented by an earlier run — the real
+deletion count is 10, and the file count has been 104 throughout. Neither figure
+came from a command that was actually run. This is the same defect class as R3:
+a number that looks plausible gets copied forward and never re-derived.
+
+### Root cause of the "grafted" clone
+
+The clone's `remote.origin.fetch` had been narrowed to `refs/heads/main` only:
+
+```
+remote.origin.fetch=+refs/heads/main:refs/remotes/origin/main
+```
+
+That single line explains three symptoms that had been worked around for several
+runs: the clone reported as grafted, `origin/feature/agentic-enterprise-platform`
+not existing locally, and `git diff main...HEAD` failing for lack of a merge base.
+It also made `git branch --set-upstream-to` fail with "not a branch". Restored the
+standard refspec, refetched, and upstream tracking now works normally. Future runs
+should not need `--unshallow` or the compare API.
+
+### The measurement trap worth remembering
+
+GitHub will not render a large diff and does not say so in the per-file payload:
+
+- `/pulls/3/diff` → HTTP 406, "diff exceeded the maximum number of lines (20000)"
+- `/pulls/3/files` → 20 files report `additions: 0`; every one is a test file
+- `/compare/main...HEAD` → same truncation, 19,366
+
+So a per-file sum silently drops entire files. Use the PR object's `additions`
+counter, or a full-clone `git diff --shortstat`, and treat a disagreement between
+two GitHub endpoints as a signal that neither is trustworthy.
+
+### Next action
+
+Resume Phase 5 product work: pick the next dependency-ready slice from
+`ROADMAP.md`. The coordination files are now internally consistent and
+CI-verified, so no further bookkeeping is owed.

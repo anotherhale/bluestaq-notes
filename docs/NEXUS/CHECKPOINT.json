@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-15",
-  "timestamp": "2026-11-25T07:50:00Z",
+  "run_id": "NEX-2026-11-25-16",
+  "timestamp": "2026-11-25T07:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "414a222",
-  "commit_note": "414a222 is the NEX-015 slice (decided-approval visibility). Local gates were run bare on it and are green, plus a mutation check on the new tests. CI has NOT been observed on 414a222. The docs commit carrying this file is its child and cannot name itself.",
+  "commit": "13ed5b7",
+  "commit_note": "13ed5b7 is the docs-only run commit (PR #3 metric correction + the clone refspec fix). CI was observed green 4/4 on it, so it is both the gate-verified commit and the head. The product slice 414a222 beneath it is unchanged.",
   "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-014 (revocable approvals) VERIFIED at b27b6b5 on 4/4 CI. NEX-015 (decided-approval visibility) VERIFIED at 414a222 on 4/4 CI.",
   "active_task": null,
   "task_statuses": {
@@ -55,13 +55,14 @@
     "migration_chain": "no migration added by NEX-015; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
     "ci_observed": true,
-    "ci_note": "CI green on 414a222: 4/4 completed/success, all head_sha 414a222, observed 2026-11-25T07:42Z. Push run 45570071880, pull_request run 45570060946 (Backend + Frontend each). This is what promotes NEX-015 from TESTED to VERIFIED.",
+    "ci_note": "CI green 4/4 on 13ed5b7 (Backend x2, Frontend x2, all completed/success), polled this session. 414a222 was also observed green. No product code changed in this run.",
     "verified_at_commit": "414a222",
     "verified_by_run": "NEX-2026-11-25-15",
     "local_gates_are_not_ci_evidence": "R10: local gates and the mutation check are recorded for reproducibility only; they do not promote NEX-015.",
-    "regression_guard": "tests/api/test_agents_api.py::TestDecidedApprovalsRemainReadable - reverting ListApprovalRequests to call list_pending_for_agent for every status makes the three ?status= tests FAIL (3 failed, 5 passed, verified by mutation this run); restoring it passes all eight."
+    "regression_guard": "tests/api/test_agents_api.py::TestDecidedApprovalsRemainReadable - reverting ListApprovalRequests to call list_pending_for_agent for every status makes the three ?status= tests FAIL (3 failed, 5 passed, verified by mutation this run); restoring it passes all eight.",
+    "pr_metrics": "104 files, 27,579 additions, 10 deletions, 74 commits ahead of origin/main (1 behind), measured with git diff --shortstat origin/main...HEAD at 13ed5b7 and matching the PR object counters exactly."
   },
-  "uncommitted_work": "none at product-commit time; the docs updates are committed separately",
+  "uncommitted_work": "none; tree clean at 13ed5b7 and pushed",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -138,5 +139,14 @@
     "gates": "local this session on 414a222: ruff format clean (195 files), ruff check passed, mypy clean (98 files), pytest 711 passed / 4 skipped.",
     "ci": "414a222: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha 414a222, observed 2026-11-25T07:42Z. This promotes NEX-015 to VERIFIED.",
     "note": "414a222 is the NEX-015 product slice. The docs commit carrying this file is its child."
+  },
+  "pr_status": {
+    "number": 3,
+    "state": "open",
+    "draft": true,
+    "head": "13ed5b7",
+    "body_updated": "2026-11-25T07:49:37Z",
+    "body_metrics_verified": true,
+    "merge": "prohibited - must remain unmerged for human review"
   }
 }
