@@ -10,10 +10,10 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-028 all VERIFIED.** NEX-028 — context assembly — is VERIFIED at `a3d1b32` on observed CI and **completes M2.6 decisioning** (NEX-027 was its first half). |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `8052ded` — the docs-only checkpoint head left by run `NEX-2026-11-25-30`. |
-| Head commit (run end) | `a3d1b32` — the NEX-028 code + tests commit. Its CI is polled on that exact SHA: 4/4 `completed/success`, polled 2026-11-25T14:42Z. |
+| Head commit (run end) | `03ead43` — the docs promotion carrying NEX-028's VERIFIED status. NEX-028's own evidence SHA is `a3d1b32`, whose CI is 4/4 `completed/success` at that exact SHA (polled 2026-11-25T14:42Z). |
 | Last CI result | **`a3d1b32` (NEX-028): 4/4 `completed/success`**, every check run reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`, polled 2026-11-25T14:42Z — both the push run (`45636602210`) and the pull_request run (`45636618245`). Prior: `fb8d5bd` (NEX-027), 4/4, polled 14:18Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body last refreshed at head `fd223f4` (2026-11-25T13:21Z); the branch is now **five commits ahead** (`8742faa`, `f2f8e61`, `fb8d5bd`, `8052ded`, `a3d1b32`) and the body does not mention NEX-027 or NEX-028. Re-measure from the PR object before quoting any counter. |
+| Draft PR | #3 (draft, unmerged — human review required). Body **refreshed this run** at head `03ead43` (PATCH 2026-11-25T14:52:08Z) and read back **byte-equal** (30,024 chars). It now covers NEX-027, NEX-028, defect 11 and risk R31, and quotes **34,700 additions / 10 deletions / 124 files / 137 commits**. Re-measure from the PR object before quoting a counter — the body goes stale on the next product commit. |
 | CI status | **`a3d1b32` (NEX-028): 4/4 `completed/success`, polled 2026-11-25T14:42Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events, all four reporting `head_sha` `a3d1b32`. An earlier poll at 14:40Z saw one duplicate check entry `in_progress`; the later read shows all four `completed`/`success`. The docs commit for this run will be superseded by the concurrency group and read `completed/cancelled` — neither pass nor fail, and not evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -724,7 +724,7 @@ The organization slice is implemented across all layers:
 | `ruff format` | clean — 156 files unchanged (`src/`, `tests/`) |
 | `ruff check` | All checks passed |
 | `mypy` | clean (104 source files) |
-| `pytest` (full) | **824 passed, 4 skipped** (was 794; the delta is exactly the 30 new NEX-028 tests) |
+| `pytest` (full) | **828 collected** on head `03ead43` (local collection at this head). The pass/skip split is quoted from CI rather than a local run: backend CI is green at `a3d1b32`. |
 | Migration chain | no migration added; head unchanged. No schema change in this slice |
 | Frontend `typecheck`/`lint`/`test`/`build` | not run locally this slice — no frontend files changed (CI ran them anyway and they passed) |
 
@@ -815,15 +815,14 @@ None currently. The following are known open items, not blockers:
    polled 2026-11-25T14:18Z.
 2. ~~**NEX-028 context assembly.**~~ **Satisfied** — VERIFIED, 4/4 `completed/success` at
    `a3d1b32`, polled 2026-11-25T14:42Z. M2.6 decisioning is now complete in both halves.
-3. **Refresh PR #3.** Its body was last written at `fd223f4`; the branch is now five commits
-   ahead (`8742faa`, `f2f8e61`, `fb8d5bd`, `8052ded`, `a3d1b32`) and the body mentions neither
-   NEX-027 nor NEX-028. Re-measure additions/files/commits from the pull-request object at the
-   current head (never a local diff) and verify byte-equality after the PATCH. This is the
-   highest-value remaining action: it is the only artifact a human reviewer reads.
-4. **Wire `ContextEnvelope` into a real caller** (R31). It is currently exercised only by tests.
-   The first production caller — tool-gateway classification or the approval-recommendation
-   path — is what proves the 200-char value cap and 32-field cap fit real content. Re-read the
-   Phase 6 section of `ROADMAP.md` before choosing; do not invent a slice from a run summary.
+3. ~~**Refresh PR #3.**~~ **Satisfied this run** — refreshed from the PR object at head
+   `03ead43`, PATCH 2026-11-25T14:52:08Z, read back byte-equal (30,024 chars). Counters now
+   34,700 additions / 10 deletions / 124 files / 137 commits.
+4. **Wire `ContextEnvelope` into a real caller — now NEX-029, the next scheduled slice**
+   (R31). It is currently exercised only by tests. The first production caller —
+   tool-gateway classification or the approval-recommendation path — is what proves the
+   200-char value cap and 32-field cap fit real content. Re-read the Phase 5/6 section of
+   `ROADMAP.md` before choosing; do not invent a slice from a run summary.
 5. **Confirm whether revoking a delegation or agent invalidates approvals already
    granted under it.** `RevokeDelegation` revokes the delegation and every token
    derived from it, immediately and ownership-checked, but this run did not establish

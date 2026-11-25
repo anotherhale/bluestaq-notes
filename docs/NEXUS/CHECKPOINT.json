@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-31",
-  "timestamp": "2026-11-25T14:45:00Z",
+  "timestamp": "2026-11-25T14:53:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "a3d1b32",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-028 all VERIFIED. NEX-028 (context assembly: classify content before it can influence a judgment) verified at a3d1b32. M2.6 decisioning is now complete in both halves (NEX-027 decisioning, NEX-028 context assembly).",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-028 all VERIFIED. NEX-028 (context assembly: classify content before it can influence a judgment) verified at a3d1b32 on observed CI (4/4 completed/success, every head_sha = a3d1b32). M2.6 decisioning is complete in both halves (NEX-027 decisioning, NEX-028 context assembly); the next slice wires ContextEnvelope into its first production caller (R31).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -31,7 +31,7 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
     "NEX-025": "VERIFIED - 4/4 completed/success at d481bd0, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z",
@@ -96,23 +96,27 @@
     "verified_at_commit": "a3d1b32 (NEX-028), fb8d5bd (NEX-027), b46e2e3 (NEX-026)",
     "verified_by_run": "NEX-2026-11-25-31 (NEX-028), NEX-2026-11-25-30 (NEX-027), NEX-2026-11-25-29 (NEX-026)"
   },
-  "uncommitted_work": "none - this docs commit carries the checkpoint",
+  "uncommitted_work": "none at checkpoint time (this checkpoint commit is the only pending change; it is committed immediately after this file is written)",
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "a3d1b32",
-    "body_updated_at": "2026-11-25T12:53:30Z",
+    "head": "03ead43",
+    "body_updated_at": "2026-11-25T14:52:08Z",
     "counters": {
-      "additions": 31612,
+      "additions": 34700,
       "deletions": 10,
-      "files": 111,
-      "commits_ahead_of_main": 118,
-      "measured_at_commit": "88926ec",
-      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21)"
+      "files": 124,
+      "commits_ahead_of_main": 137,
+      "measured_at_commit": "03ead43",
+      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21). Re-measured 2026-11-25T14:53Z and identical to what the refreshed body quotes."
     },
-    "note": "PR #3 is open, draft and unmerged. It is now FIVE commits behind (8742faa, f2f8e61, fb8d5bd, 8052ded, a3d1b32) and its body mentions neither NEX-027 nor NEX-028. Re-measure every counter from the pull-request object at the current head before quoting one; do not sum per-file or compare endpoints (R21).",
+    "note": "PR #3 is open, draft and unmerged. Its body was refreshed this run from the PR object and read back BYTE-EQUAL (30,024 characters, updated_at 2026-11-25T14:52:08Z). It now covers NEX-027 (fb8d5bd) and NEX-028 (a3d1b32), the 11th defect, and risk R31. The body is current as of head 03ead43 and goes stale again on the next product commit - re-measure every counter from the pull-request object before quoting one.",
     "merge": "prohibited - must remain unmerged for human review",
-    "body_refresh": "Refreshed this run from the PR object at e511fc9. Corrected 30,749 -> 31,545 additions, 107 -> 117 commits, 741 -> 757 tests, ten -> eleven migrations; added NEX-023 (c367746) and NEX-024 (eaaae23) to the defect list, the CI paragraph and the verified-commit list. Verified byte-identical after PATCH.",
+    "body_refresh": {
+      "status": "DONE this run",
+      "method": "GET then PATCH /repos/anotherhale/bluestaq-notes/pulls/3, then read back and asserted byte-equality against the local file (a 2xx is not evidence the prose arrived)",
+      "verified": "byte-equal readback, 30024 chars"
+    },
     "pending_update": "body refresh required - it was last written at fd223f4 and is five commits stale",
     "body_head": "fd223f4",
     "body_counters": "32,161 additions / 10 deletions / 112 files / 126 commits, 752 tests (748 passed, 4 skipped) - taken from the pull-request object, not a local diff (R21)",
@@ -121,7 +125,10 @@
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment": "not updated this run. NEX-027 VERIFIED at fb8d5bd and NEX-028 VERIFIED at a3d1b32 are recorded here and in STATE.md/EXECUTION_LOG.md; the tracking issue still lacks both."
+    "last_comment": "not updated this run. NEX-027 VERIFIED at fb8d5bd and NEX-028 VERIFIED at a3d1b32 are recorded here and in STATE.md/EXECUTION_LOG.md; the tracking issue still lacks both.",
+    "last_updated_by_nexus": "2026-11-25T14:52Z",
+    "last_comment_id": 7165962121,
+    "note": "Run report for NEX-2026-11-25-31 posted to issue #2 as comment 7165962121 (byte-equal readback)."
   },
   "blockers": [],
   "risks": [
@@ -163,8 +170,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing."
     },
     {
       "id": "R23",
@@ -228,10 +235,14 @@
       "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
     }
   ],
-  "next_task": "Refresh PR #3's body from the pull-request object so it covers NEX-027 (fb8d5bd) and NEX-028 (a3d1b32). It is the only artifact a human reviewer reads and is now five commits stale (body last written at fd223f4).",
-  "next_action": "Refresh PR #3 from the PR object (never a local diff - R21): re-measure additions/files/commits at the current head, add NEX-027 and NEX-028 to the defect/verified lists, and verify byte-equality after the PATCH. Then wire ContextEnvelope into its first production caller (R31) - re-read the ROADMAP phase section before choosing that slice.",
-  "recovery_instructions": "HEAD is the docs commit for run NEX-2026-11-25-31. The NEX-028 slice is a3d1b32 and is VERIFIED (4/4 completed/success at that exact SHA, every head_sha a3d1b3214fa990aab9abe2f93cdef642bde8c882, polled 2026-11-25T14:42Z). Every commit after a3d1b32 touches only docs/NEXUS/ and docs/ADR/ - verify with `git log --oneline a3d1b32..HEAD --name-only`. NEX-001..NEX-028 all VERIFIED; M2.6 decisioning is complete in both halves. PR #3 draft and unmerged; issue #2 open. Next: refresh PR #3, then give ContextEnvelope a production caller.",
-  "ci_status": "a3d1b32 (NEX-028): 4/4 completed/success, all head_sha a3d1b3214fa990aab9abe2f93cdef642bde8c882, polled 2026-11-25T14:42Z - VERIFIED. Both the push run (45636602210) and the pull_request run (45636618245) succeeded. The docs head carrying this checkpoint will read completed/cancelled once superseded by the concurrency group, which is neither a pass nor a failure. Prior observed green: fb8d5bd (NEX-027) 4/4 at 14:18Z.",
+  "next_task": "NEX-029: wire `ContextEnvelope` into its first production caller so its classification bounds are exercised against real content rather than fixtures (risk R31). This is the slice that closes Phase 5 into the runtime; re-read the ROADMAP Phase 5/6 section and BACKLOG NEX-028 notes before scoping it.",
+  "next_action": "1) Re-read state: `docs/NEXUS/CHECKPOINT.json`, `STATE.md`, then only the ROADMAP phase section for Phase 6 and BACKLOG entries at or after NEX-028. 2) Confirm `git rev-parse HEAD` and that `a3d1b32..HEAD` is docs-only. 3) Implement NEX-029 as one vertical slice: an application use case that builds a `ContextEnvelope` from classified entries and passes it to the decisioning port, with tests proving (a) an entry above the ceiling is refused and (b) an unlabeled entry fails closed. 4) Run the gates BARE (`ruff format --check`, `ruff check`, `mypy`, `pytest`). 5) Commit, push, poll check-runs at the NEW slice sha, and only then promote to VERIFIED. Never promote on local gates alone (R9).",
+  "recovery_instructions": "Read CHECKPOINT.json and STATE.md, then `git rev-parse HEAD`. This checkpoint's `commit` field holds a3d1b32 because that is the SHA whose CI was polled (see commit_scope); HEAD is the docs head that contains this file. Verify `git log --oneline a3d1b32..HEAD --name-only` lists only docs/NEXUS/ and docs/ADR/. If the working tree is dirty, inspect the diff before discarding anything - a previous run may have been killed mid-edit. Then start NEX-029 per next_action.",
+  "ci_status": {
+    "nex028_slice_a3d1b32": "OBSERVED 4/4 completed/success, every check run head_sha = a3d1b32, polled 2026-11-25T14:42Z. This is CI at the slice's own SHA, not descendant-CI.",
+    "latest_observed": "a3d1b32 (product commit). Docs-only commits after it (8052ded, 03ead43) may show completed/cancelled when superseded - that is neither a pass nor a fail and must never be quoted as green.",
+    "note": "No CI claim in this checkpoint covers docs heads beyond a3d1b32."
+  },
   "verified_tasks": [
     "NEX-001",
     "NEX-002",

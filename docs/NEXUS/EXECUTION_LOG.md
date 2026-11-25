@@ -3790,3 +3790,82 @@ NEX-028 — NEX-028's evidence is the `a3d1b32` run above, which is green at its
 **Next action:** refresh PR #3's body from the pull-request object so it covers NEX-027
 (`fb8d5bd`) and NEX-028 (`a3d1b32`) — it is the only artifact a human reviewer reads and it is
 now five commits stale. Then wire `ContextEnvelope` into its first production caller (R31).
+
+---
+
+## Run NEX-2026-11-25-31 (delivery state)
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-31` |
+| Timestamp | 2026-11-25T14:31Z start, 14:54Z end (run cap 30 min) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `03ead43` |
+| Ending commit | the docs commit that contains this entry |
+| Phase | 5 (durable runtime) — delivery state only |
+
+### Tasks completed vs verified
+
+**NEX-028 VERIFIED.** This run did not write product code. It promoted NEX-028 from TESTED
+to VERIFIED on **observed CI at the slice's own SHA**: `commits/a3d1b32/check-runs` returned
+4/4 `completed/success`, every check run reporting `head_sha` = `a3d1b32`, polled
+2026-11-25T14:42Z. This is a run at the slice's SHA, not descendant-CI.
+
+**PR #3 body refreshed.** Measured from the pull-request object (`GET /pulls/3`), written
+locally, PATCHed, and read back **byte-equal** (30,024 characters, `updated_at`
+2026-11-25T14:52:08Z). The body now carries NEX-027, NEX-028, defect 11 and risk R31.
+
+**Issue #2 updated** with the run report (comment `7165962121`, byte-equal readback).
+
+### A false alarm, recorded because it will recur
+
+The local tracking ref disagreed with GitHub about whether `a3d1b32` had been pushed. Two
+authoritative sources — `git ls-remote` and the GitHub API — both show it on the remote, and
+`main...HEAD` was 0 ahead / 0 behind. The branch never diverged; one local ref was stale.
+Nothing was rewritten to "fix" it. A recovery run that trusts `git status -sb` alone here
+would have concluded work was lost and might have re-pushed or reset.
+
+### A measurement trap, recorded because it produced a wrong number
+
+Two GitHub endpoints on PR #3 under-report the branch. At `03ead43`, `/pulls/3/files` lists
+all 124 files but sums to 30,444 additions; `/compare/main...03ead43` sums to 23,013; the
+pull-request object reports **34,700**. Both list endpoints are truncated or sampled — GitHub
+refuses to render a diff over 20,000 lines (`/pulls/3/diff` answers HTTP 406 for that reason)
+and returns test files with `additions: 0`. A local `git diff` is unusable too, because the
+clone is grafted and a two-dot diff counts the whole grafted root commit. Quote the PR object.
+
+### A correction made mid-run
+
+The first version of the new PR body cited `tests/agent/test_decision_provider_neutrality.py`.
+That path does not exist; the file is `tests/architecture/test_decision_provider_neutrality.py`
+(53 lines). Caught by checking the path against the tree before quoting it, and fixed in both
+places before the PATCH.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| CI at `a3d1b32` | **4/4 `completed/success`**, every `head_sha` = `a3d1b32`, observed 14:42Z |
+| PR body readback | byte-equal to the local file, 30,024 chars |
+| Issue #2 comment readback | byte-equal |
+| Docs-only diff check | `git log --oneline a3d1b32..HEAD --name-only` lists only `docs/NEXUS/` and `docs/ADR/` |
+| Secrets scan | clean — no credentials in any changed file |
+
+### Files changed
+
+`docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`, `docs/NEXUS/EXECUTION_LOG.md`.
+
+### Checkpoint status
+
+Updated atomically (temp file → `json.load` validation → `os.replace`). `pr_state.counters`
+re-measured to 34,700 / 10 / 124 / 137 at `03ead43`, and `pr_state.body_refresh` records the
+byte-equality check. `next_task` is now NEX-029.
+
+### Next action
+
+**NEX-029 — wire `ContextEnvelope` into its first production caller** (risk R31). Read the
+Phase 5/6 section of `ROADMAP.md` before scoping. Implement one vertical slice: a use case
+that builds a `ContextEnvelope` from classified entries and passes it to the decisioning port,
+with tests proving an over-ceiling entry is refused and an unlabeled entry fails closed. Run
+the gates bare, commit, push, and poll check-runs at the **new** slice SHA before promoting to
+VERIFIED — local gates alone are never enough (R9).
