@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-33",
-  "timestamp": "2026-11-25T15:52:00Z",
+  "timestamp": "2026-11-25T15:53:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "2c626f9",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-030 all VERIFIED. NEX-029 (first production caller of the judgment path) is VERIFIED on evidence_basis descendant-CI: its own commit f71745e reads completed/cancelled on all four runs (superseded in the CI concurrency group by the docs commit e3b8517), and e3b8517 is 4/4 completed/success over a tree that contains all three NEX-029 product files. NEX-030 (ContextHash minted only by a ContextEnvelope) is VERIFIED with direct CI 4/4 success at 0727628. R31 is closed; its stated residual limit is that str.__new__ still bypasses the mint deliberately. M2.6 decisioning has a live route.",
@@ -238,7 +238,7 @@
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "`commit` names the last commit carrying real content: 3fc6464, the docs promotion for run NEX-2026-11-25-33. The checkpoint cannot name its own containing commit, so a follow-up 'checkpoint self-reference' commit sits on top of it; read `git log --oneline -1` for the true HEAD. Verify `git merge-base --is-ancestor 3fc6464 HEAD` rather than string-comparing.",
-  "head_at_checkpoint": "3fc6464",
+  "commit_scope": "`commit` names the last commit carrying real content: 2c626f9, the execution-log addendum recording the CI observations and delivery outcomes for this run. The product work is 0727628 (NEX-030 ContextHash) and the docs promotion is 3fc6464. Commits after 2c626f9 (21ff149, 7f96058, 6119761, and the commit carrying this file) are checkpoint bookkeeping only and carry no implementation. `head_at_checkpoint` is the head observed when this file was written.",
+  "head_at_checkpoint": "6119761",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them."
 }
