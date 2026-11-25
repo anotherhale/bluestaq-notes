@@ -4074,3 +4074,64 @@ Poll the four check runs for `fe5eadc`; if green, record NEX-032 as CI-verified 
 update PR #3 (re-measure counters from the PR object, never from this file) and issue #2
 (use **lists**, not tables — a markdown table in an issue comment returns HTTP 500 on this
 repository).
+
+## Run `NEX-2026-11-25-35` — NEX-032 integration close-out (CI promotion, PR #3, issue #2)
+
+- **Timestamp:** 2026-11-25T16:31–16:55Z
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `a13365d` (docs promotion left by run `NEX-2026-11-25-34`)
+- **Ending commit:** see `git log -1` — the bookkeeping commit for this run
+- **Tasks completed:** NEX-032 promoted to CI-VERIFIED; PR #3 and issue #2 refreshed
+- **Tasks started:** none — this run was deliberately integration-only
+
+### What this run did
+
+1. **Polled CI at `fe5eadc`.** 4/4 `completed/success`, every check run `head_sha` =
+   `fe5eadca918b26412cea4374ac5a02b162cb086b`, started 16:43:38–43Z and completed
+   16:44:33–16:45:13Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend
+   (typecheck/lint/test/build), one pair per `push` and `pull_request` event. This is
+   evidence **at the slice's own SHA**, not descendant-CI. NEX-032 → **CI PASSED**.
+2. **PATCHed PR #3 body** to 43,921 chars and read it back byte-equal. Added the NEX-032
+   section; closed **R31** and **R32** in Known risks; refreshed the Phase 5 row to
+   `VERIFIED (NEX-001…NEX-032)` and rewrote the Phase 5 Next-steps item to name the
+   aggregate-count follow-up. Added a forward pointer to the historical NEX-031 paragraph
+   that still called R32 "the live follow-up", so a reader of that section is not left with
+   a stale risk.
+3. **Commented on issue #2** (id 7168592223, 5,766 chars) with NEX-032 evidence. **Lists
+   only** — a markdown table in an issue comment returns HTTP 500 on this repository.
+4. **Corrected the draft evidence before publishing it.** The first draft of the PR section
+   carried invented CI timestamps (`16:34–16:38Z`). The real run completed at
+   `16:44:33–16:45:13Z`. Nothing published ever contained the wrong values, because the
+   timestamps were re-read from the check-runs API first.
+
+### Two tooling failures worth recording
+
+- **A heredoc corrupted a build script for the 8th time.** `python3 - <<'PY'` splicing a PR
+  body repeated text, mangled the replacement strings and hung the shell. Quoting the
+  delimiter does not protect the payload. Killed it and rebuilt the same transformation as
+  `/tmp/build_pr3.py` via the file-editor tool. Nothing was written to disk by the corrupt
+  run — verified with `git status --porcelain` before retrying.
+- **A `python3 -c "..."` one-liner was mangled by the shell the same way**, failing with a
+  `SyntaxError` before its `open(...,'w')` ran. Confirmed `STATE.md` was untouched
+  (`grep -c` still found the old line), then made the three edits with the file-editor tool
+  instead. Lesson unchanged and now well-evidenced: **prose and multi-line Python go through
+  the file-editor or a `/tmp/*.py` script; inline `-c` is safe only for trivial one-liners.**
+
+### Validation
+
+No code changed this run. CI at `fe5eadc` is the authority and is green (4/4). The
+docs-only commits in this run are not themselves evidence and will read
+`completed/cancelled` once superseded — neither pass nor fail.
+
+### Files changed
+
+`docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`, `docs/NEXUS/EXECUTION_LOG.md`.
+
+### Next action
+
+**NEX-033** — aggregate over-cap context withholdings into a count so a routinely-thin
+advisory is visible without a caller inspecting every response. NEX-032 surfaces names per
+response; nothing counts them across advisories. Decide first whether the count belongs in
+a structured log line or a metric port; do not add a metrics dependency without a
+demonstrated need. This is a monitoring slice — the security invariant already holds in the
+safe direction.

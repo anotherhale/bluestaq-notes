@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-34",
-  "timestamp": "2026-11-25T16:45:00Z",
+  "timestamp": "2026-11-25T16:50Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "fe5eadc",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-032 all VERIFIED. NEX-032 closes R32: withholding is now observable, not merely auditable - ContextEnvelope.withheld_fields reports (name, reason) pairs, distinguishing a deliberate ceiling exclusion from an over-cap degradation, and the reason is carried end to end to ApprovalAdvisoryResponse.over_cap_context_fields.",
@@ -87,9 +87,29 @@
     "negative_control_nex032": "The validation-bypass test fails on the pre-fix code: an over-cap candidate with a non-DataClassification classification is silently accepted without the isinstance check in from_candidates.",
     "functional_guard_proof": "withheld_fields reports names only, never values. An input both over-cap and above ceiling is reported once (as OVER_CAP), so telemetry never double-counts. over_cap_context_fields is enforced as a subset of excluded_context_fields on DecisionRequest, so two records cannot disagree about what was withheld."
   },
-  "uncommitted_work": "none - all product changes committed and pushed at fe5eadc",
-  "pr_state": "#3 open, draft, unmerged (human review required). NEX-032 evidence pending update.",
-  "tracking_issue": "#2 open. NEX-032 evidence pending update.",
+  "uncommitted_work": null,
+  "pr_state": {
+    "number": 3,
+    "state": "open",
+    "draft": true,
+    "head": "a13365d41391738658d88fbb559361c3e28f61f3",
+    "counters": {
+      "additions": 36587,
+      "deletions": 10,
+      "changed_files": 127,
+      "commits": 156
+    },
+    "counters_measured_at": "2026-11-25T16:46Z, from the PR object (not from any doc)",
+    "body_updated": "PATCH 2026-11-25T16:49Z, body 43,921 chars, read back byte-equal. Adds the NEX-032 section, closes R31 and R32 in Known risks, refreshes the Phase 5 row and the Next steps item.",
+    "note": "Counters are pre-docs-commit values. Re-measure from the PR object before quoting."
+  },
+  "tracking_issue": {
+    "number": 2,
+    "state": "open",
+    "last_comment_id": 7168592223,
+    "last_comment_len": 5766,
+    "last_comment_scope": "NEX-032 VERIFIED with CI evidence at fe5eadc. Lists only - a markdown table in an issue comment returns HTTP 500 on this repository."
+  },
   "blockers": [],
   "risks": [
     {
@@ -202,8 +222,8 @@
       "status": "closed by NEX-032 (per-field observability); aggregation is a separate follow-up"
     }
   ],
-  "next_task": "Re-poll CI at fe5eadc and, if green, record NEX-032 as CI-verified. Then select the next dependency-ready slice from BACKLOG.md - the strongest candidate is aggregating over-cap withholdings into a count so the NEX-032 signal becomes a metric rather than a per-response field.",
-  "next_action": "Poll GitHub check runs for fe5eadc (4 expected: 2 backend, 2 frontend). Record the result in ci_status and STATE.md. Then update PR #3 and issue #2 with NEX-032 evidence.",
+  "next_task": "NEX-033",
+  "next_action": "Aggregate over-cap context withholdings into a count so a routinely-thin advisory is visible without a caller inspecting every response. NEX-032 surfaces the names per response; nothing counts them across advisories. Decide first whether the count belongs in a structured log line or a metric port - do not add a metrics dependency without a demonstrated need. This is a monitoring slice: the security invariant already holds in the safe direction.",
   "recovery_instructions": "Tree is clean and pushed at fe5eadc. NEX-032 product commit is fe5eadc; the docs promotion and checkpoint bookkeeping commits follow it. R32 is closed by NEX-032 for per-field observability; aggregation remains a follow-up. R31 is closed by NEX-030 plus NEX-031. Do not reopen either without reading ADR-012 and the ContextHash docstring. PR #3 and issue #2 need NEX-032 evidence before new code starts.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
@@ -211,7 +231,7 @@
     "nex028_slice_a3d1b32": "OBSERVED 4/4 completed/success, polled 2026-11-25T14:42Z.",
     "note": "The docs-only commit for this run will itself read completed/cancelled when superseded - neither pass nor fail, and never evidence.",
     "nex031_slice_240a446": "OBSERVED 4/4 completed/success at 240a446, every check run head_sha=240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25 (ids 139340978511, 139340978877, 139341004059, 139341004430), completed 2026-11-25T16:20:51-16:21:32Z, polled 2026-11-25T16:22Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event.",
-    "nex032_slice_fe5eadc": "NOT YET POLLED as of 2026-11-25T16:45Z. Poll before claiming CI-verified."
+    "nex032_slice_fe5eadc": "OBSERVED 4/4 completed/success at fe5eadc, every check run head_sha=fe5eadca918b26412cea4374ac5a02b162cb086b, started 2026-11-25T16:43:38-43Z, completed 2026-11-25T16:44:33-16:45:13Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event. Polled 2026-11-25T16:47Z."
   },
   "verified_tasks": [
     "NEX-001",
@@ -252,7 +272,7 @@
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "commit names the last commit carrying real implementation: 240a446, NEX-031 product. Every commit after it is docs promotion or checkpoint bookkeeping and carries no code. head_at_checkpoint is the branch head observed when this file was last written; it is one commit behind the remote by construction, because writing it creates another bookkeeping commit. Do not chase it - verify the real head with git ls-remote origin refs/heads/<branch> or the GitHub /branches API, never from this field or from the local origin/* tracking ref.",
-  "head_at_checkpoint": "NOT AUTHORITATIVE - see commit_scope. Read the real head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform.",
+  "commit_scope": "commit names the last commit carrying real implementation (fe5eadc, NEX-032). The docs promotion above it is a13365d. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
+  "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them."
 }

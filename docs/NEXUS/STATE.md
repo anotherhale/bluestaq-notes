@@ -11,9 +11,9 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `f5825ff` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-33`. |
 | Head commit (run end) | `fe5eadc` is NEX-032's product commit (see `git log -1` for the docs promotion above it). |
-| Last CI result | **`fe5eadc` (NEX-032): NOT YET POLLED.** Prior: `240a446` (NEX-031), 4/4 `completed/success`, polled 2026-11-25T16:22Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
-| Tracking issue | #2 (open) — **stale as of `fe5eadc`**: does not yet carry NEX-032 evidence. |
-| Draft PR | #3 (draft, unmerged — human review required). **Stale as of `fe5eadc`**: it does not yet cover NEX-032. Re-measure counters from the PR object before quoting them. |
+| Last CI result | **`fe5eadc` (NEX-032): 4/4 `completed/success`, every `head_sha` = `fe5eadca918b…`, completed 2026-11-25T16:44:33–16:45:13Z, polled 16:47Z.** Prior: `240a446` (NEX-031), 4/4, polled 16:22Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
+| Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -396,8 +396,8 @@ Recorded so a later audit does not re-open it without cause.
 | Field | Value |
 | --- | --- |
 | Task | NEX-032 — withholding is observable with a reason per field |
-| Status | **IMPLEMENTED, TESTED, VERIFIED locally** at `fe5eadc` (860 passed / 4 skipped). CI **not yet polled** — see `ci_status.nex032_slice_fe5eadc`. |
-| Next action | Poll the four check runs at `fe5eadc`; if green, record CI-verified, then update PR #3 and issue #2 with NEX-032 evidence before starting new code. |
+| Status | **IMPLEMENTED, TESTED, VERIFIED, COMMITTED, PUSHED, CI PASSED** at `fe5eadc` (860 passed / 4 skipped; 4/4 `completed/success` at that SHA, polled 16:47Z). PR #3 and issue #2 updated. |
+| Next action | NEX-033: aggregate over-cap withholdings into a count (monitoring slice). Decide structured-log vs metric port first; no new metrics dependency without a demonstrated need. |
 
 ## NEX-032 (run `NEX-2026-11-25-34`) — a withheld field that cannot say why is not a signal
 
@@ -917,8 +917,10 @@ None currently. The following are known open items, not blockers:
    in aggregate. This is a monitoring slice, not a correctness one — the security invariant
    already holds in the safe direction. Decide first whether the count belongs in a structured
    log line or a metric port; do not invent a metrics dependency without a demonstrated need.
-7. **Re-poll CI at `fe5eadc` and promote NEX-032 to CI-verified.** Cheap, and the standing rule
-   is that a local gate result is not a CI result. Do this before new code.
+7. ~~**Re-poll CI at `fe5eadc` and promote NEX-032 to CI-verified.**~~ **Satisfied.** 4/4
+   `completed/success`, every `head_sha` = `fe5eadca918b…`, polled 2026-11-25T16:47Z. PR #3
+   body PATCHed (43,921 chars) and issue #2 commented (7168592223) with that evidence.
+   Remaining: NEX-033, the aggregate count over withholdings.
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate
