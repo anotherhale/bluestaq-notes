@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-08",
-  "timestamp": "2026-11-25T03:46:00Z",
+  "timestamp": "2026-11-25T03:51:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "0fcc078",
   "commit_note": "The last commit whose gates and CI were verified (4/4 green on both push and pull_request). The docs commit recording this run is its child.",
@@ -52,8 +52,8 @@
     "pr": 3,
     "state": "draft",
     "merged": false,
-    "description_updated": "2026-11-25T03:12:00Z",
-    "note": "Open and still draft (isDraft=true, state=OPEN, never merged). Body still records 20,576 insertions / 89 files / 614 tests while the branch is now 21,190 / 90 / 643 and does not yet mention NEX-010. Numbers are directionally honest, not current - refreshing the body is queued as the next bookkeeping action, after NEX-009 work."
+    "description_updated": "2026-11-25T03:50:00Z",
+    "note": "Open and still draft (isDraft=true, state=OPEN, never merged). Body refreshed in run NEX-2026-11-25-08 to the measured diff: 21,310 insertions / 91 files / 643 tests, with NEX-010 and the non-ASCII-nonce defect added and R9/R10 recorded. The earlier body said 20,576 / 89 / 614. It is still a draft: bringing it to review is a human decision."
   },
   "tracking_issue": {
     "number": 2,
@@ -68,7 +68,7 @@
     "R10 (low, process): a green local gate run is only evidence if it invokes the same command CI invokes. Scoping ruff to `src tests` let a docs Markdown fence fail CI. Run the gates bare; see AGENTS.md."
   ],
   "next_task": "NEX-009",
-  "next_action": "Start NEX-009 (durable agentic runtime) with the first slice scoped to run-checkpoint persistence plus a resume test rather than the whole task: prove a run that checkpoints progress resumes after interruption without repeating completed side effects. Secondary, if the clock is short: refresh the PR #3 body counts (21,190 insertions / 90 files / 643 tests) and add NEX-010 to its status table.",
+  "next_action": "Start NEX-009 (durable agentic runtime), first slice scoped to run-checkpoint persistence plus a resume test: prove a run that checkpoints progress resumes after interruption without repeating completed side effects. Do not attempt the whole task in one run. PR #3's body is now current; re-check it against `git diff --stat main...HEAD` whenever a slice lands.",
   "recovery_instructions": "Branch feature/agentic-enterprise-platform. Everything through NEX-010 is VERIFIED with CI evidence at 0fcc078 (4/4 green, push and pull_request). NEX-009 (durable runtime) is the next dependency-ready task and is large - slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. Run the quality gates bare, exactly as CI does, or a docs code block can fail CI. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
