@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-30",
-  "timestamp": "2026-11-25T14:20:00Z",
+  "timestamp": "2026-11-25T14:25:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "fb8d5bd",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-027 all VERIFIED. NEX-027 (provider-neutral judgment that cannot grant authority) verified at fb8d5bd. M2.6 remaining: context assembly.",
@@ -124,7 +124,7 @@
       "measured_at_commit": "88926ec",
       "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21)"
     },
-    "note": "PR #3 is open, draft and unmerged. Body was last refreshed at fd223f4 and does not mention NEX-027; refresh from the pull-request object before quoting any counter (R21).",
+    "note": "PR #3 is open, draft and unmerged. Body refreshed this run from the pull-request object and read back byte-identical; counters now measured on head 3f6f39c (33,872 additions / 10 deletions / 121 files / 134 commits / 798 tests collected, 794 passed 4 skipped). It covers NEX-026 (b46e2e3), NEX-027 (fb8d5bd) and R30. Issue #2 updated with comment 7165217502.",
     "merge": "prohibited - must remain unmerged for human review",
     "body_refresh": "Refreshed this run from the PR object at e511fc9. Corrected 30,749 -> 31,545 additions, 107 -> 117 commits, 741 -> 757 tests, ten -> eleven migrations; added NEX-023 (c367746) and NEX-024 (eaaae23) to the defect list, the CI paragraph and the verified-commit list. Verified byte-identical after PATCH.",
     "pending_update": "none - body refreshed 2026-11-25T13:21Z at head fd223f4 and verified byte-equal after the PATCH",
@@ -235,8 +235,8 @@
     }
   ],
   "next_task": "Context assembly - the other half of M2.6. NEX-027 deliberately carries only a SHA-256 context_hash, so context assembly is the slice that decides what is hashed and what may enter a decision request. Re-read the Phase 5 section of ROADMAP.md before choosing.",
-  "next_action": "Refresh PR #3's body from the pull-request object (GET /repos/anotherhale/bluestaq-notes/pulls/3) so it covers NEX-027 (fb8d5bd) and R30, then PATCH and re-GET to assert substrings. Then start the context-assembly slice.",
-  "recovery_instructions": "HEAD is the docs commit for run NEX-2026-11-25-30; the NEX-027 slice is fb8d5bd and is VERIFIED (4/4 completed/success at that exact SHA, polled 2026-11-25T14:18Z). Every commit after fb8d5bd touches only docs/NEXUS/ - verify with `git log --oneline fb8d5bd..HEAD --name-only`. NEX-001..NEX-027 all VERIFIED; PR #3 draft and unmerged. Next: refresh PR #3's body, then context assembly.",
+  "next_action": "Start the context-assembly slice (the other half of M2.6): decide what the decision request's SHA-256 context_hash is computed over and what may enter a decision request. Re-read the Phase 5 section of ROADMAP.md first, then write the domain value object before the use case.",
+  "recovery_instructions": "HEAD is the second docs commit for run NEX-2026-11-25-30 (3f6f39c was the first). The NEX-027 slice is fb8d5bd and is VERIFIED (4/4 completed/success at that exact SHA, polled 2026-11-25T14:18Z). Every commit after fb8d5bd touches only docs/NEXUS/ - verify with `git log --oneline fb8d5bd..HEAD --name-only`. NEX-001..NEX-027 all VERIFIED; PR #3 draft and unmerged; issue #2 updated. Next: context assembly.",
   "ci_status": "fb8d5bd (NEX-027): 4/4 completed/success, all head_sha fb8d5bd, polled 2026-11-25T14:18Z - VERIFIED. The docs head carrying this checkpoint will read completed/cancelled once superseded by the concurrency group, which is neither a pass nor a failure. Prior observed green: b46e2e3 (NEX-026) 4/4, polled 13:34Z.",
   "verified_tasks": [
     "NEX-001",
