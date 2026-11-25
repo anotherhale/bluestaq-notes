@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-37",
-  "timestamp": "2026-11-25T19:10Z",
+  "timestamp": "2026-11-25T19:24Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "5c0575b",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-037 all VERIFIED. NEX-036 audited the decisioning path's production caller; the fail-closed premise held, but RecommendApprovalDecision produced advice for requests already settled, fixed with a 409 guard. NEX-037 closes R34: the per-process withholding count is now an aggregate at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty by default and therefore denies everyone.",
@@ -286,7 +286,9 @@
     "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all.",
     "reconciliation_docs_sha": "83122fc",
     "reconciliation_docs_result": "VERIFIED GREEN - 4/4 completed/success at 83122fc (docs-only: EXECUTION_LOG, STATE, CHECKPOINT). Polled 2026-11-25T19:22Z. Every check run reported head_sha 83122fc. This commit changes no source, so the green run confirms the tree is unchanged and healthy; it is not new evidence about the product code, which remains verified at 5c0575b.",
-    "delivery_this_run": "Issue #2 comment 7172232588 posted 2026-11-25T19:23Z (NEX-037 re-entry report), verified byte-equal to the local file (3026 bytes). PR #3 body was already correct and was not re-PATCHed."
+    "delivery_this_run": "Issue #2 comment 7172232588 posted 2026-11-25T19:23Z (NEX-037 re-entry report), verified byte-equal to the local file (3026 bytes). PR #3 body was already correct and was not re-PATCHed.",
+    "head_sha": "957a740",
+    "head_result": "VERIFIED GREEN - 4/4 completed/success at 957a740, polled 2026-11-25T19:24Z. Docs-only head; confirms the tree is healthy, not new product evidence."
   },
   "verified_tasks": [
     "NEX-001",
