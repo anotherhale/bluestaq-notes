@@ -43,7 +43,7 @@ criterion holds, and now so do the tests that check it.
 | --- | --- |
 | Task | none - NEX-015 closed; next slice not yet selected |
 | Status | idle, budget remaining |
-| Next action | Select the next dependency-ready Phase-5 slice from ROADMAP.md |
+| Next action | Select the next dependency-ready Phase-5 slice from ROADMAP.md. PR #3 body is current as of `7ce6f8b` (27,517 / 10 / 104, 715 tests, seven VERIFIED slices). |
 
 ## Last completed task
 

@@ -1963,3 +1963,57 @@ executed. Use `file_editor` to write the script, then run it - never a heredoc.
 2. Recompute PR #3 metrics on the new head and refresh the body; it still
    describes an older commit and understates the branch.
 3. Select the next dependency-ready Phase-5 slice. Never merge PR #3.
+
+---
+
+## Run NEX-2026-11-25-15 (continued) - NEX-015 promoted, PR #3 refreshed
+
+- **Run ID:** NEX-2026-11-25-15
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `414a222`
+- **Ending commit:** `7ce6f8b` (docs) plus the run's final docs commit
+- **Tasks completed:** NEX-015 promoted TESTED -> **VERIFIED** on observed CI; PR #3 body
+  refreshed and its metrics corrected
+- **Tasks verified:** NEX-015
+- **Tasks in progress:** none - next slice not yet selected
+- **Files changed:** `docs/NEXUS/{BACKLOG,STATE,EXECUTION_LOG}.md`,
+  `docs/NEXUS/CHECKPOINT.json`
+- **Migrations:** none
+- **Tests executed:** none new. The promotion rests on CI's execution of the eight
+  `TestDecidedApprovalsRemainReadable` tests on `414a222`, not on a local re-run.
+- **Test outcomes:** CI 4/4 `completed/success` on `414a222` (push `45570071880`,
+  pull_request `45570060946`, all `head_sha 414a222`, observed 2026-11-25T07:42Z)
+- **Security findings:** none new
+- **CI status:** green on `414a222`; the docs head that follows it is unobserved and is
+  not claimed to be green
+- **Commits:** `7ce6f8b` docs(nexus): record NEX-015 as VERIFIED on CI 4/4
+- **Push status:** pushed, `414a222..7ce6f8b`
+- **PR status:** #3 open, still draft, still unmerged; body updated (head, metrics, a fourth
+  defect, seven verified slices)
+- **Tracking issue status:** #2 unchanged this run
+- **Checkpoint status:** updated and validated
+- **Next prioritized task:** select the next dependency-ready Phase-5 slice
+
+### R21 - GitHub's per-file stats truncate on a large PR, and the undercount is silent
+
+The PR body had been carrying numbers measured from `git diff --shortstat main...HEAD` on a
+grafted clone, which cannot work: there is no merge base. This run found the clone could be
+made whole with `git fetch --unshallow` (it now reports
+`is-shallow-repository: false`), so a real `origin/main...HEAD` diff is available and gives
+**27,517 insertions / 10 deletions / 104 files**, matching the PR object's own counters.
+
+Two GitHub endpoints were tried first and both under-report, with no error to say so:
+
+| Source | Additions | Why it is wrong |
+| --- | --- | --- |
+| `/pulls/3/files` (paginated) | 20,309 | 20 files report `additions: 0`, every one a test file |
+| `/compare/main...HEAD` | 19,366 | same truncation |
+| `/pulls/3/diff` | - | HTTP 406, "diff exceeded the maximum number of lines (20000)" |
+| `git diff --shortstat origin/main...HEAD` | **27,517** | full clone; agrees with the PR object |
+
+The first attempt at this fix published 19,366 into the PR body, which would have understated
+the branch by ~8,000 lines. It was caught before the run ended because the PR object's
+`additions` field (27,517) contradicted the per-file sum, and the contradiction was chased
+instead of picking the more convenient number. Two lessons: quote the PR object or a full-clone
+`--shortstat`, never a per-file sum; and when two GitHub endpoints disagree, neither is
+trustworthy until a third source breaks the tie.

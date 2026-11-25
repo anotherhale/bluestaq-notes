@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-15",
-  "timestamp": "2026-11-25T07:47:00Z",
+  "timestamp": "2026-11-25T07:50:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "414a222",
   "commit_note": "414a222 is the NEX-015 slice (decided-approval visibility). Local gates were run bare on it and are green, plus a mutation check on the new tests. CI has NOT been observed on 414a222. The docs commit carrying this file is its child and cannot name itself.",
@@ -74,7 +74,9 @@
       "changed_files": 109,
       "tests_collected": 715
     },
-    "note": "PR #3 head moved to 414a222. Metrics measured with `git diff --shortstat main HEAD` (two-dot; the clone is grafted so three-dot fails) and `pytest --collect-only`. Remains draft and unmerged; automated merging is prohibited."
+    "note": "PR #3 head moved to 414a222. Metrics measured with `git diff --shortstat main HEAD` (two-dot; the clone is grafted so three-dot fails) and `pytest --collect-only`. Remains draft and unmerged; automated merging is prohibited.",
+    "body_current_at": "7ce6f8b",
+    "metrics": "27,517 insertions / 10 deletions / 104 files, measured with git diff --shortstat origin/main...HEAD on a full clone; matches the PR object. Per-file sums from /pulls/3/files (20,309) and /compare (19,366) are truncated and must not be quoted."
   },
   "tracking_issue": {
     "number": 2,
@@ -106,6 +108,12 @@
       "severity": "medium",
       "summary": "Heredocs corrupt or hang in this environment.",
       "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run: a `cat > /tmp/x.py <<'PY'` block corrupted its own command text and had to be abandoned."
+    },
+    {
+      "id": "R21",
+      "severity": "low",
+      "summary": "GitHub per-file diff stats truncate silently on a large PR.",
+      "detail": "On a diff over 20,000 lines, /pulls/{n}/files reports additions:0 for 20 files (every test file) and /pulls/{n}/diff returns HTTP 406, with no error on the stats endpoints to signal the truncation. Per-file sums gave 20,309 and /compare gave 19,366 against a true 27,517. Quote the PR object's additions field or `git diff --shortstat origin/main...HEAD` on a full clone."
     }
   ],
   "next_task": "Select the next dependency-ready Phase-5 slice from ROADMAP.md.",
@@ -125,7 +133,7 @@
     "observed": "2026-11-25T07:42Z",
     "note": "Green on 414a222: 4/4 completed/success, all head_sha 414a222 (push 45570071880, pull_request 45570060946)."
   },
-  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: `git diff --shortstat main HEAD` (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus `pytest --collect-only -o addopts=''` (the repo's addopts=-q hides the count line). MEASURED at 414a222 this run: 109 files, 27487 insertions, 943 deletions, 715 tests collected. Recompute after committing rather than copying these figures.",
+  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: `git diff --shortstat main HEAD` (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus `pytest --collect-only -o addopts=''` (the repo's addopts=-q hides the count line). MEASURED at 414a222 this run: 109 files, 27487 insertions, 943 deletions, 715 tests collected. Recompute after committing rather than copying these figures. | Clone note: `git fetch --unshallow` succeeded on 2026-11-25, so the clone is no longer shallow/grafted and `git merge-base` plus `origin/main...HEAD` diffs now work. PR #3 body refreshed and corrected to 27,517 / 10 / 104 on head 7ce6f8b.",
   "validation_status": {
     "gates": "local this session on 414a222: ruff format clean (195 files), ruff check passed, mypy clean (98 files), pytest 711 passed / 4 skipped.",
     "ci": "414a222: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha 414a222, observed 2026-11-25T07:42Z. This promotes NEX-015 to VERIFIED.",
