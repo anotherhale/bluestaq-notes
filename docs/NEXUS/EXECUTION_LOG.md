@@ -1834,3 +1834,65 @@ dropping it.
    dependency-ready slice; do not inherit this run's guess.
 2. Implement that one slice, run the gates bare, and commit.
 3. Never merge PR #3. Keep the body's numbers recomputed on the head you push.
+
+## NEX-2026-11-25-15 — NEX-014 revocable approvals
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `83ed35b`
+- **Ending commit:** `b27b6b5` (pushed; `git ls-remote` confirmed)
+- **Task:** NEX-014 — a human must be able to withdraw a granted approval
+  before the agent spends it.
+
+### What was wrong
+
+An approved-but-unspent `ApprovalRequest` is live authority: the gateway honours
+it on the next matching call. The only exits from that state were to spend it or
+wait for expiry, so an approver who said yes by mistake could not take it back.
+
+### Slice (domain -> use case -> API -> persistence -> tests)
+
+- `ApprovalStatus.REVOKED`, kept distinct from `DENIED`. A denial refuses a grant
+  never made; a revocation withdraws one that was. Collapsing them would erase
+  that distinction from the audit record.
+- `ApprovalRequest.revoke()`: separation of duties (an agent has no user id, so it
+  cannot withdraw the consent it requested), refuses pending requests (deny those)
+  and spent ones (that would rewrite history). The approver's original `reason` is
+  preserved; the withdrawal goes in `revoke_reason`.
+- `is_usable()` fails closed on a row carrying `revoked_at` even when its status
+  column still reads approved — contradictory rows must not authorise.
+- `RevokeApprovalRequest` use case + `POST /agents/approvals/{id}/revoke`,
+  owner-only, non-owner 404 (same non-enumerable rule as the other approval routes).
+- Migration `e5a3b9c04f21`: adds the three columns, widens the status CHECK. The
+  downgrade folds `revoked` -> `denied` **before** narrowing the constraint.
+
+### Evidence
+
+| Gate | Result |
+| --- | --- |
+| `pytest` (bare) | 690 collected, 686 passed, 4 skipped |
+| `ruff format --check` (bare, repo-wide) | clean, 195 files |
+| `ruff check` | clean |
+| `mypy` | clean, 98 files |
+| Migration chain | upgrade -> downgrade over a **real** revoked row -> re-upgrade |
+| CI | **not observed** on `b27b6b5` |
+
+Mutation check: removing the downgrade's `revoked`->`denied` fold makes both new
+migration tests fail (returncode 1, CHECK-constraint violation). The tests are
+real evidence, not decoration.
+
+### Risk recorded
+
+R19 — the migration suite upgrades an empty database, so a data-dependent
+downgrade step is untested by default. `e5a3b9c04f21` is the first revision where
+that mattered; it is now pinned by a non-empty-table test.
+
+R12 confirmed again: a `cat >> file << EOF` heredoc corrupted this very file and
+it had to be restored from git. Use this script pattern instead.
+
+### Next action
+
+1. `gh api repos/anotherhale/bluestaq-notes/commits/b27b6b5/check-runs` — only
+   green CI promotes NEX-014 to VERIFIED.
+2. Recompute PR #3 metrics on the new head and refresh the body (it was **not**
+   refreshed this run and now understates the branch by one slice).
+3. Select the next Phase-5 slice from `ROADMAP.md`. Never merge PR #3.

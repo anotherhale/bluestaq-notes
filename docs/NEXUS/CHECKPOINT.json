@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-14",
-  "timestamp": "2026-11-25T06:55:00Z",
+  "run_id": "NEX-2026-11-25-15",
+  "timestamp": "2026-11-25T07:07:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "12584a1",
-  "commit_note": "12584a1 is the correction commit: it fixes the NEX-013 validity bound that was inert because ApprovalRequestRepository.add dropped expires_at/consumed_at. CI was then observed on 12584a1: 4/4 completed/success, all head_sha 12584a1, so NEX-013 is VERIFIED on that evidence. The docs commit carrying this file is its child and cannot name itself; CI was not run against it.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 audit trail VERIFIED (f50a78d); NEX-012 audit chain VERIFIED (3aade7c, CI 4/4); NEX-013 approval validity VERIFIED (12584a1, CI 4/4) after a correction that fixed a bound which had been inert while recorded VERIFIED.",
+  "commit": "b27b6b5",
+  "commit_note": "b27b6b5 is the NEX-014 slice (revocable approvals). Local gates were run bare on it and are green. CI has NOT been observed on b27b6b5. The docs commit carrying this file is its child and cannot name itself.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-014 (revocable approvals) IMPLEMENTED + locally TESTED at b27b6b5; awaiting CI observation before VERIFIED.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -23,7 +23,8 @@
     "NEX-009-HTTP": "TESTED",
     "NEX-011": "VERIFIED",
     "NEX-012": "VERIFIED",
-    "NEX-013": "VERIFIED"
+    "NEX-013": "VERIFIED",
+    "NEX-014": "TESTED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -41,29 +42,30 @@
     "NEX-009-HTTP",
     "NEX-011",
     "NEX-012",
-    "NEX-013"
+    "NEX-013",
+    "NEX-014"
   ],
   "validation": {
-    "pytest_full": "686 collected, 682 passed, 4 skipped (local, run bare, on 12584a1)",
-    "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 194 files",
+    "pytest_full": "690 collected, 686 passed, 4 skipped (local, run bare, on b27b6b5)",
+    "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 195 files",
     "ruff_check": "clean",
     "mypy": "clean (98 source files)",
-    "migration_chain": "new head d4c8e2a71f05 (bound_approval_validity_and_single_use), down_revision b2e5c81f4a07; upgrade -> downgrade -1 -> upgrade verified, and the backfill verified against a NON-EMPTY table",
+    "migration_chain": "new head e5a3b9c04f21 (revocable_approvals), down_revision d4c8e2a71f05. Upgrade to head, downgrade over a REAL revoked row, and re-upgrade all verified.",
     "frontend_gates": "not run locally - no frontend files changed",
     "ci_observed": false,
-    "ci_note": "Last observed green CI is e2bf7bc (4/4, 2026-11-25T06:21Z). CI has NOT been observed for 12584a1. NEX-013 stays TESTED until it is.",
-    "verified_at_commit": "e2bf7bc",
-    "verified_by_run": "NEX-2026-11-25-13",
-    "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote NEX-013 on these.",
-    "regression_guard": "tests/agent/test_tool_gateway.py::...::test_an_approval_opened_by_the_gateway_is_time_bounded and tests/agent/test_approval_persistence.py both FAIL when the repository fix is reverted, and pass with it."
+    "ci_note": "Last observed green CI is 12584a1 (4/4). CI has NOT been observed for b27b6b5.",
+    "verified_at_commit": "12584a1",
+    "verified_by_run": "NEX-2026-11-25-14",
+    "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote NEX-014 on these.",
+    "regression_guard": "tests/persistence/test_migrations.py::TestRevocationDowngradeFoldsRevokedRows both FAIL when the downgrade's revoked->denied fold is removed (verified by mutation this run) and pass with it."
   },
   "uncommitted_work": "none",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "fe2188a",
-    "body_refreshed": "2026-11-25T06:58Z",
+    "head": "b27b6b5",
+    "body_refreshed": "NOT refreshed this run - body still describes fe2188a",
     "metrics_at_head": {
       "additions": 26506,
       "deletions": 10,
@@ -72,7 +74,7 @@
       "commits_behind": 1,
       "tests_collected": 690
     },
-    "note": "Body recomputed on 48477da (metrics unchanged since: docs-only commits after it). The NEX-013 overstatement is replaced with the correction. PR head is now fe2188a; CI on fe2188a was still queued/in_progress when this run ended, so no result is claimed for it. Remains draft and unmerged; automated merging is prohibited."
+    "note": "PR #3 head moved to b27b6b5. The body was NOT recomputed this run, so its metrics understate the branch by one slice. Remains draft and unmerged; automated merging is prohibited."
   },
   "tracking_issue": {
     "number": 2,
@@ -82,21 +84,27 @@
   "blockers": [],
   "risks": [
     {
-      "id": "R12",
-      "severity": "medium",
-      "summary": "Heredocs corrupt or hang in this environment.",
-      "detail": "An append to EXECUTION_LOG.md hung instead of writing. It was interrupted before touching the file (line count and tail verified). Write scripts to /tmp with file_editor, then run them."
-    },
-    {
       "id": "R18",
       "severity": "high",
       "summary": "A slice can pass its tests and CI while the adapter that stores its invariant drops the field the check reads.",
       "detail": "NEX-013 was VERIFIED on green CI while ApprovalRequestRepository.add() omitted expires_at, so the bound was inert for every gateway-created approval. The test used save(), which does write the columns. Pin security-relevant fields through the write path production uses. Closed for NEX-013 by 12584a1."
+    },
+    {
+      "id": "R19",
+      "severity": "medium",
+      "summary": "A migration downgrade can be untested because the suite upgrades an empty database.",
+      "detail": "e5a3b9c04f21's downgrade folds 'revoked' rows to 'denied' before narrowing the status CHECK. On an empty table that UPDATE touches nothing, so a wrong ordering would pass. Now pinned by TestRevocationDowngradeFoldsRevokedRows, which seeds a real revoked row; removing the fold makes both tests fail."
+    },
+    {
+      "id": "R12",
+      "severity": "medium",
+      "summary": "Heredocs corrupt or hang in this environment.",
+      "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run."
     }
   ],
-  "next_task": "Select the next dependency-ready Phase 5 slice from ROADMAP.md. PR #3 body is now current at 48477da.",
-  "next_action": "1) gh api repos/anotherhale/bluestaq-notes/commits/12584a1/check-runs - only a green 4/4 promotes NEX-013 to VERIFIED. 2) Recompute PR #3 metrics and update the body. 3) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-013 is VERIFIED at 12584a1 (CI 4/4). Do not re-verify it. Choose the next Phase 5 slice from ROADMAP.md. Never merge PR #3. Write any script to /tmp via file_editor; never use a heredoc.",
+  "next_task": "Observe CI on b27b6b5; then select the next dependency-ready Phase 5 slice from ROADMAP.md.",
+  "next_action": "1) gh api repos/anotherhale/bluestaq-notes/commits/b27b6b5/check-runs - only a green result promotes NEX-014 to VERIFIED. 2) Recompute PR #3 metrics (git diff --shortstat main HEAD + pytest --collect-only -o addopts='') and refresh the body. 3) Select the next Phase-5 slice. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-014 is TESTED at b27b6b5 (local gates green, CI unobserved). Do not re-implement it. Never merge PR #3. Write any script to /tmp via file_editor; never use a heredoc.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -109,12 +117,12 @@
     ],
     "check_runs_on_head": 4,
     "observed": "2026-11-25T05:49Z",
-    "note": "Last observed green commit is 3aade7c: 4/4 completed/success (backend + frontend, push and pull_request). No CI observed yet for the NEX-013 commit."
+    "note": "Last observed green commit is 12584a1 (4/4). No CI observed for b27b6b5."
   },
   "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures.",
   "validation_status": {
-    "gates": "local: 686 collected / 682 passed / 4 skipped; ruff format --check and ruff check clean (194 files); mypy clean (98 files)",
-    "ci": "observed green on 12584a1: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha 12584a1, 2026-11-25T06:43Z",
-    "note": "12584a1 is the product fix. The docs commit that carries this checkpoint is its child and cannot name itself; CI was not run against it."
+    "gates": "local on b27b6b5: 690 collected / 686 passed / 4 skipped; ruff format --check + ruff check clean (195 files); mypy clean (98 files)",
+    "ci": "last observed green is 12584a1: 4/4 (Backend + Frontend). Nothing observed for b27b6b5.",
+    "note": "b27b6b5 is the product slice. The docs commit carrying this checkpoint is its child."
   }
 }
