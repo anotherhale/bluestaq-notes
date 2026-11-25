@@ -86,8 +86,8 @@
     "functional_guard_proof": "A withheld value never reaches the digest: two envelopes differing only in the over-cap value produce identical context_hash. excluded_field_names unions classification withholding and over-cap withholding. An included-and-withheld name and an illegal withheld name are both rejected at construction."
   },
   "uncommitted_work": "none - all product and docs changes committed and pushed",
-  "pr_state": "#3 open, draft, unmerged (human review required). STALE as of 240a446: the body does not yet cover NEX-031. Refreshing it is the next run's first action. Re-measure additions/deletions/file/commit counts from the PR object before quoting them - never from memory.",
-  "tracking_issue": "#2 open. STALE as of 240a446: NEX-031 is not yet recorded there. Post it next run, using LISTS not tables (a markdown table in an issue comment body returns HTTP 500 on this repo).",
+  "pr_state": "#3 open, draft, unmerged (human review required). UPDATED this run: body now carries a ## NEX-031 section and R31/R32 status, verified by read-back substring assertions. PR object measured at head e5ce026: 36136 additions, 10 deletions, 127 files, 150 commits. Never merge.",
+  "tracking_issue": "#2 open. UPDATED this run with NEX-031 evidence as comment 7167944614 (byte-equal to the local file on read-back; lists only, no tables).",
   "blockers": [],
   "risks": [
     {
@@ -201,7 +201,7 @@
     }
   ],
   "next_task": "NEX-032: the withholding NEX-031 introduced is auditable but not observable. Surface, per recommendation, which context fields were withheld and why (classification vs over-cap), so a thinner-than-expected advisory is visible rather than inferred. See R32.",
-  "next_action": "Refresh PR #3 body at the current head first (it is stale as of 240a446), then update tracking issue #2 with NEX-031, then start NEX-032.",
+  "next_action": "Start NEX-032: make the withholding observable rather than merely auditable (surface withheld field names and their reason per recommendation). PR #3 and issue #2 are now current at e5ce026, so no refresh is owed.",
   "recovery_instructions": "Tree is clean and pushed. NEX-031 product commit is 240a446; the docs promotion and checkpoint bookkeeping commits follow it. `git log --oneline -4` shows the ordering. R31 is closed by NEX-030 (ContextHash) plus NEX-031 (real note text); do not reopen it without reading ADR-012 and the stated str.__new__ limit in the ContextHash docstring. R32 is the live follow-up. PR #3 and issue #2 are STALE as of 240a446 - refresh both before starting new code.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
