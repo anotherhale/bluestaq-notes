@@ -22,6 +22,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.authorization import AuthorizationProvider
+from notes_service.application.ports.decisioning import DecisionProvider
 from notes_service.application.ports.identity import IdentityProvider
 from notes_service.application.ports.organization_authorization import (
     OrganizationAuthorizationProvider,
@@ -122,6 +123,7 @@ from notes_service.bootstrap.config import Settings
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
 from notes_service.infrastructure.identity.demo_provider import DemoIdentityProvider
 from notes_service.infrastructure.identity.oidc_provider import OidcIdentityProvider
@@ -365,12 +367,27 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     )
     withholding_recorder = InMemoryWithholdingRecorder()
 
-    # The stub is the only adapter today. It is deterministic and abstains under
-    # any real threshold, so enabling the flag alone does not start handing out
-    # opinions; a real provider is a separate, reviewed slice.
+    # The stub is the default adapter: deterministic, offline, and it abstains
+    # under any real threshold. A deployment opts into a real vendor by setting
+    # DECISIONING_HTTP_ENDPOINT; that alone does not enable judgment, because
+    # ``decisioning_enabled`` still gates every call. Selecting the provider here
+    # rather than in each use case keeps one answer to "which provider is this
+    # process using".
+    def _build_decision_provider() -> DecisionProvider:
+        if settings.decisioning_http_endpoint is None:
+            return StubDecisionProvider()
+        return HttpDecisionProvider(
+            name=settings.decisioning_http_provider_name,
+            endpoint=settings.decisioning_http_endpoint,
+            api_key=settings.decisioning_http_api_key,
+            timeout_seconds=settings.decisioning_http_timeout_seconds,
+        )
+
+    decision_provider: DecisionProvider = _build_decision_provider()
+
     def make_decision_evaluator() -> EvaluateDecision:
         return EvaluateDecision(
-            provider=StubDecisionProvider(),
+            provider=decision_provider,
             enabled=settings.decisioning_enabled,
             min_confidence=settings.decisioning_min_confidence,
         )

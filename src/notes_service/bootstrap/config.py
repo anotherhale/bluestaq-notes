@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     decisioning_enabled: bool = False
     # Confidence a provider must reach before its opinion is usable at all.
     decisioning_min_confidence: float = 0.5
+    # Optional external judgment service. When BOTH are unset the offline stub is
+    # used, which abstains under any real threshold. Setting the endpoint is what
+    # opts a deployment into a real vendor; it does not by itself enable
+    # decisioning, because ``decisioning_enabled`` still gates every call.
+    decisioning_http_endpoint: str | None = None
+    decisioning_http_api_key: str | None = None
+    # Recorded in telemetry and returned to clients, so it must be an identifier.
+    # A deployment running two vendors (e.g. a canary) distinguishes them here
+    # rather than by parsing the endpoint host.
+    decisioning_http_provider_name: str = "http"
+    decisioning_http_timeout_seconds: float = 5.0
 
     # -- operations -------------------------------------------------------
     # User ids allowed to read process-wide operational totals (the advisory
@@ -161,6 +172,31 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"ops_operator_user_ids contains a non-UUID id: {candidate!r}"
                 ) from exc
+        return value
+
+    @field_validator("decisioning_http_endpoint")
+    @classmethod
+    def _validate_decisioning_endpoint(cls, value: str | None) -> str | None:
+        """Require HTTPS at startup.
+
+        The adapter enforces this too, but the adapter is constructed lazily per
+        use case. A deployment that misconfigured the scheme should learn at boot,
+        not on the first advisory a human is waiting for.
+        """
+        if value is None:
+            return None
+        text = value.strip()
+        if not text:
+            return None
+        if not text.lower().startswith("https://"):
+            raise ValueError("decisioning_http_endpoint must be an https:// URL")
+        return text
+
+    @field_validator("decisioning_http_timeout_seconds")
+    @classmethod
+    def _validate_decisioning_timeout(cls, value: float) -> float:
+        if not 0 < value <= 60:
+            raise ValueError("decisioning_http_timeout_seconds must be in (0, 60]")
         return value
 
     @field_validator("log_level")
