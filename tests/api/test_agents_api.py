@@ -636,6 +636,125 @@ class TestApprovalHttp:
         assert response.status_code == 404, response.text
 
 
+class TestDecidedApprovalsRemainReadable:
+    """A decision must not erase the record from the API.
+
+    The listing used to return pending requests only, so the moment a human
+    approved or denied, the request vanished from the only read path. An approver
+    could not confirm what they had approved and an auditor had no API view of the
+    grant at all — the audit trail held the only copy. These pin both read paths
+    that fix it: a status filter on the listing, and a direct read by id.
+    """
+
+    @staticmethod
+    def _decided(client: TestClient, *, approve: bool, owner: str = ALICE) -> tuple[dict, dict]:
+        agent = register_agent(client, owner, capabilities=[DELETE])
+        opened = client.post(
+            f"/api/v1/agents/{agent['id']}/approvals",
+            headers=auth_headers(owner),
+            json={"capability": DELETE, "resource_ref": "note-42"},
+        ).json()
+        decided = client.post(
+            f"/api/v1/agents/approvals/{opened['id']}/decision",
+            headers=auth_headers(owner),
+            json={"approve": approve, "reason": "checked"},
+        )
+        assert decided.status_code == 200, decided.text
+        return agent, decided.json()
+
+    def test_the_default_listing_is_still_the_pending_queue(self, client: TestClient) -> None:
+        agent, _ = self._decided(client, approve=True)
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals", headers=auth_headers(ALICE)
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == []
+
+    def test_an_approved_request_is_listed_by_status(self, client: TestClient) -> None:
+        agent, decided = self._decided(client, approve=True)
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?status=approved",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert [item["id"] for item in items] == [decided["id"]]
+        assert items[0]["decided_by_user_id"] == ALICE
+        assert items[0]["reason"] == "checked"
+
+    def test_a_denied_request_is_listed_by_status(self, client: TestClient) -> None:
+        agent, decided = self._decided(client, approve=False)
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?status=denied",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 200, response.text
+        assert [item["id"] for item in response.json()["items"]] == [decided["id"]]
+
+    def test_a_revoked_request_is_listed_by_status(self, client: TestClient) -> None:
+        agent, approved = self._decided(client, approve=True)
+        revoked = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "no longer needed"},
+        )
+        assert revoked.status_code == 200, revoked.text
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?status=revoked",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 200, response.text
+        assert [item["id"] for item in response.json()["items"]] == [approved["id"]]
+
+    def test_a_decided_request_is_readable_by_id(self, client: TestClient) -> None:
+        _, decided = self._decided(client, approve=True)
+
+        response = client.get(
+            f"/api/v1/agents/approvals/{decided['id']}", headers=auth_headers(ALICE)
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["id"] == decided["id"]
+        assert body["status"] == "approved"
+        assert body["decided_by_user_id"] == ALICE
+
+    def test_reading_another_users_approval_gets_404(self, client: TestClient) -> None:
+        _, decided = self._decided(client, approve=True, owner=ALICE)
+
+        response = client.get(
+            f"/api/v1/agents/approvals/{decided['id']}", headers=auth_headers(BOB)
+        )
+
+        assert response.status_code == 404, response.text
+
+    def test_reading_an_unknown_approval_gets_404(self, client: TestClient) -> None:
+        response = client.get(
+            "/api/v1/agents/approvals/99999999-9999-4999-8999-999999999999",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 404, response.text
+
+    def test_an_unknown_status_is_rejected(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[DELETE])
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?status=not-a-state",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 422, response.text
+
+
 class TestApprovalRevocationHttp:
     """Withdrawing a grant over HTTP, before the agent can spend it."""
 

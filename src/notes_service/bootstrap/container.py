@@ -39,6 +39,7 @@ from notes_service.application.use_cases.agent_runs import (
 from notes_service.application.use_cases.agents import (
     DecideApprovalRequest,
     GetAgent,
+    GetApprovalRequest,
     GrantDelegation,
     IssueAgentToken,
     ListAgents,
@@ -215,6 +216,7 @@ class Container:
     decide_approval_request: Callable[[], DecideApprovalRequest]
     revoke_approval_request: Callable[[], RevokeApprovalRequest]
     list_approval_requests: Callable[[], ListApprovalRequests]
+    get_approval_request: Callable[[], GetApprovalRequest]
     # Reading the audit trail is the owning human's authority, matching approvals:
     # the trail names which tools an agent reached for, which is private to its
     # owner. Nothing here can write to the trail; only the gateway does that.
@@ -470,6 +472,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         decide_approval_request=make(DecideApprovalRequest),
         revoke_approval_request=make(RevokeApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
+        get_approval_request=make(GetApprovalRequest),
         list_tool_invocations=make(ListToolInvocations),
         verify_tool_invocation_chain=make(VerifyToolInvocationChain),
         invoke_tool=make_tool_gateway,

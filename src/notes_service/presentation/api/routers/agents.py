@@ -23,6 +23,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
+from notes_service.domain.agent.value_objects import ApprovalStatus
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     AgentListResponse,
@@ -216,13 +217,24 @@ def open_approval_request(
 @router.get(
     "/{agent_id}/approvals",
     response_model=ApprovalRequestListResponse,
-    summary="List pending approvals for one of the caller's agents",
+    summary="List approvals for one of the caller's agents, pending by default",
     dependencies=[RateLimitDep],
 )
 def list_approval_requests(
-    agent_id: UUID, principal: PrincipalDep, container: ContainerDep
+    agent_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    status: ApprovalStatus = Query(
+        default=ApprovalStatus.PENDING,
+        description=(
+            "Which state to list. Defaults to pending, the actionable queue. Any "
+            "other value reads the agent's full history so a decision stays reviewable."
+        ),
+    ),
 ) -> ApprovalRequestListResponse:
-    requests = container.list_approval_requests().run(principal, agent_id=str(agent_id))
+    requests = container.list_approval_requests().run(
+        principal, agent_id=str(agent_id), status=status.value
+    )
     items = [ApprovalRequestResponse.from_domain(request) for request in requests]
     return ApprovalRequestListResponse(items=items, meta=_page(items))
 
@@ -278,6 +290,26 @@ def verify_tool_invocation_chain(
     """
     verdict = container.verify_tool_invocation_chain().run(principal, agent_id=str(agent_id))
     return ChainVerdictResponse.from_domain(verdict)
+
+
+@router.get(
+    "/approvals/{approval_id}",
+    response_model=ApprovalRequestResponse,
+    summary="Read one approval request belonging to one of the caller's agents",
+    dependencies=[RateLimitDep],
+)
+def get_approval_request(
+    approval_id: UUID, principal: PrincipalDep, container: ContainerDep
+) -> ApprovalRequestResponse:
+    """Read back the record for an approval the caller's agent asked for.
+
+    The decision and revocation routes take an approval id but returned nothing
+    readable afterwards, so a reviewer could not confirm what they had approved
+    or withdrawn without inspecting the audit trail. A non-owner gets 404, not
+    403, so an approval id cannot be used to probe for another user's agent.
+    """
+    request = container.get_approval_request().run(principal, approval_id=str(approval_id))
+    return ApprovalRequestResponse.from_domain(request)
 
 
 @router.post(

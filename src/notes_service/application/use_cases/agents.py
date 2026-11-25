@@ -38,6 +38,7 @@ from notes_service.domain.agent.value_objects import (
     SENSITIVE_CAPABILITIES,
     AgentId,
     ApprovalRequestId,
+    ApprovalStatus,
     Capability,
     DelegatedAuthorizationId,
     TokenAudience,
@@ -419,12 +420,54 @@ class RevokeApprovalRequest(UseCase):
 
 
 class ListApprovalRequests(UseCase):
-    """List pending approvals for one of the caller's agents."""
+    """List approval requests for one of the caller's agents.
 
-    def run(self, principal: Principal, *, agent_id: str) -> list[ApprovalRequest]:
+    ``status`` defaults to ``pending`` because that is the actionable queue a
+    reviewer needs first, and it is what this endpoint returned before filtering
+    existed. Every other value selects from the agent's *full* history, which is
+    what makes a decision reviewable after the fact: a decided approval used to
+    disappear from the only read path, so an approver could not confirm what they
+    had approved, and an auditor could not see the grant at all through the API.
+    """
+
+    def run(
+        self,
+        principal: Principal,
+        *,
+        agent_id: str,
+        status: str | None = None,
+    ) -> list[ApprovalRequest]:
+        wanted = ApprovalStatus(status) if status is not None else ApprovalStatus.PENDING
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            return uow.approvals.list_pending_for_agent(agent.id)
+            if wanted is ApprovalStatus.PENDING:
+                return uow.approvals.list_pending_for_agent(agent.id)
+            return [
+                request
+                for request in uow.approvals.list_for_agent(agent.id)
+                if request.status is wanted
+            ]
+
+
+class GetApprovalRequest(UseCase):
+    """Read one approval request belonging to one of the caller's agents.
+
+    The decision and revocation routes both take an approval id, but there was no
+    way to read that id back afterwards. A reviewer who approved or revoked a
+    sensitive action could not confirm the resulting record, and the audit trail
+    held the only copy. Ownership is checked as everywhere else in this context:
+    a non-owner gets 404, so an approval id cannot probe for another user's agent.
+    """
+
+    def run(self, principal: Principal, *, approval_id: str) -> ApprovalRequest:
+        with self._uow_factory() as uow:
+            request = uow.approvals.get(ApprovalRequestId.parse(approval_id))
+            if request is None:
+                raise ResourceNotFound("approval request not found")
+            agent = uow.agents.get(request.agent_id)
+            if agent is None or agent.owner_user_id != principal.user_id:
+                raise ResourceNotFound("approval request not found")
+            return request
 
 
 class ListToolInvocations(UseCase):
