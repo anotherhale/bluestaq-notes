@@ -7,24 +7,36 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED + HTTP surface TESTED) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `7a392dd` |
+| Base commit (run start) | `3f1d855` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-**NEX-005-HTTP — Expose the tool gateway over HTTP.** Status: **TODO**. NEX-005
-itself is **VERIFIED** at `a3ef9d7` (`74d3d98` fixed the two defects); the
-gateway has no router, so no API contract test covers it. This is the last
-gateway gap and closes R5. See `EXECUTION_LOG.md`.
+None in flight. **NEX-005-HTTP** is **TESTED** at `c18bac7` (committed and pushed;
+CI not yet observed on that commit). NEX-005 itself is **VERIFIED** at `a3ef9d7`.
+The gateway is now reachable over HTTP, which closes R5. Next run starts with
+NEX-007 (see Next best actions).
 
 
 ## Last completed task
 
-**NEX-008 — Add continuous integration** (runs `NEX-2026-11-25-03` and `-04`).
+**NEX-005-HTTP — Expose the tool gateway over HTTP** (run `NEX-2026-11-25-05`,
+`c18bac7`). `POST /api/v1/agents/tools/invoke` is the thinnest possible edge over
+`InvokeTool`, so audience, revocation, capability, approval, and audit remain in
+exactly one place. Two properties are load-bearing and pinned by
+`tests/api/test_tool_gateway_api.py` (9 tests): the demo-identity header is
+**ignored** (a demo user id is not authority to invoke a tool), and the token is
+resolved for `TokenAudience.TOOL_GATEWAY`, so a Notes-API token is refused.
+Refusals return `401`/`403`/`409`/`422`, never a `500`, and the token is never
+echoed. Rate limiting keys on a digest of the presented token rather than the
+client address, so agents cannot exhaust each other's budget.
+
+Previously, **NEX-008 — Add continuous integration** (runs `NEX-2026-11-25-03`
+and `-04`).
 The repository had **no CI at all**; `.github/workflows/ci.yml` now runs the
 backend gates (`ruff format --check`, `ruff check`, `mypy`, `pytest`), the
 frontend gates (`typecheck`, `lint`, `test`, `build`), and an apply-then-revert
@@ -94,14 +106,14 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-03`, at `7a392dd`) |
+| Gate | Result (run `NEX-2026-11-25-05`, at `c18bac7`) |
 | --- | --- |
-| `pytest` (full) | **603 passed, 4 skipped** (607 collected) |
+| `pytest` (full) | **612 passed, 4 skipped** (616 collected) |
 | `pytest tests/architecture` | passed (layering invariant intact) |
-| `ruff format --check` | clean (179 files) |
+| `ruff format --check` | clean |
 | `ruff check` | clean |
-| `mypy` | clean (93 source files) |
-| Frontend `typecheck`/`lint`/`test`/`build` | all passed (127 tests, 9 files) |
+| `mypy` | clean (94 source files) |
+| Frontend `typecheck`/`lint`/`test`/`build` | passed at `3f1d855` (127 tests, 9 files); no frontend files changed since |
 | `alembic upgrade head` → `downgrade base` | passed on fresh SQLite |
 
 > Local gates are **not** CI evidence, so CI was observed separately. Runs
@@ -145,8 +157,12 @@ None currently. The following are known open items, not blockers:
   sampling. This is stronger for the current delegable universe but would not
   scale if the capability set grew substantially; revisit if capabilities
   multiply.
-- **R5 (medium):** The tool gateway has no HTTP/router exposure. It is reachable
-  only from application code, so no API contract test covers it.
+- **R5 (closed 2026-11-25, run `NEX-2026-11-25-05`):** The tool gateway had no
+  HTTP/router exposure, so no API contract test covered it and no client could
+  call it. `POST /api/v1/agents/tools/invoke` now exposes it, pinned by
+  `tests/api/test_tool_gateway_api.py` (9 tests). Closed on TESTED evidence
+  (committed and pushed at `c18bac7`); CI has not yet run on that commit, so the
+  residual is CI confirmation, not missing coverage.
 - **R6 (closed 2026-11-25):** the tool gateway now has a dedicated test file,
   `tests/agent/test_tool_gateway.py` (18 tests). Writing it found two real
   defects, both fixed in `74d3d98`: a retried *denial* hit the
@@ -158,14 +174,13 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
-   an auth dependency that resolves the agent token for `TokenAudience.TOOL_GATEWAY`,
-   and an API contract test for a denied invocation. (P2; closes R5, the last
-   gateway gap.)
-2. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
+1. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
-   membership themselves. (P1, builds on NEX-006.)
+   membership themselves. (P1, builds on NEX-006; dependency-ready.)
+2. **Confirm CI green on `c18bac7`**, then promote NEX-005-HTTP from TESTED to
+   VERIFIED. The gateway's HTTP edge is the first agent-facing route, so a red
+   run there is a real signal about the agent-token path.
 3. **NEX-006 — Durable agentic runtime**: runs checkpoint progress and resume
    after interruption without repeating completed side effects. NEX-005 is done,
    so this is dependency-ready, but it is *large* — scope the first slice to

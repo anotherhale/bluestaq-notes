@@ -659,3 +659,100 @@ auth dependency resolving the agent token for `TokenAudience.TOOL_GATEWAY`, and 
 API contract test for a denied invocation. Closes R5, the last gateway gap. CI is
 now live, so a red run on that work is a signal rather than a surprise.
 
+
+---
+
+## Run NEX-2026-11-25-05 — 2026-11-25T02:31Z–02:56Z
+
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `3f1d855` · **Ending commit:** `c18bac7` (then this docs commit)
+**Phase:** 2 — Agent identity & delegation
+
+### Tasks
+
+| Task | Status change |
+| --- | --- |
+| NEX-005-HTTP — Expose the tool gateway over HTTP | TODO → **TESTED** |
+
+### What happened
+
+The gateway (`InvokeTool`) was reachable only from application code, so nothing
+exercised it over the wire and no client could call it. This run added the
+thinnest possible HTTP edge and stopped there.
+
+`POST /api/v1/agents/tools/invoke` authenticates an **agent**, then delegates to
+`InvokeTool`. The router contains no authorization decision of its own — audience,
+revocation, capability, approval, and audit stay in the one use case, which is
+what keeps the REST surface, the runtime, and any future MCP adapter from
+diverging in their enforcement.
+
+Two properties are load-bearing and pinned by tests:
+
+- `X-Demo-User-ID` is **ignored** on this route. A demo identity is a *human*
+  authentication shortcut; treating it as authority to invoke a tool would let any
+  developer-authenticated caller drive the agent surface.
+- The token is resolved for `TokenAudience.TOOL_GATEWAY`, so a Notes-API token is
+  refused with `403` despite being otherwise valid. Audience separation is what
+  stops a stolen user token from becoming a tool credential.
+
+Refusals map to `401`/`403`/`409`/`422` and are audited; none produce a `500`.
+Rate limiting keys on a digest of the presented token rather than the client
+address, so one agent cannot exhaust another's budget and the raw secret never
+becomes a limiter key.
+
+### Files changed
+
+| File | Change |
+| --- | --- |
+| `src/notes_service/presentation/api/routers/tools.py` | new — the router |
+| `src/notes_service/presentation/dependencies.py` | agent-token auth + rate-limit dependencies |
+| `src/notes_service/presentation/schemas.py` | request/response schemas |
+| `src/notes_service/presentation/api/__init__.py` | router registration |
+| `src/notes_service/bootstrap/container.py` | gateway wiring |
+| `tests/api/test_tool_gateway_api.py` | new — 9 API contract tests |
+| `docs/API.md` | endpoint reference + auth exception for the agent surface |
+
+### Tests executed
+
+`pytest` (full suite): **612 passed, 4 skipped** (616 collected), exit 0 — up from
+603 passed before this run. `ruff format --check`, `ruff check`, and `mypy` all
+clean (94 source files). `tests/architecture/test_layering.py` still passes, so
+`domain/` and `application/` remain free of FastAPI imports.
+
+The 9 new tests cover: a successful audited invocation; `X-Demo-User-ID` ignored;
+a malformed header; a Notes-API token refused; a capability refusal; an unknown
+tool; replay of a recorded outcome; a reused idempotency key with different
+arguments returning `409`; and the token never appearing in a response.
+
+### Verification status — deliberately not VERIFIED
+
+Local gates pass, but **CI has not run on `c18bac7`**. The slice is TESTED, not
+VERIFIED, and the checkpoint says so. CI is green at `3f1d855` (runs `45531483962`,
+`45531492783`). Confirming `c18bac7` is the first action of the next run.
+
+### Decisions
+
+- The router takes no security decisions of its own; it is an adapter over the use
+  case. Recorded because it is the rule that keeps enforcement single-sourced.
+- Rate-limit key is a token digest, not the client IP. Client IP would let one
+  agent starve another behind the same egress address, and would make the limiter
+  key attacker-controlled.
+
+### Risks
+
+- **R5 closed** — the gateway is now reachable over HTTP. Residual: CI confirmation.
+- **R8 (low)** restated: the local suite can hide environment-dependent
+  assumptions. Test helpers must use `sys.executable` or explicit paths, never a
+  bare `.venv/...`.
+
+### Git
+
+Commit `c18bac7` `feat(agents): expose the governed tool gateway over HTTP`
+(6 files, +346 lines). Pushed `3f1d855..c18bac7` fast-forward, no force. Remote
+verified with `git ls-remote` — both refs resolve to `c18bac7`.
+
+### Next action
+
+Confirm CI green on `c18bac7`, promote NEX-005-HTTP to VERIFIED, then start NEX-007
+(tenant-scoped capability checks). See `CHECKPOINT.json.next_action`.
+

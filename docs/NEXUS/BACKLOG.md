@@ -273,7 +273,7 @@ surfacing `InvariantViolation` as a 500). Both fixed in `74d3d98`.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | TODO |
+| Status | TESTED (run `NEX-2026-11-25-05`, `c18bac7`; CI pending) |
 | Dependencies | NEX-005 |
 
 **Objective:** make the gateway reachable through the API layer, so agents can
@@ -283,6 +283,23 @@ invoke tools over HTTP under the same governed path.
 resolves an agent token for `TokenAudience.TOOL_GATEWAY` and rejects tokens
 minted for the Notes API; a denied invocation returns a refusal status, not a
 500; an API contract test covers the deny path and a successful invocation.
+
+**Delivered:** `POST /api/v1/agents/tools/invoke`
+(`presentation/api/routers/tools.py`), request/response schemas, DI wiring in
+`presentation/dependencies.py` (`AgentTokenSecretDep`, `AgentRateLimitDep`) and
+`bootstrap/container.py`. `tests/api/test_tool_gateway_api.py` (9 tests) covers a
+successful audited invocation, `X-Demo-User-ID` being ignored, a malformed
+header, a Notes-API token refused, a capability refusal, an unknown tool, replay
+of a recorded outcome, a reused key with different arguments (`409`), and the
+token never being echoed.
+
+The router makes no security decision of its own: it authenticates the agent and
+delegates to `InvokeTool`, so audience, revocation, capability, approval, and
+audit stay in one place. Rate limiting keys on a digest of the presented token,
+not the client address, so one agent cannot exhaust another's budget and the raw
+secret never becomes a limiter key.
+
+**Status note:** TESTED, not VERIFIED — CI has not yet run on `c18bac7`.
 
 **Security:** the caller identity must come from the token, never the body.
 Token audience separation is load-bearing — a Notes API token must not invoke

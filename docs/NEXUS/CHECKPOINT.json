@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-04",
-  "timestamp": "2026-11-25T19:25:00Z",
+  "run_id": "NEX-2026-11-25-05",
+  "timestamp": "2026-11-25T02:54:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "6f30020",
+  "commit": "c18bac7",
   "commit_note": "Verified HEAD this checkpoint describes: the last commit with verified gates. The checkpoint docs commit that carries this file is its child, so this field is intentionally not self-referential.",
-  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending)",
+  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED + HTTP surface TESTED)",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -16,7 +16,7 @@
     "NEX-005-followup": "VERIFIED",
     "NEX-004": "VERIFIED",
     "NEX-007": "TODO",
-    "NEX-005-HTTP": "TODO",
+    "NEX-005-HTTP": "TESTED",
     "NEX-008": "VERIFIED"
   },
   "completed_tasks": [
@@ -25,28 +25,29 @@
     "NEX-005",
     "NEX-005-followup",
     "NEX-004",
-    "NEX-008"
+    "NEX-008",
+    "NEX-005-HTTP"
   ],
   "validation": {
-    "pytest_full": "603 passed, 4 skipped (607 collected)",
+    "pytest_full": "612 passed, 4 skipped (616 collected)",
     "pytest_architecture": "passed (within full suite)",
-    "ruff_format": "clean (179 files)",
+    "ruff_format": "clean",
     "ruff_check": "clean",
-    "mypy": "clean (93 source files)",
-    "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed",
-    "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (19 tables created, all dropped)",
+    "mypy": "clean (94 source files)",
+    "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed at 3f1d855; no frontend files changed since",
+    "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
     "ci_observed": true,
-    "ci_note": "CI is green on GitHub, not merely configured. Runs 45531483962 (push) and 45531492783 (pull_request) both succeeded on 6f30020; gh api .../commits/6f30020/check-runs reports all four check runs completed/success.",
-    "verified_at_commit": "6f30020",
-    "verified_by_run": "NEX-2026-11-25-04 (local gates re-executed, then confirmed by an observed green GitHub Actions run)"
+    "ci_note": "CI is green at 3f1d855 (runs 45531483962 push and 45531492783 pull_request, all four check runs completed/success). CI has NOT yet run on c18bac7, so the gateway HTTP slice is TESTED, not VERIFIED.",
+    "verified_at_commit": "3f1d855",
+    "verified_by_run": "NEX-2026-11-25-05 (local gates re-executed at c18bac7; CI confirmation pending for c18bac7)"
   },
-  "uncommitted_work": "none after this run commits the migration-test portability fix and the state-file updates",
+  "uncommitted_work": "none after this run commits the gateway HTTP slice (c18bac7) and the state-file updates",
   "pr_state": {
     "pr": 3,
     "state": "draft",
     "merged": false,
     "description_updated": "2026-11-25T01:41:35Z",
-    "note": "Still draft; not marked ready for review. CI now runs on this PR and is green at 6f30020 (run 45531492783). The PR description does not yet mention CI; that is a small follow-up, not a correctness gap."
+    "note": "Still draft; not marked ready for review. CI is green at 3f1d855 and has not yet run on c18bac7. The PR description does not yet mention the tool gateway HTTP surface or CI; that is a small follow-up, not a correctness gap."
   },
   "tracking_issue": {
     "number": 2,
@@ -55,22 +56,27 @@
   },
   "blockers": [],
   "risks": [
-    "R3 (CLOSED on observed evidence 2026-11-25): CI was absent entirely; it now runs on every push and pull request and is green at 6f30020. Residual: CI covers the documented gates only, so a gap no test exercises is still a gap.",
+    "R3 (CLOSED 2026-11-25): CI was absent entirely; it now runs on every push and pull request and is green at 3f1d855. Residual: CI covers the documented gates only, so a gap no test exercises is still a gap.",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
-    "R5: NEX-005 has no HTTP/router exposure yet - the gateway is reachable only from application code. No API contract test covers it.",
-    "R7: gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently.",
-    "R8 (new, low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers."
+    "R5 (CLOSED 2026-11-25): the gateway had no HTTP exposure. POST /api/v1/agents/tools/invoke now exposes it, pinned by tests/api/test_tool_gateway_api.py (9 tests). Residual: CI confirmation on c18bac7.",
+    "R6 (CLOSED 2026-11-25): gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently.",
+    "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers."
   ],
-  "next_task": "NEX-005-HTTP",
-  "next_action": "Implement NEX-005-HTTP: expose the tool gateway through the API layer. Add a router under the agent API surface, an auth dependency that resolves the agent token for TokenAudience.TOOL_GATEWAY, and an API contract test for a denied invocation (expect the deterministic refusal, not a 500). Follow the existing presentation-layer patterns; keep domain/application free of FastAPI imports so tests/architecture/test_layering.py stays green. Run ruff format, ruff check, mypy, pytest, then push and confirm CI goes green.",
-  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it. CI is now live: 'gh run list --branch feature/agentic-enterprise-platform --limit 5' shows the latest runs.",
+  "next_task": "NEX-007",
+  "next_action": "Confirm CI green on c18bac7 (gh api repos/anotherhale/bluestaq-notes/commits/c18bac7/check-runs), then promote NEX-005-HTTP from TESTED to VERIFIED in BACKLOG.md and STATE.md. Then implement NEX-007 (tenant-scoped capability checks): extend application/use_cases/tenant_access.py to answer which tenants the caller may act in (organization_ids is already computed but unused), so tenant-scoped use cases stop re-deriving membership themselves. Keep domain/ and application/ free of FastAPI/SQLAlchemy imports so tests/architecture/test_layering.py stays green. Run ruff format, ruff check, mypy, pytest, then push and confirm CI.",
+  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it. CI is live: 'gh run list --branch feature/agentic-enterprise-platform --limit 5' shows the latest runs.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
-    "workflow_files": [".github/workflows/ci.yml"],
-    "jobs": ["backend", "frontend"],
+    "workflow_files": [
+      ".github/workflows/ci.yml"
+    ],
+    "jobs": [
+      "backend",
+      "frontend"
+    ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T19:22Z",
-    "note": "Green at 6f30020 on both push and pull_request events; all four check runs completed/success. First run at b223e02 failed on a real portability defect (migration tests invoked .venv/bin/alembic), fixed in 6f30020."
+    "observed": "2026-11-25T02:31Z",
+    "note": "Green at 3f1d855 on both push and pull_request events; all four check runs completed/success. Not yet observed on c18bac7."
   }
 }
