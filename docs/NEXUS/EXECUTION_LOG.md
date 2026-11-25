@@ -3329,3 +3329,129 @@ change. PR #3 remains draft and unmerged, as required.
 **Next action.** Read `docs/NEXUS/ROADMAP.md` Phase 5 and select the next
 dependency-ready slice. NEX-001…NEX-024 are all VERIFIED and R27 is closed on both settle
 paths (resolve and abort), so the durable-runtime audit work is complete.
+
+---
+
+## Run `NEX-2026-11-25-28` — revoking authority withdraws the approvals granted under it
+
+**Run ID:** `NEX-2026-11-25-28` · **Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `24f1e20` · **Ending commit:** `d481bd0` · **Slice:** NEX-025 (new)
+
+### The defect
+
+This run answered the one open question the previous run left behind. The answer was yes,
+there was a live gap, and it was reachable.
+
+An approval is keyed by `agent_id` and records no delegation. `RevokeDelegation` revoked
+the delegation and its tokens but **left the agent operational**. So:
+
+1. A human approves `delete_note` on note X for agent A (approved under delegation D1).
+2. The human revokes D1 — withdrawing their consent.
+3. The human grants D2 to the same agent A.
+4. A token from D2 now finds the still-`approved` request for note X and deletes it.
+
+The action ran on an authorisation granted under a consent the human had since withdrawn.
+That is the defect: the approval outlived the authority that justified it.
+
+`RevokeAgent` had the same shape but was latent rather than exploitable — `AdvanceAgentRun`
+re-resolves the agent token on every call and the agent check rejects a revoked agent, so
+approvals could not be *used* while revoked. But they stayed `approved`, so any
+reactivation path would inherit grants made before the emergency stop.
+
+The security architecture (§11) requires expired, revoked and invalidated to be *distinct
+blocking states*. The status enum and the revocation stamp already existed (`e5a3b9c04f21`
+made granted approvals revocable), but nothing ever moved a live approval into the revoked
+state at the moment consent was withdrawn.
+
+### The slice
+
+- `ApprovalRequestRepository.revoke_granted_for_agent(agent_id, *, now, reason) -> int`
+  added to the port (`application/ports/agents.py`).
+- Implemented in `SqlAlchemyApprovalRequestRepository` as one conditional bulk `UPDATE`:
+  only rows with `status = approved`, `consumed_at IS NULL`, `revoked_at IS NULL` are
+  touched, flipping status to `revoked` with `revoked_at`, `revoke_reason`, and a
+  `version` bump so a stale in-memory copy cannot resurrect them via the NEX-020 CAS.
+- Called from `RevokeDelegation.run` (reason names the delegation) and `RevokeAgent.run`
+  (reason `"agent revoked"`), in the same transaction as the revocation itself.
+
+Three deliberate exclusions, each with a test:
+
+| Case | Behaviour | Why |
+| --- | --- | --- |
+| Spent approval (`consumed_at` set) | Left `approved` | The act it authorised already happened. Marking it revoked would claim an authorisation was withdrawn before it was used. |
+| Pending request | Left `pending` | It was never a grant, so it is not a withdrawn grant. Collapsing the two erases the difference between "asked, never decided" and "granted, then taken back". |
+| `revoked_by_user_id` | Stays `NULL` | No human performed this withdrawal. The honest record is no approver plus a `revoke_reason` naming the cause, not an invented user id. |
+
+Fail closed: the human must approve again.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format` | clean |
+| `ruff check` | All checks passed |
+| `mypy` | Success: no issues in 98 source files |
+| Full `pytest` | **748 passed, 4 skipped**, exit 0 |
+| New tests alone | `tests/agent/test_approval_revocation.py` — 6 passed |
+| Negative control | Adapter replaced with `return 0` → the 3 positive tests fail, the 3 guard tests still pass |
+| Architecture layering | untouched — the port is a `Protocol`, the use cases import no framework code |
+
+The negative control is the important one. Replacing the adapter body with a no-op turned
+*only* the three tests that assert the withdrawal red; the three tests that assert what must
+**not** change stayed green. That separates "this test detects the bug" from "this test
+asserts an invariant", which is the distinction R18 was about — a green suite through a
+decorative control.
+
+Baseline was 742 passed / 4 skipped; 748 is exactly the 6 new tests.
+
+### CI — observed, not assumed
+
+`d481bd0` is pushed and confirmed: `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+returns `d481bd0426b906d665433ab09c4578fd2d4f50c7`.
+
+All **4 check runs exist for `d481bd0`** (two Backend, two Frontend — push and
+pull_request events), and all 4 read `in_progress` when polled 2026-11-25T13:16Z.
+
+**Status is TESTED, not VERIFIED.** CI had not completed at the time of this run. Per R9/R10
+local green is not CI green, and an `in_progress` run is not a pass. The next run must poll
+`d481bd0` and record what it actually observes; if this head is superseded by the docs
+commit that follows it, the superseded run will read `completed/cancelled`, which is
+neither a pass nor a failure — in that case poll `d481bd0` directly, since its own runs are
+unaffected by a later push.
+
+### Risk added
+
+**R28 (high).** *A grant can outlive the consent that justified it, because the grant does
+not name the consent.* An approval records `agent_id` and no delegation, so it cannot be
+attributed to a surviving delegation when one is withdrawn — and nothing withdrew it. The
+general rule: for every piece of live authority, ask what revokes it, and follow the chain
+to the end. Revoking the container (delegation, agent) is not enough if the authority is
+keyed to something that survives the container. Note this recurred the *shape* of R23 and
+R26 — the control existed on the path someone thought of and missed a sibling path.
+
+### Files changed
+
+`src/notes_service/application/ports/agents.py`,
+`src/notes_service/application/use_cases/agents.py`,
+`src/notes_service/infrastructure/db/agent_repositories.py`,
+`tests/agent/test_approval_revocation.py` (new),
+plus `docs/NEXUS/` state files.
+
+No migration (columns already existed), no dependency change, no HTTP surface change.
+
+### Process note — R12 violation, caught and repaired
+
+The first commit attempt used a `cat <<'MSG'` heredoc for the message. It corrupted exactly
+as R12 predicts: the payload splintered into repeated fragments with `iiii…` filler, and the
+command hung waiting on input. The commit never landed — `git log` still showed `24f1e20`
+and the working tree was intact — so nothing was lost. The message was then written with
+the file editor to `/tmp/commit-msg.txt` and committed with `-F`, and the result verified:
+27 lines, zero `iiii` matches. **R12 is confirmed a third time.** Prose payloads go through
+the file editor, always, including commit messages.
+
+### Next action
+
+Poll `d481bd0`'s 4 check runs until they settle and record the observed result. Then read
+`docs/NEXUS/ROADMAP.md` Phase 5 and pick the next dependency-ready slice — NEX-001…NEX-025
+with NEX-025 at TESTED.
+

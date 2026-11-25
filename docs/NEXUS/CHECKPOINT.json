@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-27",
-  "timestamp": "2026-11-25T12:59:00Z",
+  "run_id": "NEX-2026-11-25-28",
+  "timestamp": "2026-11-25T13:17:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "5290be728c5f8b08011143cfdc40e27ce5a5f31d",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
-  "active_task": "none - NEX-001..NEX-024 all VERIFIED; PR #3 body refreshed at e511fc9",
+  "commit": "d481bd0426b906d665433ab09c4578fd2d4f50c7",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-024 all VERIFIED. NEX-025 (revoking a delegation or agent must withdraw the approvals granted under that authority) is TESTED at d481bd0 - code, tests and all local gates green; CI runs existed but were in_progress when polled 2026-11-25T13:16Z, so CI is NOT claimed.",
+  "active_task": "NEX-025 at TESTED. Next run must poll d481bd0's 4 check runs and record the observed result before promoting it to VERIFIED.",
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -31,9 +31,10 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
-    "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z"
+    "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
+    "NEX-025": "TESTED - d481bd0 pushed; 4 check runs in_progress at 2026-11-25T13:16Z, not observed green"
   },
   "completed_tasks": [
     "NEX-001",
@@ -65,17 +66,17 @@
     "NEX-024"
   ],
   "validation": {
-    "pytest_full": "742 passed, 4 skipped, exit 0 - run bare this session with the NEX-024 slice. Baseline 740; delta is exactly the 2 new NEX-024 tests.",
-    "ruff_format": "clean - 201 files already formatted (bare, repo-wide, includes docs/ Markdown fences), this session",
-    "ruff_check": "All checks passed, run bare this session",
-    "mypy": "Success: no issues found in 98 source files, run bare this session",
-    "new_tests_alone": "tests/agent/test_agent_runs.py - 21 passed (19 existing + 2 new)",
-    "negative_control": "Removing only the seal loop from AbortAgentRun turns exactly test_abort_seals_the_audit_link_the_crash_left_open red (assert STARTED is FAILED); the other 20 stay green. Restored and re-verified at 21 passed.",
+    "pytest_full": "748 passed, 4 skipped, exit 0 - run bare this session on the NEX-025 tree. Baseline was 742; delta is exactly the 6 new NEX-025 tests.",
+    "ruff_format": "clean - run bare this session",
+    "ruff_check": "All checks passed - run bare this session",
+    "mypy": "Success: no issues found in 98 source files - run bare this session",
+    "new_tests_alone": "tests/agent/test_approval_revocation.py - 6 passed (class TestRevokingDelegationWithdrawsApprovals)",
+    "negative_control": "Replacing SqlAlchemyApprovalRequestRepository.revoke_granted_for_agent with a no-op (return 0) turns exactly the 3 positive tests red while the 3 guard tests (spent approval preserved, pending untouched, fresh delegation cannot revive) stay green. The guards passing under the mutation is the point: they assert invariants, not the bug.",
     "race_check": "The defect is not a race but a missing authorization read: the advance path re-resolved the token per step yet compared only agent identity, so a token from a second delegation could drive a run planned by the first, and revoking the planning delegation did not stop the run while any other token existed. The positive half of the test proves a fresh token from the planning delegation still completes the run, so a blanket deny cannot pass.",
-    "architecture": "layering test untouched; domain/ and application/ import no framework code in this change",
-    "migration_chain": "No migration added. tool_invocations already carries status, outcome and the seal.",
+    "architecture": "layering test untouched and green; the port is a Protocol and the use cases import no framework code",
+    "migration_chain": "No migration. approval_requests already carried status, revoked_at, revoke_reason, consumed_at and version (version added by NEX-020).",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NEX-024: 4/4 completed/success at eaaae23 (head_sha matches the polled commit), polled 2026-11-25T12:16Z. Two Backend (ruff, mypy, pytest, migrations) and two Frontend (typecheck, lint, test, build) - push and pull_request events.",
+    "ci_observed": "NOT observed for d481bd0. 4 runs in_progress at 2026-11-25T13:16Z. Local gates are recorded for reproducibility, not as proof (R9/R10).",
     "ci_note": "NEX-021 is deliberately TESTED, not VERIFIED. Local gates are recorded above for reproducibility, not as proof (R9/R10). This run put code, tests and docs in one commit specifically so the next run can observe a single CI run covering the whole tree, instead of having to reason about descendant-CI.",
     "evidence_basis": {
       "note": "NEX-024 VERIFIED on its own commit eaaae23 - a run whose head_sha equals the polled SHA, not descendant-CI. NEX-001..NEX-024 all VERIFIED.",
@@ -99,11 +100,11 @@
       "head_sha_match": true,
       "note": "A run at the slice's own commit: code, tests and docs landed in this one commit, so coverage is direct rather than descendant-CI."
     },
-    "environment": ".venv did not exist in this clone; created with `uv venv .venv --python 3.12` and `uv pip install -e \".[dev]\"`. All gates ran from .venv/bin, matching CI's pip install.",
+    "environment": ".venv created with `uv venv` (CPython 3.13.15) and `uv pip install -e \".[dev]\"`; all gates ran from .venv/bin.",
     "verified_at_commit": "eaaae23",
-    "verified_by_run": "NEX-2026-11-25-26 (NEX-024)"
+    "verified_by_run": "NEX-2026-11-25-26 (NEX-024) - NEX-025 not yet verified"
   },
-  "uncommitted_work": "none",
+  "uncommitted_work": "none - this checkpoint is written by the docs commit that follows d481bd0",
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
@@ -117,9 +118,10 @@
       "measured_at_commit": "88926ec",
       "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21)"
     },
-    "note": "PR #3 is open, draft and unmerged, head eaaae23. Its body is stale and must be refreshed from the PR object's counters before quoting - never per-file sums (R21).",
-    "merge": "prohibited \u2014 must remain unmerged for human review",
-    "body_refresh": "Refreshed this run from the PR object at e511fc9. Corrected 30,749 -> 31,545 additions, 107 -> 117 commits, 741 -> 757 tests, ten -> eleven migrations; added NEX-023 (c367746) and NEX-024 (eaaae23) to the defect list, the CI paragraph and the verified-commit list. Verified byte-identical after PATCH."
+    "note": "PR #3 is open, draft and unmerged. Its body was last refreshed at 88926ec and is now one code commit behind (d481bd0). Re-measure from the PR object before quoting - never per-file sums (R21).",
+    "merge": "prohibited — must remain unmerged for human review",
+    "body_refresh": "Refreshed this run from the PR object at e511fc9. Corrected 30,749 -> 31,545 additions, 107 -> 117 commits, 741 -> 757 tests, ten -> eleven migrations; added NEX-023 (c367746) and NEX-024 (eaaae23) to the defect list, the CI paragraph and the verified-commit list. Verified byte-identical after PATCH.",
+    "pending_update": "Body does not yet mention NEX-025 (d481bd0) or R28. Refresh after CI is observed."
   },
   "tracking_issue": {
     "number": 2,
@@ -128,6 +130,13 @@
   },
   "blockers": [],
   "risks": [
+    {
+      "id": "R28",
+      "severity": "high",
+      "summary": "A grant can outlive the consent that justified it, because the grant does not name the consent.",
+      "detail": "An approval records agent_id and no delegation, so it cannot be attributed to a surviving delegation when one is withdrawn - and nothing withdrew it. RevokeDelegation revoked the delegation and its tokens but left the agent operational, so after re-delegation a token from the new delegation could spend an approval granted under the withdrawn one. RevokeAgent left approvals approved too: latent while the agent check blocks use, but any reactivation path would inherit pre-emergency-stop grants. Closed by NEX-025 on both paths. General rule: for every piece of live authority, ask what revokes it and follow the chain to the end - revoking the container is not enough if the authority is keyed to something that survives it. Same shape as R23 and R26.",
+      "status": "closed on both revocation paths by NEX-025 (d481bd0); CI not yet observed"
+    },
     {
       "id": "R27",
       "severity": "high",
@@ -138,8 +147,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing."
+      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
     },
     {
       "id": "R23",
@@ -195,12 +204,18 @@
       "severity": "high",
       "summary": "A verifier that only checks a seal when the seal exists can be defeated by deleting the seal.",
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
+    },
+    {
+      "id": "R12",
+      "severity": "medium",
+      "summary": "Heredocs corrupt or hang in this environment - confirmed a third time, on a commit message.",
+      "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
     }
   ],
-  "next_task": "1) Re-read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice (NEX-001..NEX-024 are VERIFIED; R27 is closed on both settle paths). 2) Optionally confirm whether revoking a delegation or agent invalidates previously granted approvals - the one open question left from this run.",
-  "next_action": "Read ROADMAP.md Phase 5, pick the next slice from BACKLOG.md, and implement it as one vertical slice.",
-  "recovery_instructions": "This checkpoint was written by the commit that follows 5290be7, so HEAD will normally be exactly one commit ahead of the `commit` field: the state-only commit that carried this file. Confirm with `git log --oneline -2`; if HEAD is more than one commit ahead, read those commits before trusting this file. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at 88926ec (31,612 additions / 10 deletions / 111 files / 118 commits, 25,010 bytes, byte-verified). No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
-  "ci_status": "88926ec (docs-only head): all 4 check runs in_progress when polled 2026-11-25T12:52Z - NOT claimed green. Most recent completed green is e511fc9 (4/4 completed/success, read 12:41Z). Product commits were green at their own SHAs: eaaae23 (NEX-024, 4/4 12:16Z), c367746 (NEX-023, 4/4 11:50Z), 1156f6e (NEX-022, 4/4 11:27Z).",
+  "next_task": "1) Poll d481bd0's 4 check runs until settled and record the observed result (promote NEX-025 to VERIFIED only on 4/4 completed/success with head_sha == d481bd0; note that a later docs push cancels the superseded run, so poll d481bd0 directly rather than its descendant). 2) Read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice.",
+  "next_action": "Poll https://api.github.com/repos/anotherhale/bluestaq-notes/commits/d481bd0426b906d665433ab09c4578fd2d4f50c7/check-runs and record the result.",
+  "recovery_instructions": "HEAD is normally one docs commit ahead of the `commit` field: confirm with `git log --oneline -3`. NEX-001..NEX-024 are VERIFIED; NEX-025 is TESTED at d481bd0 and needs only CI observation. First action of the next run: poll d481bd0's check runs. Then pick the next Phase-5 slice from ROADMAP.md. PR #3 stays draft and unmerged.",
+  "ci_status": "d481bd0 (NEX-025 code slice): 4 check runs exist (2 Backend, 2 Frontend - push and pull_request events), all in_progress when polled 2026-11-25T13:16Z. NOT claimed green. Most recent observed green: eaaae23 (NEX-024) 4/4 completed/success at 12:16Z. A docs head superseded by a later push reads completed/cancelled, which is neither a pass nor a failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -230,7 +245,9 @@
     "NEX-023",
     "NEX-024"
   ],
-  "in_progress_tasks": {},
+  "in_progress_tasks": {
+    "NEX-025": "TESTED - awaiting CI observation at d481bd0"
+  },
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "5d7d182 is the last docs head this checkpoint describes. The commit that writes this checkpoint is its child, so git rev-parse HEAD is exactly one commit ahead of this field by construction - that is expected, not staleness. The code slice carrying CI evidence is eaaae23 (NEX-024), observed 4/4 completed/success with every head_sha equal to it. Docs-only heads after it (517208f, b069c0e, c181e8a, 5d7d182) are not code slices; any that is superseded reads completed/cancelled, which is neither a pass nor a failure."
+  "commit_scope": "d481bd0 is the NEX-025 code slice and carries the CI evidence to poll. The commit that writes this checkpoint is its child (docs-only), so `git rev-parse HEAD` will normally be one commit ahead of the `commit` field - expected, not staleness."
 }
