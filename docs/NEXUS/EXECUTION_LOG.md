@@ -1783,3 +1783,54 @@ proof of the criterion; it was proof only that the assertions passed.
 2. Recompute PR #3 metrics (`git diff --shortstat main HEAD`, two-dot; the clone
    is grafted) and refresh the body, which predates both NEX-013 and this fix.
 3. Select the next Phase 5 slice from `ROADMAP.md`. Never merge PR #3.
+
+---
+
+## Run NEX-2026-11-25-15 — PR #3 body reconciled with reality
+
+- **Run ID:** NEX-2026-11-25-15
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `4a5f916` (tree carried staged STATE/BACKLOG/CHECKPOINT edits)
+- **Ending commit:** `7bff806`
+- **Tasks completed:** NEX-013 promotion to VERIFIED committed; PR #3 body refreshed.
+- **Tasks verified:** NEX-013 (VERIFIED on CI observed at `12584a1`, 4/4).
+- **Files changed:** `docs/NEXUS/STATE.md`, `docs/NEXUS/CHECKPOINT.json`.
+- **Migrations:** none this run (NEX-013's `d4c8e2a71f05` landed in `12584a1`).
+- **Tests executed:** `ruff format --check` (194 files, clean), `ruff check`
+  (All checks passed), `pytest --collect-only` (690 collected). Full suite was
+  not re-run because this run changed documentation only; the last full-suite
+  evidence is CI on `12584a1`.
+- **Test outcomes:** local gates green; remote CI on `7bff806` **4/4 success**
+  (Backend x2, Frontend x2), observed after the push, not assumed.
+- **Security findings:** none new. The NEX-013 correction (an approval that
+  never expired) was the previous run's finding and is fixed.
+- **Commits:** `48477da` (promote NEX-013 to VERIFIED), `7bff806` (record PR #3
+  body refresh).
+- **Push status:** both pushed; `git ls-remote` matched local at each step.
+- **PR status:** #3 draft, open, **unmerged**. Head tracks `7bff806`'s parent
+  `48477da` at body-refresh time; body metrics were recomputed on `48477da`.
+- **Checkpoint status:** `pr_state` recorded; `next_task` points at roadmap
+  selection.
+- **Risks:** R9 (a body's numbers rot; this run found the body understating the
+  branch by ~360 lines and 1 file, and still claiming NEX-013 VERIFIED at
+  `e2bf7bc` when the fix landed in `12584a1`).
+
+### What the body said vs. what was true
+
+| Claim | Body said | Reality on `48477da` |
+| --- | --- | --- |
+| Size | 26,143 lines / 102 files | 26,506 additions / 10 deletions / 103 files |
+| Tests | 684 collected | 690 collected |
+| Format scope | 189 files | 194 files |
+| NEX-013 | VERIFIED at `e2bf7bc` | bound was inert until `12584a1` |
+
+The body was refreshed with all four corrected, and the NEX-013 paragraph now
+states the defect and why the earlier status was wrong rather than silently
+dropping it.
+
+### Next action for the following run
+
+1. Re-read `docs/NEXUS/ROADMAP.md` (Phase 5 section) and select the next
+   dependency-ready slice; do not inherit this run's guess.
+2. Implement that one slice, run the gates bare, and commit.
+3. Never merge PR #3. Keep the body's numbers recomputed on the head you push.
