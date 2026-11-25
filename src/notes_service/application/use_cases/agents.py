@@ -40,6 +40,7 @@ from notes_service.domain.agent.value_objects import (
     DelegatedAuthorizationId,
     TokenAudience,
 )
+from notes_service.domain.errors import InvariantViolation
 from notes_service.domain.identity.principal import Principal
 
 
@@ -255,12 +256,18 @@ class ResolveAgentToken(UseCase):
                 # A token minted for the tool gateway must not work on the Notes
                 # API and vice versa.
                 raise AccessDenied("agent token is not valid for this audience")
-            token.assert_live(now=self._clock.now())
 
-            delegation = uow.delegations.get(token.delegation_id)
-            if delegation is None:
-                raise AccessDenied("agent token delegation no longer exists")
-            delegation.assert_usable()
+            # Revocation is expressed as a domain invariant on the token and the
+            # delegation. Translate it here: an expired authority is a refusal,
+            # not a broken invariant, and must not surface as a 500 at the edge.
+            try:
+                token.assert_live(now=self._clock.now())
+                delegation = uow.delegations.get(token.delegation_id)
+                if delegation is None:
+                    raise AccessDenied("agent token delegation no longer exists")
+                delegation.assert_usable()
+            except InvariantViolation as exc:
+                raise AccessDenied(str(exc)) from exc
 
             agent = uow.agents.get(token.agent_id)
             if agent is None or not agent.is_operational:

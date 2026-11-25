@@ -142,16 +142,29 @@ class InvokeTool(UseCase):
         tool = resolve_tool(tool_name)
         cleaned = validate_arguments(tool, arguments)
 
+        resource_ref = _resource_ref(tool, cleaned)
+
         if tool.capability not in resolved.token.capabilities:
             # Denied before any handler is reachable. Recorded, because a denied
-            # attempt is exactly what an audit trail exists to show.
+            # attempt is exactly what an audit trail exists to show. The prior
+            # lookup runs first so a retried denial replays the recorded refusal
+            # instead of colliding with the (agent_id, idempotency_key) constraint.
+            prior = self._find_prior(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                idempotency_key=idempotency_key,
+                resource_ref=resource_ref,
+            )
+            if prior is not None:
+                return prior
             invocation = ToolInvocation.begin(
                 agent_id=resolved.agent.id,
                 token_id=resolved.token.id,
                 tool=tool,
                 idempotency_key=idempotency_key,
                 arguments=cleaned,
-                resource_ref=_resource_ref(tool, cleaned),
+                resource_ref=resource_ref,
             )
             invocation.deny(outcome=f"token lacks capability {tool.capability.value}")
             with self._uow_factory() as uow:
@@ -159,7 +172,6 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
-        resource_ref = _resource_ref(tool, cleaned)
         principal = _actor_principal(resolved)
 
         if tool.requires_approval:
