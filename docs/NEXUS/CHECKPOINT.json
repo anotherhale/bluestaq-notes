@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-06",
-  "timestamp": "2026-11-25T03:10:00Z",
+  "timestamp": "2026-11-25T03:22:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e1cb0c5",
-  "commit_note": "The commit whose gates were verified. The docs commit that records this run is its child.",
+  "commit": "e93a3e9",
+  "commit_note": "The last commit whose gates and CI were verified (4/4 green). The docs commit recording this run is its child.",
   "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED)",
   "active_task": null,
   "task_statuses": {
@@ -17,7 +17,8 @@
     "NEX-004": "VERIFIED",
     "NEX-007": "VERIFIED",
     "NEX-005-HTTP": "VERIFIED",
-    "NEX-008": "VERIFIED"
+    "NEX-008": "VERIFIED",
+    "NEX-010": "TODO"
   },
   "completed_tasks": [
     "NEX-006",
@@ -38,17 +39,17 @@
     "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed at 3f1d855; no frontend files changed since",
     "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
     "ci_observed": true,
-    "ci_note": "CI is green on e1cb0c5 itself: gh api repos/anotherhale/bluestaq-notes/commits/e1cb0c5/check-runs reports 4 check runs, all completed/success (Backend ruff+mypy+pytest+migrations x2, Frontend typecheck+lint+test+build x2). This is what promotes NEX-007 from TESTED to VERIFIED.",
+    "ci_note": "CI is green on e93a3e9: the check-runs API reports 4 check runs, all completed/success (Backend ruff+mypy+pytest+migrations x2, Frontend typecheck+lint+test+build x2). Confirmed against the authoritative remote (git ls-remote and the branches API both report e93a3e9), not the cached origin/ ref, which was stale.",
     "verified_at_commit": "e1cb0c5",
     "verified_by_run": "NEX-2026-11-25-06"
   },
-  "uncommitted_work": "none after this run commits e1cb0c5 and the docs update",
+  "uncommitted_work": "none after this run commits the docs update (BACKLOG, STATE, CHECKPOINT, EXECUTION_LOG)",
   "pr_state": {
     "pr": 3,
     "state": "draft",
     "merged": false,
-    "description_updated": "2026-11-25T01:41:35Z",
-    "note": "Still draft; not marked ready for review. The PR body does not yet mention the tool gateway HTTP surface, the tenant-scoped capability answer, or CI; that is a small follow-up, not a correctness gap."
+    "description_updated": "2026-11-25T03:12:00Z",
+    "note": "Open and still draft (isDraft=true, state=OPEN, never merged). Title and body were refreshed this run: title is \"Implement enterprise organization, identity, delegation, and tool gateway\"; body records 20,576 insertions / 89 files / 614 tests, the 4 new routers, 4 migrations, and ADR-011. The body previously claimed specification-only work, understating the branch by an order of magnitude."
   },
   "tracking_issue": {
     "number": 2,
@@ -61,11 +62,12 @@
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
     "R5 (CLOSED 2026-11-25): the gateway had no HTTP exposure. POST /api/v1/agents/tools/invoke now exposes it, pinned by tests/api/test_tool_gateway_api.py (9 tests) and green in CI at c18bac7.",
     "R6 (CLOSED 2026-11-25): gateway denial replay and revocation mapping are pinned by tests/agent/test_tool_gateway.py; keep that file or both defects can return silently.",
-    "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers."
+    "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers.",
+    "R9 (NEW 2026-11-25, OPEN): the OIDC token verifier (HttpOidcRelyingParty._verify_id_token) has no direct test. No file under tests/ imports infrastructure/identity/oidc_relying_party; every login test injects FakeRelyingParty. So NEX-002 criterion \"wrong issuer/audience/expiry is rejected\" is asserted only against the fake, and the real signature/iss/aud/exp/nonce checks could regress with a green suite. Filed as NEX-010 (P1, small)."
   ],
-  "next_task": "NEX-009",
-  "next_action": "Start NEX-009 (durable agentic runtime; renumbered from the duplicate NEX-006 id) scoped to a first slice: run-checkpoint persistence plus a resume test, not the whole task. Before starting, update draft PR #3 body to reflect the tool gateway HTTP surface, the tenant-scoped capability answer, and CI evidence, so the PR stops understating what it carries.",
-  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it. CI is live: 'gh run list --branch feature/agentic-enterprise-platform --limit 5' shows the latest runs.",
+  "next_task": "NEX-010",
+  "next_action": "Write tests/authentication/test_oidc_relying_party.py (NEX-010): generate an RSA key pair in-process, sign real JWTs, stub only PyJWKClient.get_signing_key_from_jwt, and assert AuthenticationError for a wrong signing key, wrong iss, wrong aud, expired exp, nonce mismatch, absent nonce, and missing sub; assert a valid token yields VerifiedIdToken. Then NEX-002 can move from IMPLEMENTED to TESTED.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform, head e93a3e9 (remote confirmed via ls-remote). NEX-007 VERIFIED; NEX-002 IMPLEMENTED with its only gap being the untested verifier (NEX-010). NEX-009 (durable runtime) is dependency-ready but large; slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,

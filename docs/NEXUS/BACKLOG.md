@@ -51,7 +51,7 @@ skipped.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 |
-| Status | TODO |
+| Status | **IMPLEMENTED** (not TESTED — see gap note) |
 | Dependencies | NEX-001 |
 
 **Objective:** replace demo-only authentication with a real OIDC authorization-
@@ -84,6 +84,24 @@ fail closed on any validation error.
 state/nonce, JWKS-validated ID tokens, session cookies, and subject→user linkage
 via `external_identities` (never auto-provisions). Covered by
 `tests/authentication/{test_login_use_cases,test_identity_provider,test_login_router,test_session_domain}.py`.
+
+**Status correction (NEX-2026-11-25-06):** the field above read `TODO`, which was
+wrong — 92 tests exist across those four modules and the flow is implemented. It
+is **IMPLEMENTED, not TESTED**, because one acceptance criterion is unverified:
+
+> *An ID token with wrong issuer/audience/expiry is rejected.*
+
+`grep` over `tests/` finds **no test that imports
+`infrastructure/identity/oidc_relying_party`** — the module holding
+`HttpOidcRelyingParty._verify_id_token`, the only code that actually checks the
+signature, `iss`, `aud`, `exp`/`iat`, and the nonce. Every login test substitutes
+a `FakeRelyingParty`, so the verification logic itself is exercised by nothing.
+The other three criteria *are* covered (`test_replayed_callback_is_rejected`,
+`test_expired_transaction_is_rejected`, the `httponly`/`samesite=lax` cookie
+assertions in `test_login_router.py:202`, and the production demo-auth refusals
+in `test_identity_provider.py`).
+
+Closing the gap is a bounded, well-specified slice — see NEX-010.
 
 ---
 
@@ -441,4 +459,50 @@ holds locally, in CI, and in a container alike.
 `gh api .../commits/6f30020/check-runs` reports all four check runs
 `completed/success`. The repository now has an automated regression gate on every
 push and pull request, and it has demonstrably caught a real defect.
+
+
+---
+
+## NEX-010 — Direct tests for the OIDC token verifier
+
+| Field | Value |
+| --- | --- |
+| Phase | 1 |
+| Priority | P1 (security — closes an unverified acceptance criterion) |
+| Status | TODO |
+| Dependencies | NEX-002 |
+| Complexity | small |
+
+**Objective:** prove that `HttpOidcRelyingParty._verify_id_token` rejects a token
+with a wrong signature, issuer, audience, expiry, or nonce. This is the single
+unverified acceptance criterion of NEX-002 and the only untested security-critical
+code in the identity stack.
+
+**Scope:** `tests/authentication/test_oidc_relying_party.py` (new). Do not change
+production code unless a test exposes a real defect.
+
+**Why it matters:** every existing login test injects a `FakeRelyingParty`, so the
+assertions about wrong issuer/audience/expiry are made against the fake, not the
+real verifier. If the real verifier were misconfigured — e.g. `verify_aud` dropped,
+or the nonce comparison inverted — the suite would stay green. That is the same
+class of defect the R3/R6 notes warn about: a gate that cannot fail is not a gate.
+
+**Approach:** generate an RSA key pair in the test, sign real JWTs, and stub only
+the JWKS lookup (`PyJWKClient.get_signing_key_from_jwt`) so no network is touched.
+Then assert `AuthenticationError` for each deviation:
+
+- valid token → `VerifiedIdToken` with the expected subject/issuer/audience
+- wrong signing key → rejected
+- `iss` mismatch → rejected
+- `aud` mismatch → rejected
+- expired `exp` → rejected
+- nonce mismatch, and nonce absent → rejected
+- missing `sub` → rejected
+
+**Acceptance criteria:** all cases above have a test that fails if the
+corresponding `jwt.decode` option or the nonce check is removed. NEX-002 may then
+move to TESTED, and to VERIFIED once CI confirms it.
+
+**Security considerations:** test keys are generated in-process and never
+committed; no real IdP is contacted; no secrets in fixtures.
 

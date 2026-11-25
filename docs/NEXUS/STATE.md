@@ -189,18 +189,21 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Update draft PR #3** with the tool gateway HTTP surface, the tenant-scoped
-   capability answer, and the CI-green evidence at `e1cb0c5`, so the PR body stops
-   understating what it carries.
+1. **NEX-010 — Direct tests for the OIDC token verifier** (P1, small, newly
+   filed): `HttpOidcRelyingParty._verify_id_token` — the only code that checks a
+   token's signature, `iss`, `aud`, `exp`/`iat`, and nonce — is imported by **no
+   test**; every login test injects `FakeRelyingParty`. NEX-002's criterion "an ID
+   token with wrong issuer/audience/expiry is rejected" is therefore asserted only
+   against the fake. Write `tests/authentication/test_oidc_relying_party.py` with
+   in-process RSA keys and a stubbed JWKS lookup. Full spec in the backlog.
 2. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
    runs checkpoint progress and resume after interruption without repeating
    completed side effects. NEX-005 and NEX-007 are done, so this is
    dependency-ready, but it is *large* — scope the first slice to run-checkpoint
    persistence plus a resume test rather than attempting the whole task. (P2.)
-3. **Reconcile NEX-002 (OIDC authentication)** — its Status field still reads
-   `TODO` while its Outcome note records IMPLEMENTED (authorization-code + PKCE,
-   state/nonce, JWKS-validated ID tokens, session cookies, subject→membership
-   linkage) across four test modules. Settle whether it is TESTED or VERIFIED on
-   evidence and correct the field. It blocks all agent-identity work, so a stale
-   `TODO` on it misleads task selection.
+3. **Keep PR #3 honest as slices accumulate.** The body was refreshed this run
+   (title now "Implement enterprise organization, identity, delegation, and tool
+   gateway"; 20,576 insertions / 89 files / 614 tests). Re-check
+   `git diff --stat main...HEAD` against the body whenever a slice lands, because
+   the body has understated the branch before.
 

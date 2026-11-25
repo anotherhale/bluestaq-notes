@@ -889,3 +889,69 @@ Two coordination defects were found while updating the docs, both corrected:
 Both were caught by reading `BACKLOG.md` instead of trusting the checkpoint — the
 same lesson as the 2026-11-25-05 run.
 
+
+---
+
+## NEX-2026-11-25-06 (continued) — NEX-002 settled on evidence: IMPLEMENTED, gap filed
+
+**Starting commit:** `e93a3e9` · **Ending commit:** docs commit for this entry ·
+**Branch:** `feature/agentic-enterprise-platform` · **Task:** NEX-002 reconciliation
+(this was Next-best-action 3 in `STATE.md`).
+
+### What was asked
+
+`BACKLOG.md` recorded NEX-002 (OIDC authentication) as `Status: TODO` while its own
+Outcome note recorded IMPLEMENTED with four test modules. Settle it on evidence.
+
+### What the evidence showed
+
+- The flow is real: authorization-code + PKCE, `state`/`nonce`, session cookies,
+  subject→user linkage via `external_identities`. 92 tests across
+  `test_identity_provider` (27), `test_login_router` (21), `test_login_use_cases`
+  (27), `test_session_domain` (17), plus 3 bearer tests.
+- Three of the four acceptance criteria are genuinely covered: replayed callback
+  rejected (`test_login_router.py:234`), expired transaction rejected
+  (`test_login_use_cases.py:248`), cookie flags asserted `httponly` +
+  `samesite=lax` (`test_login_router.py:202-203`), and production demo-auth
+  refusal pinned by four tests in `test_identity_provider.py`.
+- **The fourth is not.** "An ID token with wrong issuer/audience/expiry is
+  rejected" has no test against the code that performs it. `grep -rn` over
+  `tests/` finds **no import of `infrastructure/identity/oidc_relying_party`** —
+  the module holding `HttpOidcRelyingParty._verify_id_token`, which is the only
+  place `iss`, `aud`, `exp`/`iat`, signature, and nonce are checked. Every login
+  test substitutes `FakeRelyingParty`. The assertions about wrong issuer/audience
+  are therefore made *against the fake*.
+
+### Status decision
+
+`Status: TODO` → **IMPLEMENTED**. Not TESTED, because one criterion is unverified,
+and a suite that cannot fail on a broken verifier is not evidence for it. Filed
+**NEX-010** (P1, small) with a concrete test plan (in-process RSA keys, stub only
+the JWKS lookup, assert `AuthenticationError` per deviation).
+
+### Also this run
+
+- Corrected the PR #3 title/body, which had described the branch as
+  specification-only while it carried 20,576 insertions / 89 files / 614 tests.
+- Verified CI on `e93a3e9` is 4/4 `completed/success`, against the authoritative
+  remote — the cached `origin/feature/...` ref was stale at `5ecfd3f` and would
+  have produced a false "not pushed" conclusion.
+
+### Files changed
+
+`docs/NEXUS/BACKLOG.md` (NEX-002 status + correction note, NEX-010 added),
+`docs/NEXUS/STATE.md` (next best actions rewritten),
+`docs/NEXUS/CHECKPOINT.json` (R9 added, next_task → NEX-010),
+this log.
+
+### Not done, deliberately
+
+NEX-010's tests were **not** written: ~6 minutes remained, below the 10-minute
+floor for starting a slice. Writing them would have produced a dirty tree at the
+kill boundary. The next run starts there with a fully specified task.
+
+### Next exact action
+
+Write `tests/authentication/test_oidc_relying_party.py` per NEX-010, then promote
+NEX-002 to TESTED (and VERIFIED once CI confirms).
+
