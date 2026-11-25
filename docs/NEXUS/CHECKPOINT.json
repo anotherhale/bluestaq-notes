@@ -342,7 +342,7 @@
     "NEX-035": "The adapter conformance suite R30 asked for, plus four fixes at the provider identity seam that building it exposed. Product commit 12f6fa9, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T18:14Z). 555 insertions across 3 files.",
     "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary."
   },
-  "branch_head_observed_at": "2026-11-25T18:57Z",
+  "branch_head_observed_at": "2026-11-25T19:03Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
     "5c0575b": "NEX-037 product slice - operator-gated withholding aggregate (implementation)",
@@ -357,7 +357,7 @@
   "run_summary": {
     "run_id": "NEX-2026-11-25-37",
     "started_commit": "5d2792b",
-    "ending_commit": "ff10f21",
+    "ending_commit": "dedd886 (docs). Product commit for NEX-037 is 5c0575b; every later commit is documentation. The TRUE head is git ls-remote origin refs/heads/feature/agentic-enterprise-platform - a field written by a commit can never name the commit that writes it.",
     "slices_completed": 1,
     "slices_promoted": [
       "NEX-037"
