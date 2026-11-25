@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-22",
-  "timestamp": "2026-11-25T10:22:00Z",
+  "timestamp": "2026-11-25T10:29:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e09a819",
-  "commit_note": "460a26a = NEX-020's code commit (fix(approvals): refuse a stale decision instead of re-granting authority), CI 4/4 at that SHA. c68f386 = the docs commit that first recorded NEX-020 as IMPLEMENTED + TESTED; the promotion docs commit carrying this file is c68f386's child — run `git log -1` to name it. A commit cannot contain its own SHA, so this field names the code head rather than pretending otherwise.",
+  "commit": "23a36dc",
+  "commit_note": "23a36dc = docs commit recording the PR #3 body refresh and two tooling defects. 460a26a = NEX-020's code commit, which is where CI was first observed green. 23a36dc was also observed 4/4 completed/success (polled 2026-11-25T10:29Z), so the docs head is not merely descendant-covered. A commit cannot contain its own SHA.",
   "project_phase": "Phase 2 complete; Phase 5 (durable runtime) — NEX-019 run write concurrency VERIFIED at 66e8cd6 (CI 4/4); NEX-020 approval-decision CAS VERIFIED at 460a26a (CI 4/4).",
   "active_task": null,
   "task_statuses": {
@@ -84,23 +84,30 @@
       "mypy": "pass — no issues in 98 source files",
       "pytest_full": "pass — 730 passed, 4 skipped",
       "migration_round_trip": "pass — upgrade/downgrade/upgrade clean"
+    },
+    "ci_observed_latest": {
+      "commit": "23a36dc",
+      "polled_at": "2026-11-25T10:29:00Z",
+      "result": "4/4 completed/success",
+      "head_sha_match": true,
+      "note": "The docs head itself is green, so no descendant-CI caveat applies to it. NEX-020's product evidence remains the run at 460a26a."
     }
   },
   "uncommitted_work": "none at run end (docs commit pending when this file was written)",
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "e09a819",
+    "head": "23a36dc",
     "body_updated_at": "2026-11-25T10:20:26Z",
     "counters": {
-      "additions": 29940,
+      "additions": 29971,
       "deletions": 10,
       "files": 110,
-      "commits_ahead_of_main": 101,
-      "measured_at_commit": "e09a819",
-      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), not per-file sums. GitHub truncates diffs past ~20,000 lines: /pulls/3/files reports additions: 0 for every test file and /pulls/3/diff returns HTTP 406, so per-file sums and /compare both undercount badly (R21)."
+      "commits_ahead_of_main": 102,
+      "measured_at_commit": "23a36dc",
+      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), re-measured after the push to 23a36dc. The body text still attributes 29,950 / 110 / 101 to e09a819, which is true of that commit; the delta is this docs commit's 31 lines. Not from per-file sums (R21)."
     },
-    "note": "Body refreshed 2026-11-25T10:20:26Z (HTTP 200, 19,032 bytes accepted intact) at head e09a819. Next run must re-measure counters from the PR object at the then-current head before quoting any number (R21, R24).",
+    "note": "Body refreshed 2026-11-25T10:20:26Z at head e09a819 (HTTP 200, 19,032 bytes echoed). Counters moved to 29,971 / 110 / 102 by the later docs push to 23a36dc; the body's figures remain correctly attributed to e09a819. Re-measure before quoting (R21, R24).",
     "merge": "prohibited — must remain unmerged for human review"
   },
   "tracking_issue": {
