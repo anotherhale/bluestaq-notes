@@ -11,7 +11,7 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `72957e4` — the NEX-035 docs promotion over product commit `12f6fa9`. |
 | Head commit (run end) | `90eea0c` — NEX-036's product commit (docs promotion follows above it). |
-| Last CI result | **`12f6fa9` (NEX-035): VERIFIED** — 4/4 `completed/success`, polled 2026-11-25T18:14Z. **`90eea0c` (NEX-036): NOT POLLED** — pushed with roughly 15 minutes of window left and CI had not completed, so NEX-036 is **VERIFIED on local evidence only**. Poll `90eea0c` before calling it CI-verified. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Last CI result | **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), one complete pair, polled 2026-11-25T18:45Z. A duplicate Backend run (id 139429874630) reads `completed/cancelled` — the concurrency group killed the superseded event run, which is neither pass nor fail and is not counted. **`12f6fa9` (NEX-035): 4/4 `completed/success`, polled 2026-11-25T18:14Z.** See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
@@ -60,6 +60,12 @@ and one asserting the live case still returns an advisory, so the fix cannot pas
 everything. The four refusal tests were verified to **fail** with the guard removed — the
 negative control was run on disk, then the file was restored from a backup and re-verified
 line by line, because a heredoc in this environment corrupted the command that ran it.
+
+CI was polled at `90eea0c` and is green: Backend `completed/success` (id 139429822539) and
+Frontend `completed/success` (id 139429823232), one complete pair, 2026-11-25T18:45Z. A
+duplicate Backend run reads `completed/cancelled` because the concurrency group killed the
+superseded event run — neither pass nor fail, and not counted. The product commit was
+pushed before the docs commit so the evidence names `90eea0c` rather than a docs head.
 
 ## NEX-035 (run `NEX-2026-11-25-36`) — the adapter was policed on its answer and trusted on its name
 

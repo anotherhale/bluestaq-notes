@@ -4596,14 +4596,18 @@ Fixed with a precondition in the use case — not the aggregate, because nothing
 ### Delivery
 
 - Commit `90eea0c`; push verified against `git ls-remote` — remote and local both `90eea0c`.
-- **CI not polled.** The slice landed with ~15 minutes of window left; CI had not completed.
-  NEX-036 is recorded as VERIFIED on **local** evidence only, and `ci_status` says explicitly
-  that `90eea0c` is neither pass nor fail until polled.
+- **CI polled and green at `90eea0c`** (2026-11-25T18:45Z): Backend `completed/success` (id
+  139429822539) and Frontend `completed/success` (id 139429823232), one complete pair, both
+  started 18:41:54Z. A duplicate Backend run (id 139429874630) reads `completed/cancelled` at
+  18:43:27Z — the concurrency group cancelled the superseded event run. That is neither pass
+  nor fail and is not counted as evidence. The product commit was pushed **before** the docs
+  commit, so the evidence names `90eea0c` rather than a docs head reading `cancelled`.
 
 ### What this run did not do
 
-- Did not claim CI green. A 15-minute-old push with unfinished checks is not evidence, and
-  the run's own rule is that a status is only ever what evidence establishes.
+- Did not update PR #3 or issue #2. The CI poll consumed the remaining window; the delivery
+  debt is recorded in `CHECKPOINT.json`'s `next_action` as the next run's first action, so it
+  is stated rather than silently dropped.
 - Did not touch the aggregate's guards. The refusal is a precondition on the question, so
   putting it in `ApprovalRequest` would have conflated "cannot answer" with "cannot change".
 
