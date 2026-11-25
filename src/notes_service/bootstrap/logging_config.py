@@ -42,11 +42,73 @@ _SENSITIVE_KEYS = frozenset(
 
 
 def redact(mapping: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``mapping`` with sensitive values replaced."""
-    return {
-        key: (REDACTED if key.lower() in _SENSITIVE_KEYS else value)
-        for key, value in mapping.items()
+    """Return a copy of ``mapping`` with sensitive values replaced.
+
+    Recurses into nested mappings and sequences because a structured payload is
+    routinely nested (``{"auth": {"token": ...}}``) and a shallow pass would
+    leave the credential one level down in the output.
+    """
+    return {key: _redact_value(key, value) for key, value in mapping.items()}
+
+
+def _redact_value(key: str, value: Any) -> Any:
+    if key.lower() in _SENSITIVE_KEYS:
+        return REDACTED
+    if isinstance(value, dict):
+        return redact(value)
+    if isinstance(value, (list, tuple)):
+        return [_redact_value(key, item) for item in value]
+    return value
+
+
+#: Attributes every :class:`logging.LogRecord` carries. Anything else on a record
+#: was attached deliberately by the caller via ``extra={...}`` and is a structured
+#: field, not formatting state.
+_RESERVED_RECORD_KEYS = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
     }
+)
+
+
+def _structured_extras(record: logging.LogRecord) -> dict[str, Any]:
+    """Every caller-supplied ``extra`` field on ``record``, redacted.
+
+    Deliberately a denylist of reserved attributes rather than an allowlist of
+    known keys. The allowlist this replaces named six fields, so any other
+    structured value a caller attached — an over-cap count, a capability name, a
+    correlation id under a new key — was emitted into a log call and then
+    silently dropped by the formatter. A field that a caller cannot read back is
+    not telemetry; it is the appearance of it.
+    """
+    extras = {
+        key: value
+        for key, value in record.__dict__.items()
+        if key not in _RESERVED_RECORD_KEYS and not key.startswith("_")
+    }
+    return redact(extras)
 
 
 class JsonFormatter(logging.Formatter):
@@ -60,10 +122,7 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         # Structured extras attached via ``logger.info(..., extra={...})``.
-        for key in ("request_id", "method", "path", "status_code", "duration_ms", "user_id"):
-            value = getattr(record, key, None)
-            if value is not None:
-                payload[key] = value
+        payload.update(_structured_extras(record))
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)

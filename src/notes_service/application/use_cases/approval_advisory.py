@@ -36,12 +36,14 @@ verdict would be an affordance a caller could read as consent; a number in
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from notes_service.application.errors import ResourceNotFound
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.clock import Clock
+from notes_service.application.ports.withholding import WithholdingRecorder
 from notes_service.application.use_cases.agents import load_owned_agent
 from notes_service.application.use_cases.base import UnitOfWorkFactory, UseCase
 from notes_service.domain.agent.context import (
@@ -57,6 +59,8 @@ from notes_service.domain.agent.entities import ApprovalRequest
 from notes_service.domain.agent.value_objects import ApprovalRequestId
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.notes.value_objects import NoteId
+
+_LOGGER = logging.getLogger("notes_service.advisory")
 
 if TYPE_CHECKING:
     from notes_service.application.ports.repositories import UnitOfWork
@@ -107,9 +111,11 @@ class RecommendApprovalDecision(UseCase):
         authorization: AuthorizationProvider,
         clock: Clock,
         evaluate_decision: EvaluateDecision,
+        withholding_recorder: WithholdingRecorder,
     ) -> None:
         super().__init__(uow_factory=uow_factory, authorization=authorization, clock=clock)
         self._evaluate_decision = evaluate_decision
+        self._withholding_recorder = withholding_recorder
 
     def run(self, principal: Principal, *, approval_id: str) -> ApprovalAdvisory:
         with self._uow_factory() as uow:
@@ -131,7 +137,37 @@ class RecommendApprovalDecision(UseCase):
             correlation_id=str(request.id),
         )
         evaluation = self._evaluate_decision.run(decision_request)
+        self._record_withholding(evaluation)
         return _advisory_from(evaluation, approval_id=str(request.id))
+
+    def _record_withholding(self, evaluation: DecisionEvaluation) -> None:
+        """Count this advisory's over-cap withholdings and log the running total.
+
+        Per-response visibility (NEX-032) makes a single degraded advisory
+        visible to a caller who inspects it. Nothing counted how often it
+        happens, so a note title that is *routinely* over the cap degraded every
+        advisory quietly. The count is what turns "this one was thin" into "this
+        endpoint is systematically thin".
+
+        Logged at WARNING only when this call was actually degraded: an
+        always-on WARNING for healthy advisories would train a reader to ignore
+        it, which is how a real signal gets lost.
+        """
+        self._withholding_recorder.record(over_cap_field_names=evaluation.over_cap_context_fields)
+        snapshot = self._withholding_recorder.snapshot()
+        level = logging.WARNING if evaluation.over_cap_context_fields else logging.INFO
+        _LOGGER.log(
+            level,
+            "approval advisory context withheld",
+            extra={
+                "approval_id": evaluation.correlation_id,
+                "over_cap_field_names": list(evaluation.over_cap_context_fields),
+                "excluded_field_count": len(evaluation.excluded_context_fields),
+                "over_cap_advisories_total": snapshot.over_cap_advisories_total,
+                "advisories_total": snapshot.advisories_total,
+                "over_cap_rate": round(snapshot.over_cap_rate, 4),
+            },
+        )
 
     def _build_envelope(
         self, uow: UnitOfWork, *, principal: Principal, request: ApprovalRequest

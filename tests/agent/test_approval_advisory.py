@@ -48,6 +48,9 @@ from notes_service.infrastructure.db.seed import DEMO_USERS
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
 from notes_service.infrastructure.security.clock import SystemClock
+from notes_service.infrastructure.security.withholding_recorder import (
+    InMemoryWithholdingRecorder,
+)
 
 pytestmark = pytest.mark.usefixtures("seeded")
 
@@ -97,6 +100,7 @@ class Harness:
     register: RegisterAgent
     open_approval: OpenApprovalRequest
     create_note: CreateNote
+    recorder: InMemoryWithholdingRecorder
 
     def uow(self) -> SqlAlchemyUnitOfWork:
         return SqlAlchemyUnitOfWork(self.session_factory)
@@ -141,12 +145,18 @@ def _make_harness(
     evaluator = EvaluateDecision(
         provider=StubDecisionProvider(), enabled=enabled, min_confidence=min_confidence
     )
+    recorder = InMemoryWithholdingRecorder()
     return Harness(
         session_factory=session_factory,
-        recommend=make(RecommendApprovalDecision, evaluate_decision=evaluator),
+        recommend=make(
+            RecommendApprovalDecision,
+            evaluate_decision=evaluator,
+            withholding_recorder=recorder,
+        ),
         register=make(RegisterAgent),
         open_approval=make(OpenApprovalRequest),
         create_note=make(CreateNote),
+        recorder=recorder,
     )
 
 
@@ -372,6 +382,7 @@ def test_provider_failure_abstains(session_factory: sessionmaker[Session]) -> No
         authorization=DefaultAuthorizationProvider(),
         clock=SystemClock(),
         evaluate_decision=exploding,
+        withholding_recorder=InMemoryWithholdingRecorder(),
     )
 
     advisory = recommend.run(principal, approval_id=str(request.id))
@@ -402,3 +413,63 @@ def test_decision_import_is_a_score_not_a_choice() -> None:
     assert not DecisionKind.APPROVAL_RECOMMENDATION.is_choice
     # ``Decision`` exposes no approval affordance either.
     assert not hasattr(Decision, "approve")
+
+
+# --------------------------------------------------------------------------
+# The over-cap count: a rate, so only a count can show it.
+#
+# NEX-032 made a single degraded advisory visible — the response names the
+# fields it withheld for size. That is necessary and not sufficient: a note
+# title that is *routinely* over the context cap degrades every advisory
+# quietly, and no single response is wrong enough to notice. The adapter's own
+# arithmetic is pinned in ``tests/bootstrap/test_withholding_recorder.py``;
+# these tests pin that the use case actually feeds it.
+# --------------------------------------------------------------------------
+
+
+def test_an_over_cap_advisory_is_counted(h: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A title legal for a note but over the context cap must be counted.
+
+    Shrinking the context cap simulates the two caps diverging, so the over-cap
+    path runs against a real record rather than a synthetic envelope.
+    """
+    from notes_service.domain.agent import context as context_module
+
+    principal = principal_for(ALICE)
+    note = h.create_note.run(principal, title="t" * MAX_TITLE_LENGTH, content="body")
+    request = h.pending_approval(principal, f"note:{note.id}")
+
+    monkeypatch.setattr(context_module, "MAX_FIELD_VALUE_LENGTH", 50)
+
+    h.recommend.run(principal, approval_id=str(request.id))
+
+    snapshot = h.recorder.snapshot()
+    assert snapshot.advisories_total == 1
+    assert snapshot.over_cap_advisories_total == 1
+    assert snapshot.over_cap_fields_total >= 1
+
+
+def test_a_healthy_advisory_counts_only_in_the_denominator(h: Harness) -> None:
+    """A short title is under the cap, so nothing is over-cap withheld."""
+    principal = principal_for(ALICE)
+    note = h.create_note.run(principal, title="short", content="body")
+    request = h.pending_approval(principal, f"note:{note.id}")
+
+    h.recommend.run(principal, approval_id=str(request.id))
+
+    snapshot = h.recorder.snapshot()
+    assert snapshot.advisories_total == 1
+    assert snapshot.over_cap_advisories_total == 0
+    assert snapshot.over_cap_fields_total == 0
+
+
+def test_repeated_advisories_accumulate(h: Harness) -> None:
+    """Two advisories for the same note count twice; the counter is not a cache."""
+    principal = principal_for(ALICE)
+    note = h.create_note.run(principal, title="short", content="body")
+    request = h.pending_approval(principal, f"note:{note.id}")
+
+    h.recommend.run(principal, approval_id=str(request.id))
+    h.recommend.run(principal, approval_id=str(request.id))
+
+    assert h.recorder.snapshot().advisories_total == 2

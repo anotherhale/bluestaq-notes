@@ -28,6 +28,7 @@ from notes_service.application.ports.organization_authorization import (
 )
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
+from notes_service.application.ports.withholding import WithholdingRecorder
 from notes_service.application.use_cases.agent_runs import (
     AbortAgentRun,
     AdvanceAgentRun,
@@ -127,6 +128,9 @@ from notes_service.infrastructure.identity.routing_provider import RoutingIdenti
 from notes_service.infrastructure.identity.session_provider import SessionIdentityProvider
 from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
+from notes_service.infrastructure.security.withholding_recorder import (
+    InMemoryWithholdingRecorder,
+)
 
 UseCaseT = TypeVar("UseCaseT", bound=UseCase)
 LoginUseCaseT = TypeVar("LoginUseCaseT", bound=OidcUseCase)
@@ -147,6 +151,10 @@ class Container:
     identity_provider: IdentityProvider
     authorization_provider: AuthorizationProvider
     rate_limiter: RateLimiter
+    # Counts context withholdings across advisories. Process-local today; the
+    # port is what lets a shared store or exporter replace it without touching
+    # the use case.
+    withholding_recorder: WithholdingRecorder
     clock: SystemClock
 
     # Browser login (authorization-code + PKCE). These are ``None`` unless
@@ -351,6 +359,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         limit=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window_seconds,
     )
+    withholding_recorder = InMemoryWithholdingRecorder()
 
     # The stub is the only adapter today. It is deterministic and abstains under
     # any real threshold, so enabling the flag alone does not start handing out
@@ -368,6 +377,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             authorization=authorization_provider,
             clock=clock,
             evaluate_decision=make_decision_evaluator(),
+            withholding_recorder=withholding_recorder,
         )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
@@ -450,6 +460,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         identity_provider=identity_provider,
         authorization_provider=authorization_provider,
         rate_limiter=rate_limiter,
+        withholding_recorder=withholding_recorder,
         clock=clock,
         relying_party=relying_party,
         begin_login=begin_login,
