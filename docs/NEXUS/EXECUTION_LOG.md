@@ -3869,3 +3869,27 @@ that builds a `ContextEnvelope` from classified entries and passes it to the dec
 with tests proving an over-ceiling entry is refused and an unlabeled entry fails closed. Run
 the gates bare, commit, push, and poll check-runs at the **new** slice SHA before promoting to
 VERIFIED — local gates alone are never enough (R9).
+
+## Run NEX-2026-11-25-32
+
+- **Timestamp:** 2026-11-25T15:06:00Z
+- **Branch:** feature/agentic-enterprise-platform
+- **Starting commit:** 0c591e6
+- **Ending commit:** f71745e (product), docs head follows
+- **Tasks completed (implemented + tested + pushed):** NEX-029
+- **Tasks verified:** none this run (no CI polled)
+- **Tasks in progress:** NEX-029 - pushed, awaiting CI observation
+- **Files changed:** 6 (1 new use case, 1 new API test, 1 new unit test suite, 3 wiring edits)
+- **Migrations:** none
+- **Tests executed:** full suite bare - 839 passed, 4 skipped. ruff format clean (159 files), ruff check clean, mypy 105 files clean.
+- **Test outcomes:** green. 15 new tests: 12 unit (envelope bounds, excluded context, fail-closed on provider error, advisory-never-authority) + 3 API (route reachable, request left pending, 404 for non-owner, 401 unauthenticated).
+- **Security findings:** the advisory response carries no verdict field, so the contract shape - not a comment - prevents the output being read as an approval. Route is owner-only with 404 for others.
+- **Commits:** f71745e `feat(decisioning): give the judgment path a production caller (NEX-029)`
+- **Push status:** PUSHED. Remote feature branch confirmed at f71745e via `git ls-remote`.
+- **CI status:** NOT POLLED for f71745e. No claim made.
+- **PR status:** PR #3 open, draft, unmerged. Body NOT refreshed this run - it still describes head 03ead43 and does not cover NEX-029.
+- **Tracking issue:** #2 not updated this run.
+- **Risks:** R31 partially mitigated (ContextEnvelope now has a production caller) but still open - it has not met real note text, and context_hash remains a plain str. Negative control was NOT run this slice (budget).
+- **Checkpoint status:** updated atomically, JSON re-validated.
+- **Process defect:** a `git commit -F -` heredoc corrupted its payload again (4th+ occurrence, already logged as R12). Caught it by checking `git rev-parse HEAD` was unchanged and the tree still staged - the commit never ran. Redone via a /tmp message file and byte-verified.
+- **Next action:** poll check-runs at f71745e; promote NEX-029 to VERIFIED only on an observed 4/4 completed/success, then run the skipped negative control and refresh PR #3.
