@@ -3918,3 +3918,42 @@ VERIFIED — local gates alone are never enough (R9).
 - **Tracking issue:** #2 not updated this run.
 - **Process defect (recurrence):** an inline multi-line `python -c "…"` corrupted itself in this shell (the R12 hazard, now confirmed for `python -c` and not only heredocs). The command failed with `SyntaxError` so **nothing executed**; verified via `git status --porcelain` and an `ast.parse` of all three files that the tree was untouched, then redid the work through a `/tmp` script written with the file editor.
 - **Next action:** poll check-runs for the NEX-030 product commit and quote only an observed status; then refresh PR #3 counters from the PR object.
+
+### Run NEX-2026-11-25-33 — completion addendum (CI + delivery)
+
+- **CI polled and NEX-030 promoted to VERIFIED.** `0727628` reads **4/4
+  `completed/success`**, every check run reporting `head_sha=0727628`, completed
+  2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505,
+  139325908590), polled 2026-11-25T15:46Z. The line above that says CI was not
+  polled was true when written and is superseded by this observation.
+- **NEX-029 promoted to VERIFIED** on `evidence_basis: descendant-CI` (4/4
+  `completed/success` at `e3b8517`, polled 15:27Z), as argued above. Its own
+  commit `f71745e` is `completed/cancelled` on all four runs and can never be
+  polled green.
+- **R31 closed** in `CHECKPOINT.json` risks and in `BACKLOG.md`.
+- **Docs promotion commit `3fc6464`** carries the STATE/BACKLOG/CHECKPOINT
+  updates; `21ff149` corrects the checkpoint `commit` field to the run's content
+  head, and `7f96058` records delivery state. All pushed to
+  `feature/agentic-enterprise-platform`.
+- **PR #3 refreshed this run.** Body PATCH-ed at head `3fc6464`, read back
+  **byte-equal at 33,895 chars**, asserted on specific substrings (`## NEX-029`,
+  `## NEX-030`, `descendant-CI`, `**R31 is closed.**`). Counters re-measured
+  from the PR object: **35,701 additions / 10 deletions / 127 files / 142
+  commits**. It remains **draft and unmerged**.
+- **Tracking issue #2 updated this run.** Comment id `7167365125`, 3,062 chars,
+  read back and asserted on substrings.
+- **Process finding (new, cost two attempts):** a markdown **table** in an issue
+  comment body makes `POST /issues/2/comments` return **HTTP 500** on this
+  repository. Bisected with a probe comment (`7167365125`) PATCH-ed header-only
+  then with the full table-free body; both succeeded, and the table-free prose
+  is what is posted. Use lists for issue comments here. PR bodies with tables
+  are unaffected — `PATCH /pulls/3` accepted them.
+- **Push hazard observed:** the first push of this run was rejected with
+  `Internal Server Error` from the remote (not an auth or conflict error).
+  Verified the local commit and branch were intact, waited 10s, retried, and it
+  succeeded. No force push, no reset.
+- **Final state:** tree clean, HEAD `7f96058`, all work pushed. Suite 846 passed
+  / 4 skipped; ruff format and check clean; mypy 105 files clean.
+- **Next action:** NEX-031 — exercise `ContextEnvelope` assembly against real
+  stored **note** text, since the bounds (32 fields, 200 chars/field) have only
+  ever met approval metadata.
