@@ -13,6 +13,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from notes_service.application.ports.withholding import WithholdingSnapshot
 from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
@@ -819,6 +820,34 @@ class ApprovalAdvisoryResponse(ResponseModel):
             over_cap_context_fields=advisory.over_cap_context_fields,
             latency_ms=advisory.latency_ms,
             advisory_available=advisory.is_advisory_available,
+        )
+
+
+class WithholdingReportResponse(ResponseModel):
+    """Process-wide advisory withholding totals, for operators.
+
+    ``over_cap_rate`` is the aggregate R34 asks for: the fraction of advisories
+    that were computed on less context than the caller held. It is reported
+    alongside its numerator and denominator so a reader can judge how much the
+    rate means at the current volume — ``0.0`` over three advisories and ``0.0``
+    over thirty thousand are very different claims.
+
+    Counts only. No field name, value, note id or user id appears here, which is
+    why this can be a single process-wide number without disclosing content.
+    """
+
+    advisories_total: int
+    over_cap_advisories_total: int
+    over_cap_fields_total: int
+    over_cap_rate: float
+
+    @classmethod
+    def from_snapshot(cls, snapshot: WithholdingSnapshot) -> WithholdingReportResponse:
+        return cls(
+            advisories_total=snapshot.advisories_total,
+            over_cap_advisories_total=snapshot.over_cap_advisories_total,
+            over_cap_fields_total=snapshot.over_cap_fields_total,
+            over_cap_rate=snapshot.over_cap_rate,
         )
 
 

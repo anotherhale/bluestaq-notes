@@ -117,7 +117,9 @@ from notes_service.application.use_cases.permissions import (
     ShareNote,
 )
 from notes_service.application.use_cases.tools import InvokeTool
+from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
+from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
@@ -258,6 +260,8 @@ class Container:
     # opinion about one pending approval; the answer is advisory and cannot
     # decide the request.
     recommend_approval_decision: Callable[[], RecommendApprovalDecision]
+    # Process-wide operational totals, gated on ``ops_operator_user_ids``.
+    get_withholding_report: Callable[[], GetWithholdingReport]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -378,6 +382,17 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             clock=clock,
             evaluate_decision=make_decision_evaluator(),
             withholding_recorder=withholding_recorder,
+        )
+
+    def make_get_withholding_report() -> GetWithholdingReport:
+        # Parsed here, inside build_container, so the allowlist is converted once
+        # per process rather than once per request. ``Settings`` has already
+        # validated every value is a UUID; an unset allowlist yields an empty set,
+        # which the use case treats as "nobody".
+        operator_ids = frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids)
+        return GetWithholdingReport(
+            withholding_recorder=withholding_recorder,
+            operator_ids=operator_ids,
         )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
@@ -527,4 +542,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         abort_agent_run=make(AbortAgentRun),
         evaluate_decision=make_decision_evaluator,
         recommend_approval_decision=make_recommend_approval_decision,
+        get_withholding_report=make_get_withholding_report,
     )

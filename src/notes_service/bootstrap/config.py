@@ -9,6 +9,7 @@ in production. Failing fast here is safer than failing open at runtime.
 from __future__ import annotations
 
 import json
+import uuid
 from enum import StrEnum
 from typing import Annotated, Literal
 
@@ -100,6 +101,13 @@ class Settings(BaseSettings):
     # Confidence a provider must reach before its opinion is usable at all.
     decisioning_min_confidence: float = 0.5
 
+    # -- operations -------------------------------------------------------
+    # User ids allowed to read process-wide operational totals (the advisory
+    # withholding aggregate). EMPTY BY DEFAULT, and empty means *nobody*: the
+    # aggregate spans every tenant, so it must be granted explicitly rather than
+    # inherited by being logged in. Anyone not listed gets 404, not 403.
+    ops_operator_user_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     # -- logging ----------------------------------------------------------
     log_level: str = "INFO"
     log_json: bool = True
@@ -108,7 +116,13 @@ class Settings(BaseSettings):
     default_page_size: int = 20
     max_page_size: int = 100
 
-    @field_validator("cors_allow_origins", "oidc_algorithms", "oidc_scopes", mode="before")
+    @field_validator(
+        "cors_allow_origins",
+        "oidc_algorithms",
+        "oidc_scopes",
+        "ops_operator_user_ids",
+        mode="before",
+    )
     @classmethod
     def _split_csv(cls, value: object) -> object:
         """Accept comma-separated values or a JSON array from the environment.
@@ -128,6 +142,25 @@ class Settings(BaseSettings):
                     raise ValueError("expected a comma-separated list or JSON array") from exc
                 return parsed
             return [item.strip() for item in text.split(",") if item.strip()]
+        return value
+
+    @field_validator("ops_operator_user_ids")
+    @classmethod
+    def _validate_operator_ids(cls, value: list[str]) -> list[str]:
+        """Reject a malformed id at startup rather than at request time.
+
+        The gate compares ``UserId`` values, so a typo would otherwise match
+        nobody and the endpoint would look broken for the one operator it was
+        meant to serve. Failing here names the offending value in the startup
+        error instead.
+        """
+        for candidate in value:
+            try:
+                uuid.UUID(candidate)
+            except (ValueError, AttributeError, TypeError) as exc:
+                raise ValueError(
+                    f"ops_operator_user_ids contains a non-UUID id: {candidate!r}"
+                ) from exc
         return value
 
     @field_validator("log_level")
