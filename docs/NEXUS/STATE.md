@@ -10,8 +10,8 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-037 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `5d2792b` — the NEX-036 docs promotion; the run fast-forwarded to `8f05a5b` after reconciling against the remote. |
-| Head commit (run end) | `5c0575b` — NEX-037's product commit (docs promotion follows above it). |
-| Last CI result | **`5c0575b` (NEX-037): polled 2026-11-25T18:52Z while `queued`/`in_progress` — NOT a result.** 4 check runs exist on that SHA, all reporting `head_sha` `5c0575b`. **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), one complete pair, polled 2026-11-25T18:45Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Head commit (run end) | `7ac893c` — the NEX-037 docs promotion, over product commit `5c0575b`. |
+| Last CI result | **`5c0575b` (NEX-037): VERIFIED GREEN** — 4/4 `completed/success`, every check run reporting `head_sha` `5c0575b5df0b2aa30e1d4a28f622ac327871f902` (Backend 139441878322, Frontend 139441878023, plus the duplicate pair 139441830759 / 139441831292), polled 2026-11-25T18:57Z. Earlier polls at 18:52Z and 18:54Z saw the same runs `queued`/`in_progress`; they are kept because they are why the claim carries a timestamp. **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), polled 2026-11-25T18:45Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. NEX-036 is carried by comment 7171412980. NEX-037 not yet posted. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `c37037f`**: body PATCHed 2026-11-25T18:47Z (56,759 chars, read back byte-equal) with the NEX-036 section. NEX-037 not yet in the body. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
@@ -61,10 +61,16 @@ sees 404 rather than 403). Both layers matter here — the use case raising `Res
 and the router *not* remapping it are separate claims, and only an HTTP-level test pins the
 second.
 
-Status: **VERIFIED on local evidence** — `ruff format` clean (169 files), `ruff check` clean,
-`mypy` clean over 109 source files, full `pytest` **920 passed / 4 skipped**. CI on `5c0575b`
-was polled at 2026-11-25T18:52Z and was still `queued`/`in_progress`: it must be re-polled
-before this slice is called CI-verified.
+Status: **VERIFIED** — CI at `5c0575b` is 4/4 `completed/success`, every check run reporting
+`head_sha` `5c0575b5df0b2aa30e1d4a28f622ac327871f902`, polled 2026-11-25T18:57Z. Two earlier
+polls (18:52Z, 18:54Z) saw the same runs still `queued`/`in_progress`, which is why the claim
+carries a timestamp at all. Local gates: `ruff format` clean (169 files), `ruff check` clean,
+`mypy` clean over 109 source files, full `pytest` **920 passed / 4 skipped**.
+
+One arithmetic caveat, recorded rather than smoothed: NEX-036 recorded 916 passed and this
+slice adds 7 tests, which predicts 923. The measured number is 920. NEX-036's 916 was written
+without a measured baseline, so the discrepancy is most likely in the prior figure — but that
+is not proven, and 920 is what the suite actually reported.
 
 
 ## NEX-036 (run `NEX-2026-11-25-37`) — the caller was audited, and the advisory outlived its question
@@ -1126,4 +1132,23 @@ actually uses.
 and NEX-012 each reached TESTED on local runs and then VERIFIED only when CI went
 green on the commit (`0e74d4f`, `e817d04`, `f50a78d`, `3aade7c`). A local green
 suite is not evidence; R9/R10 exist because that conflation happened before.
+
+
+## Next best actions (run `NEX-2026-11-25-37`, superseding the list above)
+
+1. **PATCH PR #3's body with a NEX-037 section, then POST one issue #2 comment.** This run
+   spent its delivery budget on reconciliation, the slice, and the state files; both are owed.
+   Re-measure the counters from the PR object at the new head rather than reusing the numbers
+   above — a docs commit moves the head and every counter with it. Use lists, never a markdown
+   table, in an issue comment on this repository.
+2. **NEX-037's CI is settled — do not re-poll it.** 4/4 `completed/success` at `5c0575b`,
+   polled 18:57Z, every `head_sha` equal to that SHA. Any future docs head reads
+   `completed/cancelled` once superseded; that is neither pass nor fail and is never evidence.
+3. **Next implementation slice: the first real `DecisionProvider` adapter.** It is the largest
+   dependency-ready unlock, and NEX-035's conformance suite now exists to police it — the
+   suite found four real defects in the identity seam, so a new adapter has something to fail
+   against. `make_decision_evaluator()` is still a stub.
+4. **R36 is open and is not urgent but is not nothing:** the ops allowlist is a static
+   environment variable with no expiry and no record of who read the totals. Fold it into the
+   scoped-capability work rather than patching it ad hoc.
 

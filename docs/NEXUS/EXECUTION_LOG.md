@@ -4698,7 +4698,7 @@ scoped-capability work, not something to solve ad hoc here.
 | `ruff check` | All checks passed |
 | `mypy` | Success: no issues found in **109** source files |
 | `pytest` | **920 passed, 4 skipped** (4 skips are the postgres-only tests) |
-| CI `5c0575b` | **NOT CONCLUDED** — 4 runs, all `queued`/`in_progress` at 18:52Z and 18:54Z |
+| CI `5c0575b` | **4/4 `completed/success`** at 18:57Z, every `head_sha` = `5c0575b` (18:52Z and 18:54Z polls saw the same runs in progress) |
 
 The gates ran **after** the last edit. The only change made after the first full-suite run was
 a comment reword in `container.py`, and the suite was re-run afterwards, so the committed tree
@@ -4714,9 +4714,15 @@ in the file rather than let a later reader discover it.
 
 ### Status
 
-**NEX-037: VERIFIED on local evidence. NOT CI-verified.** That distinction is deliberate and is
-stamped with both poll timestamps in `CHECKPOINT.json`, because "CI has not run yet" and "CI
-failed" are indistinguishable to a later reader unless the timestamp is there.
+**NEX-037: VERIFIED.** CI on `5c0575b` came back **4/4 `completed/success`** at 18:57Z — every
+check run reporting `head_sha` `5c0575b` — so the slice moved from local-evidence-only to fully
+CI-verified inside this run. The two earlier polls (18:52Z, 18:54Z) are kept in the checkpoint
+because they are the reason the claim carries a timestamp: had the run ended before the third
+poll, the note would have read "not yet concluded, polled at 18:54Z" rather than quietly
+implying a pass.
+
+This is the payoff of stamping a not-yet-observed claim. The alternative — writing "CI
+pending" with no time — becomes indistinguishable from "CI failed" within a day.
 
 ### Delivery debt — not cleared this run
 

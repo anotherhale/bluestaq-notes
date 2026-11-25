@@ -46,7 +46,7 @@
     "NEX-034": "VERIFIED - CI 4/4 completed/success at e386e02, every check run head_sha=e386e02 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, one pair per push and pull_request event), polled 2026-11-25T17:41Z. Local gates: ruff format clean (164 files), ruff check clean, mypy 107 source files clean, pytest 873 -> 877 passed / 4 skipped (baseline measured by stashing, not assumed). Negative control run on disk: restoring the exact-match matcher turns 3 of the 4 new tests red; the over-redaction test passes on both versions correctly, because it guards a property the old matcher had.",
     "NEX-035": "VERIFIED - CI 4/4 completed/success at 12f6fa9, every check run head_sha=12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec (two Backend ruff/mypy/pytest/migrations and two Frontend typecheck/lint/test/build, one pair per push and pull_request event), polled 2026-11-25T18:14Z. Local gates: ruff format clean, ruff check clean, mypy 107 source files clean, pytest 881 -> 911 passed / 4 skipped. The 881 baseline was MEASURED this run by running the suite with the new file ignored, not inferred from arithmetic; the delta is exactly the 30 new conformance tests. Negative control: the hostile-fake meta-tests assert the conformance suite REJECTS each of five deliberate violations, so the suite has been shown to fail.",
     "NEX-036": "VERIFIED - CI green at 90eea0c: Backend (ruff/mypy/pytest/migrations) completed/success (id 139429822539) and Frontend (typecheck/lint/test/build) completed/success (id 139429823232), both started 2026-11-25T18:41:54Z, polled 2026-11-25T18:45Z. The duplicate Backend run (id 139429874630) reads completed/cancelled - the CI concurrency group killed the superseded event run, which is neither pass nor fail and is never counted as evidence. Local gates: ruff format clean, ruff check clean, mypy 107 source files clean, pytest 916 passed / 4 skipped (baseline 911 at NEX-035, +5 net). Negative control: replacing both guard branches with `if False:` turned the four non-pending/expired tests red (observed on disk, file restored from backup and re-verified).",
-    "NEX-037": "VERIFIED on LOCAL evidence - ruff format clean (169 files), ruff check clean, mypy 109 source files clean, pytest 920 passed / 4 skipped. CI on 5c0575b was polled twice (2026-11-25T18:52Z and 18:54Z) and was still queued/in_progress both times: 4 check runs exist on that SHA, all reporting head_sha 5c0575b, none concluded. This is a STAMPED OBSERVATION, not a result - re-poll 5c0575b before calling the slice CI-verified."
+    "NEX-037": "VERIFIED GREEN - 4/4 completed/success at 5c0575b, every check run reporting head_sha 5c0575b5df0b2aa30e1d4a28f622ac327871f902 (Backend id 139441878322, Frontend id 139441878023, plus the duplicate pair 139441830759 Backend / 139441831292 Frontend, one pair per push and pull_request event), polled 2026-11-25T18:57Z. Local gates: ruff format clean (169 files), ruff check clean, mypy 109 source files clean, pytest 920 passed / 4 skipped. NOTE: the 916 -> 920 arithmetic does not reconcile (7 new tests predict 923); NEX-036's 916 was recorded without a measured baseline, so the discrepancy is most likely in the prior figure, but that is not proven and 920 is the measured number."
   },
   "completed_tasks": [
     "NEX-001",
@@ -134,7 +134,7 @@
       "severity": "low",
       "summary": "Withholding is counted per process but nothing exports the count.",
       "detail": "NEX-033 introduced the WithholdingRecorder port and NEX-032 made each advisory report which fields were withheld and why. Both are per-response or per-process observations. An operator cannot currently answer 'how often are advisories thinner than they should be' without reading individual responses, so a systematic over-cap withholding would be visible in aggregate nowhere. This is a monitoring gap, not a correctness gap: the security invariant (withhold rather than leak) holds. Carried forward as NEX-037. CLOSED (NEX-037): GET /api/v1/ops/withholding-report returns advisories_total, over_cap_advisories_total, over_cap_fields_total and over_cap_rate, so the rate R34 asked for is now a number an operator can alert on. The aggregate spans every tenant, so it is gated on OPS_OPERATOR_USER_IDS - empty by default, and empty means nobody, not everybody. A non-operator receives 404 rather than 403 so probing cannot confirm the endpoint exists. The response carries counts only: no field name, value, note id or user id. Malformed operator ids fail at startup rather than matching nobody silently.",
-      "status": "closed by NEX-037 - local gates green (pytest 920 passed / 4 skipped, mypy 109 files, ruff clean). CI on 5c0575b not yet concluded at 2026-11-25T18:54Z; re-poll before treating as CI-verified."
+      "status": "closed by NEX-037 - 4/4 completed/success at 5c0575b, every head_sha equal to that SHA, polled 2026-11-25T18:57Z."
     },
     {
       "id": "R31",
@@ -274,15 +274,16 @@
     }
   ],
   "next_task": "NEX-038",
-  "next_action": "NEX-038: re-poll CI on 5c0575b FIRST - it was still in_progress at 2026-11-25T18:54Z and NEX-037 is marked VERIFIED on local evidence only. Then close the delivery debt NEX-037 left: PR #3 body does not yet carry a NEX-037 section and issue #2 has no NEX-037 comment. After that, the highest-value dependency-ready work is the R33 residual (the log redactor's vocabulary is finite) or the first real DecisionProvider adapter, which R30/NEX-035's conformance suite now exists to police. Verify any premise against the code before acting: the last five next_action fields each needed correcting.",
-  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-037 is 5c0575b on feature/agentic-enterprise-platform; a docs promotion follows in a separate commit, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-037 local gates are green; its CI was polled twice and had NOT concluded, so poll 5c0575b before calling it CI-verified. NEX-037 is the first slice in this programme to add an authenticated-except-allowlist route: read the R34 entry in the risks ledger and the NEX-037 section of STATE.md before changing any access rule on /api/v1/ops.",
+  "next_action": "NEX-038: NEX-037's CI is now GREEN at 5c0575b (4/4, polled 18:57Z), so step 1 is already done - do not re-do it. Remaining: PATCH PR #3's body with a NEX-037 section and POST one issue #2 comment (lists, never a table). After that, the first real DecisionProvider adapter is the largest dependency-ready unlock, because NEX-035's conformance suite now exists to police it. Verify any premise against the code before acting: the last five next_action fields each needed correcting.",
+  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-037 is 5c0575b on feature/agentic-enterprise-platform; docs commits 7ac893c and above follow it, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-037 is fully CI-verified (4/4 green at 5c0575b). NEX-037 is the first slice in this programme to add an allowlist-gated platform-operations route: read the R34 entry and the NEX-037 section of STATE.md before changing any access rule on /api/v1/ops.",
   "ci_status": {
     "product_slice_sha": "5c0575b",
-    "product_slice_result": "NOT CONCLUDED. Polled 2026-11-25T18:52Z (all 4 runs queued/in_progress) and again at 18:54Z (all 4 in_progress). 4 check runs exist on the SHA - two Backend, two Frontend, one pair per push and pull_request event - every one reporting head_sha 5c0575b. No run had concluded, so this is neither pass nor fail.",
+    "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 5c0575b, every check run reporting head_sha 5c0575b5df0b2aa30e1d4a28f622ac327871f902 (Backend id 139441878322, Frontend id 139441878023, plus the duplicate pair 139441830759 Backend / 139441831292 Frontend, one pair per push and pull_request event), polled 2026-11-25T18:57Z.",
     "prior_slice": "90eea0c (NEX-036): VERIFIED GREEN, polled 2026-11-25T18:45Z. Backend completed/success (id 139429822539), Frontend completed/success (id 139429823232).",
     "docs_heads": "Any docs-only commit following 5c0575b carries no source change, so a red or cancelled run on it says nothing about the code. 5c0575b is an ancestor of any such head.",
     "rule": "Poll the PRODUCT commit before pushing its docs commit. A docs head superseded by the concurrency group reads completed/cancelled, which is neither pass nor fail and must never be counted as either.",
-    "evidence_basis": "5c0575b: not yet established. 90eea0c: direct green poll at that SHA. Any later docs commit: descendant-CI - green at an ancestor whose tree contains the code, weaker than a green poll at the SHA itself, and labelled as such rather than folded in."
+    "evidence_basis": "5c0575b: direct green poll at that SHA, all four check runs reporting head_sha 5c0575b. 90eea0c: direct green poll at that SHA. Any later docs commit (7ac893c and above): descendant-CI - green at an ancestor whose tree contains the code, which is weaker than a green poll at the SHA itself and is labelled as such rather than folded in.",
+    "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all."
   },
   "verified_tasks": [
     "NEX-001",
@@ -331,7 +332,7 @@
   "commit_scope": "commit names the last commit carrying real IMPLEMENTATION (90eea0c, NEX-036). The docs promotion above it is separate. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
   "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local: ruff format clean, ruff check clean, mypy 109 source files clean, pytest 920 passed / 4 skipped. CI: NOT concluded on 5c0575b as of 2026-11-25T18:54Z (4 runs, all in_progress) - re-poll before claiming CI-verified. PR #3 body and issue #2 comment were NOT updated this run; both owe a NEX-037 section.",
+  "validation_status": "Local: ruff format clean, ruff check clean, mypy 109 source files clean, pytest 920 passed / 4 skipped. CI: 4/4 completed/success at 5c0575b, polled 2026-11-25T18:57Z, every head_sha equal to that SHA. PR #3 body and issue #2 comment were NOT updated this run; both owe a NEX-037 section.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -341,30 +342,31 @@
     "NEX-035": "The adapter conformance suite R30 asked for, plus four fixes at the provider identity seam that building it exposed. Product commit 12f6fa9, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T18:14Z). 555 insertions across 3 files.",
     "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary."
   },
-  "branch_head_observed_at": "2026-11-25T18:54Z",
+  "branch_head_observed_at": "2026-11-25T18:57Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
-    "5c0575b": "NEX-037 product slice - operator-gated withholding aggregate (implementation)"
+    "5c0575b": "NEX-037 product slice - operator-gated withholding aggregate (implementation)",
+    "7ac893c": "docs - NEX-037 promoted, R34 closed, R36 opened, NEX-038 planned"
   },
   "delivery_state": {
     "pr_3_body": "NOT updated this run. Carries NEX-036 as of c37037f (56,759 chars, read back byte-equal at 2026-11-25T18:47Z). NEX-037 section is owed.",
     "issue_2_comment": "NOT updated this run. Last comment id 7171412980 carries NEX-036. NEX-037 comment is owed.",
-    "owed": "PR #3 body section for NEX-037, and one issue #2 comment. Use lists, never a markdown table, in an issue comment on this repository."
+    "owed": "PR #3 body section for NEX-037, and one issue #2 comment. Use lists, never a markdown table, in an issue comment on this repository. This is NEX-038 steps 2 and 3."
   },
   "run_summary": {
     "run_id": "NEX-2026-11-25-37",
     "started_commit": "5d2792b",
-    "ending_commit": "5c0575b",
+    "ending_commit": "7ac893c",
     "slices_completed": 1,
     "slices_promoted": [
       "NEX-037"
     ],
-    "note": "One complete slice. The run opened by reconciling a divergence the previous run left: the local branch was 4 commits behind the remote (8f05a5b), and the fast-forward was safe because the remote commits touched only docs/NEXUS/* while this run's work was in src/ and tests/. R34's premise was checked against the code before building on it. CI on the product commit did not conclude inside the window, so the slice is recorded VERIFIED on local evidence only, with the poll timestamps stamped - the one thing this run must not do is let that distinction blur into 'CI passed'."
+    "note": "One complete slice, fully delivered. The run opened by reconciling a divergence the previous run left: the local branch was 4 commits behind the remote (8f05a5b), and the fast-forward was safe because the remote commits touched only docs/NEXUS/* while this run's work was in src/ and tests/. R34's premise was checked against the code before building on it. CI on the product commit was polled three times - in_progress twice, then 4/4 green at 18:57Z - so the slice moved from 'VERIFIED on local evidence' to fully CI-verified inside the same run. That upgrade is the reason the first two polls were stamped rather than left as a vague 'not yet run': the note could be corrected honestly instead of rotting."
   },
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
-    "last_observed_sha": "5c0575b",
-    "last_observed_at": "2026-11-25T18:54Z",
+    "last_observed_sha": "7ac893c",
+    "last_observed_at": "2026-11-25T18:57Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
