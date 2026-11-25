@@ -3957,3 +3957,50 @@ VERIFIED — local gates alone are never enough (R9).
 - **Next action:** NEX-031 — exercise `ContextEnvelope` assembly against real
   stored **note** text, since the bounds (32 fields, 200 chars/field) have only
   ever met approval metadata.
+
+## Run `NEX-2026-11-25-33` — NEX-031: a note is 300x the context cap
+
+- **Branch:** `feature/agentic-enterprise-platform`. **Starting commit** `4f1c95f`,
+  **ending commit** `240a446` (product) plus the docs promotion above it.
+- **Task completed:** NEX-031 — an over-cap record-derived context value is withheld
+  rather than raising. **VERIFIED** on 4/4 `completed/success` at `240a446`, every
+  check run `head_sha` = `240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25`, completed
+  2026-11-25T16:20:51–16:21:32Z, polled 16:22Z.
+- **Why this slice:** NEX-030 closed by naming its own residual — the envelope bounds
+  (32 fields, 200 chars/field) had met real approval metadata but never real **note**
+  text. A note body may be `MAX_CONTENT_BYTES` (64 KiB, ~300x the field cap).
+- **Defect:** `RecommendApprovalDecision` used `ContextEnvelope.from_fields`, which
+  constructs every field eagerly and so raises above `MAX_FIELD_VALUE_LENGTH`. Correct
+  for hand-authored references; wrong for record-derived content, where a note title is
+  legal at the notes domain's `MAX_TITLE_LENGTH`. "The title is long" became "the
+  advisory failed" — a denial of a read the caller is entitled to. The two caps are
+  independent constants that both happen to be 200 today, so a title at the domain
+  maximum sat exactly at the context cap and a coincidence read like a guarantee.
+- **Fix:** `ContextEnvelope.from_candidates` withholds an over-cap value instead of
+  raising. The field is never constructed — so it cannot enter the digest, and the raw
+  subject text is not left in memory one refactor away from the canonical form — and its
+  name lands in `withheld_field_names`. `excluded_field_names` unions classification
+  withholding and over-cap withholding, because an audit reader needs the same fact
+  either way. Construction rejects an illegal withheld name, a name both included and
+  withheld, and repeats. `from_fields` is unchanged and still refuses over-cap values.
+- **Tests:** over-cap withheld and named; a withheld value never reaches the digest (two
+  envelopes differing only in the over-cap value hash identically); the two reasons
+  union without shadowing; illegal and contradictory names rejected. The advisory gains
+  the production-data check — a real stored note with a **64 KiB body** still yields an
+  advisory, its title withheld by classification (CONFIDENTIAL, above the INTERNAL
+  ceiling) rather than by length, approval stays PENDING.
+- **Load-bearing proof:** reverting the fix fails the max-title test with
+  `a context field value may be at most 50 characters` at `context.py:133`.
+- **Gates:** `ruff format` clean (159 files), `ruff check` clean, `mypy` clean (105
+  source files), full `pytest` **850 passed / 4 skipped** (baseline 846).
+- **Reconciliation:** `CHECKPOINT.json` named `2c626f9` while HEAD was `4f1c95f`;
+  `STATE.md`'s Active-task section still described NEX-024. Both corrected against Git.
+- **New risk R32 (open, medium):** withholding is safe for security and quiet for
+  usefulness — nothing reports how often a real input is withheld, so a routinely
+  over-cap field would thin every advisory invisibly. Recorded, not fixed here.
+- **Not done this run (clock):** PR #3 and issue #2 are stale as of `240a446`. Refreshing
+  them is the next run's first action, before any new code.
+- **Next action:** refresh PR #3 body at `240a446` (re-measure counters from the PR
+  object), then update issue #2 with NEX-031 using lists (not tables — a markdown table
+  in an issue comment returns HTTP 500 on this repository), then start NEX-032.
+

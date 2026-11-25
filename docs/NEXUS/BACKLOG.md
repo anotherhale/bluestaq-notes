@@ -1744,3 +1744,72 @@ have still never met real **note text**; they have met real approval data.
 
 **Next action:** refresh PR #3 at the current head, update tracking issue #2, then pick the
 next dependency-ready slice.
+
+## NEX-031 — A record-derived value over the context cap is withheld, not fatal
+
+**Status:** IMPLEMENTED, TESTED, VERIFIED locally. **Phase:** 5 (durable runtime) —
+context minimisation hardening. **Priority:** P1 (security invariant, closes the
+observation NEX-030 recorded).
+
+**Objective.** Close the gap NEX-030 named: the envelope bounds (32 fields, 200
+chars/field) had only ever met approval metadata — short titles and a capability
+string. The real subject of an approval is a **note**, whose body may be
+`MAX_CONTENT_BYTES` (64 KiB of UTF-8), roughly 300x the per-field cap.
+
+**The defect.** `RecommendApprovalDecision._envelope` built its context with
+`ContextEnvelope.from_fields`, which constructs every `ContextField` eagerly and
+therefore *raises* when a value exceeds `MAX_FIELD_VALUE_LENGTH`. That is correct for
+hand-authored references, where the caller is responsible for bounding input. It is
+wrong for record-derived content: a note title is legal at the notes domain's
+`MAX_TITLE_LENGTH`, so "the title is long" became "the advisory failed" — a denial of
+a read the caller is entitled to. The two caps are independent constants that happen
+to both be 200 today, which is exactly what hid the bug: a title at the domain maximum
+sits *at* the cap, so a coincidence read like a guarantee.
+
+**The fix.** New `ContextEnvelope.from_candidates` for record-derived values. An
+over-cap value is **withheld instead of raised**: the field is never constructed (so
+it cannot enter the digest, and the raw subject text is not left in memory one
+refactor away from the canonical form), and its name is recorded in
+`withheld_field_names` so the audit trail still says the input existed.
+
+- `excluded_field_names` unions the two withholding reasons — above-ceiling
+  classification and over-cap value — because an audit reader needs the same fact
+  either way: *this input was present and not sent*.
+- Invariants enforced at construction: a withheld name must still be a legal field
+  name; a name may not be both included and withheld (contradictory statements about
+  one input, with no way for a reader to choose); withheld names may not repeat.
+- `_validate_field_name` was extracted so the withholding path can check a name
+  *before* deciding whether the value fits, without duplicating the rule.
+- `from_fields` is unchanged and still refuses over-cap values — the distinction is
+  caller-knows-the-bound (fields) versus value-comes-from-a-record (candidates).
+
+**Files.** `domain/agent/context.py` (+`from_candidates`, `withheld_field_names`,
+`_validate_field_name`), `application/use_cases/approval_advisory.py` (builds
+candidates, drops the `ContextField` import).
+
+**Tests.**
+- `tests/agent/test_context_envelope.py::TestWithholdingAnOverCapValue` — withheld and
+  named; a withheld value never reaches the digest (two envelopes differing only in the
+  over-cap value hash identically); ceiling + over-cap names union without shadowing;
+  illegal withheld name rejected; included-and-withheld rejected.
+- `tests/agent/test_approval_advisory.py::test_a_note_at_the_content_ceiling_still_produces_an_advisory`
+  — the production-data check: a real stored note with a **64 KiB body** at the domain
+  maximum still yields an advisory, the title is withheld by *classification* (it is
+  CONFIDENTIAL, above the INTERNAL ceiling) rather than by length, the stored body is
+  asserted to exceed the context cap, and the approval stays PENDING.
+- `test_..._maximum_length_title...` — shrinks the context cap so the two caps
+  diverge, proving the cap divergence directly rather than relying on today's
+  coincidence.
+
+**Load-bearing proof.** Reverting the fix made the max-title test fail with
+`ValidationError: a context field value may be at most 50 characters` at
+`context.py:133` — the exact denial-of-advisory the change removes. Restored and
+re-verified green.
+
+**Gates.** `ruff format` clean, `ruff check` clean, `mypy` clean (105 source files),
+full `pytest` **850 passed, 4 skipped**.
+
+**Migration:** none. **New dependencies:** none.
+
+**Next action:** commit and push this slice, then refresh PR #3 and tracking issue #2.
+

@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-030 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-031 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 closes the observation NEX-030 recorded by exercising the envelope bounds against real stored **note** bodies. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `e3b8517` — the docs-only checkpoint head left by run `NEX-2026-11-25-32`. |
-| Head commit (run end) | The docs promotion carrying NEX-029's and NEX-030's VERIFIED status (see `git log -1`). NEX-030's own evidence SHA is `0727628`, whose CI is 4/4 `completed/success` at that exact SHA (polled 2026-11-25T15:46Z). NEX-029's evidence is **descendant-CI** at `e3b8517` — see below. |
-| Last CI result | **`0727628` (NEX-030): 4/4 `completed/success`**, every check run reporting `head_sha` `0727628`, completed 2026-11-25T15:45:47–58Z (ids 139325893086, 139325893633, 139325908505, 139325908590), polled 15:46Z. Prior: `a3d1b32` (NEX-028), 4/4, polled 14:42Z. |
+| Base commit (run start) | `4f1c95f` — the checkpoint-bookkeeping head left by run `NEX-2026-11-25-33`'s predecessor. |
+| Head commit (run end) | `240a446` is NEX-031's product commit (see `git log -1` for the docs promotion above it). |
+| Last CI result | **`240a446` (NEX-031): see `ci_status` in `CHECKPOINT.json` for the poll result and timestamp.** Prior: `0727628` (NEX-030), 4/4 `completed/success`, polled 2026-11-25T15:46Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body was last refreshed at head `03ead43` (PATCH 2026-11-25T14:52:08Z) and is now **stale**: it does not cover NEX-029 or NEX-030. Refreshing it is the next run's first action. Re-measure counters from the PR object before quoting them. |
-| CI status | **`0727628` (NEX-030): 4/4 `completed/success` at that exact SHA**, polled 2026-11-25T15:46Z. **`e3b8517` (NEX-029, descendant-CI): 4/4 `completed/success`**, polled 15:27Z. NEX-029's own product commit `f71745e` reads `completed/cancelled` on all four runs — superseded by the docs commit in the CI concurrency group, so it can never be polled green; the evidence is a green run at its docs-only child. The docs commit for *this* run will likewise read `completed/cancelled` when superseded — neither pass nor fail, and never evidence. |
+| Draft PR | #3 (draft, unmerged — human review required). **Stale as of `240a446`**: it does not yet cover NEX-031. Refreshing it is the next run's first action. Re-measure counters from the PR object before quoting them. |
+| CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-028 (run `NEX-2026-11-25-31`) — a hash of a secret is still a fact about the secret
@@ -395,9 +395,57 @@ Recorded so a later audit does not re-open it without cause.
 
 | Field | Value |
 | --- | --- |
-| Task | NEX-024 — aborting a run must seal the audit link the crash left open |
-| Status | **VERIFIED** — 4/4 `completed/success` at `eaaae23`, polled 2026-11-25T12:16Z. All four `head_sha` values equal the polled commit, so this is a run at the slice's own SHA, not descendant-CI. |
-| Next action | Read `ROADMAP.md` Phase 5 and select the next dependency-ready slice. |
+| Task | NEX-031 — a record-derived value over the context cap is withheld, not fatal |
+| Status | **IMPLEMENTED, TESTED, VERIFIED locally**; CI poll result recorded in `CHECKPOINT.json` → `ci_status.nex031_slice_240a446`. |
+| Next action | Refresh PR #3 body at the current head, then update tracking issue #2, then select the next dependency-ready slice. |
+
+## NEX-031 (run `NEX-2026-11-25-33`) — a note is 300x the context cap, and that must not deny the advisory
+
+NEX-030 closed by naming its own residual: the envelope bounds (32 fields, 200 chars/field) had
+met real approval metadata but never real **note text**. The subject of an approval is a note,
+and a note body may be `MAX_CONTENT_BYTES` — 64 KiB of UTF-8, roughly 300x the per-field cap.
+
+`RecommendApprovalDecision` built its context with `ContextEnvelope.from_fields`, which
+constructs every `ContextField` eagerly and therefore *raises* when a value exceeds
+`MAX_FIELD_VALUE_LENGTH`. That is correct for hand-authored references, where the caller is
+responsible for bounding input. It is wrong for record-derived content: a note title is legal at
+the notes domain's `MAX_TITLE_LENGTH`, so "the title is long" became "the advisory failed" — a
+denial of a read the caller is entitled to. The two caps are independent constants that happen to
+both be 200 today, which is exactly what hid the defect: a title at the domain maximum sits *at*
+the cap, so a coincidence read like a guarantee.
+
+The fix is `ContextEnvelope.from_candidates` for record-derived values: an over-cap value is
+**withheld instead of raised**. The field is never constructed — so it cannot enter the digest,
+and the raw subject text is not left in memory one refactor away from the canonical form — and
+its name is recorded in `withheld_field_names` so the audit trail still says the input existed.
+`excluded_field_names` unions the two withholding reasons (above-ceiling classification,
+over-cap value), because an audit reader needs the same fact either way: *this input was present
+and not sent*. Construction rejects a withheld name that is not a legal field name, a name that
+is both included and withheld, and repeated withheld names. `from_fields` is unchanged and still
+refuses over-cap values; the distinction is caller-knows-the-bound versus value-comes-from-a-record.
+
+Tests: the over-cap path is withheld and named; a withheld value never reaches the digest (two
+envelopes differing only in the over-cap value hash identically); the two reasons union without
+shadowing; illegal and contradictory names are rejected. The advisory gains the production-data
+check — a real stored note with a **64 KiB body** still yields an advisory, its title withheld by
+*classification* (CONFIDENTIAL, above the INTERNAL ceiling) rather than by length, and the
+approval stays PENDING. A second test shrinks the context cap so the two caps diverge, proving the
+divergence rather than relying on today's coincidence.
+
+**Load-bearing:** reverting the fix fails the max-title test with `a context field value may be at
+most 50 characters` at `context.py:133` — the exact denial-of-advisory the change removes.
+
+## Last completed task
+
+**NEX-030 (VERIFIED, `0727628`, CI 4/4)** — `DecisionRequest.context_hash` was a plain `str`, so a
+caller could hand-assemble a digest that did not correspond to the envelope it was sending.
+Asserting a hash asserts "these were the inputs", so a caller-assembled value takes on the
+declassification decision ADR-012 gives to `ContextEnvelope` alone. `ContextHash` subclasses
+`str`, so it serialises, compares and hashes as the plain hex digest — it is a construction-time
+guard, not a new wire format. Only `ContextEnvelope.context_hash` can mint one. The stated limit
+is recorded in the class docstring: `str.__new__` still bypasses the guard deliberately, so the
+mistake is impossible to write by accident rather than impossible for a process already inside
+this one.
 
 ## NEX-024 (run `NEX-2026-11-25-26`) — aborting is settling, so it must seal too
 
