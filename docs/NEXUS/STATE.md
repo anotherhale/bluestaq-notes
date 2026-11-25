@@ -70,22 +70,20 @@ resolve) and were observed failing before the fix — the resolve returned `200`
 for a suspended delegator. A skip-based version that asserted nothing was
 discarded rather than kept. See risk **R23**.
 
-**Status: TESTED at `990557d`.** Local gates green (716 passed / 4 skipped, ruff
-format + check clean, mypy clean, architecture 5 passed). CI on `990557d` has
-**not** been observed, so this is not VERIFIED.
+**Status: VERIFIED at `990557d`.** CI on that exact SHA is 4/4
+`completed/success` (observed 2026-11-25T08:56Z, `head_sha` confirmed on all four
+check runs), with local gates green at the same commit (716 passed / 4 skipped,
+ruff format + check clean, mypy clean, architecture 5 passed). See risk **R23**.
 
-## Next best actions
+**Next best actions**
 
-1. **Observe CI on `990557d`.** `gh api
-   repos/anotherhale/bluestaq-notes/commits/990557d/check-runs` — only a 4/4
-   `completed/success` promotes NEX-017 to VERIFIED. Do not promote on local
-   gates.
-2. **Re-measure, then refresh, the PR #3 body.** Quote the PR object counters at
-   the current head (`additions` / `deletions` / `changed_files` / `commits`),
-   never a local two-dot diff — the clone is grafted and per-file sums truncate.
-3. **Pick the next dependency-ready slice from `ROADMAP.md`.** NEX-003 and
-   NEX-006 are the two remaining TESTED-but-unverified tasks; re-confirm CI on
-   their SHAs before promoting either.
+1. **Refresh the PR #3 body.** Head is `46496b7`; measured counters at that head
+   are 28,357 additions / 10 deletions / 106 files / 87 commits, 720 tests
+   collected. The body still describes `eab423c`, so it is stale — say so until
+   it is rewritten.
+2. **Re-poll CI on the NEX-003 and NEX-006 SHAs.** Both are TESTED, not verified.
+   Promote only on an observed 4/4 at the named SHA.
+3. **Select the next dependency-ready Phase-5 slice from `ROADMAP.md`.**
 
 ## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)
 

@@ -967,7 +967,7 @@ does not open a duplicate approval request.
 | --- | --- |
 | Phase | 2 (identity & delegation) / 5 (durable runtime) |
 | Priority | P0 (offboarding did not revoke agent authority) |
-| Status | **TESTED** at `990557d` - local gates green, CI not yet observed |
+| Status | **VERIFIED** at `990557d` - CI 4/4 completed/success, observed 2026-11-25T08:56Z |
 | Dependencies | NEX-006 (tenant access enforcement), NEX-003 (agent identity), NEX-014 (revocation) |
 | Architecture | explicit authorization, fail-closed security, one shared decision seam |
 
@@ -1000,6 +1000,5 @@ delegator over HTTP, resolve the agent token (403), reactivate, resolve again
 **Security:** closes an offboarding hole in which a departed or suspended
 person's agent retained live authority over the delegator's resources.
 
-**Next action:** observe CI on `990557d`; on 4/4 `completed/success` promote to
-VERIFIED.
+**Next action:** done — VERIFIED on 4/4 `completed/success` at `990557d`.
 

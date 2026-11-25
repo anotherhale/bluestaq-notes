@@ -2219,3 +2219,33 @@ plainly rather than implying the PR is current.
 NEX-017 to VERIFIED and re-measure the PR object counters before refreshing the
 body. Never merge PR #3.
 
+**Outcome, same run:** done - 4/4 `completed/success` was observed on `990557d`,
+so NEX-017 is now VERIFIED. The PR counters were re-measured. The body refresh
+was NOT done and is the next run's first action.
+
+**CI observation, same run (2026-11-25T08:56Z).** `990557d` is **4/4
+`completed/success`**. Both `Backend (ruff, mypy, pytest, migrations)` and
+`Frontend (typecheck, lint, test, build)` report `completed/success`, and the API
+returns each of them twice, so all four runs were read. Every run's `head_sha`
+was checked and equals `990557de5d4daaa551d6613d41c0880dd34f8c60` — the green
+result is attributed to that SHA by reading it, not by trusting the
+`.../commits/{sha}/check-runs` association, which is the mistake that produced
+earlier false CI claims in this project.
+
+NEX-017 therefore moves **TESTED → VERIFIED** at `990557d`. Checkpoint, STATE,
+BACKLOG and the run header were updated in the same run that observed the
+evidence.
+
+`46496b7` (the docs commit pushed above) was `in_progress` when polled and is
+**not** claimed green. That is the normal state of every docs head in this repo:
+pushing the next commit cancels the previous run, so a docs head routinely ends
+`completed/cancelled` and never shows success. Only a run actually observed as
+`success` is reported as passing.
+
+**PR counters re-measured at `46496b7`** from the PR object (not a local diff,
+which is invalid on this grafted clone): **28,357 additions / 10 deletions / 106
+files / 87 commits**, **720 tests collected**. The PR body still describes
+`eab423c` and has not been rewritten, so the PR is recorded as open, draft,
+unmerged, and **stale in its description** — refreshing it with these numbers is
+the next run's first action.
+

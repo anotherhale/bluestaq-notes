@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-17",
-  "timestamp": "2026-11-25T08:55:00Z",
+  "run_id": "NEX-2026-11-25-18",
+  "timestamp": "2026-11-25T08:58:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "990557d",
-  "commit_note": "990557d is the NEX-017 product commit (delegator tenant-access re-check in agent token resolution), pushed. CI on it has NOT been observed; it is TESTED, not VERIFIED.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4). NEX-017 (delegator tenant-access re-check) TESTED at 990557d.",
+  "commit": "46496b7",
+  "commit_note": "46496b7 is the NEXUS docs commit for run NEX-2026-11-25-18, on top of the NEX-017 product commit 990557d. 990557d carries CI 4/4 completed/success, observed this run and attributed to that exact SHA.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4) and NEX-017 VERIFIED at 990557d (CI 4/4, observed 2026-11-25T08:56Z). Three tasks remain TESTED-but-unverified: NEX-003, NEX-006 and their SHAs must be re-polled before promotion.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -27,7 +27,7 @@
     "NEX-014": "VERIFIED",
     "NEX-015": "VERIFIED",
     "NEX-016": "VERIFIED",
-    "NEX-017": "TESTED"
+    "NEX-017": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-001",
@@ -46,7 +46,8 @@
     "NEX-013",
     "NEX-014",
     "NEX-015",
-    "NEX-016"
+    "NEX-016",
+    "NEX-017"
   ],
   "validation": {
     "pytest_full": "716 passed, 4 skipped, run bare at 990557d this session (720 collected).",
@@ -57,28 +58,28 @@
     "mutation_check": "The two new tests were observed FAILING before the fix (resolve returned 200 for a suspended delegator's token) and passing after.",
     "migration_chain": "no migration added by NEX-017; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": false,
-    "ci_note": "CI on 990557d not yet observed. NEX-017 stays TESTED until 4/4 completed/success is seen on that exact SHA.",
-    "verified_at_commit": null,
-    "verified_by_run": null
+    "ci_observed": true,
+    "ci_note": "990557d: 4/4 completed/success, all four check runs reporting head_sha 990557de5d4daaa551d6613d41c0880dd34f8c60 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, each seen twice by the check-runs API). Verified by reading head_sha, not by assuming the commit association.",
+    "verified_at_commit": "990557d",
+    "verified_by_run": "NEX-2026-11-25-18"
   },
-  "uncommitted_work": "none; tree clean after the NEX-017 commit and push",
+  "uncommitted_work": "none; tree clean at 46496b7 plus this checkpoint update",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "990557d",
+    "head": "46496b7",
     "body_refreshed": "2026-11-25T08:23:26Z at head eab423c. Corrected three stale counters (707 tests, 195 ruff files, 97 mypy sources) to 718 / 196 / 98, refreshed the CI-evidence line to the observed b9b7207 result, and added NEX-016 to the defect list.",
     "metrics_at_head": {
-      "additions": 28079,
+      "additions": 28357,
       "deletions": 10,
       "changed_files": 106,
-      "commits": 79,
-      "tests_collected": 718,
-      "measured_at": "eab423c",
+      "commits": 87,
+      "tests_collected": 720,
+      "measured_at": "46496b7",
       "method": "PR object counters from GET /repos/anotherhale/bluestaq-notes/pulls/3"
     },
-    "note": "PR #3 head moved to 990557d (NEX-017). Metrics not re-measured this run; the last verified counters are at eab423c. Remains draft and unmerged; automated merging is prohibited.",
+    "note": "PR #3 head is 46496b7 (docs commit on top of the NEX-017 product commit 990557d). Counters re-measured from the PR object at this head: 28,357 additions / 10 deletions / 106 files / 87 commits; 720 tests collected. The body text still describes eab423c and has NOT been rewritten to these numbers. Remains draft and unmerged; automated merging is prohibited.",
     "body_current_at": "eab423c",
     "metrics": "27,659 insertions / 10 deletions / 104 files, measured with git diff --shortstat origin/main...HEAD on a full clone; matches the PR object. Per-file sums from /pulls/3/files (20,309) and /compare (19,366) are truncated and must not be quoted.",
     "body_metrics_verified": true,
@@ -103,7 +104,7 @@
       "id": "R23",
       "severity": "high",
       "summary": "A control enforced on every path someone thought of can still miss a path that establishes the same identity.",
-      "detail": "NEX-006 closed the offboarding gap by calling ensure_tenant_access on the three human identity paths (OIDC callback, session resolution, bearer provider). Agent-token resolution was a fourth way to establish an identity and never called it, so a suspended delegator's agent stayed fully operational for as long as its token lived. The gap survived because the shared seam looked complete: every caller of ensure_tenant_access was correct, and nothing enumerated the callers that were missing. Lesson: when a check is 'the one place', list every identity-establishing path and assert each one calls it, rather than trusting the seam's existence."
+      "detail": "NEX-006 closed the offboarding gap by calling ensure_tenant_access on the three human identity paths (OIDC callback, session resolution, bearer provider). Agent-token resolution was a fourth way to establish an identity and never called it, so a suspended delegator's agent stayed fully operational for as long as its token lived. The gap survived because the shared seam looked complete: every caller of ensure_tenant_access was correct, and nothing enumerated the callers that were missing. Lesson: when a check is 'the one place', list every identity-establishing path and assert each one calls it, rather than trusting the seam's existence. Closed for agent tokens by 990557d."
     },
     {
       "id": "R22",
@@ -142,10 +143,10 @@
       "detail": "On a diff over 20,000 lines, /pulls/{n}/files reports additions:0 for 20 files (every test file) and /pulls/{n}/diff returns HTTP 406, with no error on the stats endpoints to signal the truncation. Per-file sums gave 20,309 and /compare gave 19,366 against a true 27,659. Quote the PR object's additions field or `git diff --shortstat origin/main...HEAD` on a full clone."
     }
   ],
-  "next_task": "Observe CI on 990557d; promote NEX-017 on 4/4, else diagnose. Then refresh PR #3 metrics.",
-  "next_action": "Poll 4/4 completed/success on 990557d. On green, promote NEX-017 to VERIFIED and add it to completed_tasks. Re-measure the PR object counters at the new head before refreshing the body. Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is VERIFIED at b9b7207 (CI 4/4); NEX-017 is TESTED at 990557d pending CI - do not re-implement either. Carry R22/R23 forward: a security control needs a test of the full decision-to-effect path, and a control enforced on some identity paths must be checked on every path that establishes an identity. The clone is grafted; use PR object counters for metrics. Never merge PR #3. Write scripts to /tmp via file_editor; never use a heredoc - it corrupted a commit message this run (amended before push).",
-  "ci_status": "990557d: not observed yet (pushed this run). b9b7207: 4/4 completed/success (NEX-016 is VERIFIED on it). Docs heads after b9b7207 are completed/cancelled - superseded, not passing.",
+  "next_task": "Refresh the PR #3 body to the 46496b7 counters (28,357 / 10 / 106 / 87, 720 tests) and name 990557d as the CI-verified product head.",
+  "next_action": "1. Rewrite PR #3 body with the measured counters and the two VERIFIED commits (b9b7207 for NEX-016, 990557d for NEX-017). 2. Re-poll CI on the NEX-003 and NEX-006 SHAs; promote only on observed 4/4. 3. Then select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is VERIFIED at b9b7207 (CI 4/4) and NEX-017 is VERIFIED at 990557d (CI 4/4). NEX-003 and NEX-006 are TESTED, not verified - re-poll their SHAs before promoting. PR #3 is open, draft and must stay unmerged. The PR body is stale relative to the measured counters; refresh it before claiming the PR is current.",
+  "ci_status": "990557d: 4/4 completed/success (verified 2026-11-25T08:56Z, head_sha confirmed on every run). 46496b7 (docs): in_progress at time of checkpoint, not claimed green. b9b7207: 4/4 completed/success.",
   "notes_on_pr_body": "Body refreshed at eab423c on 2026-11-25T08:23:26Z; its counters match the PR object (106 files / 28,079 additions / 10 deletions / 79 commits / 718 tests collected).",
   "validation_status": {
     "gates": "local at b9b7207: ruff format --check clean, ruff check clean, mypy clean, pytest 714 passed / 4 skipped.",
@@ -156,9 +157,9 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "990557d",
+    "head": "46496b7",
     "body_updated": "2026-11-25T08:23:26Z",
-    "body_metrics_verified": true,
+    "body_metrics_verified": false,
     "merge": "prohibited - must remain unmerged for human review"
   },
   "verified_tasks": [
@@ -178,12 +179,12 @@
     "NEX-013",
     "NEX-014",
     "NEX-015",
-    "NEX-016"
+    "NEX-016",
+    "NEX-017"
   ],
   "in_progress_tasks": {
     "NEX-006": "TESTED",
-    "NEX-003": "TESTED",
-    "NEX-017": "TESTED"
+    "NEX-003": "TESTED"
   },
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }
