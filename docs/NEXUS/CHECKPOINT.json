@@ -102,23 +102,22 @@
     "state": "open",
     "draft": true,
     "counters": {
-      "additions": 38560,
+      "additions": 38862,
       "deletions": 28,
       "changed_files": 134,
-      "commits": 167
+      "commits": 171
     },
-    "counters_measured_at": "2026-11-25T18:20Z, read from the PR object AFTER the docs commit 2b61055 landed (the PATCH response returned these figures).",
-    "body_updated": "PATCHed 2026-11-25T18:21Z: NEX-035 section appended (absent before), body 50,720 -> 53,141 chars, read back byte-equal to the intended string. head.sha read back as 2b61055.",
-    "note": "Counters measured post-product-commit, pre-docs-commit. Re-measure before quoting; the docs commit that records them changes them.",
-    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) reported 12f6fa9, and `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` reported 12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec. They agreed. Never read the head from this file.",
-    "last_observed": "2026-11-25T18:18Z"
+    "counters_measured_at": "2026-11-25T18:47Z, read from the PR object after the CI-correction docs commit c37037f. Re-measure before quoting; a later commit changes them.",
+    "body_updated": "PATCHed 2026-11-25T18:47Z: NEX-036 section appended, 53,141 -> 56,759 chars, read back byte-equal. head.sha read back as c37037f.",
+    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) and `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` agreed at c37037f. Never read the head from this file.",
+    "last_observed": "2026-11-25T18:47Z"
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment_id": 7170773014,
-    "last_comment_len": 4044,
-    "last_comment_scope": "NEX-035 VERIFIED with CI evidence at 12f6fa9, plus the run-id collision finding. Lists only - a markdown table in an issue comment returns HTTP 500 on this repository. Posted and read back byte-equal."
+    "last_comment_id": 7171412980,
+    "last_comment_len": 3199,
+    "last_comment_scope": "NEX-036 VERIFIED with CI evidence at 90eea0c, R35 closed, R34 carried forward to NEX-037. Lists only; posted and read back byte-equal."
   },
   "blockers": [],
   "risks": [
@@ -254,7 +253,7 @@
     }
   ],
   "next_task": "NEX-037",
-  "next_action": "TWO actions, in order. (1) DELIVERY DEBT: PR #3 body and issue #2 comment still describe NEX-035 as the latest slice. Append the NEX-036 section to PR #3 (PATCH /pulls/3) and post an issue #2 comment (lists, NOT a table - a markdown table returns HTTP 500 there), each read back and asserted on specific substrings plus byte-equality. (2) NEX-037: close R34 by exporting the withholding rate. Verify the premise first - grep -rn 'WithholdingRecorder' src/notes_service - because the last four next_action fields each needed correcting against the code. Candidate scope: expose the existing counters through health/readiness or a metrics endpoint, with a test asserting a withheld field increments exactly one counter and a 409 refusal increments none.",
+  "next_action": "NEX-037: close R34 by exporting the withholding rate. Verify the premise against the code FIRST - grep -rn 'WithholdingRecorder' src/notes_service - because the last four next_action fields each needed correcting against the tree. Candidate scope: expose the existing counters through health/readiness or a metrics endpoint, with a test asserting a withheld field increments exactly one counter and that a 409 refusal increments none. Delivery debt is CLEARED this run (PR #3 body and issue #2 comment both carry NEX-036).",
   "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-036 is 90eea0c on feature/agentic-enterprise-platform; a docs promotion follows in a separate commit, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-036 local gates are green; its CI was NOT polled to completion, so poll 90eea0c before calling it CI-verified. Then start NEX-037, verifying the premise against the code first.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
@@ -314,7 +313,7 @@
   "commit_scope": "commit names the last commit carrying real IMPLEMENTATION (90eea0c, NEX-036). The docs promotion above it is separate. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
   "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local: ruff format/check clean, mypy 107 files clean, pytest 916 passed / 4 skipped (baseline 911 at NEX-035, +5 new tests, negative control verified on disk). CI: green at 90eea0c - one complete Backend+Frontend pair completed/success, polled 2026-11-25T18:45Z; the duplicate event run was cancelled by the concurrency group.",
+  "validation_status": "Local: ruff format/check clean, mypy 107 files clean, pytest 916 passed / 4 skipped (baseline 911 at NEX-035, +5 new tests, negative control verified on disk). CI: green at 90eea0c, polled 2026-11-25T18:45Z. PR #3 body and issue #2 comment both verified byte-equal after writing.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -327,27 +326,28 @@
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
     "90eea0c": "NEX-036 product fix - advisory refused for a non-pending or expired request (implementation)",
-    "5d2792b": "docs - NEX-036 promoted in checkpoint/STATE/EXECUTION_LOG, CI evidence recorded, R34 opened"
+    "5d2792b": "docs - NEX-036 promoted in checkpoint/STATE/EXECUTION_LOG, CI evidence recorded, R34 opened",
+    "c37037f": "docs - correct the 'CI not polled' claim once the poll came back green"
   },
   "delivery_state": {
-    "ci_nex036": "Green at 90eea0c, polled 2026-11-25T18:45Z: Backend + Frontend completed/success (one complete pair); duplicate Backend run cancelled by the concurrency group (not evidence).",
-    "pr_3_body": "NOT updated this run - the window closed after the CI poll. PR #3 still carries the NEX-035 section. NEX-036 needs a section appended; that is the first delivery action for the next run.",
-    "issue_2_comment": "NOT posted this run, for the same reason. Issue #2's last comment is 7170773014 (NEX-035). Remember: lists, never a markdown table, in an issue comment."
+    "ci_nex036": "Green at 90eea0c, polled 2026-11-25T18:45Z: Backend completed/success (id 139429822539) + Frontend completed/success (id 139429823232), one complete pair. Duplicate Backend run id 139429874630 reads completed/cancelled (concurrency group); not evidence.",
+    "pr_3_body": "PATCHed 2026-11-25T18:47Z with the NEX-036 section: 53,141 -> 56,759 chars, read back BYTE-EQUAL to the intended string and asserted on specific substrings ('## NEX-036 — the advisory outlived its question', '139429822539'). Head read back as c37037f. Counters from the PR object at that moment: 38,862 additions / 28 deletions / 134 files / 171 commits - measured AFTER the CI-correction docs commit, so they include it.",
+    "issue_2_comment": "POSTed id 7171412980, 3,199 chars, read back BYTE-EQUAL and asserted on four specific substrings. Lists, not a table - a markdown table in an issue comment returns HTTP 500 on this repository."
   },
   "run_summary": {
     "run_id": "NEX-2026-11-25-37",
     "started_commit": "72957e4",
-    "ending_commit": "5d2792b",
+    "ending_commit": "c37037f",
     "slices_completed": 1,
     "slices_promoted": [
       "NEX-036"
     ],
-    "note": "One complete slice: the audit premise was probed rather than assumed, the defect it found was fixed, the fix was mutation-checked, and the result is committed, pushed and CI-verified. The product commit 90eea0c was pushed before the docs commit so the evidence names the product SHA rather than a docs head that would read cancelled."
+    "note": "One complete slice, fully delivered: the audit premise was probed rather than assumed, the defect it found was fixed, the fix was mutation-checked, CI was polled green at the product SHA, and PR #3 and issue #2 both carry the slice with bodies verified byte-equal. A stale 'not polled' claim written in the promotion commit was corrected in the same run once the poll returned - it would otherwise have read as a finding long after it stopped being true."
   },
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
-    "last_observed_sha": "90eea0c",
-    "last_observed_at": "2026-11-25T18:41Z",
+    "last_observed_sha": "c37037f",
+    "last_observed_at": "2026-11-25T18:47Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
