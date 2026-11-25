@@ -283,7 +283,9 @@
     "docs_heads": "Any docs-only commit following 5c0575b carries no source change, so a red or cancelled run on it says nothing about the code. 5c0575b is an ancestor of any such head.",
     "rule": "Poll the PRODUCT commit before pushing its docs commit. A docs head superseded by the concurrency group reads completed/cancelled, which is neither pass nor fail and must never be counted as either.",
     "evidence_basis": "5c0575b: direct green poll at that SHA, all four check runs reporting head_sha 5c0575b. 90eea0c: direct green poll at that SHA. Any later docs commit (7ac893c and above): descendant-CI - green at an ancestor whose tree contains the code, which is weaker than a green poll at the SHA itself and is labelled as such rather than folded in.",
-    "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all."
+    "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all.",
+    "reconciliation_docs_sha": "83122fc",
+    "reconciliation_docs_result": "VERIFIED GREEN - 4/4 completed/success at 83122fc (docs-only: EXECUTION_LOG, STATE, CHECKPOINT). Polled 2026-11-25T19:22Z. Every check run reported head_sha 83122fc. This commit changes no source, so the green run confirms the tree is unchanged and healthy; it is not new evidence about the product code, which remains verified at 5c0575b."
   },
   "verified_tasks": [
     "NEX-001",
