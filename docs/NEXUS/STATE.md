@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **TESTED** (`990557d`, CI not yet observed) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `8e3d767` |
-| Head commit (run end) | `b9b7207` (NEX-016 product slice; pushed and verified on the remote). The docs commit carrying this file is its child. |
-| Last CI result | **Green on `b9b7207`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. This is the NEX-016 product commit. |
+| Base commit (run start) | `adf0ae2` |
+| Head commit (run end) | `990557d` (NEX-017 product slice; pushed). The docs commit carrying this file is its child. |
+| Last CI result | **Green on `b9b7207`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. That is the NEX-016 product commit. **`990557d` has not been observed yet.** |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `a9f7322`. Body **refreshed 2026-11-25T08:23Z** at `eab423c`: **106 files, 28,079 insertions, 10 deletions, 79 commits**, 718 tests collected. |
-| CI status | **`b9b7207`: 4/4 `completed/success`** (the only head with green CI from this run; NEX-016 is VERIFIED on it). `eab423c` and its successors are **`completed/cancelled`** — superseded by the next push, which is not the same as passing. `24dd693` was `in_progress` at last poll (2026-11-25T08:33Z). All three are Markdown/JSON only. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `990557d`. Body last **refreshed 2026-11-25T08:23Z** at `eab423c`: **106 files, 28,079 insertions, 10 deletions, 79 commits**, 718 tests collected. Not re-measured this run. |
+| CI status | **`b9b7207`: 4/4 `completed/success`** — the only head with green CI; NEX-016 is VERIFIED on it. **`990557d`: not yet observed.** Every docs head after `b9b7207` reads `completed/cancelled` — superseded by the next push, which is not the same as passing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable
@@ -41,13 +41,51 @@ Why the suite was green throughout: every approval test covered one half of the
 path (that a request is raised, that a decision is stored, that expiry and
 revocation work). None covered approve-then-continue. See risk **R22**.
 
+## NEX-017 (run `NEX-2026-11-25-17`) — a suspended delegator's agent kept working
+
+NEX-006 closed the offboarding gap by calling `ensure_tenant_access` on the three
+human identity paths: the OIDC callback, per-request session resolution, and the
+bearer provider. **Agent-token resolution is a fourth way to establish an
+identity, and it never called it.**
+
+That matters because `_actor_principal` makes every tool call act *as the
+delegator*. So suspending or deprovisioning a person left their agent fully
+operational for as long as its token lived — the exact offboarding hole NEX-006
+closed, reopened one layer up.
+
+`ResolveAgentToken` now re-checks tenant access after its existing delegation
+checks (expiry, revocation, agent suspension, capability subset) and refuses
+`DENIED`. It reuses `resolve_tenant_access`, so the decision stays in the pure
+domain rule rather than becoming a second copy. Two deliberate choices:
+
+- **`UNAFFILIATED` is still allowed.** A brand-new identity must be able to
+  bootstrap; the check refuses only a *denied* membership. Per-resource
+  authorization continues to run as the delegator downstream.
+- **The refusal is a pause, not a tombstone.** A test reactivates the membership
+  and asserts the same token works again, so the check cannot be satisfied by
+  permanently breaking the token.
+
+The two tests drive the real path end to end (HTTP membership suspend, then token
+resolve) and were observed failing before the fix — the resolve returned `200`
+for a suspended delegator. A skip-based version that asserted nothing was
+discarded rather than kept. See risk **R23**.
+
+**Status: TESTED at `990557d`.** Local gates green (716 passed / 4 skipped, ruff
+format + check clean, mypy clean, architecture 5 passed). CI on `990557d` has
+**not** been observed, so this is not VERIFIED.
+
 ## Next best actions
 
-1. Observe CI on `b9b7207`; promote NEX-016 to VERIFIED on 4/4, or diagnose the
-   failure before doing anything else.
-2. Refresh the PR #3 body against the PR object counters (106 / 27,936 / 10 / 77 /
-   718) — it is stale at `7ce6f8b`.
-3. Pick the next dependency-ready Phase-5 slice from `ROADMAP.md`.
+1. **Observe CI on `990557d`.** `gh api
+   repos/anotherhale/bluestaq-notes/commits/990557d/check-runs` — only a 4/4
+   `completed/success` promotes NEX-017 to VERIFIED. Do not promote on local
+   gates.
+2. **Re-measure, then refresh, the PR #3 body.** Quote the PR object counters at
+   the current head (`additions` / `deletions` / `changed_files` / `commits`),
+   never a local two-dot diff — the clone is grafted and per-file sums truncate.
+3. **Pick the next dependency-ready slice from `ROADMAP.md`.** NEX-003 and
+   NEX-006 are the two remaining TESTED-but-unverified tasks; re-confirm CI on
+   their SHAs before promoting either.
 
 ## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)
 

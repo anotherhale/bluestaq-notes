@@ -961,3 +961,45 @@ does not open a duplicate approval request.
 
 **Next action:** observe CI on `b9b7207`; on 4/4 green promote to VERIFIED.
 
+## NEX-017 - Re-check tenant access when resolving an agent token
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 (identity & delegation) / 5 (durable runtime) |
+| Priority | P0 (offboarding did not revoke agent authority) |
+| Status | **TESTED** at `990557d` - local gates green, CI not yet observed |
+| Dependencies | NEX-006 (tenant access enforcement), NEX-003 (agent identity), NEX-014 (revocation) |
+| Architecture | explicit authorization, fail-closed security, one shared decision seam |
+
+**Objective:** NEX-006 enforced tenant access on the three human identity paths.
+Agent-token resolution is a fourth way to establish an identity and did not check
+it, so a suspended or deprovisioned delegator's agent stayed fully operational
+until the token expired.
+
+**Why it mattered:** `_actor_principal` makes every tool call act *as the
+delegator*. The agent inherits the person's authority, so it must also inherit
+the person's loss of it. This was the NEX-006 offboarding gap one layer up.
+
+**Delivered:** `ResolveAgentToken` in `application/use_cases/agents.py` now calls
+`resolve_tenant_access` after its existing checks (expiry, delegation
+revocation, agent suspension, capability subset) and refuses `DENIED`. The
+`tenant_access.py` docstring is corrected from "three paths" to four.
+
+**Decisions:**
+
+- Reuses `resolve_tenant_access` rather than re-deriving the rule, so there is
+  still one decision implementation.
+- `UNAFFILIATED` remains allowed so a new identity can bootstrap; only `DENIED`
+  is refused.
+- The refusal is a pause: reactivating the membership restores the same token.
+
+**Tests:** `tests/api/test_agents_api.py::TestDelegatorTenantAccess` - suspend the
+delegator over HTTP, resolve the agent token (403), reactivate, resolve again
+(success). Both were observed failing before the fix (200 while suspended).
+
+**Security:** closes an offboarding hole in which a departed or suspended
+person's agent retained live authority over the delegator's resources.
+
+**Next action:** observe CI on `990557d`; on 4/4 `completed/success` promote to
+VERIFIED.
+

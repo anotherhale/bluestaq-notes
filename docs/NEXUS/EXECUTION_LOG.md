@@ -2147,3 +2147,75 @@ Then refresh the PR body and select the next Phase-5 slice.
 **CI correction (same run, 2026-11-25T08:33Z).** The docs heads `eab423c` and `10ae3c7` did **not** pass CI: their runs are `completed/cancelled`, superseded when the next commit was pushed. Reporting them as "CI green" would have been false. The only green evidence from this run is `b9b7207` at 4/4 `completed/success`, which is the head NEX-016 is verified against. STATE.md previously listed the PR head as `b9b7207`; it is `24dd693`.
 
 **Truthfulness defect in CHECKPOINT.json, found and fixed.** `completed_tasks` listed 19 entries, but only 16 of the 19 tracked statuses were VERIFIED: NEX-003 and NEX-006 are TESTED, NEX-009-HTTP was stale-TESTED while BACKLOG said VERIFIED, and `NEX-009-slice1` was a phantom id (BACKLOG records slice 1 under NEX-009). The list conflated "work done" with "verified", so four unfinished tasks read as finished. `completed_tasks` now means VERIFIED only, `in_progress_tasks` carries the TESTED entries, and `status_semantics` states the rule. NEX-009-HTTP promoted to VERIFIED on independently re-confirmed evidence: `e817d04` is 4/4 `completed/success` (re-polled this run).
+
+---
+
+## Run `NEX-2026-11-25-17` — NEX-017 delegator tenant-access re-check
+
+**Timestamp:** 2026-11-25T08:31Z start (`RUN_START=1795595480`).
+**Branch:** `feature/agentic-enterprise-platform`.
+**Starting commit:** `adf0ae2`. **Ending commit:** `990557d`.
+**Project phase:** Phase 2 complete; Phase 5 durable runtime in progress.
+
+**Recovery and reconciliation.** CHECKPOINT.json and STATE.md were read whole and
+agreed with Git: branch correct, tree clean, head `adf0ae2`. The uncommitted work
+described in the session handoff was already present in the working tree and
+passed the full local gate set before this run touched anything, so it was
+resumed rather than redone — the interrupted-work rule from Section 5.
+
+**Task completed (TESTED, not VERIFIED):** NEX-017.
+
+`ResolveAgentToken` re-checked token expiry, delegation revocation, agent
+suspension and capability subset, but never whether the delegator still had
+tenant access. Because `_actor_principal` makes every tool call act *as the
+delegator*, suspending or deprovisioning a person left their agent fully
+operational for the life of its token. That is the NEX-006 offboarding hole
+reopened one layer up: a control was enforced on the three human identity paths
+(OIDC callback, session resolution, bearer provider) and agent-token resolution
+was a fourth path nobody enumerated. Recorded as risk **R23**.
+
+The fix calls `resolve_tenant_access` after the existing delegation checks and
+refuses only `DENIED`, so the decision stays in the pure domain rule and a new
+identity can still bootstrap (`UNAFFILIATED` stays allowed).
+
+**Tests:** `tests/api/test_agents_api.py::TestDelegatorTenantAccess` drives the
+real path — suspend the delegator over HTTP, resolve the agent token, expect 403;
+reactivate, resolve again, expect success. A skip-based draft that asserted
+nothing was discarded. Both tests were observed **failing before the fix** (200
+while suspended) and passing after, which is the only reason to trust them.
+
+**Files changed:** `application/use_cases/agents.py` (+16),
+`application/use_cases/tenant_access.py` (docstring corrected from three
+enforcement paths to four), `tests/api/test_agents_api.py` (+73).
+
+**Gates, run bare as CI runs them at `990557d`:** `ruff format --check` clean
+(196 files), `ruff check` clean, `mypy` clean (98 source files), `pytest`
+**716 passed / 4 skipped**, `tests/architecture` 5 passed (the new import is
+application → application, so the layering boundary holds). No migration added;
+head remains `e5a3b9c04f21`.
+
+**Commit / push:** `990557d` pushed to `origin/feature/agentic-enterprise-platform`
+(`adf0ae2..990557d`).
+
+**Tooling defect encountered again (R12).** The commit message was first written
+through a shell heredoc and came out duplicated and interleaved. It was caught
+before the push because the message was inspected, then amended from a file
+written with the file editor — safe, because the commit was unpushed. The same
+heredoc corruption then hit a `cat >> docs/NEXUS/BACKLOG.md` append, which
+produced several kilobytes of interleaved garbage. That file was reverted with
+`git checkout --` and the entry re-applied with the editor. Nothing was lost,
+but this is the fourth occurrence and the rule is now unambiguous: **write text
+files with the file editor, never through a shell heredoc.**
+
+**CI:** not observed for `990557d` this run. NEX-017 is TESTED. `b9b7207`
+(NEX-016) remains the only head observed green at 4/4 `completed/success`, and
+NEX-016 stays VERIFIED on that evidence.
+
+**PR:** #3 remains open, draft, unmerged. Head is now `990557d`; the body was not
+refreshed this run, so its counters still describe `eab423c`. Recording that
+plainly rather than implying the PR is current.
+
+**Next action:** observe 4/4 `completed/success` on `990557d`. On green, promote
+NEX-017 to VERIFIED and re-measure the PR object counters before refreshing the
+body. Never merge PR #3.
+
