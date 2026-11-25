@@ -178,6 +178,7 @@ class SqlAlchemyAgentRepository:
                 revoked_at=agent.revoked_at,
             )
         )
+        agent.mark_persisted()
 
     def get(self, agent_id: AgentId) -> AgentIdentity | None:
         row = self._session.get(AgentRow, _as_uuid(agent_id))
@@ -202,17 +203,47 @@ class SqlAlchemyAgentRepository:
         return [_agent_to_domain(row) for row in rows]
 
     def save(self, agent: AgentIdentity) -> None:
+        """Persist the aggregate, refusing to overwrite a newer stored version.
+
+        The compare-and-set is one ``UPDATE ... WHERE version = :expected``, as in
+        :meth:`SqlAlchemyAgentRunRepository.save`. Without it two writers that
+        loaded the same agent both succeed and the loser's commit wins silently:
+        a copy taken before a revoke writes ``status=active`` and
+        ``revoked_at=NULL`` back over the revoked row, restoring a principal a
+        human deliberately stopped, and a copy taken before a narrowing restores
+        the capabilities it removed. Both are silent re-grants of withdrawn
+        authority, so the loser must reload rather than overwrite.
+        """
         row = self._session.get(AgentRow, _as_uuid(agent.id))
         if row is None:
             self.add(agent)
             return
-        row.display_name = agent.display_name
-        row.capabilities = _encode_capabilities(agent.capabilities)
-        row.status = agent.status.value
-        row.max_token_ttl_seconds = agent.max_token_ttl_seconds
-        row.version = agent.version
-        row.updated_at = agent.updated_at
-        row.revoked_at = agent.revoked_at
+        expected_version = agent.persisted_version
+        result = self._session.execute(
+            update(AgentRow)
+            .where(
+                AgentRow.id == _as_uuid(agent.id),
+                AgentRow.version == expected_version,
+            )
+            .values(
+                display_name=agent.display_name,
+                capabilities=_encode_capabilities(agent.capabilities),
+                status=agent.status.value,
+                max_token_ttl_seconds=agent.max_token_ttl_seconds,
+                version=agent.version,
+                updated_at=agent.updated_at,
+                revoked_at=agent.revoked_at,
+            )
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            current = self._session.execute(
+                select(AgentRow.version).where(AgentRow.id == _as_uuid(agent.id))
+            ).scalar_one_or_none()
+            raise VersionConflict(
+                expected=int(expected_version),
+                actual=int(current) if current is not None else int(expected_version),
+            )
+        agent.mark_persisted()
 
 
 class SqlAlchemyDelegationRepository:

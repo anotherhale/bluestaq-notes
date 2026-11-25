@@ -1179,3 +1179,86 @@ that observation, not on descendant-CI and not on the local gates.
 **Next action:** continue the CAS audit (NEX-021) — enumerate the remaining repositories
 whose `save()` rewrites a whole row without a compare-and-set; delegations, tokens and tool
 invocations are the first candidates.
+
+*Satisfied:* that audit is written up as NEX-021 below and the enumeration is complete. The
+three candidates named here — delegations, tokens, tool invocations — turned out **not** to
+need a version; `AgentIdentity` was the real remaining offender.
+
+## NEX-021 — A stale write must not resurrect a suspended or revoked agent
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P0 (security: silent re-grant of withdrawn authority on the emergency-stop aggregate) |
+| Status | **TESTED** — 5 new tests pass, full suite 735 passed / 4 skipped, gates clean; CI not yet observed on this commit |
+| Dependencies | NEX-003 (agent identity), NEX-019 (the CAS pattern), NEX-020 (the second copy of it) |
+
+**Objective:** finish the CAS audit. Close the same lost-update hole NEX-019 and NEX-020
+closed for runs and approvals, on the aggregate whose revocation *is* the kill switch.
+
+The audit enumerated every `save()` in `infrastructure/db/` and asked one question per
+aggregate: does the write rewrite authority-bearing columns from caller-supplied state,
+and is there a version to compare against?
+
+| Aggregate | `version` column | `persisted_version` | CAS on `save` |
+| --- | --- | --- | --- |
+| `Note` | yes | via `expected_version` arg | **yes** |
+| `AgentRun` | yes | yes | **yes** (NEX-019) |
+| `ApprovalRequest` | yes | yes | **yes** (NEX-020) |
+| **`AgentIdentity`** | **yes** | **no** | **no — unconditional overwrite** |
+| `DelegatedAuthorization` | no | n/a | writes 3 fields; revoke monotonic |
+| `AgentToken` | no | n/a | writes `revoked_at` only; monotonic |
+| `ToolInvocation` | no | n/a | writes verdict and seal together |
+
+The table records the state **at audit time**, before this slice. After it, `AgentIdentity`
+moves into the "yes / yes / yes" column and no aggregate is left without either a
+compare-and-set or a monotonic write.
+
+`AgentIdentity` was the only remaining offender, and the worst one. It already bumped
+`version` on **every** authority-changing transition — `suspend`, `activate`, `revoke`,
+`narrow_capabilities` — so the version was maintained and then ignored. `save()` wrote
+`status`, `capabilities`, `revoked_at`, `max_token_ttl_seconds` and the rest straight from
+whatever the caller had loaded.
+
+**Harm.** Two requests can hold the same agent id at once (a human revoking in the control
+centre while an unrelated edit finishes). With no compare-and-set the later commit wins
+silently:
+
+- a stale copy saved after a revoke writes `status=active` and `revoked_at=NULL` back over
+  the revoked row — the emergency stop is undone and the agent can issue tokens again;
+- a stale copy taken before a `narrow_capabilities` restores the removed capabilities,
+  re-widening a ceiling the domain only ever permits to shrink.
+
+Nothing raises. For a note this is a lost edit; here it is a silent re-grant of authority a
+human explicitly withdrew.
+
+**Root cause:** same shape as NEX-020. `save` was an unconditional full-row overwrite, and
+`AgentIdentity` kept no record of the version it had been loaded at. `version - 1` cannot
+supply it, because a caller may mutate several times between two saves (e.g. suspend then
+narrow, one `save`).
+
+**Delivered:**
+
+- `domain/agent/entities.py` — `AgentIdentity` gains `persisted_version` (seeded in
+  `__post_init__`, updated by a new `mark_persisted()`), matching `ApprovalRequest` and
+  `AgentRun`. `version` and the `_bump()` calls were already correct and are unchanged.
+- `infrastructure/db/agent_repositories.py` — `add()` now calls `mark_persisted()`;
+  `save()` is one `UPDATE ... WHERE id = :id AND version = :expected` raising
+  `VersionConflict` on rowcount 0 (already HTTP 409 via `presentation/errors.py`), then
+  calls `mark_persisted()`.
+- No migration: `agents.version` has existed since `c3f1a9d47e02`.
+
+**Tests:** `tests/agent/test_agent_identity_concurrency.py` — 5 tests through the
+production write path: a stale save cannot resurrect a revoked agent, cannot reinstate a
+suspended one, cannot widen a narrowed capability set; an honest current-version write
+still succeeds; and a double save without reload is refused because `mark_persisted()`
+moved `persisted_version` forward.
+
+**Deliberately out of scope:** `DelegatedAuthorization`, `AgentToken` and `ToolInvocation`
+carry no version and need none. Each `save()` writes a strictly monotonic field
+(`revoked_at`, a terminal verdict), so two concurrent writers converge on the same value
+rather than one erasing the other's authority. Adding a version there would be ceremony,
+not a guard. Recorded here so a future audit does not re-open it without cause.
+
+**Next action:** observe CI on this commit; on 4/4 `completed/success` at this `head_sha`,
+promote to VERIFIED.

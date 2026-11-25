@@ -2782,3 +2782,106 @@ It is now done, and the evidence is checkable:
    as **field-level edits only** with `ensure_ascii=False`: 18 changed lines, and the
    `evidence_basis` object intact. Match the existing formatting before rewriting a file,
    and check the diff size against the number of fields actually changed.
+
+---
+
+## Run `NEX-2026-11-25-23` — 2026-11-25T10:31Z — NEX-021: a stale write must not resurrect a stopped agent
+
+**Starting commit** `d426b95` (docs head from the previous run). **Branch**
+`feature/agentic-enterprise-platform`. **Phase** 5 (durable runtime).
+
+### What this run did
+
+Finished the compare-and-set audit that NEX-019 (runs) and NEX-020 (approvals) started.
+The audit asked one question of every repository under `infrastructure/db/`: does `save()`
+rewrite authority-bearing columns from caller-supplied state, and is there a version to
+compare against?
+
+| Aggregate | `version` | `persisted_version` | CAS on `save` |
+| --- | --- | --- | --- |
+| `Note` | yes | via `expected_version` arg | yes |
+| `AgentRun` | yes | yes | yes (NEX-019) |
+| `ApprovalRequest` | yes | yes | yes (NEX-020) |
+| **`AgentIdentity`** | **yes** | **no** | **no — unconditional overwrite** |
+| `DelegatedAuthorization` | no | n/a | 3 fields; revoke monotonic |
+| `AgentToken` | no | n/a | `revoked_at` only; monotonic |
+| `ToolInvocation` | no | n/a | verdict and seal written together |
+
+`AgentIdentity` was the last offender and the most dangerous one, because its revocation
+*is* the emergency stop. It already bumped `version` on `suspend`, `activate`, `revoke` and
+`narrow_capabilities` — and `save()` ignored the value. The version was maintained and then
+discarded.
+
+### The defect
+
+Two requests can hold the same agent id at once: a human revoking in the control centre
+while an unrelated edit finishes. With no compare-and-set the later commit won silently.
+
+- A stale copy saved after a revoke wrote `status=active` and `revoked_at=NULL` back over
+  the revoked row. The kill switch was undone and the agent could issue tokens again.
+- A stale copy taken before a narrowing restored the capabilities the narrowing removed,
+  re-widening a ceiling the domain only permits to shrink.
+
+Neither raised. This is the same class of silent re-grant of withdrawn authority that
+NEX-019 fixed for run progress and NEX-020 fixed for approval decisions.
+
+### The fix
+
+- `domain/agent/entities.py`: `AgentIdentity` gains `persisted_version`, seeded in
+  `__post_init__` and advanced by `mark_persisted()`. It exists because `version - 1` is
+  not the stored version — a caller may mutate several times between two saves, so the
+  repository needs the exact value it last read or wrote.
+- `infrastructure/db/agent_repositories.py`: `save()` is now a single
+  `UPDATE ... WHERE id AND version = :expected`. On rowcount 0 it re-reads the stored
+  version and raises `VersionConflict` (HTTP 409). `add()` calls `mark_persisted()`.
+- No migration: `agents.version` has existed since `c3f1a9d47e02`.
+
+### Validation
+
+- `tests/agent/test_agent_identity_concurrency.py` — **5 tests, all pass**, driving the
+  production `save()` path: stale-save-after-revoke, stale-save-after-suspend,
+  stale-save-after-narrowing, honest-write-still-succeeds, and second-save-without-reload.
+- **Negative control run this session.** Deleting the `version == expected` predicate turns
+  **4 of the 5 red** while the honest-write test stays green. So the suite detects the lost
+  update; it does not merely assert "always raise". The predicate was restored and the file
+  re-verified (`grep -c` = 1, 5 passed).
+- Bare gates, as CI runs them: `ruff format --check` — 201 files already formatted;
+  `ruff check` — All checks passed; `mypy` — 98 source files clean; `pytest` full suite —
+  **735 passed, 4 skipped** (was 730; the delta is exactly the 5 new tests).
+- Migration round-trip on a scratch SQLite db: `upgrade head` → `downgrade -1` → `upgrade
+  head`, clean. No migration was added.
+
+### Status
+
+**TESTED**, not VERIFIED. CI has not been observed on the commit carrying this slice. The
+local evidence above is reproducibility, not proof (R9/R10). Promotion requires 4/4
+`completed/success` at that commit's `head_sha`.
+
+### Deliberately out of scope
+
+`DelegatedAuthorization`, `AgentToken` and `ToolInvocation` get no version. Each writes a
+strictly monotonic field (`revoked_at`, a terminal verdict), so concurrent writers converge
+on the same value instead of erasing each other's authority. Adding a version there would be
+ceremony that guards nothing. Recorded in STATE.md and the BACKLOG so a later audit does not
+re-open it without cause.
+
+### Decisions
+
+No new ADR. This slice applies the existing optimistic-concurrency contract
+(`docs/ADR/ADR-008`) to one more aggregate; it does not change the contract.
+
+### Commit strategy, and why it differs from the last two runs
+
+NEX-019 and NEX-020 each landed a product commit followed by a docs commit. Because the CI
+concurrency group cancels superseded runs, the product commit then ends with **zero check
+runs of its own** and can only be labelled descendant-CI. This run lands code, tests and
+NEXUS docs in a **single** commit, so the one CI run covers the entire tree — docs included
+— and the slice is directly, not indirectly, covered. The cost is a larger single commit;
+the benefit is unambiguous evidence.
+
+### Next action
+
+Poll CI on the pushed commit. Promote NEX-021 to VERIFIED only on 4/4 `completed/success`
+at that `head_sha`; if a later push supersedes it, say so plainly rather than reporting the
+superseded head as green. Then select the next dependency-ready Phase-5 slice from
+`ROADMAP.md` — the CAS audit itself is now closed.

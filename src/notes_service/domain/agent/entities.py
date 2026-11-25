@@ -76,10 +76,29 @@ class AgentIdentity(_Versioned):
     capabilities: frozenset[Capability]
     status: AgentStatus = AgentStatus.ACTIVE
     max_token_ttl_seconds: int = DEFAULT_MAX_TOKEN_TTL_SECONDS
+    # Suspension, reactivation, revocation and narrowing all change what this
+    # principal may do, so each bumps ``version``. Persistence needs that to be
+    # enforced, not decorative: ``save`` rewrites ``status``, ``capabilities``
+    # and ``revoked_at`` from whatever the caller last read, so a stale copy
+    # saved after a revoke restores ``active`` over ``revoked`` and clears
+    # ``revoked_at`` — the emergency stop silently undone. A stale copy also
+    # reinstates capabilities a narrowing removed.
     version: int = 1
+    # The version this aggregate was last read from or written to storage at.
+    # ``version - 1`` is not that value: a caller may mutate several times
+    # between two saves, so persistence needs the exact stored version to build
+    # its ``UPDATE ... WHERE version = :expected``.
+    persisted_version: int = field(default=1, init=False, repr=False)
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
     revoked_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        self.persisted_version = self.version
+
+    def mark_persisted(self) -> None:
+        """Record that ``version`` is now what storage holds."""
+        self.persisted_version = self.version
 
     @classmethod
     def register(

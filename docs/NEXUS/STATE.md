@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **TESTED** (local gates green, CI not yet observed) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `b630ff3` — the clone started on `main` at `d6f92d0`; the authorized branch was fetched and checked out before any gate was trusted, then verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `b630ff3`). |
-| Head commit (run end) | `23a36dc` — `docs(nexus): record the PR #3 body refresh and two tooling defects`, on top of the promotion commit `e09a819`, the fix `460a26a` and the first docs commit `c68f386`. Pushed and re-read with `git rev-parse` (local and `origin/feature/agentic-enterprise-platform` both `23a36dc`). **Observed 4/4 `completed/success` at this head** (polled 2026-11-25T10:29Z), so the docs head is directly covered rather than descendant-covered. A later commit that carries this row is not named here, because a commit cannot contain its own SHA. |
-| Last CI result | **`460a26a`: 4/4 `completed/success`**, every check run reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z). Backend (ruff, mypy, pytest, migrations) ×2, Frontend (typecheck, lint, test, build) ×2. Local gates at `460a26a` agree: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **730 passed / 4 skipped**, `alembic upgrade head → downgrade -1 → upgrade head` clean. Other observed heads: `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4. |
+| Head commit (run end) | The commit carrying NEX-021, on top of `d426b95`. Pushed and re-read with `git rev-parse` against `origin/feature/agentic-enterprise-platform`; the SHA is recorded in `CHECKPOINT.json` and the execution log rather than here, because a commit cannot contain its own SHA. |
+| Last CI result | **Not yet observed on the NEX-021 commit.** The most recent observation remains `460a26a` (NEX-020): 4/4 `completed/success`, every check run reporting `head_sha` `460a26a`, polled 2026-11-25T10:16:40Z. Local gates on the NEX-021 tree: `ruff format` clean (201 files), `ruff check` clean, `mypy` 98 files clean, full `pytest` **735 passed / 4 skipped**, migration round-trip clean. Local green is not CI green (R9/R10). |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T10:20:26Z at head `e09a819`; re-measured after the later docs push, the PR object reports 110 files / 29,971 insertions / 10 deletions / 102 commits at `23a36dc`. The body's own figures (29,950 / 110 / 101) are correctly attributed to `e09a819`. Re-measure from that endpoint before quoting; never from per-file sums (R21). |
-| CI status | **`460a26a` (this run's code head): 4/4 `completed/success`**, every check run reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z). Older observations, all `completed/success` with matching `head_sha`: `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z), `2b3beb7` 4/4 (09:28Z), `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| Draft PR | #3 (draft, unmerged — human review required). Body was last refreshed at `e09a819`; it predates NEX-021. Re-measure from the PR object before quoting; never from per-file sums (R21). |
+| CI status | **NEX-021: no observation yet.** Older observations, all `completed/success` with matching `head_sha`: `460a26a` 4/4 (10:16Z), `23a36dc` 4/4 (10:29Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
@@ -188,13 +188,61 @@ fail-closed changes plus tests that pin the production path), and CI on
 criterion holds, and now so do the tests that check it.
 
 
+## NEX-021 (run `NEX-2026-11-25-23`) — a stale write must not resurrect a stopped agent
+
+This run finished the CAS audit that NEX-019 and NEX-020 started. The audit asked one
+question of every repository under `infrastructure/db/`: does `save()` rewrite
+authority-bearing columns from caller-supplied state, and is there a version to compare
+against?
+
+| Aggregate | `version` column | `persisted_version` | CAS on `save` |
+| --- | --- | --- | --- |
+| `Note` | yes | via `expected_version` arg | yes |
+| `AgentRun` | yes | yes | yes (NEX-019) |
+| `ApprovalRequest` | yes | yes | yes (NEX-020) |
+| **`AgentIdentity`** | **yes** | **no** | **no — unconditional overwrite** |
+| `DelegatedAuthorization` | no | n/a | writes 3 fields; revoke monotonic |
+| `AgentToken` | no | n/a | writes `revoked_at` only; monotonic |
+| `ToolInvocation` | no | n/a | writes verdict and seal together |
+
+`AgentIdentity` was the last offender and the worst one, because its revocation *is* the
+emergency stop. It already bumped `version` on every authority-changing transition —
+`suspend`, `activate`, `revoke`, `narrow_capabilities` — and `save()` ignored it. The
+version was maintained and then thrown away.
+
+The harm: two requests can hold the same agent id at once (a human revoking in the control
+centre while an unrelated edit finishes). With no compare-and-set the later commit won
+silently — a stale copy wrote `status=active` and `revoked_at=NULL` back over a revoked
+row, undoing the kill switch; and a stale copy taken before a narrowing restored the
+removed capabilities, re-widening a ceiling the domain only permits to shrink. Neither
+raised.
+
+Fixed by giving `AgentIdentity` a `persisted_version` (seeded in `__post_init__`, advanced
+by `mark_persisted()`) and making `save()` one `UPDATE ... WHERE id AND version = :expected`
+that raises `VersionConflict` (HTTP 409) on rowcount 0 — the same shape as NEX-019 and
+NEX-020. `add()` also calls `mark_persisted()`. No migration: `agents.version` has existed
+since `c3f1a9d47e02`.
+
+Status: **TESTED.** Five new tests in `tests/agent/test_agent_identity_concurrency.py`
+drive the production `save()` path. Negative control run this session: deleting the
+`version == expected` predicate turns 4 of the 5 red while the honest-write test stays
+green, so the suite detects the lost update rather than asserting "always raise".
+
+**Deliberately out of scope:** `DelegatedAuthorization`, `AgentToken` and `ToolInvocation`
+need no version. Each writes a strictly monotonic field (`revoked_at`, a terminal verdict),
+so concurrent writers converge on the same value instead of erasing each other's authority.
+Recorded so a later audit does not re-open it without cause.
+
+**Next action:** observe CI on the commit carrying this slice; promote to VERIFIED only on
+4/4 `completed/success` at that `head_sha`.
+
 ## Active task
 
 | Field | Value |
 | --- | --- |
-| Task | none - NEX-015 closed; next slice not yet selected |
-| Status | idle, budget remaining |
-| Next action | Select the next dependency-ready Phase-5 slice from ROADMAP.md. PR #3 body is current as of `7ce6f8b` (27,517 / 10 / 104, 715 tests, seven VERIFIED slices). |
+| Task | NEX-021 — CAS audit of `save()`; implementation and tests done, awaiting CI |
+| Status | TESTED — local gates green; **CI not yet observed on this commit** |
+| Next action | Poll CI on the pushed commit; promote to VERIFIED on 4/4 `completed/success` at that `head_sha`. Then pick the next Phase-5 slice from ROADMAP.md. |
 
 ## Last completed task
 
@@ -460,19 +508,18 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-13`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-23`, bare as CI runs them) |
 | --- | --- |
-| `ruff format --check` | clean — **193 files** (repo-wide, includes `docs/` Markdown fences) |
-| `ruff check` | clean |
+| `ruff format` | clean — 201 files unchanged (repo-wide, includes `docs/` Markdown fences) |
+| `ruff check` | All checks passed |
 | `mypy` | clean (98 source files) |
-| `pytest` (full) | **684 collected, 0 failures, 4 skipped** = 680 passed (up from 677 + 3) |
-| Migration chain | new head `d4c8e2a71f05`; verified upgrade → downgrade → upgrade round-trip and the backfill on a **non-empty** table |
+| `pytest` (full) | **735 passed, 4 skipped** (was 730; the delta is exactly the 5 new NEX-021 tests) |
+| Migration chain | no migration added; head stays `f19a2c6d8b04`. Round-trip re-verified on a scratch SQLite db: upgrade → downgrade -1 → upgrade, clean |
 | Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
 
-> **CI is the evidence.** The last commit with observed green CI is `e2bf7bc`
-> (run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156),
-> `completed/success`), which contains NEX-013. NEX-013 is therefore VERIFIED.
-> Local gates are recorded above for reproducibility, not as proof (R10).
+> **CI is the evidence.** Local gates above are for reproducibility, not proof (R9/R10).
+> NEX-021 is **TESTED**, not VERIFIED: CI has not been observed on the commit that carries
+> it. Promote only on 4/4 `completed/success` at that `head_sha`.
 
 ## Blockers
 
@@ -553,22 +600,22 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-019 is promoted — do not re-promote it.** `66e8cd6` read 4/4
-   `completed/success` with `head_sha` `66e8cd6` at 09:46Z, and the PR, the
-   tracking issue and this file now say so. A later run should confirm rather
-   than re-derive.
-2. **Next dependency-ready slice (P1/P2, Phase 5).** The durable runtime now
-   enforces its own write concurrency. Re-read the Phase 5 section of
-   `ROADMAP.md` before choosing; do not invent a slice from a run summary. A
-   candidate worth checking first: whether any *other* aggregate in
-   `infrastructure/db/` still writes a versioned row without a compare-and-set —
-   NEX-019 fixed the run aggregate, and the same silent-overwrite shape may
-   survive elsewhere.
-3. **Refresh the PR #3 body at the current head.** It was last measured at
-   `fa387a9` (106 files / 28,409 / 10 / 89 commits / 720 tests) and now predates
-   NEX-018 and NEX-019. Recompute from the PR object (`additions`, `deletions`,
-   `changed_files`, `commits`) plus `pytest --collect-only -o addopts=""`; do not
-   quote a local two-dot diff, which counts the grafted root commit.
+1. **Promote NEX-021 on CI, not on this run's local gates.** The slice is TESTED: 735
+   passed locally, negative control verified. It becomes VERIFIED only when 4/4
+   `completed/success` is observed at the `head_sha` carrying it. Do not re-derive the
+   local result.
+2. **The CAS audit is now closed — do not re-open it without new evidence.** Every
+   repository under `infrastructure/db/` has been classified (table in the NEX-021 section
+   above). `DelegatedAuthorization`, `AgentToken` and `ToolInvocation` carry no version and
+   need none: each writes a strictly monotonic field, so concurrent writers converge
+   instead of erasing authority. If a future slice makes one of them non-monotonic, that
+   is the trigger to revisit — not the absence of a `version` column on its own.
+3. **Next dependency-ready slice (P1/P2, Phase 5).** Re-read the Phase 5 section of
+   `ROADMAP.md` before choosing; do not invent a slice from a run summary.
+4. **Refresh the PR #3 body at the current head.** Its counters were measured at an earlier
+   commit and now predate NEX-021. Recompute from the PR object (`additions`, `deletions`,
+   `changed_files`, `commits`) plus a `pytest --collect-only` count; do not quote a local
+   two-dot diff, which counts the grafted root commit (R21).
 
 **Check the adapter, not just the aggregate (R18).** NEX-013 was VERIFIED while
 `ApprovalRequestRepository.add()` silently dropped the two columns the whole
