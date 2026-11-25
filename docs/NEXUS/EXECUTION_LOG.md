@@ -1151,3 +1151,24 @@ did not update it.
 Start **NEX-009** (durable agentic runtime). Slice it: persist run checkpoints
 and prove, with a test, that an interrupted run resumes without repeating
 completed side effects. Do not attempt the whole task in one run.
+
+### Addendum — PR #3 body refresh (same run, after the promotion commit)
+
+Ran while CI was still working on `447f5e6`, using the tail of the window rather
+than starting NEX-009 with under 10 minutes left.
+
+- Measured the branch against `main` instead of trusting the body:
+  **21,310 insertions / 91 files / 643 tests**. The body claimed 20,576 / 89 / 614.
+- Rewrote the body. It now records `0fcc078` as the latest CI-verified commit
+  (it said `e1cb0c5`), adds NEX-010 and the non-ASCII-nonce defect as the third
+  bug the tests found, and carries R9 (do not promote on local gates) and R10
+  (run the gates bare) so a reviewer sees the process failures, not just the
+  passing table.
+- PR #3 stays an **open draft, unmerged**. Marking it ready for review is a human
+  decision; this run did not make it.
+
+**Honest CI status at the time of writing:** `b804573` has four check runs
+`queued`/`in_progress` — **not yet green**. The claim in this log is that CI was
+green on `0fcc078` (observed, 4/4) and that the two docs-only commits on top are
+still running. Recording it that way rather than waiting is deliberate: the
+window was closing, and a truthful "pending" beats an inferred "green".
