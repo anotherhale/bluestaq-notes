@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-24",
-  "timestamp": "2026-11-25T11:25:00Z",
+  "run_id": "NEX-2026-11-25-25",
+  "timestamp": "2026-11-25T11:47:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "1156f6e",
-  "commit_note": "NEX-022 code, tests and NEXUS docs landed in one commit on top of 88eba9e, so a single CI run covers the whole tree.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) through NEX-022 all VERIFIED. NEX-022 (run<->delegation binding) is VERIFIED: 4/4 completed/success at 1156f6e, every check run reporting that head_sha. CAS audit of infrastructure/db/ closed.",
-  "active_task": null,
+  "commit": "PENDING_PUSH",
+  "commit_note": "NEX-023 code, tests and NEXUS docs land in one commit on top of e549e94, so a single CI run covers the whole tree. Replace PENDING_PUSH with the real SHA after the push.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-022 all VERIFIED. NEX-023 (a ruling must seal the audit link a crash left open) is TESTED: local gates green, negative control verified, CI NOT yet observed at its commit.",
+  "active_task": "NEX-023",
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -32,7 +32,8 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)"
+    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-023": "TESTED - local gates green (740 passed / 4 skipped), negative control verified; CI unobserved at its commit"
   },
   "completed_tasks": [
     "NEX-001",
@@ -62,34 +63,33 @@
     "NEX-022"
   ],
   "validation": {
-    "pytest_full": "737 passed, 4 skipped, exit 0 \u2014 run bare on the feature branch this session with the NEX-022 slice applied. Baseline was 735; the delta is exactly the 2 new NEX-022 tests.",
-    "ruff_format": "clean \u2014 201 files already formatted (bare, repo-wide, includes docs/ Markdown fences), this session",
+    "pytest_full": "740 passed, 4 skipped, exit 0 - run bare this session on the feature branch with the NEX-023 slice applied. Baseline was 737; the delta is exactly the 3 new NEX-023 tests.",
+    "ruff_format": "clean - 201 files already formatted (bare, repo-wide, includes docs/ Markdown fences), this session",
     "ruff_check": "All checks passed, run bare this session",
     "mypy": "Success: no issues found in 98 source files, run bare this session",
-    "new_tests_alone": "tests/agent/test_agent_runs.py \u2014 16 passed (14 existing + 2 new)",
-    "negative_control": "Removing the delegation-binding check from _load_for_agent turns exactly test_advance_refuses_a_token_from_a_different_delegation and test_advance_fails_closed_when_a_run_records_no_delegation red; the other 14 tests in the file stay green. Check restored, file re-verified at 16 passed.",
+    "new_tests_alone": "tests/agent/test_agent_runs.py - 19 passed (16 existing + 3 new)",
+    "negative_control": "Reverting only agent_runs.py turns exactly test_owner_ruling_seals_the_audit_record_the_crash_left_open and test_owner_ruling_records_a_failure_when_the_effect_did_not_land red; the other tests stay green. Change restored, file re-verified at 19 passed.",
     "race_check": "The defect is not a race but a missing authorization read: the advance path re-resolved the token per step yet compared only agent identity, so a token from a second delegation could drive a run planned by the first, and revoking the planning delegation did not stop the run while any other token existed. The positive half of the test proves a fresh token from the planning delegation still completes the run, so a blanket deny cannot pass.",
     "architecture": "layering test untouched; domain/ and application/ import no framework code in this change",
-    "migration_chain": "No migration added. agent_runs.delegation_id and its FK already exist, so the fix needs no schema change.",
-    "frontend_gates": "not run locally \u2014 no frontend files changed",
-    "ci_observed": "4/4 completed/success at 1156f6e, every check run reporting head_sha 1156f6e, polled 2026-11-25T11:27:56Z. Two Backend (ruff, mypy, pytest, migrations) and two Frontend (typecheck, lint, test, build) runs, for the push and pull-request events.",
+    "migration_chain": "No migration added. tool_invocations already carries status, outcome and the seal.",
+    "frontend_gates": "not run locally - no frontend files changed",
+    "ci_observed": "NOT OBSERVED for NEX-023. Last observation remains 1156f6e (NEX-022): 4/4 completed/success, polled 2026-11-25T11:27:56Z.",
     "ci_note": "NEX-021 is deliberately TESTED, not VERIFIED. Local gates are recorded above for reproducibility, not as proof (R9/R10). This run put code, tests and docs in one commit specifically so the next run can observe a single CI run covering the whole tree, instead of having to reason about descendant-CI.",
-    "verified_at_commit": "1156f6e",
-    "verified_by_run": "NEX-2026-11-25-24",
     "evidence_basis": {
-      "note": "NEX-022 is VERIFIED at 1156f6e: 4/4 completed/success, all head_sha matching, polled 2026-11-25T11:27:56Z. Code, tests and docs are in that single commit, so no descendant-CI reasoning is needed.",
+      "note": "NEX-022 remains VERIFIED at 1156f6e (4/4, polled 2026-11-25T11:27:56Z). NEX-023 has no CI observation at its own commit and must not be promoted without one.",
       "nex_020_commit": "460a26a",
       "nex_021_commit": "e459f98",
       "criterion_coverage": "NEX-022: a token from a different delegation cannot advance a run; a run with no recorded binding cannot be advanced; a fresh token from the planning delegation still can.",
       "negative_control": "Removing the check turns exactly the 2 new tests red; the other 14 stay green.",
-      "nex_022_commit": "1156f6e"
+      "nex_022_commit": "1156f6e",
+      "nex_023_commit": "PENDING_PUSH"
     },
     "gates_this_run": {
-      "ruff_format_check": "pass \u2014 201 files already formatted",
+      "ruff_format_check": "pass - 201 files already formatted",
       "ruff_check": "pass",
-      "mypy": "pass \u2014 no issues in 98 source files",
-      "pytest_full": "pass \u2014 737 passed, 4 skipped",
-      "negative_control": "pass \u2014 2 new tests red with the binding check removed"
+      "mypy": "pass - no issues in 98 source files",
+      "pytest_full": "pass - 740 passed, 4 skipped",
+      "negative_control": "pass - 2 sealing tests red with the use-case change reverted"
     },
     "ci_observed_latest": {
       "commit": "1156f6e",
@@ -97,9 +97,12 @@
       "result": "4/4 completed/success",
       "head_sha_match": true,
       "note": "A run at the slice's own commit: code, tests and docs landed in this one commit, so coverage is direct rather than descendant-CI."
-    }
+    },
+    "environment": ".venv did not exist in this clone; created with `uv venv .venv --python 3.12` and `uv pip install -e \".[dev]\"`. All gates ran from .venv/bin, matching CI's pip install.",
+    "verified_at_commit": "1156f6e",
+    "verified_by_run": "NEX-2026-11-25-24 (NEX-022)"
   },
-  "uncommitted_work": "none",
+  "uncommitted_work": "none (all changes committed and pushed this run; see commit field)",
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
@@ -123,6 +126,12 @@
   },
   "blockers": [],
   "risks": [
+    {
+      "id": "R27",
+      "severity": "high",
+      "summary": "A terminal state in one record is not a terminal state in the record that describes the same event.",
+      "detail": "NEX-023: InvokeTool commits its ToolInvocation as `started` before entering the handler (correct - a crash must leave a trace), and ResolveInterruptedStep settled the run without ever closing that row. So after an owner ruled whether the effect landed, the run was terminal and the audit link said `started` forever. Three costs: the trail permanently asserts 'unknown' about a ruled-on fact; `started` is exactly what a live call looks like, so the orphan is indistinguishable from an in-flight attempt; and the deterministic key stayed open so _find_prior raised Conflict on every retry, meaning the ruling did not actually unblock the gateway. This is R26 inverted - R26 was a column written and never read, this is a second record never settled. General rule: when a use case settles a record, enumerate every other record that describes the same event and ask whether any can be left mid-flight. Two records that disagree are not a partial success."
+    },
     {
       "id": "R26",
       "severity": "high",
@@ -185,10 +194,10 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Take the next dependency-ready Phase-5 slice from ROADMAP.md. Do not re-open the CAS audit of infrastructure/db/ without evidence a monotonic aggregate became non-monotonic, and do not re-promote NEX-001..NEX-022.",
-  "next_action": "1. Pick the next dependency-ready Phase-5 task from ROADMAP.md. 2. Refresh PR #3's body at the then-current head, recomputing counters from the PR object (additions, deletions, changed_files, commits) \u2014 never per-file sums. 3. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-022 all VERIFIED, most recently NEX-022 at 1156f6e (4/4 completed/success, head_sha matching). Working tree clean at that commit. PR #3 is draft and must never be auto-merged. The CAS audit of infrastructure/db/ is closed.",
-  "ci_status": "1156f6e (NEX-022): 4/4 completed/success, every check run reporting head_sha 1156f6e, polled 2026-11-25T11:27:56Z. Prior observed green: e459f98 (NEX-021) 4/4 (10:46Z), 460a26a 4/4 (10:16Z), 23a36dc 4/4 (10:29Z), 66e8cd6 4/4, 2b3beb7 4/4, 9a90e3a 4/4, 990557d 4/4, b9b7207 4/4. e5f1bb4 (NEX-003), 4c5a6ef (NEX-006) and 789d78a (NEX-018) have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled \u2014 neither a pass nor a failure.",
+  "next_task": "Promote NEX-023 to VERIFIED on an observed 4/4 completed/success whose head_sha is the commit carrying it; then take the next dependency-ready Phase-5 slice from ROADMAP.md. Do not re-open the CAS audit of infrastructure/db/ without evidence a monotonic aggregate became non-monotonic, and do not re-promote NEX-001..NEX-022.",
+  "next_action": "1. Poll the pushed head's check runs; promote NEX-023 to VERIFIED only on 4/4 completed/success with matching head_sha (a later docs commit cancels the earlier run, so poll the head that actually carries the code). 2. Refresh PR #3's body at the then-current head, recomputing counters from the PR object (additions, deletions, changed_files, commits) - never per-file sums (R21). 3. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-022 VERIFIED, most recently NEX-022 at 1156f6e. NEX-023 is TESTED and pushed but unverified; its commit is in the `commit` field. Working tree clean. PR #3 is draft and must never be auto-merged. The CAS audit of infrastructure/db/ is closed.",
+  "ci_status": "NEX-023: NOT OBSERVED at its commit. Last observed green: 1156f6e (NEX-022) 4/4 completed/success, polled 2026-11-25T11:27:56Z. Prior: e459f98 4/4 (10:46Z), 460a26a 4/4 (10:16Z), 23a36dc 4/4 (10:29Z), 66e8cd6 4/4, 2b3beb7 4/4, 9a90e3a 4/4, 990557d 4/4, b9b7207 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -216,6 +225,16 @@
     "NEX-021",
     "NEX-022"
   ],
-  "in_progress_tasks": {},
+  "in_progress_tasks": {
+    "NEX-023": {
+      "objective": "An owner's ruling on an interrupted step must seal the audit-chain invocation the crash left STARTED.",
+      "state": "IMPLEMENTED + TESTED locally. Not VERIFIED: no CI observation at the carrying commit.",
+      "files": [
+        "src/notes_service/application/use_cases/agent_runs.py",
+        "tests/agent/test_agent_runs.py"
+      ],
+      "next": "Poll CI at the pushed head; promote on an observed 4/4 completed/success with matching head_sha."
+    }
+  },
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }

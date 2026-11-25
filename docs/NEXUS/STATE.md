@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **VERIFIED** (`e459f98`, CI 4/4); NEX-022 run↔delegation binding **TESTED** (local gates green, CI unobserved). The compare-and-set audit of `infrastructure/db/` is **closed**. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **VERIFIED** (`e459f98`, CI 4/4); NEX-022 run↔delegation binding **VERIFIED** (`1156f6e`, CI 4/4); NEX-023 crash-orphaned audit link **TESTED** (local gates green, CI unobserved). The compare-and-set audit of `infrastructure/db/` is **closed**. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `b630ff3` — the clone started on `main` at `d6f92d0`; the authorized branch was fetched and checked out before any gate was trusted, then verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `b630ff3`). |
 | Head commit (run end) | `1156f6e` — the single commit carrying the NEX-022 fix, its two tests and this documentation, on top of `88eba9e`. Pushed and confirmed with `git rev-parse` against `origin/feature/agentic-enterprise-platform` before CI was polled, so this is the SHA CI actually ran on. |
@@ -240,9 +240,36 @@ Recorded so a later audit does not re-open it without cause.
 
 | Field | Value |
 | --- | --- |
-| Task | NEX-021 — CAS audit of `save()`; implementation, tests and CI all green |
-| Status | **VERIFIED** — 4/4 `completed/success` at `e459f98`, polled 10:46Z |
-| Next action | Poll CI on the pushed commit; promote to VERIFIED on 4/4 `completed/success` at that `head_sha`. Then pick the next Phase-5 slice from ROADMAP.md. |
+| Task | NEX-023 — an owner's ruling on an interrupted step must seal the audit link the crash left open |
+| Status | **TESTED** — fix + 3 tests written, local gates green (740 passed / 4 skipped), negative control verified. **CI not yet observed** at this slice's commit. |
+| Next action | Push, then poll the pushed head. Promote to VERIFIED only on an observed 4/4 `completed/success` whose `head_sha` is that commit. |
+
+## NEX-023 (run `NEX-2026-11-25-25`) — a ruled-on effect must not leave the trail asserting "unknown"
+
+`InvokeTool` commits its `ToolInvocation` as `started` before entering the handler — the
+right ordering, because a crash must leave a trace rather than none. But
+`ResolveInterruptedStep` settled the run and never closed that row, so after an owner
+ruled whether the effect landed the audit chain still said `started` forever.
+
+That is worse than a cosmetic wart in three ways. The trail is permanently wrong about a
+fact a human has since established. `started` is exactly what a *live* call looks like, so
+a crash-orphaned link and an in-flight one become indistinguishable forever. And the
+step's deterministic key stayed at `started`, so `_find_prior` raised `Conflict` on every
+retry — the ruling meant to unblock the run did not unblock the gateway.
+
+The use case now seals the link in the same transaction that settles the run: `succeed`
+when the effect landed, `fail` when it did not, and nothing at all when the link is absent
+or already terminal. Sealing through the existing transitions recomputes `outcome_hash`, so
+`verify_chain` still verifies. A settled link is never rewritten — the gateway's own
+evidence outranks an operator's reconstruction.
+
+Status: **TESTED.** Local gates at the slice: `ruff format` clean (201 files), `ruff check`
+clean, `mypy` clean over 98 sources, full `pytest` **740 passed / 4 skipped** (baseline 737,
+delta exactly these 3 tests), `tests/agent/test_agent_runs.py` 19 passed. Negative control:
+reverting only the use-case change turns exactly the two sealing tests red.
+
+CI has **not** been observed at this commit. It is not VERIFIED until 4/4
+`completed/success` is observed with a matching `head_sha`.
 
 ## Last completed task
 
@@ -600,11 +627,12 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. ~~**Promote NEX-021 on CI, not on this run's local gates.**~~ **Satisfied** — 4/4 at `e459f98`. The slice reached VERIFIED on CI. Historically it was TESTED: 735
-   passed locally, negative control verified. It becomes VERIFIED only when 4/4
-   `completed/success` is observed at the `head_sha` carrying it. Do not re-derive the
-   local result.
-2. **The CAS audit is now closed — do not re-open it without new evidence.** Every
+1. **Promote NEX-023 on CI, not on this run's local gates.** It is TESTED: 740 passed
+   locally, negative control verified, two new tests red without the fix. It becomes
+   VERIFIED only when 4/4 `completed/success` is observed at the `head_sha` carrying it.
+   Do not re-derive the local result, and do not promote on descendant-CI if a later docs
+   commit supersedes this head.
+2. **The CAS audit is closed — do not re-open it without new evidence.** Every
    repository under `infrastructure/db/` has been classified (table in the NEX-021 section
    above). `DelegatedAuthorization`, `AgentToken` and `ToolInvocation` carry no version and
    need none: each writes a strictly monotonic field, so concurrent writers converge
@@ -613,9 +641,16 @@ None currently. The following are known open items, not blockers:
 3. **Next dependency-ready slice (P1/P2, Phase 5).** Re-read the Phase 5 section of
    `ROADMAP.md` before choosing; do not invent a slice from a run summary.
 4. **Refresh the PR #3 body at the current head.** Its counters were measured at an earlier
-   commit and now predate NEX-021. Recompute from the PR object (`additions`, `deletions`,
+   commit and now predate NEX-023. Recompute from the PR object (`additions`, `deletions`,
    `changed_files`, `commits`) plus a `pytest --collect-only` count; do not quote a local
    two-dot diff, which counts the grafted root commit (R21).
+
+**A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
+the same shape as R26 (a column written and never read) but inverted: the run aggregate
+reached a terminal status while the *audit* record for the same step stayed `started`
+forever. Whenever a use case settles one record, ask which other records describe the same
+event and whether any of them can be left mid-flight. A settled run next to a `started`
+invocation is not a partial success; it is two records that disagree, permanently.
 
 **Check the adapter, not just the aggregate (R18).** NEX-013 was VERIFIED while
 `ApprovalRequestRepository.add()` silently dropped the two columns the whole

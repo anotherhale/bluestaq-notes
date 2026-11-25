@@ -35,8 +35,13 @@ from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.agents import ResolveAgentToken, ResolvedToken
 from notes_service.application.use_cases.base import UnitOfWorkFactory, UseCase
 from notes_service.application.use_cases.tools import InvokeTool, ToolResult
-from notes_service.domain.agent.runs import AgentRun, AgentRunId, PlannedStep
-from notes_service.domain.agent.tools import resolve_tool, validate_arguments
+from notes_service.domain.agent.runs import (
+    AgentRun,
+    AgentRunId,
+    PlannedStep,
+    step_idempotency_key,
+)
+from notes_service.domain.agent.tools import InvocationStatus, resolve_tool, validate_arguments
 from notes_service.domain.agent.value_objects import AgentId, TokenAudience
 from notes_service.domain.errors import DomainError, InvariantViolation
 from notes_service.domain.identity.principal import Principal
@@ -285,6 +290,14 @@ class ResolveInterruptedStep(_RunUseCase):
     The owner states whether the step's effect landed. The domain does not infer
     it: retrying an effect that landed duplicates it, and skipping one that did
     not loses it. Both are worse than asking.
+
+    The ruling also seals the gateway's audit record for that step. The gateway
+    writes its invocation ``started`` *before* entering the handler, so a crash
+    leaves the link permanently open — and an open link is indistinguishable
+    from an attempt still in flight. Settling only the run would leave the
+    tamper-evident trail asserting "outcome unknown" about an effect a human has
+    since ruled on, which is the one thing the trail exists to prevent. Both
+    records are settled in one transaction so they cannot disagree.
     """
 
     def run(
@@ -297,13 +310,47 @@ class ResolveInterruptedStep(_RunUseCase):
     ) -> AgentRun:
         with self._uow_factory() as uow:
             run, _agent = self._load_owned_run(uow, principal=principal, run_id=run_id)
+            step = run.interrupted_step
+            if step is None:
+                raise InvalidInput(f"run {run.id} has no interrupted step to resolve")
+            sequence = step.sequence
             try:
                 run.resolve_interrupted(effect_landed=effect_landed, outcome=outcome)
             except InvariantViolation as exc:
                 raise InvalidInput(str(exc)) from exc
             uow.agent_runs.save(run)
+            self._seal_step_audit(
+                uow, run=run, sequence=sequence, effect_landed=effect_landed, outcome=outcome
+            )
             uow.commit()
         return run
+
+    def _seal_step_audit(
+        self,
+        uow: UnitOfWork,
+        *,
+        run: AgentRun,
+        sequence: int,
+        effect_landed: bool,
+        outcome: str | None,
+    ) -> None:
+        """Close the invocation the interrupted step left open, if it is open.
+
+        A step that crashed *before* the gateway wrote its row has nothing to
+        seal, and a step whose invocation already reached a terminal status is
+        left alone: the audit record's own outcome is the stronger evidence, and
+        rewriting a settled link would defeat the chain's purpose.
+        """
+        invocation = uow.tool_invocations.find_by_idempotency_key(
+            AgentId.parse(run.agent_id), step_idempotency_key(run.id, sequence)
+        )
+        if invocation is None or invocation.status is not InvocationStatus.STARTED:
+            return
+        if effect_landed:
+            invocation.succeed(outcome=outcome or "effect confirmed after interruption")
+        else:
+            invocation.fail(outcome=outcome or "owner ruled the effect did not land")
+        uow.tool_invocations.save(invocation)
 
 
 class AbortAgentRun(_RunUseCase):

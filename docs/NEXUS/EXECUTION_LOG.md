@@ -2992,3 +2992,81 @@ polling. Polled the commit's check runs: **4/4 `completed/success`**, all four r
 
 NEX-022 is therefore **VERIFIED** at `1156f6e` — a run at the slice's own commit, not
 descendant-CI, because the code, the tests and this documentation landed in that one commit.
+
+---
+
+# Run `NEX-2026-11-25-25` — NEX-023: an owner's ruling must seal the audit link a crash left open
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-25` |
+| Timestamp | 2026-11-25T11:31Z → 2026-11-25T11:47Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `e549e94` (NEX-022 promotion, verified against `origin` before any edit) |
+| Ending commit | recorded below after the push |
+| Phase | 5 (durable runtime) / audit integrity |
+
+## Observation and reconciliation
+
+The clone arrived on `main` at `d6f92d0`. The authorized branch was fetched and checked
+out, then confirmed with `git rev-parse HEAD origin/feature/agentic-enterprise-platform`
+(both `e549e94`) before any gate was trusted. NEX-022 was already VERIFIED at `1156f6e`
+with its promotion commit `e549e94` present on the remote, so it was not re-worked.
+
+The working tree was **not** clean at run start: `agent_runs.py` and `test_agent_runs.py`
+carried an interrupted slice from the previous run. That work was inspected, not discarded,
+and completed here. Its defect was real and its fix direction was sound, so the smallest
+safe unit was to finish it.
+
+Environment note: `.venv` did not exist in this clone and `notes-service` was not
+importable. Created with `uv venv .venv --python 3.12` and `uv pip install -e ".[dev]"`.
+Every gate below ran from `.venv/bin`, which is what CI's `pip install` produces.
+
+## Task: NEX-023
+
+**Defect.** `InvokeTool` commits its `ToolInvocation` as `started` *before* entering the
+handler — correct, because a crash must leave a trace. But `ResolveInterruptedStep` settled
+the run and never closed that row. After an owner ruled whether the effect landed, the
+audit chain still reported `started` forever.
+
+Three consequences, all permanent:
+
+1. The trail asserts "outcome unknown" about a fact a human has since established.
+2. `started` is exactly what a live call looks like, so a crash-orphaned link and an
+   in-flight one become indistinguishable for the rest of the chain's life.
+3. The step's deterministic key stayed at `started`, so `_find_prior` raised `Conflict` on
+   every retry — the ruling meant to unblock the run did not unblock the gateway.
+
+**Fix.** `ResolveInterruptedStep` seals the link in the same transaction that settles the
+run, located by the same deterministic key the gateway used
+(`step_idempotency_key(run.id, sequence)`). `succeed` when the effect landed, `fail` when it
+did not, and no write when the link is absent or already terminal. Sealing through the
+existing transitions recomputes `outcome_hash`, so `verify_chain` still verifies. A settled
+link is never rewritten: the gateway's own evidence outranks an operator's reconstruction.
+
+An explicit `interrupted_step is None` check was added so the rejection is a clear
+`InvalidInput` rather than a message from the aggregate's invariant.
+
+## Validation
+
+- `tests/agent/test_agent_runs.py`: **19 passed** (16 before + 3 new).
+- Full suite: **740 passed, 4 skipped**, exit 0 (baseline 737; the delta is exactly the 3
+  new tests).
+- `ruff format`: 201 files already formatted, run bare. `ruff check`: clean, run bare.
+  `mypy`: no issues in 98 source files.
+- No migration: the invocation table already carries status, outcome and the seal.
+- Architecture: no new framework import in `domain/` or `application/`; the layering test
+  is untouched and green.
+
+**Negative control.** Reverting only `agent_runs.py` (keeping the tests) turns exactly
+`test_owner_ruling_seals_the_audit_record_the_crash_left_open` and
+`test_owner_ruling_records_a_failure_when_the_effect_did_not_land` red, and leaves the rest
+of the file green. The change was restored and the file re-verified at 19 passed. This
+matters because the first draft of the "already terminal" test left the step `STARTED`
+instead of `INTERRUPTED` and failed for the wrong reason — a test that fails for an
+unrelated reason is not evidence, so it was corrected to build the real crash state.
+
+## Status
+
+NEX-023 is **TESTED**, not VERIFIED. No CI observation exists at the commit carrying it.
+Promotion requires an observed 4/4 `completed/success` whose `head_sha` is that commit.

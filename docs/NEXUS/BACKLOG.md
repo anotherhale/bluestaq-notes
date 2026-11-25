@@ -1336,3 +1336,73 @@ change to the plan path (it was already correct). This is a read-path fix.
 
 **Verified:** CI is 4/4 `completed/success` at `1156f6e`, the commit that carries the fix, its tests and this documentation — so the run covered the whole slice rather than an ancestor.
 **Next action:** none for this slice; take the next dependency-ready Phase-5 task.
+
+## NEX-023 — An owner's ruling must seal the audit record the crash left open
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) / audit integrity |
+| Priority | P0 (the tamper-evident trail could permanently assert "unknown" about an effect that has since been ruled on) |
+| Status | **TESTED** — local gates green (19 passed in file, full suite 740 passed / 4 skipped (baseline 737; delta is exactly these 3 tests)), negative control verified. CI **not yet observed** at this slice's commit. |
+| Dependencies | NEX-011 (audit trail), NEX-012 (hash chain), NEX-018 (a missing seal counts as a break) |
+
+**Objective:** close the terminal-state gap between the run aggregate and the gateway's
+audit chain.
+
+`InvokeTool` commits its `ToolInvocation` row as `started`, in its own transaction,
+*before* entering the handler. That ordering is correct and deliberate: a crash inside a
+handler must leave a visible trace rather than none. But nothing ever closed that row for
+the step a crash interrupted.
+
+`ResolveInterruptedStep` settled the run — the step became `succeeded` or `failed` and the
+run reached a terminal status — and left the gateway's invocation in `started` forever.
+Three consequences, none cosmetic:
+
+- **The trail is permanently wrong about a fact that is now known.** After an owner rules
+  "the effect landed", a `started` link still asserts the outcome is unknown. The chain
+  exists so a later reader can tell what happened; this makes it lie about the one event a
+  human explicitly adjudicated.
+- **`started` is ambiguous by construction.** It is exactly what an attempt *still in
+  flight* looks like, so a crash-orphaned link and a live call are indistinguishable
+  afterwards. Leaving one behind destroys that distinction permanently for that chain.
+- **It made the chain's own repair path unreachable.** The step's deterministic key stayed
+  at `started`, so `_find_prior` raised `Conflict` on every retry: the ruling that was
+  supposed to unblock the run did not unblock the gateway.
+
+**Implementation:** `ResolveInterruptedStep` now seals the step's audit link in the same
+transaction that settles the run, so the two records cannot disagree. It locates the
+invocation by the same deterministic key the gateway used
+(`step_idempotency_key(run.id, sequence)`) and closes it only while it is still `started`:
+
+- `effect_landed=True` → `succeed(outcome=...)`, which recomputes the outcome seal.
+- `effect_landed=False` → `fail(outcome=...)`, recording what the human ruled rather than a
+  blanket success.
+- absent, or already terminal → left untouched. A link the gateway settled is stronger
+  evidence than an operator's reconstruction, and rewriting it would defeat the chain. A
+  step that crashed *before* the gateway wrote its row has nothing to seal, so this is a
+  no-op rather than an error.
+
+The seal is recomputed through the existing `succeed`/`fail` transitions, so `outcome_hash`
+stays consistent with content and `verify_chain` still verifies.
+
+**Tests** (`tests/agent/test_agent_runs.py`, +3, plus a hardened existing path):
+- `test_owner_ruling_seals_the_audit_record_the_crash_left_open` — builds the exact crash
+  state (step begun, invocation committed `started`, process gone), rules the effect
+  landed, then asserts the link is `succeeded` with `completed_at` and `outcome_hash`, that
+  **no** link is left `started`, and that `verify_chain` still verifies.
+- `test_owner_ruling_records_a_failure_when_the_effect_did_not_land` — the same crash state
+  ruled the other way must record `failed`, not success.
+- `test_resolving_leaves_an_already_terminal_audit_link_untouched` — a link the gateway
+  already settled keeps its status, `outcome` and `outcome_hash` byte-for-byte.
+
+**Negative control:** reverting only the use-case change turns exactly the two sealing tests
+red and leaves the rest of the file green; the change was restored and the file re-verified
+at 19 passed.
+
+**Not delivered, deliberately:** no migration (the invocation table already carries status,
+outcome and seal), no change to the gateway's write-before-execute ordering (it is the right
+ordering), and no attempt to infer whether an effect landed — the domain still refuses to
+guess on the operator's behalf.
+
+**Next action:** poll CI at the pushed head; promote to VERIFIED only on an observed
+4/4 `completed/success` whose `head_sha` is that commit.

@@ -45,8 +45,16 @@ from notes_service.application.use_cases.agents import (
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.notes import ListNotes
 from notes_service.application.use_cases.tools import InvokeTool
-from notes_service.domain.agent.runs import AgentRunId, PlannedStep, RunStatus, StepStatus
-from notes_service.domain.agent.value_objects import Capability, TokenAudience
+from notes_service.domain.agent.audit_chain import verify_chain
+from notes_service.domain.agent.runs import (
+    AgentRunId,
+    PlannedStep,
+    RunStatus,
+    StepStatus,
+    step_idempotency_key,
+)
+from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation, resolve_tool
+from notes_service.domain.agent.value_objects import AgentId, Capability, TokenAudience
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.db.seed import DEMO_USERS
@@ -231,6 +239,34 @@ def test_a_crashed_step_halts_the_run_until_an_owner_decides(h: Harness) -> None
     assert h.run_titles(agent) == ["two"]
 
 
+def _crash_mid_step(h: Harness, agent, run) -> ToolInvocation:
+    """Leave ``run``'s first step interrupted with an open audit link.
+
+    This mirrors exactly what the gateway does before entering a handler: it
+    commits the invocation ``started``, then the process dies. Building the row
+    directly is the only way to reproduce that state without an actual crash.
+    """
+    run.resume()
+    step = run.ordered_steps[0]
+    run.begin_step(step.id)
+    with h.uow() as uow:
+        uow.agent_runs.save(run)
+        sequence, previous = uow.tool_invocations.next_chain_link(AgentId.parse(agent.id))
+        invocation = ToolInvocation.begin(
+            agent_id=AgentId.parse(agent.id),
+            token_id=None,
+            tool=resolve_tool(step.tool_name),
+            idempotency_key=step_idempotency_key(run.id, step.sequence),
+            arguments=step.arguments,
+            resource_ref=step.resource_ref,
+            previous_hash=previous,
+            chain_sequence=sequence,
+        )
+        uow.tool_invocations.add(invocation)
+        uow.commit()
+    return invocation
+
+
 def test_owner_can_declare_an_interrupted_effect_did_not_land(h: Harness) -> None:
     _agent, secret = h.secret_for()
     run = h.plan.run(secret=secret, steps=[create_step("only")])
@@ -245,6 +281,106 @@ def test_owner_can_declare_an_interrupted_effect_did_not_land(h: Harness) -> Non
 
     assert resolved.status is RunStatus.FAILED
     assert resolved.ordered_steps[0].status is StepStatus.FAILED
+
+
+def test_owner_ruling_seals_the_audit_record_the_crash_left_open(h: Harness) -> None:
+    """A settled run must not leave the tamper-evident trail claiming "unknown".
+
+    The gateway writes its invocation ``started`` before entering a handler, so a
+    crash mid-step leaves that link open forever. If resolving the run did not
+    also settle the invocation, the trail would keep asserting the outcome is
+    unknown about an effect a human has explicitly ruled on — and ``STARTED`` is
+    precisely what an in-flight attempt looks like, so the two are
+    indistinguishable afterwards.
+    """
+    agent, secret = h.secret_for()
+    run = h.plan.run(secret=secret, steps=[create_step("one")])
+    invocation = _crash_mid_step(h, agent, run)
+
+    with h.uow() as uow:
+        stored = uow.agent_runs.get(run.id)
+        assert stored is not None
+        stored.mark_interrupted()
+        uow.agent_runs.save(stored)
+        uow.commit()
+        assert (
+            uow.tool_invocations.get(invocation.id).status  # type: ignore[union-attr]
+            is InvocationStatus.STARTED
+        )
+
+    resolved = h.resolve.run(h.principal, run_id=str(run.id), effect_landed=True)
+    assert resolved.ordered_steps[0].status is StepStatus.SUCCEEDED
+
+    with h.uow() as uow:
+        sealed = uow.tool_invocations.get(invocation.id)
+        assert sealed is not None
+        assert sealed.status is InvocationStatus.SUCCEEDED
+        assert sealed.completed_at is not None
+        assert sealed.outcome_hash is not None
+        chain = uow.tool_invocations.list_chain(AgentId.parse(agent.id))
+        assert all(link.status is not InvocationStatus.STARTED for link in chain)
+        verdict = verify_chain(chain)
+        assert verdict.verified, verdict.reason
+
+
+def test_owner_ruling_records_a_failure_when_the_effect_did_not_land(h: Harness) -> None:
+    """The trail records what the human actually ruled, not a blanket success."""
+    agent, secret = h.secret_for()
+    run = h.plan.run(secret=secret, steps=[create_step("only")])
+    invocation = _crash_mid_step(h, agent, run)
+
+    with h.uow() as uow:
+        stored = uow.agent_runs.get(run.id)
+        assert stored is not None
+        stored.mark_interrupted()
+        uow.agent_runs.save(stored)
+        uow.commit()
+
+    h.resolve.run(h.principal, run_id=str(run.id), effect_landed=False)
+
+    with h.uow() as uow:
+        sealed = uow.tool_invocations.get(invocation.id)
+        assert sealed is not None
+        assert sealed.status is InvocationStatus.FAILED
+        assert sealed.outcome is not None
+
+
+def test_resolving_leaves_an_already_terminal_audit_link_untouched(h: Harness) -> None:
+    """A link the gateway already settled is evidence; the ruling must not rewrite it."""
+    agent, secret = h.secret_for()
+    run = h.plan.run(secret=secret, steps=[create_step("only")])
+
+    # Execute the step for real, then force the run back into ``interrupted``.
+    h.advance.run(secret=secret, run_id=str(run.id))
+    with h.uow() as uow:
+        stored = uow.agent_runs.get(run.id)
+        assert stored is not None
+        step = stored.ordered_steps[0]
+        step.status = StepStatus.INTERRUPTED
+        step.completed_at = None
+        stored.status = RunStatus.INTERRUPTED
+        uow.agent_runs.save(stored)
+        uow.commit()
+
+    with h.uow() as uow:
+        before = uow.tool_invocations.find_by_idempotency_key(
+            AgentId.parse(agent.id), step_idempotency_key(run.id, 1)
+        )
+        assert before is not None
+        assert before.status is InvocationStatus.SUCCEEDED
+        original_outcome = before.outcome
+        original_hash = before.outcome_hash
+
+    h.resolve.run(h.principal, run_id=str(run.id), effect_landed=False)
+
+    with h.uow() as uow:
+        after = uow.tool_invocations.find_by_idempotency_key(
+            AgentId.parse(agent.id), step_idempotency_key(run.id, 1)
+        )
+        assert after is not None
+        assert after.status is InvocationStatus.SUCCEEDED
+        assert after.outcome == original_outcome
+        assert after.outcome_hash == original_hash
 
 
 def test_resolving_a_run_with_no_interrupted_step_is_rejected(h: Harness) -> None:
