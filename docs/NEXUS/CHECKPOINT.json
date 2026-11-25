@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-10",
-  "timestamp": "2026-11-25T04:50:00Z",
+  "run_id": "NEX-2026-11-25-11",
+  "timestamp": "2026-11-25T05:15:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "0e74d4f",
-  "commit_note": "0e74d4f is the last commit whose gates were verified: NEX-009 slice 1, with all four CI check runs (backend and frontend, on both the push and pull_request events) completed/success. This run's NEX-009-HTTP product commit is its child and is TESTED only - CI has not been observed on it. The docs commit that contains this file is the child of that.",
-  "project_phase": "Phase 2 complete (agent identity & delegation all VERIFIED). Phase 5 durable runtime: NEX-009 slice 1 (durable runs) VERIFIED; NEX-009-HTTP (HTTP surface) TESTED - committed and pushed, CI not yet observed.",
+  "commit": "f50a78d",
+  "commit_note": "f50a78d is the last commit whose product code was verified by local gates: NEX-011, the tool-invocation audit trail HTTP surface. Its frontend CI job reported 2/2 completed/success; both backend check runs were still in_progress when the run ended, so NEX-011 is TESTED and not VERIFIED. The last commit with fully observed green CI remains e817d04 (NEX-009-HTTP, 4/4). The docs commit that contains this file is the child of f50a78d.",
+  "project_phase": "Phase 2 complete (agent identity & delegation all VERIFIED). Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 tool-invocation audit trail TESTED (f50a78d, backend CI not concluded).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -20,7 +20,8 @@
     "NEX-008": "VERIFIED",
     "NEX-010": "VERIFIED",
     "NEX-009": "VERIFIED",
-    "NEX-009-HTTP": "TESTED"
+    "NEX-009-HTTP": "TESTED",
+    "NEX-011": "TESTED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -35,19 +36,20 @@
     "NEX-002",
     "NEX-009-slice1",
     "NEX-009",
-    "NEX-009-HTTP"
+    "NEX-009-HTTP",
+    "NEX-011"
   ],
   "validation": {
-    "pytest_full": "662 passed, 4 skipped (local, run bare) - was 651 + 4 before this slice",
-    "ruff_format": "clean (188 files, repo-wide incl. docs Markdown)",
+    "pytest_full": "674 collected, 0 failures, 4 skipped = 670 passed (local, run bare; was 662 + 8 API)",
+    "ruff_format": "clean (189 files, repo-wide incl. docs Markdown)",
     "ruff_check": "clean",
     "mypy": "clean (97 source files)",
-    "migration_chain": "unchanged this run - HTTP surface only, no new migration",
-    "frontend_gates": "not run - no frontend files changed",
+    "migration_chain": "unchanged this run - read path over an existing table, no new migration",
+    "frontend_gates": "not run locally - no frontend files changed; CI frontend job reported 2/2 completed/success on f50a78d",
     "ci_observed": false,
-    "ci_note": "NEX-009-HTTP's commit has NOT been CI-verified. The last observed-green commit remains 0e74d4f (4/4 check runs). Local gates are recorded for reproducibility only, not as CI evidence (R10).",
-    "verified_at_commit": "0e74d4f",
-    "verified_by_run": "NEX-2026-11-25-09",
+    "ci_note": "NEX-011's commit f50a78d is NOT CI-verified: frontend 2/2 completed/success, backend 2 runs still in_progress at run end. The last observed-green commit remains e817d04 (4/4 check runs). Local gates are recorded for reproducibility only, not as CI evidence (R10).",
+    "verified_at_commit": "e817d04",
+    "verified_by_run": "NEX-2026-11-25-10",
     "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote on these."
   },
   "uncommitted_work": "none",
@@ -56,7 +58,7 @@
     "state": "draft",
     "merged": false,
     "description_updated": "2026-11-25T03:50:00Z",
-    "note": "Open draft, unmerged (never merged). Body was last refreshed in run NEX-2026-11-25-08 to 21,310 insertions / 91 files / 643 tests; the branch is now 22,819 / 95 / 655 after NEX-009 slice 1 and roughly 23,700 / 106 / 666 after NEX-009-HTTP. The body is stale and must be recomputed from `git diff --shortstat main...HEAD` next run - do not copy these numbers forward without re-measuring."
+    "note": "Open draft, unmerged (never merged). Body last refreshed in run NEX-2026-11-25-08 to 21,310 insertions / 91 files / 643 tests. Re-measured this run at f50a78d: 24,087 insertions / 98 files. The body is stale and understates the branch; recompute from `git diff --shortstat main...HEAD` plus a fresh pytest collect next run - do not copy these numbers forward without re-measuring."
   },
   "tracking_issue": {
     "number": 2,
@@ -69,13 +71,14 @@
     "R8 (low): migration tests once shelled out to '.venv/bin/alembic' and never ran in CI; fixed in 6f30020. Prefer sys.executable in test helpers.",
     "R9 (CLOSED 2026-11-25, NEX-010): OIDC verifier pinned by tests/authentication/test_oidc_relying_party.py (21 tests, real RSA keys). Residual: JWKS network discovery still stubbed by design.",
     "R10 (low, process): a green local gate run is only evidence if it invokes the same command CI invokes. Run the gates bare.",
-    "R11 (CLOSED at TESTED, 2026-11-25, NEX-009-HTTP): runs had no HTTP surface. /api/v1/agent-runs now exposes plan/advance/get/list/resolve/abort, pinned by tests/api/test_agent_runs_api.py (9 tests). Not VERIFIED - CI not observed on the commit.",
-    "R12 (low, process): writing prose or scripts through a shell heredoc corrupts them in this environment. Write scripts and messages to files with file_editor and execute the file.",
-    "R13 (new, low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case."
+    "R11 (CLOSED 2026-11-25): the durable-run use cases had no HTTP surface; closed by NEX-009-HTTP (VERIFIED on e817d04). The same class of gap in the audit trail - a trail written but unreadable - is closed by NEX-011 at TESTED.",
+    "R12 (low, process): writing prose or scripts through a shell heredoc corrupts them in this environment. Write scripts and messages to files with file_editor and execute the file. It recurred this run and aborted a STATE.md update before it wrote anything.",
+    "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
+    "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one."
   ],
-  "next_task": "NEX-009-HTTP verification (observe CI), then the next Phase-5 slice",
-  "next_action": "Run `gh api repos/anotherhale/bluestaq-notes/commits/<NEX-009-HTTP sha>/check-runs`. If all four check runs are completed/success, promote NEX-009-HTTP from TESTED to VERIFIED in BACKLOG.md, STATE.md and this file, and record the SHA. If any job failed, read the log and fix it - do not weaken assertions. Then refresh PR #3's body from `git diff --shortstat main...HEAD` plus a fresh pytest collect (the body has understated this branch repeatedly), and re-read the Phase 5 section of docs/NEXUS/ROADMAP.md before selecting the next slice.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. Everything through NEX-009 slice 1 is VERIFIED with both CI events green on 0e74d4f. NEX-009-HTTP is TESTED: the HTTP surface for durable runs is implemented, full suite green locally, but CI has not been observed - that is the first thing to check. Never merge PR #3. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
+  "next_task": "NEX-011 verification (observe CI on f50a78d), then the next Phase-5 slice",
+  "next_action": "Run `gh api repos/anotherhale/bluestaq-notes/commits/f50a78d/check-runs`. If all four check runs are completed/success, promote NEX-011 from TESTED to VERIFIED in BACKLOG.md, STATE.md and this file, and record the SHA. If any job failed, read the log and fix it - do not weaken assertions. Then refresh PR #3's body: it is 24,087 insertions / 98 files at f50a78d while the body claims 21,310 / 91, and it has understated this branch on every run. Finally re-read the Phase 5 section of docs/NEXUS/ROADMAP.md before selecting the next slice.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. Everything through NEX-009-HTTP is VERIFIED with 4/4 CI green on e817d04. NEX-011 (tool-invocation audit trail over HTTP) is TESTED at f50a78d: the read path, schemas, wiring and 8 API tests are committed and pushed, the full suite is green locally, but backend CI had not concluded - check that first. Never merge PR #3. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -87,7 +90,7 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T04:30Z",
-    "note": "Last observed green commit is 0e74d4f: 4/4 completed/success (backend + frontend, push and pull_request). NEX-009-HTTP's commit is unobserved."
+    "observed": "2026-11-25T05:12Z",
+    "note": "Last observed green commit is e817d04: 4/4 completed/success (backend + frontend, push and pull_request). On f50a78d (NEX-011) the two frontend check runs completed/success and the two backend check runs were still in_progress at run end - unobserved."
   }
 }

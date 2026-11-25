@@ -1316,3 +1316,79 @@ Observe CI on the pushed commit
 NEX-009-HTTP to VERIFIED only if all four check runs are `completed/success`.
 Then refresh PR #3's body from `git diff --shortstat main...HEAD` and re-read the
 Phase 5 section of `ROADMAP.md` before choosing the next slice.
+
+---
+
+## Run `NEX-2026-11-25-11` — 2026-11-25
+
+| Field | Value |
+| --- | --- |
+| Starting commit | `a94d3f6` |
+| Ending commit | `f50a78d` (docs commit is its child) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Task | NEX-011 — tool-invocation audit trail over HTTP |
+| Status | **TESTED**, not VERIFIED — backend CI still running at run end |
+
+### What was built
+
+The governed tool gateway writes a `ToolInvocation` row for every attempt it
+handles, refusals included, but nothing outside the gateway could read one back.
+A trail nobody can read is not an audit trail: an owner could not answer "what did
+my agent actually try, and what was refused?"
+
+`GET /api/v1/agents/{agent_id}/tool-invocations` now serves it, through a
+`ListToolInvocations` use case over the **existing** `ToolInvocationRepository`
+port and its `list_for_agent(limit, offset)` adapter method. The port, the table
+and the paged query all already existed — this slice adds the read path and
+nothing else. No new port, no migration, no new dependency.
+
+Files: `application/use_cases/agents.py` (use case),
+`presentation/api/routers/agents.py` (route),
+`presentation/schemas.py` (`ToolInvocationResponse`,
+`ToolInvocationListResponse`), `bootstrap/container.py` (wiring),
+`tests/api/test_audit_trail_api.py` (new, 8 tests).
+
+### Tests and gates (bare, as CI runs them)
+
+- `pytest` full: **674 collected, 0 failures, 4 skipped** (670 passed; was 662 + 8).
+- `ruff format --check`: 189 files clean (repo-wide, including `docs/`).
+- `ruff check`: clean. `mypy`: clean, 97 source files.
+- No migration this run — the table already existed.
+
+### Decisions
+
+- **Owner-scoped with 404, not 403.** The trail says which tools an agent reached
+  for and when, so it is the owning human's evidence. Reusing `load_owned_agent`
+  makes a non-owner and a nonexistent id indistinguishable, so the endpoint cannot
+  be used to probe for another user's agents.
+- **`arguments_digest`, never the arguments.** The trail proves a call happened
+  with a given shape without becoming a second copy of note content. A control
+  that leaked the data it was auditing would be a new exposure.
+- **Refusals must be as visible as successes.** "The agent never tried" and "the
+  agent was blocked" are different audit findings, so a denied call leaves a row.
+- **Explicit `limit`/`offset` rather than the shared `_page` helper.** An audit
+  trail grows without bound, so a caller must be able to walk it deliberately;
+  `limit` is capped at 200 and validated at the edge.
+
+### Status
+
+NEX-011 is **TESTED**, not VERIFIED. The frontend job reported 2/2
+`completed/success` on `f50a78d`; both backend runs were still `in_progress` when
+the run ended. Local gates are recorded for reproducibility, not as evidence
+(R10). Nothing was promoted on the local run alone.
+
+### Process note
+
+A heredoc-written Python script to update `STATE.md` was corrupted by this
+environment mid-block (R12) and aborted with a `NameError` before writing, so the
+file was untouched; the edits were redone with the file editor. R12 holds: write
+prose and scripts to files, never through a shell heredoc.
+
+### Next exact action
+
+Observe CI on `f50a78d`
+(`gh api repos/anotherhale/bluestaq-notes/commits/f50a78d/check-runs`). Promote
+NEX-011 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json` only if all
+four check runs are `completed/success`; if a job failed, read the log and fix it
+without weakening assertions. Then refresh PR #3's body — measured at `f50a78d`
+it is **24,087 insertions / 98 files**, while the body still claims 21,310 / 91.

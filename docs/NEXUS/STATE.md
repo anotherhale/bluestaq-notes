@@ -7,27 +7,65 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`, CI green); NEX-009-HTTP slice 2 TESTED |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail TESTED |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `1699247` |
-| Head commit (run end) | see CHECKPOINT.json — NEX-009-HTTP pushed this run |
-| Last CI result | **4/4 green** on `0e74d4f` (prior commit); CI not yet observed on the NEX-009-HTTP commit |
+| Base commit (run start) | `a94d3f6` |
+| Head commit (run end) | `f50a78d` — NEX-011 pushed this run |
+| Last CI result | 4/4 green on `e817d04` (NEX-009-HTTP). On `f50a78d` (NEX-011): frontend 2/2 `completed/success`, backend 2 runs still `in_progress` — not concluded |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-009-HTTP is TESTED, not VERIFIED** — the HTTP surface for
-durable runs is implemented and the full suite passes locally, but CI has not yet
-run on the commit. Local green runs are not CI evidence (R10).
+None in flight. **NEX-011 is TESTED, not VERIFIED** — the tool-invocation audit
+trail is readable over HTTP and the full suite passes locally, but the backend CI
+check runs were still `in_progress` on `f50a78d` when the run ended. Local green
+runs are not CI evidence (R10); promoting on them would repeat the defect this
+project has already recorded twice.
 
-Slice 3 (not started) is the next dependency-ready work: see Next Best Actions.
+Next dependency-ready work is choosing the following Phase 5 slice — see Next
+Best Actions and the Phase 5 section of `ROADMAP.md`.
 
 
 ## Last completed task
 
-**NEX-009-HTTP — Durable agent runs over HTTP** (run `NEX-2026-11-25-10`).
+**NEX-011 — Tool-invocation audit trail over HTTP** (run `NEX-2026-11-25-11`, `f50a78d`).
+The governed tool gateway writes a `ToolInvocation` row for every attempt it
+handles, refusals included, but nothing outside the gateway could read one back.
+A trail nobody can read is not an audit trail: an owner could not answer "what did
+my agent actually try, and what was refused?"
+
+`GET /api/v1/agents/{agent_id}/tool-invocations` now serves that trail through a
+`ListToolInvocations` use case over the **existing** `ToolInvocationRepository`
+port and its `list_for_agent(limit, offset)` adapter method. The port, the table,
+and the paged query all already existed; this slice adds the read path and
+nothing else — no new port, no migration.
+
+Three properties carry the slice, each pinned by a test rather than asserted in
+prose:
+
+- **Owner-scoped, 404 not 403.** The trail says which tools an agent reached for,
+  so it is the owning human's evidence. Reusing `load_owned_agent` makes a
+  non-owner and a nonexistent id indistinguishable, so the endpoint cannot be used
+  to probe for another user's agents.
+- **A digest, not the arguments.** The trail proves a call happened with a given
+  shape without becoming a second copy of note content. A test asserts a note's
+  private body never appears in the response.
+- **Refusals are as visible as successes.** "The agent never tried" and "the agent
+  was blocked" are different audit findings, so a denied call must leave a row. A
+  test drives a capability-denied invocation and asserts a `denied` row carrying
+  the gateway's outcome is present.
+
+The one design departure: this route takes `limit`/`offset` directly instead of
+the shared `_page` helper the other agent listings use. An audit trail grows
+without bound, so a caller has to be able to walk it deliberately; `limit` is
+capped at 200 and validated at the edge.
+
+Pinned by `tests/api/test_audit_trail_api.py` (8 tests). **Status: TESTED, not
+VERIFIED** — backend CI had not concluded on the commit.
+
+Previously, **NEX-009-HTTP — Durable agent runs over HTTP** (run `NEX-2026-11-25-10`, `e817d04`).
 Slice 1 built the durable runtime but left it unreachable: the use cases existed
 and nothing could call them, so durability was real and unusable (R11).
 
@@ -207,18 +245,20 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-10`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-11`, bare as CI runs them) |
 | --- | --- |
-| `ruff format --check` | clean — **188 files** (repo-wide, includes `docs/` Markdown fences) |
+| `ruff format --check` | clean — **189 files** (repo-wide, includes `docs/` Markdown fences) |
 | `ruff check` | clean |
 | `mypy` | clean (97 source files) |
-| `pytest` (full) | **662 passed, 4 skipped** locally (up from 651 + 9 API + 2 domain) |
-| Migration chain | unchanged this run — no new migration (HTTP surface only) |
-| Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
+| `pytest` (full) | **674 collected, 0 failures, 4 skipped** = 670 passed (up from 662 + 8 API) |
+| Migration chain | unchanged this run — no new migration (read path over an existing table) |
+| Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed (CI ran them green anyway) |
 
-> **CI is the evidence.** The last commit with observed green CI is `0e74d4f`
-> (4/4 check runs). This run's commit is **TESTED only** — CI has not been observed
-> on it. Local gates are recorded above for reproducibility, not as proof (R10).
+> **CI is the evidence.** The last commit with observed green CI is `e817d04`
+> (4/4 check runs). This run's commit `f50a78d` is **TESTED only** — the frontend
+> job was 2/2 `completed/success` but both backend runs were still `in_progress`
+> when the run ended. Local gates are recorded above for reproducibility, not as
+> proof (R10).
 
 ## Blockers
 
@@ -285,16 +325,25 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Refresh the PR #3 body.** Measured on `e817d04`: 23,782 insertions / 97
-   files / 666 tests / 5 migrations. The body still claims 21,310 / 91 / 639 and
-   names `0fcc078` as CI-verified. It has understated this branch on every run —
-   always recompute with `git diff --shortstat main...HEAD` plus a fresh collect,
-   never copy the last number forward.
-2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is now
-   reachable over HTTP, so the remaining Phase-5 work is what consumes it. Re-read
-   the Phase 5 section of `ROADMAP.md` before choosing; do not invent a slice from
-   the last run's summary alone.
-3. **Promote nothing on local gates alone.** NEX-009 slice 1 and NEX-009-HTTP both
-   reached VERIFIED only when CI went green on the commit. A local green suite is
-   not evidence; R9/R10 exist because that conflation happened before.
+1. **Observe CI on `f50a78d` (NEX-011), then promote it.** At the end of this run
+   the frontend job was 2/2 `completed/success` and both backend runs were still
+   `in_progress`. Run
+   `gh api repos/anotherhale/bluestaq-notes/commits/f50a78d/check-runs`; promote
+   NEX-011 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json` only if
+   all four are `completed/success`. If a job failed, read the log and fix it —
+   do not weaken assertions.
+2. **Refresh the PR #3 body.** Measured on `f50a78d`: **24,087 insertions / 98
+   files**. The body still claims 21,310 / 91 / 639 and names `0fcc078` as
+   CI-verified. It has understated this branch on every run — always recompute
+   with `git diff --shortstat main...HEAD` plus a fresh pytest collect, never copy
+   the last number forward.
+3. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
+   over HTTP and its audit trail is now readable, so the remaining Phase-5 work is
+   what *consumes* those two surfaces. Re-read the Phase 5 section of `ROADMAP.md`
+   before choosing; do not invent a slice from the last run's summary alone.
+
+**Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP and
+NEX-011 all reached TESTED on local runs and only two have gone on to VERIFIED,
+each when CI went green on the commit. A local green suite is not evidence;
+R9/R10 exist because that conflation happened before.
 

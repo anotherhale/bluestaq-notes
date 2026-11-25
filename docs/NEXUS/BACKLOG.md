@@ -481,6 +481,66 @@ settle such a step; an agent has no endpoint that resolves its own ambiguity.
 
 ---
 
+## NEX-011 — Expose the tool-invocation audit trail over HTTP
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 |
+| Priority | P2 |
+| Status | **TESTED** (run `NEX-2026-11-25-11`; commit `f50a78d`; CI observed in progress, not yet concluded) |
+| Dependencies | NEX-003 (governed tool gateway), NEX-005-HTTP (owner-scoped listing pattern) |
+
+**Objective:** make the gateway's own audit trail readable. The governed tool
+gateway writes a `ToolInvocation` row for every attempt it handles — refusals
+included — but until this slice nothing outside the gateway could read one back.
+An owner had no way to answer "what did my agent actually try, and what was
+refused?" A trail nobody can read is not an audit trail.
+
+**Acceptance criteria:** an owner can list the invocations of their own agent;
+a non-owner gets 404 and never 403; the response carries `arguments_digest` and
+never the arguments; refused attempts appear in the trail with the gateway's
+reason; the window is explicitly bounded by `limit`/`offset` with a validated
+cap; an API contract test covers each boundary.
+
+**Delivered:** `ListToolInvocations` use case in
+`application/use_cases/agents.py`, `GET /api/v1/agents/{agent_id}/tool-invocations`
+in `presentation/api/routers/agents.py`, `ToolInvocationResponse` /
+`ToolInvocationListResponse` in `presentation/schemas.py`, and DI wiring in
+`bootstrap/container.py`. No new port and no migration: the
+`ToolInvocationRepository` port, its SQLAlchemy adapter, its
+`list_for_agent(limit, offset)` method and the `tool_invocations` table all
+already existed — this slice adds the read path and nothing else.
+
+`tests/api/test_audit_trail_api.py` (8 tests) pins the edge: a successful
+invocation is readable with its resource ref and completion time, a
+capability-denied call still appears as a `denied` row carrying the gateway's
+outcome, the response body never contains note content, a non-owner gets 404, an
+unknown agent id is indistinguishable from an unowned one, paging bounds the
+window, an out-of-range `limit` is 422, and an unauthenticated caller is refused.
+
+**Design note — explicit paging instead of the `_page` helper.** The other agent
+listings use a shared `_page` helper with a fixed window. An audit trail grows
+without bound, so a caller needs to walk it deliberately; this route takes
+`limit`/`offset` directly and caps `limit` at 200 at the edge.
+
+**Status note:** TESTED, not VERIFIED. The full suite is green locally (670
+passed, 4 skipped) and `ruff format --check` (bare), `ruff check` and `mypy` are
+clean, but local gates are not CI evidence (R10). CI check runs were observed
+`in_progress` on `f50a78d` at the end of the run and had not concluded, so this
+task must not be promoted on the strength of the local run alone.
+
+**Security:** the trail records which tools an agent reached for, when, and
+whether it was allowed to. That is the owning human's evidence, so it is
+owner-scoped like `ListApprovalRequests`, and the 404-not-403 rule keeps the
+endpoint from being used to probe for another user's agents. Storing only
+`arguments_digest` means the audit trail cannot become a second copy of note
+content — a trail that leaked the data it was auditing would be a new exposure
+created by the control meant to detect one.
+
+**Complexity:** small. Narrows R11's scope to the run surface only.
+
+---
+
 ## NEX-008 — Add continuous integration
 
 | Field | Value |
