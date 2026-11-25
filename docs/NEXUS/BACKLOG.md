@@ -2038,3 +2038,115 @@ None. No schema change, no new dependency.
 
 The suite proves a *conforming* adapter behaves. It cannot prove a vendor's model produces
 good judgments — that is an evaluation question, not a contract one.
+
+---
+
+## NEX-037 — The count existed, the aggregate did not (closes R34)
+
+**Phase:** 5 (durable runtime) / M2.6 decisioning. **Priority:** P2.
+**Status:** VERIFIED on LOCAL evidence — ruff/mypy clean, pytest 920 passed / 4 skipped.
+CI on `5c0575b` had not concluded at 2026-11-25T18:54Z; re-poll before calling it CI-verified.
+
+### Objective
+
+Close R34. `WithholdingRecorder` has counted every advisory and every over-cap withholding
+since NEX-033, and `RecommendApprovalDecision` logs the running total. Nothing exports it, so
+"how often are advisories thinner than they should be" was answerable only by reading
+individual responses. A log line is not a number an operator can alert on.
+
+### The design question was access, not exposure
+
+The aggregate spans every tenant. It is not a view of the caller's own data, so handing it to
+any authenticated caller would let one user infer another user's advisory volume — a
+cross-tenant side channel that gets more informative the more precisely it is polled. That
+ruled out a normal authenticated route, and ruled out reusing `AuthorizationProvider`, whose
+job is note *content* access. Platform operations must never be reachable by content access
+alone.
+
+### What shipped
+
+| Piece | Where |
+| --- | --- |
+| `GetWithholdingReport` (allowlist check + snapshot) | `application/use_cases/withholding_report.py` |
+| `GET /api/v1/ops/withholding-report` | `presentation/api/routers/ops.py` |
+| `OPS_OPERATOR_USER_IDS` (CSV, default empty) | `bootstrap/config.py` |
+| Recorder wiring for the read side | `bootstrap/container.py` |
+| Response schema | `presentation/schemas.py` |
+
+- **Empty allowlist denies everyone.** The grant is not a role inherited by being logged in,
+  so an unconfigured deployment exposes nothing — the right failure direction for a setting
+  nobody has considered yet.
+- **404, not 403, for a non-operator.** `403` would confirm a platform-operations surface
+  exists at that path, which is itself a small disclosure to someone probing the API.
+- **Counts only** — `advisories_total`, `over_cap_advisories_total`, `over_cap_fields_total`,
+  `over_cap_rate`. No field name, value, note id or user id. That is what makes a
+  process-wide number disclosable at all: it counts *withholding*, never *what was withheld*.
+- **`over_cap_rate` sits beside its numerator and denominator.** `0.0` over three advisories
+  and `0.0` over thirty thousand are different claims; a bare rate conflates them.
+- **Malformed operator ids fail at startup.** The gate compares `UserId` values, so a typo
+  would silently match nobody and look like a permissions bug for the one operator it was
+  meant to serve.
+
+### Tests
+
+`tests/application/test_withholding_report.py` (3) and `tests/api/test_ops_withholding_api.py`
+(4) — 7 total. Both layers are pinned because "the use case raises `ResourceNotFound`" and
+"the router does not remap it" are separate claims, and only an HTTP-level test covers the
+second. Cases: operator reads totals; empty allowlist denies; a listed other user is refused
+as not-found; the route/schema/container agree; a non-operator gets 404 rather than 403.
+
+### Migration / dependencies
+
+None. No schema change, no new dependency (stdlib `uuid`, existing FastAPI/pydantic).
+
+### Residual
+
+**R36** — the allowlist is a static environment variable with no expiry, no way to read the
+current holders from inside the system, and no record of who read the totals. The disclosure is
+small (counts only), so this is a governance gap rather than a hole. Fold it into the
+scoped-capability-grant slice rather than solving it ad hoc here.
+
+---
+
+## NEX-038 — Re-poll NEX-037's CI, then close its delivery debt
+
+**Phase:** 5. **Priority:** P0 for the first step (a VERIFIED claim rests on unpolled CI).
+**Status:** PLANNED. **Dependencies:** none.
+
+### Objective
+
+NEX-037 shipped on local evidence with CI unconcluded. Finish the verification and the
+delivery NEX-037 could not fit into its window.
+
+### Scope
+
+1. Poll `5c0575b` until every check run concludes. Record the result with a timestamp in
+   `CHECKPOINT.json` `ci_status`. If it is red, fix it — do not re-label it.
+2. PATCH PR #3's body with a NEX-037 section (objective, the access-control reasoning, the
+   seven tests, R34 closed, R36 opened). Read the body back and assert on specific substrings
+   and byte-equality.
+3. POST one issue #2 comment for NEX-037. **Lists, never a markdown table** — a table in an
+   issue comment returns HTTP 500 on this repository.
+
+### Acceptance criteria
+
+- [ ] `ci_status.product_slice_result` names a conclusion, not a `queued`/`in_progress` state.
+- [ ] PR #3 body carries a NEX-037 section, verified byte-equal after PATCH.
+- [ ] Issue #2 has a NEX-037 comment, verified byte-equal after POST.
+- [ ] `STATE.md` and `CHECKPOINT.json` agree with GitHub on the PR head.
+
+### Why this ranks first
+
+A task marked VERIFIED on local evidence is honest but provisional. The longer the gap between
+the claim and the poll, the more likely the claim is read later as "CI passed" — which is the
+exact class of stale note R24 exists to prevent. Closing it is cheap; leaving it open makes the
+record unreliable.
+
+### Then
+
+After delivery is current, the highest-value dependency-ready work is either the **R33
+residual** (the log redactor's vocabulary is finite — additive, low risk) or the **first real
+`DecisionProvider` adapter**, which NEX-035's conformance suite now exists to police. The
+adapter is the larger unlock: it turns decisioning from a stub into a capability, and the
+suite means the adapter's first real test is not its first genuine test. Verify the premise
+against the code before starting — the last five `next_action` fields each needed correcting.

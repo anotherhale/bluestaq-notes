@@ -7,15 +7,65 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-036 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held (a pending request stays `pending` after an advisory, and abstentions reach the caller rather than being swallowed), but the audit found that `RecommendApprovalDecision` produced advice for requests already approved, denied or revoked. Fixed with a status/liveness guard returning **409** — see **R35**. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-037 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `72957e4` — the NEX-035 docs promotion over product commit `12f6fa9`. |
-| Head commit (run end) | `90eea0c` — NEX-036's product commit (docs promotion follows above it). |
-| Last CI result | **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), one complete pair, polled 2026-11-25T18:45Z. A duplicate Backend run (id 139429874630) reads `completed/cancelled` — the concurrency group killed the superseded event run, which is neither pass nor fail and is not counted. **`12f6fa9` (NEX-035): 4/4 `completed/success`, polled 2026-11-25T18:14Z.** See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
-| Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
-| Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
+| Base commit (run start) | `5d2792b` — the NEX-036 docs promotion; the run fast-forwarded to `8f05a5b` after reconciling against the remote. |
+| Head commit (run end) | `5c0575b` — NEX-037's product commit (docs promotion follows above it). |
+| Last CI result | **`5c0575b` (NEX-037): polled 2026-11-25T18:52Z while `queued`/`in_progress` — NOT a result.** 4 check runs exist on that SHA, all reporting `head_sha` `5c0575b`. **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), one complete pair, polled 2026-11-25T18:45Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. NEX-036 is carried by comment 7171412980. NEX-037 not yet posted. |
+| Draft PR | #3 (draft, unmerged — human review required). **Current as of `c37037f`**: body PATCHed 2026-11-25T18:47Z (56,759 chars, read back byte-equal) with the NEX-036 section. NEX-037 not yet in the body. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-037 (run `NEX-2026-11-25-37`) — the count existed, the aggregate did not
+
+R34 described a monitoring gap precisely: `WithholdingRecorder` counts every advisory and
+every over-cap withholding across the process, `RecommendApprovalDecision` logs the running
+total, and nothing exports it. Answering "how often are advisories thinner than they should
+be" meant reading individual responses. A log line is not a number an operator can alert on.
+
+This slice is the read side of that recorder, and the design question was not how to expose
+the number but **who may see it**.
+
+The aggregate spans every tenant. It is not a view of the caller's own data — it is a view of
+the whole process — so exposing it to any authenticated caller would let one user infer
+another user's advisory volume, and would make the endpoint a cross-tenant side channel that
+grew more informative the more precisely it was polled. That ruled out the obvious shape
+(a normal authenticated route) and ruled out reusing `AuthorizationProvider`, whose job is
+note *content* access: platform operations must never be reachable by content access alone.
+
+What shipped instead:
+
+- `GetWithholdingReport` (`application/use_cases/withholding_report.py`) returns the snapshot
+  to a caller on an explicit allowlist, and raises `ResourceNotFound` for anyone else.
+- `OPS_OPERATOR_USER_IDS` gates it. **Empty by default, and empty means nobody** — the
+  allowlist is a grant, not a role inherited by being logged in. An unconfigured deployment
+  therefore exposes nothing, which is the correct failure direction for a setting nobody has
+  thought about yet.
+- A non-operator gets **404, not 403**. `403` would confirm that a platform-operations
+  surface exists at that path, which is itself a small disclosure to someone probing the API.
+- `GET /api/v1/ops/withholding-report` returns counts only — `advisories_total`,
+  `over_cap_advisories_total`, `over_cap_fields_total`, `over_cap_rate`. No field name,
+  value, note id or user id. That is why a single process-wide number can be disclosed at all
+  without disclosing content: the counts are about *withholding*, never about what was withheld.
+- `over_cap_rate` is reported beside its numerator and denominator, because `0.0` over three
+  advisories and `0.0` over thirty thousand are different claims and a bare rate conflates them.
+- Malformed operator ids fail **at startup**, not at request time. The gate compares `UserId`
+  values, so a typo would silently match nobody and the endpoint would look broken for the one
+  operator it was meant to serve — a failure that is hard to distinguish from a permissions bug.
+
+Seven tests cover the gate at both layers: three at the use case (operator reads totals; empty
+allowlist denies; a listed-other-user is refused as not-found) and four at the HTTP boundary
+(the route, schema and container wiring agree; empty allowlist admits nobody; a non-operator
+sees 404 rather than 403). Both layers matter here — the use case raising `ResourceNotFound`
+and the router *not* remapping it are separate claims, and only an HTTP-level test pins the
+second.
+
+Status: **VERIFIED on local evidence** — `ruff format` clean (169 files), `ruff check` clean,
+`mypy` clean over 109 source files, full `pytest` **920 passed / 4 skipped**. CI on `5c0575b`
+was polled at 2026-11-25T18:52Z and was still `queued`/`in_progress`: it must be re-polled
+before this slice is called CI-verified.
+
 
 ## NEX-036 (run `NEX-2026-11-25-37`) — the caller was audited, and the advisory outlived its question
 

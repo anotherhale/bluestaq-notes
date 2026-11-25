@@ -4620,3 +4620,122 @@ Verify the premise against the code first (`grep -rn 'WithholdingRecorder' src/n
 — the last three `next_action` fields each needed correcting. Candidate scope: expose the
 existing counters through health/readiness or a metrics endpoint, with a test asserting a
 withheld field increments exactly one counter and a 409 refusal increments none.
+
+---
+
+## Run `NEX-2026-11-25-37` — NEX-037: the count existed, the aggregate did not
+
+**Started:** 2026-11-25T18:46Z (`RUN_START` 1795632390) · **Deadline:** 1795633890 (25 min)
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `5d2792b` (local) → fast-forwarded to `8f05a5b` (remote) before any work
+**Ending commit:** `5c0575b` (product), docs promotion above it
+
+### Reconcile
+
+The local branch was **4 commits behind** the remote. Before fast-forwarding I checked what the
+remote commits touched: `docs/NEXUS/{CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}` only, and the
+local work was confined to `src/` and `tests/`. No overlap, so `git merge --ff-only` was safe
+and preserved everything. This is the R24 class in reverse — not a stale note but a stale
+*local* ref, and the fix is the same: look at the evidence before trusting the field.
+
+### Task selection
+
+`next_action` said NEX-037: close R34 by exporting the withholding rate, and it told me to
+verify the premise against the code first because the last four `next_action` fields each
+needed correcting. I did:
+
+```
+grep -rn 'WithholdingRecorder' src/notes_service
+```
+
+Confirmed: the port exists, `RecommendApprovalDecision` injects it, `InMemoryWithholdingRecorder`
+is the only adapter, and `container.py` already constructs exactly one instance per process.
+The premise held — the count is real and process-wide, and nothing exports it. The suggested
+scope (health/readiness or a metrics endpoint) was *not* adopted; see the decision below.
+
+### Decision — the aggregate is gated by an explicit allowlist, not by authentication
+
+The recorded candidate scope was to hang the counters off health/readiness. That would have
+been a cross-tenant disclosure: the counters span every tenant, so any caller who could reach
+the probe could watch another tenant's advisory volume change. Worse, `/health` is typically
+unauthenticated by design, so the "obvious" home for an operational number is the one place it
+must not go.
+
+Rejected alternatives, and why:
+
+- **A normal authenticated route** — authenticated is not authorized. Every logged-in user
+  would read a process-wide total.
+- **`AuthorizationProvider`** — that policy answers "may this caller see this note's content".
+  Reusing it would make platform operations reachable through content access, conflating two
+  different authorities.
+- **403 for a non-operator** — confirms the surface exists. 404 leaks less.
+
+Shipped: `OPS_OPERATOR_USER_IDS`, empty by default, empty meaning *nobody*. Default-deny for a
+setting an operator has not yet configured is the only safe default. Recorded as **R36** that
+the grant itself is static, unauditable and has no expiry — a governance gap to fold into the
+scoped-capability work, not something to solve ad hoc here.
+
+### Files changed
+
+| File | Change |
+| --- | --- |
+| `application/use_cases/withholding_report.py` | new — `GetWithholdingReport` |
+| `presentation/api/routers/ops.py` | new — the route |
+| `bootstrap/config.py` | `ops_operator_user_ids`, UUID-validated CSV |
+| `bootstrap/container.py` | wire the read side to the existing recorder |
+| `presentation/api/__init__.py` | register the router |
+| `presentation/schemas.py` | response schema |
+| `tests/application/test_withholding_report.py` | new — 3 tests |
+| `tests/api/test_ops_withholding_api.py` | new — 4 tests |
+
+325 insertions, 1 deletion.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format` | clean (169 files) |
+| `ruff check` | All checks passed |
+| `mypy` | Success: no issues found in **109** source files |
+| `pytest` | **920 passed, 4 skipped** (4 skips are the postgres-only tests) |
+| CI `5c0575b` | **NOT CONCLUDED** — 4 runs, all `queued`/`in_progress` at 18:52Z and 18:54Z |
+
+The gates ran **after** the last edit. The only change made after the first full-suite run was
+a comment reword in `container.py`, and the suite was re-run afterwards, so the committed tree
+is the tree that was tested.
+
+**The 916 → 920 arithmetic does not reconcile, and I am recording that rather than smoothing
+it.** NEX-036 recorded 916 passed and this slice adds 7 tests, which predicts 923. The measured
+number is 920. NEX-036's 916 was recorded without a measured baseline — it was inferred from
+NEX-035's 911 plus five new tests. So the discrepancy is most likely in the *prior* figure, not
+in this run's, but I have not proven that and will not claim it. 920 is what the suite actually
+reported; 916 is an unverified prior claim. This is R24 again, and the honest move is to say so
+in the file rather than let a later reader discover it.
+
+### Status
+
+**NEX-037: VERIFIED on local evidence. NOT CI-verified.** That distinction is deliberate and is
+stamped with both poll timestamps in `CHECKPOINT.json`, because "CI has not run yet" and "CI
+failed" are indistinguishable to a later reader unless the timestamp is there.
+
+### Delivery debt — not cleared this run
+
+- PR #3 body has **no** NEX-037 section (last PATCHed at `c37037f` for NEX-036).
+- Issue #2 has **no** NEX-037 comment (last is 7171412980 for NEX-036).
+
+Both are owed and are the first two steps of NEX-038. The window went to reconciliation, the
+slice, and the state files; delivery was the thing cut, and it is written down rather than
+silently dropped.
+
+### Next action
+
+**NEX-038:** poll `5c0575b` to a conclusion, fix it if red, then PATCH PR #3 and POST one issue
+#2 comment (lists, never a table). After that, the first real `DecisionProvider` adapter is the
+largest dependency-ready unlock — NEX-035's conformance suite now exists to police it.
+
+### Risks
+
+- **R34 closed** by this slice.
+- **R36 opened** — the ops allowlist is static, unauditable, and has no expiry.
+- **R24 recurred once more**, caught by reconciliation: a prior task's test count was recorded
+  without a measured baseline. Caught and annotated rather than propagated.
