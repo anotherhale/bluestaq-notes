@@ -2139,3 +2139,7 @@ Quoted the PR object instead. This refines, and partly contradicts, the
 Then refresh the PR body and select the next Phase-5 slice.
 
 **CI observation (same run):** `b9b7207` reported 4/4 `completed/success` (Backend x2, Frontend x2), polled 2026-11-25T08:23Z. NEX-016 promoted **TESTED -> VERIFIED** on that evidence. The follow-up docs commit (10ae3c7) was queued at poll time and is Markdown/JSON only.
+
+**PR #3 body refreshed** at 2026-11-25T08:23:26Z against the PR object at `eab423c` (106 files / 28,079 additions / 10 deletions / 79 commits / 718 tests collected). Corrected three stale counters (707 tests, 195 ruff files, 97 mypy sources) and added NEX-016 to the defect list. PR remains draft and unmerged.
+
+**Tooling note:** a `cat > /tmp/x.py <<'EOF'` heredoc was corrupted mid-command again (the tail of the script was duplicated and interleaved). The `python3` run failed with SyntaxError before executing, so no file was touched - the working tree was verified clean immediately afterwards. This is the third occurrence in this repository; scripts must be written with the file editor, never through a shell heredoc.

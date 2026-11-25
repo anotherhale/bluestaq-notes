@@ -13,7 +13,7 @@ truth; this file records intent and reconciliation.
 | Head commit (run end) | `b9b7207` (NEX-016 product slice; pushed and verified on the remote). The docs commit carrying this file is its child. |
 | Last CI result | **Green on `b9b7207`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. This is the NEX-016 product commit. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `b9b7207`. Body **stale**: last written at `7ce6f8b`. Measured at `b9b7207` from the PR object: **106 files, 27,936 insertions, 10 deletions, 77 commits**, 718 tests collected. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `b9b7207`. Body **refreshed 2026-11-25T08:23Z** at `eab423c`: **106 files, 28,079 insertions, 10 deletions, 79 commits**, 718 tests collected. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-16",
-  "timestamp": "2026-11-25T08:28:00Z",
+  "timestamp": "2026-11-25T08:33:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "b9b7207",
   "commit_note": "b9b7207 is the NEX-016 product commit, pushed, and now CI-verified 4/4. The docs commits beneath/above it (10ae3c7 and the one carrying this file) are unobserved, as expected - they change Markdown and JSON only.",
@@ -68,20 +68,21 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "10ae3c7",
-    "body_refreshed": "NOT refreshed this run - the body still describes the branch as of an earlier head.",
+    "head": "eab423c",
+    "body_refreshed": "2026-11-25T08:23:26Z at head eab423c. Corrected three stale counters (707 tests, 195 ruff files, 97 mypy sources) to 718 / 196 / 98, refreshed the CI-evidence line to the observed b9b7207 result, and added NEX-016 to the defect list.",
     "metrics_at_head": {
-      "additions": 27936,
+      "additions": 28079,
       "deletions": 10,
       "changed_files": 106,
-      "commits": 77,
+      "commits": 79,
       "tests_collected": 718,
-      "measured_at": "b9b7207",
+      "measured_at": "eab423c",
       "method": "PR object counters from GET /repos/anotherhale/bluestaq-notes/pulls/3"
     },
     "note": "PR #3 head moved to 414a222. Metrics measured with `git diff --shortstat main HEAD` (two-dot; the clone is grafted so three-dot fails) and `pytest --collect-only`. Remains draft and unmerged; automated merging is prohibited.",
-    "body_current_at": "7ce6f8b",
-    "metrics": "27,659 insertions / 10 deletions / 104 files, measured with git diff --shortstat origin/main...HEAD on a full clone; matches the PR object. Per-file sums from /pulls/3/files (20,309) and /compare (19,366) are truncated and must not be quoted."
+    "body_current_at": "eab423c",
+    "metrics": "27,659 insertions / 10 deletions / 104 files, measured with git diff --shortstat origin/main...HEAD on a full clone; matches the PR object. Per-file sums from /pulls/3/files (20,309) and /compare (19,366) are truncated and must not be quoted.",
+    "body_metrics_verified": true
   },
   "tracking_issue": {
     "number": 2,
@@ -128,7 +129,7 @@
     }
   ],
   "next_task": "Refresh PR #3 body/metrics at the current head, then select the next Phase-5 slice.",
-  "next_action": "1) Refresh PR #3's description against the PR object counters - it is stale at 7ce6f8b. 2) Verify CI on 10ae3c7 (docs-only). 3) Select the next dependency-ready Phase-5 slice from ROADMAP.md. Never merge PR #3.",
+  "next_action": "Select the next dependency-ready Phase-5 slice from ROADMAP.md and implement it. Confirm CI on eab423c (docs-only). Never merge PR #3.",
   "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is VERIFIED at b9b7207 (CI 4/4) - do not re-implement. Carry R22 forward: for a governance control, test the full decision-to-effect path, not each half separately. The clone is grafted, so three-dot diffs fail with 'no merge base' even with a standard refspec; use PR object counters for metrics. Never merge PR #3. Write scripts to /tmp via file_editor; never use a heredoc.",
   "ci_status": {
     "configured": true,
@@ -144,7 +145,7 @@
     "observed": "2026-11-25T08:23Z",
     "note": "Green 4/4 on b9b7207 (the NEX-016 product commit). 10ae3c7 was queued at last poll."
   },
-  "notes_on_pr_body": "PR #3's body is now STALE: it was last written at 7ce6f8b and the branch has moved to b9b7207. Measured at b9b7207 from the PR object: 106 files, 27,936 additions, 10 deletions, 77 commits, 718 tests collected. Two-dot `git diff --shortstat origin/main..HEAD` gives 111 files / 27,998 / 943 - it disagrees because the clone is grafted and lacks a merge base, so it is NOT a trustworthy substitute here (this differs from the 2026-11-25-15 finding, where the refspec was the cause; the refspec is now standard and three-dot still fails on 'no merge base'). Prefer the PR object counters. Refresh the body next run.",
+  "notes_on_pr_body": "Body refreshed at eab423c on 2026-11-25T08:23:26Z; its counters match the PR object (106 files / 28,079 additions / 10 deletions / 79 commits / 718 tests collected).",
   "validation_status": {
     "gates": "local at b9b7207: ruff format --check clean, ruff check clean, mypy clean, pytest 714 passed / 4 skipped.",
     "ci": "b9b7207: 4/4 completed/success, polled 2026-11-25T08:23Z.",
@@ -154,9 +155,9 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "10ae3c7",
-    "body_updated": "2026-11-25T07:49:37Z",
-    "body_metrics_verified": false,
+    "head": "eab423c",
+    "body_updated": "2026-11-25T08:23:26Z",
+    "body_metrics_verified": true,
     "merge": "prohibited - must remain unmerged for human review"
   }
 }
