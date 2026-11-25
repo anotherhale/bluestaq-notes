@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -35,7 +36,7 @@ def _alembic(db_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
         "ENVIRONMENT": "testing",
     }
     return subprocess.run(
-        [".venv/bin/alembic", *args],
+        [sys.executable, "-m", "alembic", *args],
         cwd=PROJECT_ROOT,
         env=env,
         capture_output=True,
