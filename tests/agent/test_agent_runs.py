@@ -73,7 +73,6 @@ def principal_for(user_id: UserId) -> Principal:
 def create_step(title: str) -> PlannedStep:
     return PlannedStep(
         tool_name="create_note",
-        capability=Capability.CREATE_NOTE,
         arguments={"title": title, "content": f"body for {title}"},
     )
 
@@ -183,7 +182,6 @@ def test_plan_refuses_a_capability_the_token_lacks(h: Harness) -> None:
                 create_step("allowed"),
                 PlannedStep(
                     tool_name="delete_note",
-                    capability=Capability.DELETE_NOTE,
                     arguments={"note_id": "00000000-0000-0000-0000-000000000000"},
                 ),
             ],
@@ -329,3 +327,28 @@ def test_missing_run_is_404(h: Harness) -> None:
         h.get.run(h.principal, run_id="00000000-0000-0000-0000-000000000000")
     with pytest.raises(ResourceNotFound):
         h.get.run(h.principal, run_id="not-a-uuid")
+
+
+def test_a_planned_step_takes_its_capability_from_the_tool_catalog() -> None:
+    """A step cannot be constructed with a caller-chosen capability at all.
+
+    ``capability`` is not an init field, so a plan cannot present weaker authority
+    than the tool it schedules — the mismatch is unrepresentable rather than
+    merely rejected.
+    """
+    step = PlannedStep(tool_name="delete_note", arguments={"note_id": "n"})
+    assert step.capability is Capability.DELETE_NOTE
+
+    with pytest.raises(TypeError):
+        PlannedStep(  # type: ignore[call-arg]
+            tool_name="delete_note",
+            capability=Capability.READ_NOTE,
+            arguments={"note_id": "n"},
+        )
+
+
+def test_a_planned_step_naming_an_unknown_tool_is_rejected() -> None:
+    from notes_service.domain.errors import ValidationError
+
+    with pytest.raises(ValidationError, match="unknown tool"):
+        PlannedStep(tool_name="no_such_tool", arguments={})

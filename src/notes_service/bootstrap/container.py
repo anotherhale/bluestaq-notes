@@ -28,6 +28,14 @@ from notes_service.application.ports.organization_authorization import (
 )
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
+from notes_service.application.use_cases.agent_runs import (
+    AbortAgentRun,
+    AdvanceAgentRun,
+    GetAgentRun,
+    ListAgentRuns,
+    PlanAgentRun,
+    ResolveInterruptedStep,
+)
 from notes_service.application.use_cases.agents import (
     DecideApprovalRequest,
     GetAgent,
@@ -206,6 +214,15 @@ class Container:
     # The governed tool gateway. Every agent tool call goes through it, so it is
     # the one place capability checks, approval gating, and audit are applied.
     invoke_tool: Callable[[], InvokeTool]
+    # Durable runs. Planning and advancing authenticate the agent by token; reading
+    # and settling a run belong to the owning human, because only they can rule on
+    # an interrupted step.
+    plan_agent_run: Callable[[], PlanAgentRun]
+    advance_agent_run: Callable[[], AdvanceAgentRun]
+    get_agent_run: Callable[[], GetAgentRun]
+    list_agent_runs: Callable[[], ListAgentRuns]
+    resolve_interrupted_step: Callable[[], ResolveInterruptedStep]
+    abort_agent_run: Callable[[], AbortAgentRun]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -350,6 +367,37 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             ),
         )
 
+    def make_plan_agent_run() -> PlanAgentRun:
+        return PlanAgentRun(
+            uow_factory=uow_factory,
+            authorization=authorization_provider,
+            clock=clock,
+            resolve_token=ResolveAgentToken(
+                uow_factory=uow_factory,
+                authorization=authorization_provider,
+                clock=clock,
+            ),
+        )
+
+    def make_advance_agent_run() -> AdvanceAgentRun:
+        """A run advances *through* the gateway, never around it.
+
+        The run owns ordering and durability; the gateway still owns capability,
+        approval, and audit. Composing them here is what makes "a run cannot reach
+        a tool its token lacks" true by construction rather than by convention.
+        """
+        return AdvanceAgentRun(
+            uow_factory=uow_factory,
+            authorization=authorization_provider,
+            clock=clock,
+            resolve_token=ResolveAgentToken(
+                uow_factory=uow_factory,
+                authorization=authorization_provider,
+                clock=clock,
+            ),
+            gateway=make_tool_gateway(),
+        )
+
     return Container(
         settings=settings,
         engine=engine,
@@ -411,4 +459,10 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         decide_approval_request=make(DecideApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
         invoke_tool=make_tool_gateway,
+        plan_agent_run=make_plan_agent_run,
+        advance_agent_run=make_advance_agent_run,
+        get_agent_run=make(GetAgentRun),
+        list_agent_runs=make(ListAgentRuns),
+        resolve_interrupted_step=make(ResolveInterruptedStep),
+        abort_agent_run=make(AbortAgentRun),
     )

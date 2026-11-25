@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 
+from notes_service.domain.agent.tools import resolve_tool
 from notes_service.domain.agent.value_objects import Capability
 from notes_service.domain.errors import InvariantViolation, ValidationError
 
@@ -141,20 +142,26 @@ def step_idempotency_key(run_id: AgentRunId, sequence: int) -> str:
 
 @dataclass(frozen=True, slots=True)
 class PlannedStep:
-    """A step to be scheduled when a run is created. Immutable input."""
+    """A step to be scheduled when a run is created. Immutable input.
+
+    ``capability`` is derived from the tool catalog, not supplied by the caller. A
+    plan that could declare its own capability could record a weaker authority
+    than the step it schedules — and the run row is exactly what an operator reads
+    when deciding whether an interrupted step's effect landed.
+    """
 
     tool_name: str
-    capability: Capability
     arguments: dict[str, object]
+    capability: Capability = field(init=False)
     resource_ref: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.tool_name, str) or not self.tool_name.strip():
             raise ValidationError("a planned step must name a tool")
-        if not isinstance(self.capability, Capability):
-            raise ValidationError(f"unknown capability: {self.capability!r}")
         if len(self.resource_ref) > _MAX_RESOURCE_REF:
             raise ValidationError(f"resource ref must be at most {_MAX_RESOURCE_REF} characters")
+        tool = resolve_tool(self.tool_name)
+        object.__setattr__(self, "capability", tool.capability)
 
 
 @dataclass(slots=True)

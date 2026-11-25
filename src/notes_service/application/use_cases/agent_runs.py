@@ -35,6 +35,7 @@ from notes_service.application.use_cases.agents import ResolveAgentToken, Resolv
 from notes_service.application.use_cases.base import UnitOfWorkFactory, UseCase
 from notes_service.application.use_cases.tools import InvokeTool, ToolResult
 from notes_service.domain.agent.runs import AgentRun, AgentRunId, PlannedStep
+from notes_service.domain.agent.tools import resolve_tool, validate_arguments
 from notes_service.domain.agent.value_objects import AgentId, TokenAudience
 from notes_service.domain.errors import DomainError, InvariantViolation
 from notes_service.domain.identity.principal import Principal
@@ -95,6 +96,13 @@ class PlanAgentRun(_RunUseCase):
     something the token cannot do is rejected before anything is persisted, so an
     agent cannot queue authority it does not have and wait for a later resume to
     grant it.
+
+    The capability recorded for a step is the one the **tool catalog** declares,
+    not the one the caller claims: ``PlannedStep`` derives it from the catalog on
+    construction, so a plan naming ``delete_note`` can never persist a step whose
+    recorded authority is weaker than what it will actually do. The run row is what
+    an operator reads when deciding an interrupted step, so that recorded authority
+    has to be the real one.
     """
 
     def __init__(
@@ -112,7 +120,8 @@ class PlanAgentRun(_RunUseCase):
         resolved = self._resolve_token.run(secret=secret, audience=TokenAudience.TOOL_GATEWAY.value)
         if not steps:
             raise InvalidInput("a run needs at least one step")
-        for step in steps:
+        checked = [self._checked_step(step) for step in steps]
+        for step in checked:
             if step.capability not in resolved.token.capabilities:
                 raise AccessDenied(
                     f"token lacks capability {step.capability.value} required by step "
@@ -120,13 +129,32 @@ class PlanAgentRun(_RunUseCase):
                 )
         run = AgentRun.plan(
             agent_id=resolved.agent.id,
-            planned=steps,
+            planned=checked,
             delegation_id=resolved.delegation.id,
         )
         with self._uow_factory() as uow:
             uow.agent_runs.add(run)
             uow.commit()
         return run
+
+    @staticmethod
+    def _checked_step(step: PlannedStep) -> PlannedStep:
+        """Validate the step's arguments against the tool catalog.
+
+        ``PlannedStep`` already derives and records the catalog capability, so only
+        the arguments need checking here — a step whose arguments do not fit its
+        tool would fail mid-run instead of at plan time.
+        """
+        try:
+            tool = resolve_tool(step.tool_name)
+            arguments = validate_arguments(tool, step.arguments)
+        except DomainError as exc:
+            raise InvalidInput(str(exc)) from exc
+        return PlannedStep(
+            tool_name=tool.name,
+            arguments=arguments,
+            resource_ref=step.resource_ref,
+        )
 
 
 class AdvanceAgentRun(_RunUseCase):

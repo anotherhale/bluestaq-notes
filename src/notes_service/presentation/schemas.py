@@ -13,11 +13,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
+from notes_service.domain.agent.runs import AgentRun, RunStatus, RunStep, StepStatus
 from notes_service.domain.agent.tools import InvocationStatus
 from notes_service.domain.agent.value_objects import (
     AgentStatus,
@@ -815,6 +817,155 @@ class ToolInvocationResponse(ResponseModel):
             replayed=result.replayed,
             output=dict(result.output),
         )
+
+
+# -- durable runs ---------------------------------------------------------
+
+
+class PlannedStepRequest(StrictModel):
+    """One step of a proposed plan.
+
+    ``capability`` is **not** accepted: the capability behind a tool is a property
+    of the tool catalog, so letting a caller declare it would let a plan claim a
+    weaker authority than the step it schedules. The application layer derives it
+    and refuses a plan whose tool it does not know.
+    """
+
+    tool: str = Field(min_length=1, max_length=64)
+    arguments: dict[str, object] = Field(default_factory=dict)
+    resource_ref: str = Field(default="", max_length=512)
+
+
+class PlanAgentRunRequest(StrictModel):
+    """A durable plan presented by an agent, authenticated by its own token."""
+
+    steps: list[PlannedStepRequest] = Field(min_length=1, max_length=100)
+
+
+class AdvanceAgentRunRequest(StrictModel):
+    """Ask a run to proceed. ``max_steps`` bounds one request's work."""
+
+    max_steps: int = Field(default=100, ge=1, le=1000)
+
+
+class ResolveInterruptedStepRequest(StrictModel):
+    """The owner's ruling on an ambiguous step.
+
+    ``effect_landed`` is required and explicit: the domain will not infer whether
+    a crashed step applied its side effect, because either guess is wrong half the
+    time.
+    """
+
+    effect_landed: bool
+    outcome: str | None = Field(default=None, max_length=500)
+
+
+class AbortAgentRunRequest(StrictModel):
+    """Stop a run permanently, with an optional recorded reason."""
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class RunStepResponse(ResponseModel):
+    """One step as the owner sees it, including how far it got."""
+
+    id: uuid.UUID
+    sequence: int
+    tool: str
+    capability: Capability
+    idempotency_key: str
+    resource_ref: str
+    status: StepStatus
+    outcome: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+    @classmethod
+    def from_domain(cls, step: RunStep) -> RunStepResponse:
+        return cls(
+            id=uuid.UUID(str(step.id)),
+            sequence=step.sequence,
+            tool=step.tool_name,
+            capability=step.capability,
+            idempotency_key=step.idempotency_key,
+            resource_ref=step.resource_ref,
+            status=step.status,
+            outcome=step.outcome,
+            started_at=step.started_at,
+            completed_at=step.completed_at,
+        )
+
+
+class AgentRunResponse(ResponseModel):
+    """A durable run. Step arguments are not echoed; the digest and plan are."""
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    delegation_id: uuid.UUID | None = None
+    status: RunStatus
+    version: int
+    steps: list[RunStepResponse]
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    last_error: str | None = None
+
+    @classmethod
+    def from_domain(cls, run: AgentRun) -> AgentRunResponse:
+        return cls(
+            id=uuid.UUID(str(run.id)),
+            agent_id=uuid.UUID(str(run.agent_id)),
+            delegation_id=(
+                uuid.UUID(str(run.delegation_id)) if run.delegation_id is not None else None
+            ),
+            status=run.status,
+            version=run.version,
+            steps=[RunStepResponse.from_domain(step) for step in run.ordered_steps],
+            created_at=run.created_at,
+            updated_at=run.updated_at,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            last_error=run.last_error,
+        )
+
+
+class StepOutcomeResponse(ResponseModel):
+    """What one executed step produced in this request."""
+
+    sequence: int
+    tool: str
+    output: dict[str, object] = Field(default_factory=dict)
+
+
+class RunAdvanceResponse(ResponseModel):
+    """The run after advancing, plus what this request executed.
+
+    ``halted_reason`` is set when the run stopped without completing, so a caller
+    can tell "finished" from "waiting on a human" from "a step failed".
+    """
+
+    run: AgentRunResponse
+    outcomes: list[StepOutcomeResponse] = Field(default_factory=list)
+    halted_reason: str | None = None
+
+    @classmethod
+    def from_domain(cls, advance: RunAdvance) -> RunAdvanceResponse:
+        return cls(
+            run=AgentRunResponse.from_domain(advance.run),
+            outcomes=[
+                StepOutcomeResponse(
+                    sequence=outcome.sequence, tool=outcome.tool_name, output=outcome.output
+                )
+                for outcome in advance.outcomes
+            ],
+            halted_reason=advance.halted_reason,
+        )
+
+
+class AgentRunListResponse(BaseModel):
+    items: list[AgentRunResponse]
+    meta: PageMeta
 
 
 # -- envelopes ------------------------------------------------------------
