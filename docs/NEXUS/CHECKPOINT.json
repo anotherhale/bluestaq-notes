@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-16",
-  "timestamp": "2026-11-25T08:40:00Z",
+  "timestamp": "2026-11-25T08:44:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "b9b7207",
   "commit_note": "b9b7207 is the NEX-016 product commit, pushed, and now CI-verified 4/4. The docs commits beneath/above it (10ae3c7 and the one carrying this file) are unobserved, as expected - they change Markdown and JSON only.",
@@ -20,7 +20,7 @@
     "NEX-008": "VERIFIED",
     "NEX-010": "VERIFIED",
     "NEX-009": "VERIFIED",
-    "NEX-009-HTTP": "TESTED",
+    "NEX-009-HTTP": "VERIFIED",
     "NEX-011": "VERIFIED",
     "NEX-012": "VERIFIED",
     "NEX-013": "VERIFIED",
@@ -29,17 +29,15 @@
     "NEX-016": "VERIFIED"
   },
   "completed_tasks": [
-    "NEX-006",
-    "NEX-003",
+    "NEX-001",
+    "NEX-002",
     "NEX-005",
     "NEX-005-followup",
     "NEX-004",
-    "NEX-008",
-    "NEX-005-HTTP",
     "NEX-007",
+    "NEX-005-HTTP",
+    "NEX-008",
     "NEX-010",
-    "NEX-002",
-    "NEX-009-slice1",
     "NEX-009",
     "NEX-009-HTTP",
     "NEX-011",
@@ -146,5 +144,29 @@
     "body_updated": "2026-11-25T08:23:26Z",
     "body_metrics_verified": true,
     "merge": "prohibited - must remain unmerged for human review"
-  }
+  },
+  "verified_tasks": [
+    "NEX-001",
+    "NEX-002",
+    "NEX-005",
+    "NEX-005-followup",
+    "NEX-004",
+    "NEX-007",
+    "NEX-005-HTTP",
+    "NEX-008",
+    "NEX-010",
+    "NEX-009",
+    "NEX-009-HTTP",
+    "NEX-011",
+    "NEX-012",
+    "NEX-013",
+    "NEX-014",
+    "NEX-015",
+    "NEX-016"
+  ],
+  "in_progress_tasks": {
+    "NEX-006": "TESTED",
+    "NEX-003": "TESTED"
+  },
+  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }
