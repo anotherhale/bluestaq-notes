@@ -10,10 +10,10 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `7ce6f8b` |
-| Head commit (run end) | `13ed5b7` (docs-only; pushed). Product slice beneath it is `414a222`, unchanged. |
-| Last CI result | **Green on `13ed5b7`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T07:51Z. `414a222` was also observed 4/4 green at 07:42Z. |
+| Head commit (run end) | `038db7e` (docs-only; pushed). Product slice beneath it is `414a222`, unchanged. |
+| Last CI result | **Green on `038db7e`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T07:53Z. `13ed5b7` and `414a222` were each observed 4/4 green earlier in the run. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `13ed5b7`. Body **refreshed this run** with metrics recomputed at that head: **27,579 insertions / 10 deletions / 104 files, 74 commits** ahead of `main` (1 behind), 715 tests collected. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `038db7e`. Body **refreshed this run** with metrics recomputed at that head: **27,659 insertions / 10 deletions / 104 files, 75 commits** ahead of `main` (1 behind), 715 tests collected. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)
