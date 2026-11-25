@@ -96,6 +96,86 @@ def test_redact_reaches_into_sequences() -> None:
     assert redacted["items"] == [{"api_key": REDACTED}, {"api_key": REDACTED}]
 
 
+def test_redact_matches_credential_spellings_it_was_never_told_about() -> None:
+    """A credential is recognised by shape, not by an exact spelling.
+
+    The matcher this replaces held eleven exact strings. Every credential
+    spelled differently — a vendor's ``client_secret``, a PEM ``private_key``,
+    an ``x-api-key`` header, a camelCase ``accessToken``, a ``session_cookie`` —
+    passed through untouched, so the module's "sensitive data must never be
+    logged" was enforced only for the spellings someone had happened to list.
+    That is the same enumerate-what-you-know shape as the six-key log allowlist
+    NEX-033 replaced, one layer down.
+    """
+    payload = redact(
+        {
+            "client_secret": "s3cr3t",
+            "private_key": "not-a-real-key-just-a-fixture",
+            "x-api-key": "abc123",
+            "accessToken": "tok-camel",
+            "session_cookie": "sid",
+            "Authorization": "Bearer live-token",
+        }
+    )
+
+    assert payload["client_secret"] == REDACTED
+    assert payload["private_key"] == REDACTED
+    assert payload["x-api-key"] == REDACTED
+    assert payload["accessToken"] == REDACTED
+    assert payload["session_cookie"] == REDACTED
+    assert payload["Authorization"] == REDACTED
+
+
+def test_redact_matches_a_plural_credential_key() -> None:
+    """``tokens`` is the same disclosure as ``token``."""
+    redacted = redact({"tokens": ["raw-secret-1"], "credentials": {"u": "a", "p": "b"}})
+
+    assert redacted["tokens"] == REDACTED
+    assert redacted["credentials"] == REDACTED
+
+
+def test_redact_drops_a_sequence_under_a_sensitive_key_entirely() -> None:
+    """A list under ``tokens`` is a list of credentials, not of items.
+
+    Replacing each element individually would keep the length and the ordering
+    of a secret set in the log line. The whole value goes instead.
+    """
+    redacted = redact({"tokens": ["raw-secret-1", "raw-secret-2"]})
+
+    assert redacted["tokens"] == REDACTED
+    assert "raw-secret-1" not in json.dumps(redacted)
+
+
+def test_redact_leaves_ordinary_telemetry_untouched() -> None:
+    """Surgical redaction: the fields this platform actually logs survive.
+
+    A matcher that redacts by substring would swallow ``idempotency_key``
+    (``key``), ``content_type`` (``content``) and ``duration_ms``. Over-redaction
+    is not a safe default here — it would blind the withholding counter NEX-033
+    added, which is the whole point of the log line.
+    """
+    payload = redact(
+        {
+            "request_id": "r1",
+            "status_code": 200,
+            "duration_ms": 12.5,
+            "user_id": "u1",
+            "over_cap_advisories_total": 3,
+            "over_cap_rate": 0.25,
+            "capability": "share_note",
+            "content_type": "application/json",
+            "idempotency_key": "idem-1",
+        }
+    )
+
+    assert payload["idempotency_key"] == "idem-1"
+    assert payload["content_type"] == "application/json"
+    assert payload["over_cap_rate"] == 0.25
+    assert payload["over_cap_advisories_total"] == 3
+    assert payload["capability"] == "share_note"
+    assert REDACTED not in payload.values()
+
+
 def test_formatter_does_not_emit_logging_internals() -> None:
     """Reserved attributes are formatting state, not structured fields."""
     payload = _formatted()
