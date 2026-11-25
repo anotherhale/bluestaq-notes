@@ -3710,3 +3710,83 @@ vendor response is the first genuine test of those bounds.
 **Next action:** refresh PR #3's body from the pull-request object to cover NEX-027 (`fb8d5bd`),
 then select the next dependency-ready slice: **context assembly**, the other half of M2.6.
 
+---
+
+## Run `NEX-2026-11-25-31` — NEX-028 (context assembly) + promotion
+
+- **Run ID:** `NEX-2026-11-25-31`
+- **Timestamp:** 2026-11-25T14:31Z start; slice committed `a3d1b32`, CI observed green in-run.
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `8052ded` (docs head from run `NEX-2026-11-25-30`)
+- **Ending commit:** this run's docs commit (the commit that contains this entry).
+- **Project phase:** Phase 5 (durable runtime). **M2.6 complete** — both halves now VERIFIED.
+
+**Recovery.** The run inherited an uncommitted NEX-028 working tree from an interrupted
+predecessor. Rather than trust its summary, I re-ran the gates on the tree as found: full
+`pytest` gave **824 passed / 4 skipped** (baseline 794), `ruff` and `mypy` clean. Only then did I
+commit, so the recovery added verification rather than assuming it. I also verified the test
+counts against the files instead of repeating the inherited "27 + 3": `--collect-only` shows 28
+in the new file and 8 in the architecture file (6 at baseline), so the delta is **30**, matching
+794 → 824. The inherited summary had those numbers wrong and would have put a false figure in
+the record.
+
+**Tasks completed:** NEX-028 — context assembly. One domain module,
+`domain/agent/context.py`, now owns what may enter an outbound judgment. `ContextEnvelope` hashes
+**only** fields at or below its classification ceiling, so a field above it is absent from the
+canonical input and cannot influence — or be confirmed from — the digest. `RESTRICTED` cannot be
+named as a ceiling (construction error, not a runtime branch). Exclusions are recorded by name
+(never value) and travel through `DecisionRequest` into `DecisionEvaluation`, so the audit trail
+can say the provider was asked about less than the platform held.
+
+**Why this mattered.** NEX-027 called a SHA-256 of the context a declassification boundary. A
+digest is a fingerprint: for low-entropy content a holder can confirm a guess by hashing it. The
+slice closes a gap that read as safety while not being safe.
+
+**Files changed (code, in `a3d1b32`):**
+- new: `domain/agent/context.py`, `tests/agent/test_context_envelope.py`,
+  `docs/ADR/ADR-012-context-assembly-before-judgment.md`
+- modified: `domain/agent/decisioning.py` (+34), `application/use_cases/decisioning.py` (+7),
+  `tests/architecture/test_decision_provider_neutrality.py` (+2 tests)
+
+**Tests executed (local, on the `a3d1b32` tree):** `ruff format` clean (156 files), `ruff check`
+passed, `mypy` clean (104 source files), full `pytest` **824 passed / 4 skipped** in 13.23s.
+Negative control: making `included_fields` ignore the ceiling turns three tests red, including
+`test_confidential_value_cannot_influence_the_digest`; restored and re-verified green.
+
+**CI results — observed, and the reason NEX-028 is VERIFIED:** polled
+`commits/a3d1b32/check-runs` at 2026-11-25T14:42Z and got **4/4 `completed/success`**, every
+check run reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`. Both the push run
+(`45636602210`) and the pull_request run (`45636618245`) succeeded on that SHA. An earlier poll
+at 14:40Z showed a duplicate check entry still `in_progress`; it resolved to `completed/success`
+on the re-poll. Recorded the later reading because it was observed, not inferred. This is a run
+at the slice's own SHA, so no descendant-CI reasoning is needed.
+
+**Commits:** `a3d1b32` (code + tests + ADR) and this run's docs commit (NEX-028 promoted to
+VERIFIED in STATE/BACKLOG/ROADMAP/EXECUTION_LOG/CHECKPOINT).
+
+**Push status:** `a3d1b32` pushed to `origin/feature/agentic-enterprise-platform` and confirmed
+by `git rev-parse origin/feature/agentic-enterprise-platform` in-run. The docs commit is pushed
+at the end of the run.
+
+**Decisions made:** one ADR — ADR-012 records why a hash is not a declassification boundary and
+why assembly is owned by a single module. No architectural contract changed; the slice adds a
+domain value object and threads one field through existing types.
+
+**Risks identified:** R31 (new, low) — `ContextEnvelope` is exercised only by tests so far; the
+first production caller will be the first to test whether the 200-character value cap and
+32-field cap fit real content.
+
+**Security findings:** a confidential value provably cannot influence an outbound digest. The
+judgment path still cannot reach authorization (architecture test pins it), and `context.py`
+stays framework-free (architecture test pins that too).
+
+**Checkpoint status:** updated — `docs/NEXUS/CHECKPOINT.json` records run `NEX-2026-11-25-31`,
+`commit` set to the NEX-028 code commit `a3d1b32`, NEX-028 in `verified_tasks`, and R31 added.
+
+**A note on the docs head's own CI.** This docs commit will read `completed/cancelled` when a
+later push supersedes it. `cancelled` is neither a pass nor a failure and is not evidence about
+NEX-028 — NEX-028's evidence is the `a3d1b32` run above, which is green at its own SHA.
+
+**Next action:** refresh PR #3's body from the pull-request object so it covers NEX-027
+(`fb8d5bd`) and NEX-028 (`a3d1b32`) — it is the only artifact a human reviewer reads and it is
+now five commits stale. Then wire `ContextEnvelope` into its first production caller (R31).

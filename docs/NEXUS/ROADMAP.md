@@ -46,7 +46,7 @@ for per-slice detail and for what is *verified* versus merely implemented.
 | M2.3 Delegated authority / consent records | VERIFIED (NEX-006, NEX-007) | M2.2 |
 | M2.4 Revocation | VERIFIED (NEX-014, NEX-017) | M2.2 |
 | M2.5 Tool gateway (validated, audited tool invocation) | VERIFIED (NEX-005, NEX-005-followup, NEX-011, NEX-012, NEX-018) | M2.2 |
-| M2.6 Agentic runtime (durable runs, checkpointing) | IN PROGRESS — durable runs, approval validity, decided-approval visibility, approval gating, run write concurrency, crash/abort audit sealing and approval revocation all VERIFIED (NEX-009, NEX-009-HTTP, NEX-013, NEX-015, NEX-016, NEX-019, NEX-020, NEX-023, NEX-024, NEX-025). **NEX-026** (an approval must be judged against the clock that stamped it — R29) is **TESTED** at `b46e2e3`, CI not yet observed. Remaining for this milestone: decisioning and context assembly. | M2.5 |
+| M2.6 Agentic runtime (durable runs, checkpointing) | **VERIFIED** — durable runs, approval validity, decided-approval visibility, approval gating, run write concurrency, crash/abort audit sealing, approval revocation, the approval clock (NEX-026), provider-neutral decisioning (NEX-027) and context assembly (NEX-028) are all VERIFIED. NEX-026 at `b46e2e3`, NEX-027 at `fb8d5bd`, NEX-028 at `a3d1b32` — each 4/4 `completed/success` on observed CI. Decisioning and context assembly, the last two named items, are both done. | M2.5 |
 
 **Acceptance criteria (phase):** an agent can act only within a token whose
 authority is a subset of its delegator's, every tool call is validated and

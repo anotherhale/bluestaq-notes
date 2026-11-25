@@ -7,15 +7,68 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-027 all VERIFIED.** NEX-027 — provider-neutral decisioning, the first half of what M2.6 was waiting on — is VERIFIED at `fb8d5bd` on observed CI. Remaining for M2.6: context assembly. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-028 all VERIFIED.** NEX-028 — context assembly — is VERIFIED at `a3d1b32` on observed CI and **completes M2.6 decisioning** (NEX-027 was its first half). |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `f2f8e61` — the docs-only checkpoint head left by run `NEX-2026-11-25-29`. |
-| Head commit (run end) | `fb8d5bd` — the NEX-027 code + tests commit. Its CI is polled on that exact SHA. Confirmed with `git ls-remote --heads origin feature/agentic-enterprise-platform` → `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`; the local tracking ref lags in this grafted clone and must not be trusted. |
-| Last CI result | **`fb8d5bd` (NEX-027): 4/4 `completed/success`**, every check run reporting `head_sha` `fb8d5bd5e43aa7940cbebb238c66e00fdaea8360`, polled 2026-11-25T14:18Z. Checked programmatically: the set of distinct `head_sha` values was exactly `{fb8d5bd…}` and all four runs were `completed`/`success`. Prior: `b46e2e3` (NEX-026), 4/4, polled 13:34Z. |
+| Base commit (run start) | `8052ded` — the docs-only checkpoint head left by run `NEX-2026-11-25-30`. |
+| Head commit (run end) | `a3d1b32` — the NEX-028 code + tests commit. Its CI is polled on that exact SHA: 4/4 `completed/success`, polled 2026-11-25T14:42Z. |
+| Last CI result | **`a3d1b32` (NEX-028): 4/4 `completed/success`**, every check run reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`, polled 2026-11-25T14:42Z — both the push run (`45636602210`) and the pull_request run (`45636618245`). Prior: `fb8d5bd` (NEX-027), 4/4, polled 14:18Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body last refreshed at head `fd223f4` (2026-11-25T13:21Z). It is now **four commits behind** (`8742faa`, `f2f8e61`, `fb8d5bd`) and does not mention NEX-027. Refresh from the PR object before quoting any counter. |
-| CI status | **`fb8d5bd` (NEX-027): 4/4 `completed/success`, polled 2026-11-25T14:18Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events, all four reporting `head_sha` `fb8d5bd`. An earlier poll at 14:17Z saw them `queued`/`in_progress`; the later green reading is what NEX-027's VERIFIED status rests on. The docs commit for this run will be superseded by the concurrency group and read `completed/cancelled` — neither pass nor fail, and not evidence. |
+| Draft PR | #3 (draft, unmerged — human review required). Body last refreshed at head `fd223f4` (2026-11-25T13:21Z); the branch is now **five commits ahead** (`8742faa`, `f2f8e61`, `fb8d5bd`, `8052ded`, `a3d1b32`) and the body does not mention NEX-027 or NEX-028. Re-measure from the PR object before quoting any counter. |
+| CI status | **`a3d1b32` (NEX-028): 4/4 `completed/success`, polled 2026-11-25T14:42Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events, all four reporting `head_sha` `a3d1b32`. An earlier poll at 14:40Z saw one duplicate check entry `in_progress`; the later read shows all four `completed`/`success`. The docs commit for this run will be superseded by the concurrency group and read `completed/cancelled` — neither pass nor fail, and not evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-028 (run `NEX-2026-11-25-31`) — a hash of a secret is still a fact about the secret
+
+NEX-027 closed by sending a SHA-256 of the context instead of the context, and called that a
+declassification boundary. It is not one, and the difference matters. A digest is a
+**fingerprint**: for low-entropy content — an email address, a note title, a two-word subject —
+anyone holding the digest can confirm a guessed value by hashing it. Sending the hash of a
+confidential field therefore still discloses a fact about that field. Hashing the *raw* context
+made this invisible, because the code looked like it had already answered the question.
+
+Context assembly is the half of M2.6 that answers it properly. One domain module,
+`domain/agent/context.py`, now owns what may enter an outbound judgment. Context is gathered
+into a `ContextEnvelope` of named `ContextField` values, each labelled with a
+`DataClassification`; the envelope's hash is computed over **only** the fields at or below the
+envelope's ceiling. A field above the ceiling is absent from the canonical input entirely, so
+it can neither influence the digest nor be confirmed from it. The default ceiling is `INTERNAL`:
+internal references may inform a judgment, the data subject's confidential material may not.
+
+Three properties are structural, not conventions:
+
+- **`RESTRICTED` cannot be named as a ceiling.** It is a construction error, so there is no
+  runtime branch to get wrong and no configuration under which restricted content reaches an
+  outbound digest.
+- **Exclusion is recorded, never silent.** `excluded_field_names` names what was withheld —
+  names, never values — and travels through `DecisionRequest` into `DecisionEvaluation`, so the
+  audit record can say the provider was asked about less than the platform held. A silent drop
+  would make "we asked with less" indistinguishable from "there was nothing more", which is the
+  exact failure the slice exists to prevent.
+- **Fields are named and bounded.** Names are stable lowercase identifiers so telemetry can
+  aggregate them; values cap at 200 characters and fields at 32 per envelope, so a document
+  cannot be smuggled in under one name.
+
+`DecisionRequest.from_context` is the only sanctioned route from an envelope to a question,
+because it is what guarantees the hash the provider sees was computed over content an envelope
+approved. The one honest gap, documented in that method: `context_hash` is still a plain `str`,
+so a caller *can* hand-assemble one — and doing so means taking the declassification decision
+personally. A future slice can close it by narrowing the field to a type only an envelope can
+construct.
+
+Status: **VERIFIED** on observed CI at `a3d1b32`: **4/4 `completed/success`**, every check run
+reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`, polled 2026-11-25T14:42Z —
+both the push and the pull_request run. Local gates green: `ruff format` clean, `ruff check`
+clean, `mypy` clean over 104 source files, full `pytest` **824 passed / 4 skipped** (baseline
+794; delta is exactly the 30 new tests — 28 in `tests/agent/test_context_envelope.py`, 2 added to
+`tests/architecture/test_decision_provider_neutrality.py`). Negative control: making
+`included_fields` ignore the ceiling turns three tests red, including
+`test_confidential_value_cannot_influence_the_digest`, which asserts the property directly by
+requiring two envelopes differing only in a confidential field to hash identically.
+
+**R31 (new, low).** `ContextEnvelope` is exercised only by tests so far. The first production
+caller (tool-gateway classification or approval recommendation) will be the first to test
+whether the 200-character value cap and 32-field cap fit real content; if either is too tight,
+widening it is a contract change.
 
 ## NEX-027 (run `NEX-2026-11-25-30`) — judgment that cannot become authority
 
@@ -666,18 +719,18 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-30`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-31`, bare as CI runs them) |
 | --- | --- |
-| `ruff format` | clean — 154 files unchanged (`src/`, `tests/`) |
+| `ruff format` | clean — 156 files unchanged (`src/`, `tests/`) |
 | `ruff check` | All checks passed |
-| `mypy` | clean (103 source files) |
-| `pytest` (full) | **794 passed, 4 skipped** (was 754; the delta is exactly the 40 new NEX-027 tests) |
+| `mypy` | clean (104 source files) |
+| `pytest` (full) | **824 passed, 4 skipped** (was 794; the delta is exactly the 30 new NEX-028 tests) |
 | Migration chain | no migration added; head unchanged. No schema change in this slice |
-| Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
+| Frontend `typecheck`/`lint`/`test`/`build` | not run locally this slice — no frontend files changed (CI ran them anyway and they passed) |
 
 > **CI is the evidence.** Local gates above are for reproducibility, not proof (R9/R10).
-> NEX-027 is **VERIFIED**: `fb8d5bd`'s four check runs are 4/4 `completed/success`,
-> every `head_sha` equal to `fb8d5bd`, polled 2026-11-25T14:18Z.
+> NEX-028 is **VERIFIED**: `a3d1b32`'s four check runs are 4/4 `completed/success`,
+> every `head_sha` equal to `a3d1b32`, polled 2026-11-25T14:42Z.
 
 ## Blockers
 
@@ -759,18 +812,19 @@ None currently. The following are known open items, not blockers:
 ## Next best actions
 
 1. ~~**Promote NEX-027 on CI.**~~ **Satisfied** — 4/4 `completed/success` at `fb8d5bd`,
-   polled 2026-11-25T14:18Z, every `head_sha` equal to the polled commit. This is a run at
-   the slice's own SHA, not descendant-CI. Do not re-derive the local result and do not
-   re-promote it.
-2. **Refresh PR #3.** Its body was last written at `fd223f4`; the branch is now four commits
-   ahead and the body says nothing about NEX-027. Re-measure additions/files/commits from the
-   pull-request object at the current head (never a local diff) and verify byte-equality after
-   the PATCH.
-3. **Next dependency-ready slice: context assembly** — the other half of what M2.6 named.
-   NEX-027 deliberately carries only a `context_hash`, so context assembly is the slice that
-   decides *what* is hashed and what may enter a request. Re-read the Phase 5 section of
-   `ROADMAP.md` before choosing; do not invent a slice from a run summary.
-4. **Confirm whether revoking a delegation or agent invalidates approvals already
+   polled 2026-11-25T14:18Z.
+2. ~~**NEX-028 context assembly.**~~ **Satisfied** — VERIFIED, 4/4 `completed/success` at
+   `a3d1b32`, polled 2026-11-25T14:42Z. M2.6 decisioning is now complete in both halves.
+3. **Refresh PR #3.** Its body was last written at `fd223f4`; the branch is now five commits
+   ahead (`8742faa`, `f2f8e61`, `fb8d5bd`, `8052ded`, `a3d1b32`) and the body mentions neither
+   NEX-027 nor NEX-028. Re-measure additions/files/commits from the pull-request object at the
+   current head (never a local diff) and verify byte-equality after the PATCH. This is the
+   highest-value remaining action: it is the only artifact a human reviewer reads.
+4. **Wire `ContextEnvelope` into a real caller** (R31). It is currently exercised only by tests.
+   The first production caller — tool-gateway classification or the approval-recommendation
+   path — is what proves the 200-char value cap and 32-field cap fit real content. Re-read the
+   Phase 6 section of `ROADMAP.md` before choosing; do not invent a slice from a run summary.
+5. **Confirm whether revoking a delegation or agent invalidates approvals already
    granted under it.** `RevokeDelegation` revokes the delegation and every token
    derived from it, immediately and ownership-checked, but this run did not establish
    whether a *granted* `ApprovalRequest` survives that revocation. If it does, an

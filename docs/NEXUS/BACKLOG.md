@@ -1607,3 +1607,79 @@ change, not a tweak.
 **Next action:** context assembly — the other half of M2.6. It decides *what* the context hash
 is computed over and what may enter a request.
 
+---
+
+## NEX-028 — Context assembly: classify what may influence a judgment
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) / agent decisioning (M2.6) |
+| Priority | P2 (completes M2.6 decisioning; the "hash is not declassification" gap was P1-grade) |
+| Status | **VERIFIED** — CI observed at `a3d1b32`: **4/4 `completed/success`**, every check run reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`, polled 2026-11-25T14:42Z (Backend ruff/mypy/pytest/migrations ×2, Frontend typecheck/lint/test/build ×2 — push and pull_request runs both green). Local gates green: `ruff format`/`ruff check` clean, `mypy` 104 files clean, full `pytest` **824 passed / 4 skipped** (baseline 794; delta is exactly the 30 new tests). Negative control verified (3 tests red). |
+| Dependencies | NEX-027 (the decision port and its context hash). Completes M2.6 decisioning. |
+| Complexity | Medium — 1 new source module, 1 new test file, 3 extended files, 1 new ADR, no migration |
+
+**Objective:** decide *what* may enter an outbound judgment, so the context hash NEX-027 sends
+is a declassification boundary rather than a fingerprint of the content it was meant to protect.
+
+NEX-027's own closing risk (R30) and its "Next action" named this. The gap it left is subtle
+and reads as safety while not being safe: a SHA-256 of raw context is a **fingerprint** of that
+context. For low-entropy content — an email address, a title, a two-word subject — a holder of
+the digest can confirm a guess by hashing it. "Only a hash leaves the process" was therefore
+never a declassification boundary, and hashing the *raw* context made that invisible.
+
+**Three structural properties, enforced by construction rather than review:**
+
+- **`RESTRICTED` can never be a ceiling.** Naming it is a construction error, not a runtime
+  branch, so no configuration and no data path can select it. There is no setting under which
+  restricted content contributes to an outbound digest.
+- **Exclusion is recorded, never silent.** `excluded_field_names` names what was withheld —
+  names only, never values — and this is threaded through `DecisionRequest` and
+  `DecisionEvaluation` into the audit record. A silent drop would make "we asked with less than
+  we held" indistinguishable from "there was nothing more", which is the failure being
+  prevented.
+- **Fields are named and bounded.** Names are stable lowercase identifiers so telemetry can
+  aggregate them; values are capped at 200 characters and fields at 32 per envelope, so a whole
+  document cannot be smuggled in under one name.
+
+**Change:**
+- `domain/agent/context.py` (new): `DataClassification` (four-rung ladder, `rank` ordering),
+  `ContextField` (validated name/classification/bounded value), `ContextEnvelope`
+  (`from_fields`, `included_fields`, `excluded_field_names`, `context_hash`). The hash is
+  computed over **only** fields at or below the ceiling, so a field above it is absent from the
+  canonical form and cannot influence — or be confirmed from — the digest. Default ceiling
+  `INTERNAL`. Canonical form sorts by name for reproducible cross-process digests.
+- `domain/agent/decisioning.py` (+34): `DecisionRequest.from_context()` (the only sanctioned way
+  to turn an envelope into a question) and `excluded_context_fields` on the request.
+- `application/use_cases/decisioning.py` (+7): `DecisionEvaluation.excluded_context_fields`,
+  populated from the request, so the audit trail can say the provider was asked about less.
+- `docs/ADR/ADR-012-context-assembly-before-judgment.md` (new): records why a hash is not a
+  declassification and why assembly is owned by one module.
+
+**Tests** (+30): `tests/agent/test_context_envelope.py` (28 collected) and 2 added to
+`tests/architecture/test_decision_provider_neutrality.py` (6 collected at baseline → 8). The
+30-test delta reconciles exactly with the suite going 794 → 824.
+
+The load-bearing test is `test_confidential_value_cannot_influence_the_digest`: two envelopes
+differing *only* in a confidential field must hash identically. That asserts the security
+property directly instead of assuming it.
+
+**Negative control:** making `included_fields` ignore the ceiling turns three tests red,
+including the leak test — confirming the tests actually bind the mechanism rather than the
+implementation's shape. Restored and re-verified green.
+
+**Security:** a confidential value provably cannot influence an outbound digest. The judgment
+path still cannot reach authorization; an architecture test pins both that and context.py's
+purity (no framework, no vendor, no transport import).
+
+**Known limit (documented in the `from_context` docstring):** a caller can still hand-assemble
+a `context_hash` string, since it is a plain `str`. Doing so means taking on the
+declassification decision personally. A future slice could narrow the field to a type only an
+envelope can construct.
+
+**Migration:** none. **New dependencies:** none.
+
+**Next action:** wire `ContextEnvelope` into the first real caller (tool-gateway classification
+or the approval-recommendation path) so assembly is exercised by production code, not only by
+tests (R31). Promotion is done: CI on `a3d1b32` was observed 4/4 `completed/success` at
+2026-11-25T14:42Z, which is what the VERIFIED status above rests on.
