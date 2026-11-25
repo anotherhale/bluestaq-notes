@@ -30,6 +30,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 
+from notes_service.domain.agent.audit_chain import (
+    GENESIS_HASH,
+    intent_hash,
+    outcome_hash,
+)
 from notes_service.domain.agent.value_objects import SENSITIVE_CAPABILITIES, Capability
 from notes_service.domain.errors import ValidationError
 
@@ -287,6 +292,13 @@ class ToolInvocation:
     The record is written *before* the handler runs (``STARTED``) and finalised
     after. ``arguments_digest`` rather than the raw arguments is stored so the
     audit trail never becomes a second copy of note content.
+
+    Each record is a link in a per-agent hash chain (see
+    :mod:`notes_service.domain.agent.audit_chain`). ``chain_sequence`` is the
+    record's 1-based position and ``previous_hash`` is the preceding record's
+    ``intent_hash``, so deleting, reordering or editing an attempt is detectable
+    after the fact. The chain is sealed at construction and at finalisation and
+    is never recomputed from mutable state.
     """
 
     id: ToolInvocationId
@@ -302,6 +314,10 @@ class ToolInvocation:
     approval_request_id: uuid.UUID | None = None
     invoked_at: datetime = field(default_factory=_utcnow)
     completed_at: datetime | None = None
+    chain_sequence: int = 0
+    previous_hash: str = GENESIS_HASH
+    intent_hash: str = ""
+    outcome_hash: str | None = None
 
     @classmethod
     def begin(
@@ -315,6 +331,8 @@ class ToolInvocation:
         resource_ref: str,
         approval_request_id: uuid.UUID | None = None,
         invocation_id: ToolInvocationId | None = None,
+        previous_hash: str = GENESIS_HASH,
+        chain_sequence: int = 1,
     ) -> ToolInvocation:
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
             raise ValidationError("an idempotency key is required")
@@ -323,16 +341,37 @@ class ToolInvocation:
             raise ValidationError(
                 f"idempotency key must be at most {_MAX_IDEMPOTENCY_KEY} characters"
             )
+        if chain_sequence < 1:
+            raise ValidationError("chain sequence must be at least 1")
+        resolved_id = invocation_id or ToolInvocationId.new()
+        digest = arguments_digest(tool, arguments)
+        now = _utcnow()
         return cls(
-            id=invocation_id or ToolInvocationId.new(),
+            id=resolved_id,
             agent_id=agent_id,
             token_id=token_id,
             tool_name=tool.name,
             capability=tool.capability,
             idempotency_key=key,
-            arguments_digest=arguments_digest(tool, arguments),
+            arguments_digest=digest,
             resource_ref=resource_ref,
             approval_request_id=approval_request_id,
+            invoked_at=now,
+            chain_sequence=chain_sequence,
+            previous_hash=previous_hash,
+            intent_hash=intent_hash(
+                invocation_id=resolved_id,
+                agent_id=agent_id,
+                token_id=token_id,
+                tool_name=tool.name,
+                capability=tool.capability.value,
+                idempotency_key=key,
+                arguments_digest=digest,
+                resource_ref=resource_ref,
+                approval_request_id=approval_request_id,
+                invoked_at=now,
+                previous_hash=previous_hash,
+            ),
         )
 
     @property
@@ -357,6 +396,12 @@ class ToolInvocation:
         self.completed_at = now or _utcnow()
         if outcome is not None:
             self.outcome = outcome[:_MAX_SUMMARY]
+        self.outcome_hash = outcome_hash(
+            intent_hash_value=self.intent_hash,
+            status=self.status.value,
+            outcome=self.outcome,
+            completed_at=self.completed_at,
+        )
 
 
 __all__ = [

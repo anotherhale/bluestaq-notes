@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from notes_service.application.errors import AccessDenied, InvalidInput, ResourceNotFound
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.base import UseCase
+from notes_service.domain.agent.audit_chain import ChainVerdict, verify_chain
 from notes_service.domain.agent.delegation import DelegatedAuthorization, attenuate
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.token import AgentToken, hash_agent_token
@@ -418,6 +419,27 @@ class ListToolInvocations(UseCase):
             return uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
 
 
+class VerifyToolInvocationChain(UseCase):
+    """Recompute one agent's audit chain and report the first contradiction.
+
+    Reading the trail (``ListToolInvocations``) shows what the database *claims*
+    happened. This use case is what makes the claim checkable: every entry's
+    seals are recomputed from its own stored fields and its predecessor's hash,
+    so a deleted, reordered or edited entry is reported rather than believed.
+
+    The whole trail is loaded, not a page. A window cannot be verified on its
+    own — its first entry links to a predecessor the window does not contain —
+    so paging here would produce a verdict that means nothing. The scope is
+    bounded by agent ownership instead, and the endpoint is owner-only, so a
+    non-owner gets ``404`` exactly as with the listing.
+    """
+
+    def run(self, principal: Principal, *, agent_id: str) -> ChainVerdict:
+        with self._uow_factory() as uow:
+            agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
+            return verify_chain(uow.tool_invocations.list_chain(agent.id))
+
+
 __all__ = [
     "DecideApprovalRequest",
     "GetAgent",
@@ -433,6 +455,7 @@ __all__ = [
     "ResolvedToken",
     "RevokeAgent",
     "RevokeDelegation",
+    "VerifyToolInvocationChain",
     "load_owned_agent",
     "parse_capabilities",
 ]

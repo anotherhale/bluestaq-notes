@@ -45,6 +45,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import UUID
 
 from notes_service.application.errors import (
     AccessDenied,
@@ -158,16 +159,16 @@ class InvokeTool(UseCase):
             )
             if prior is not None:
                 return prior
-            invocation = ToolInvocation.begin(
-                agent_id=resolved.agent.id,
-                token_id=resolved.token.id,
-                tool=tool,
-                idempotency_key=idempotency_key,
-                arguments=cleaned,
-                resource_ref=resource_ref,
-            )
-            invocation.deny(outcome=f"token lacks capability {tool.capability.value}")
             with self._uow_factory() as uow:
+                invocation = self._begin_invocation(
+                    uow,
+                    resolved=resolved,
+                    tool=tool,
+                    cleaned=cleaned,
+                    resource_ref=resource_ref,
+                    idempotency_key=idempotency_key,
+                )
+                invocation.deny(outcome=f"token lacks capability {tool.capability.value}")
                 uow.tool_invocations.add(invocation)
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
@@ -214,17 +215,17 @@ class InvokeTool(UseCase):
         if prior is not None:
             return prior
 
-        invocation = ToolInvocation.begin(
-            agent_id=resolved.agent.id,
-            token_id=resolved.token.id,
-            tool=tool,
-            idempotency_key=idempotency_key,
-            arguments=cleaned,
-            resource_ref=resource_ref,
-        )
         # Commit the "started" row first: a crash in the handler must not erase
         # all evidence that the attempt happened.
         with self._uow_factory() as uow:
+            invocation = self._begin_invocation(
+                uow,
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+            )
             uow.tool_invocations.add(invocation)
             uow.commit()
 
@@ -266,22 +267,22 @@ class InvokeTool(UseCase):
         if approval is None:
             # Open the request rather than executing, and record the invocation
             # as denied-for-now. The agent must come back after a human decides.
-            invocation = ToolInvocation.begin(
-                agent_id=resolved.agent.id,
-                token_id=resolved.token.id,
-                tool=tool,
-                idempotency_key=idempotency_key,
-                arguments=cleaned,
-                resource_ref=resource_ref,
-            )
-            invocation.deny(outcome=f"human approval required for {tool.capability.value}")
             with self._uow_factory() as uow:
                 request = ApprovalRequest.open(
                     agent=resolved.agent,
                     capability=tool.capability,
                     resource_ref=resource_ref,
                 )
-                invocation.approval_request_id = request.id
+                invocation = self._begin_invocation(
+                    uow,
+                    resolved=resolved,
+                    tool=tool,
+                    cleaned=cleaned,
+                    resource_ref=resource_ref,
+                    idempotency_key=idempotency_key,
+                    approval_request_id=request.id,
+                )
+                invocation.deny(outcome=f"human approval required for {tool.capability.value}")
                 uow.approvals.add(request)
                 uow.tool_invocations.add(invocation)
                 uow.commit()
@@ -289,16 +290,16 @@ class InvokeTool(UseCase):
                 f"tool {tool.name} requires human approval; request {request.id} opened"
             )
 
-        invocation = ToolInvocation.begin(
-            agent_id=resolved.agent.id,
-            token_id=resolved.token.id,
-            tool=tool,
-            idempotency_key=idempotency_key,
-            arguments=cleaned,
-            resource_ref=resource_ref,
-            approval_request_id=approval.id,
-        )
         with self._uow_factory() as uow:
+            invocation = self._begin_invocation(
+                uow,
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                approval_request_id=approval.id,
+            )
             uow.tool_invocations.add(invocation)
             uow.commit()
 
@@ -367,6 +368,38 @@ class InvokeTool(UseCase):
         # it would turn a recorded denial into an execution on a mere retry.
         raise AccessDenied(
             f"invocation under this idempotency key previously ended as {existing.status.value}"
+        )
+
+    def _begin_invocation(
+        self,
+        uow: UnitOfWork,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        approval_request_id: UUID | None = None,
+    ) -> ToolInvocation:
+        """Begin an audited invocation, sealed into the agent's hash chain.
+
+        The chain link is read from ``uow`` — the same transaction that will
+        insert the entry — so the sequence number and predecessor hash are
+        consistent with what is committed. A concurrent insert that claims the
+        same sequence is rejected by the unique constraint rather than silently
+        forking the chain.
+        """
+        sequence, previous = uow.tool_invocations.next_chain_link(resolved.agent.id)
+        return ToolInvocation.begin(
+            agent_id=resolved.agent.id,
+            token_id=resolved.token.id,
+            tool=tool,
+            idempotency_key=idempotency_key,
+            arguments=cleaned,
+            resource_ref=resource_ref,
+            approval_request_id=approval_request_id,
+            previous_hash=previous,
+            chain_sequence=sequence,
         )
 
     def _finalise(self, invocation: ToolInvocation, *, failed: bool, outcome: str | None) -> None:

@@ -49,6 +49,7 @@ from notes_service.application.use_cases.agents import (
     ResolveAgentToken,
     RevokeAgent,
     RevokeDelegation,
+    VerifyToolInvocationChain,
 )
 from notes_service.application.use_cases.authentication import (
     BeginLogin,
@@ -216,6 +217,9 @@ class Container:
     # the trail names which tools an agent reached for, which is private to its
     # owner. Nothing here can write to the trail; only the gateway does that.
     list_tool_invocations: Callable[[], ListToolInvocations]
+    # Recomputing the chain is the check that makes the trail evidence rather
+    # than a log. Owner-only for the same reason as the listing.
+    verify_tool_invocation_chain: Callable[[], VerifyToolInvocationChain]
     # The governed tool gateway. Every agent tool call goes through it, so it is
     # the one place capability checks, approval gating, and audit are applied.
     invoke_tool: Callable[[], InvokeTool]
@@ -464,6 +468,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         decide_approval_request=make(DecideApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
         list_tool_invocations=make(ListToolInvocations),
+        verify_tool_invocation_chain=make(VerifyToolInvocationChain),
         invoke_tool=make_tool_gateway,
         plan_agent_run=make_plan_agent_run,
         advance_agent_run=make_advance_agent_run,

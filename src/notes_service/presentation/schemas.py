@@ -17,6 +17,7 @@ from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
+from notes_service.domain.agent.audit_chain import ChainVerdict
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import AgentRun, RunStatus, RunStep, StepStatus
@@ -841,6 +842,10 @@ class ToolInvocationAuditResponse(ResponseModel):
     invoked_at: datetime
     completed_at: datetime | None = None
     outcome: str | None = None
+    chain_sequence: int
+    previous_hash: str
+    intent_hash: str
+    outcome_hash: str | None = None
 
     @classmethod
     def from_domain(cls, invocation: ToolInvocation) -> ToolInvocationAuditResponse:
@@ -864,6 +869,10 @@ class ToolInvocationAuditResponse(ResponseModel):
             invoked_at=invocation.invoked_at,
             completed_at=invocation.completed_at,
             outcome=invocation.outcome,
+            chain_sequence=invocation.chain_sequence,
+            previous_hash=invocation.previous_hash,
+            intent_hash=invocation.intent_hash,
+            outcome_hash=invocation.outcome_hash,
         )
 
 
@@ -1019,6 +1028,48 @@ class AgentRunListResponse(BaseModel):
 class ToolInvocationAuditListResponse(BaseModel):
     items: list[ToolInvocationAuditResponse]
     meta: PageMeta
+
+
+class ChainBreakResponse(BaseModel):
+    """Where the recomputation first disagreed with what is stored."""
+
+    sequence: int
+    invocation_id: str
+    reason: str
+
+
+class ChainVerdictResponse(BaseModel):
+    """The result of recomputing an agent's audit chain.
+
+    ``verified`` is the answer; ``checked`` is the evidence behind it, so
+    "verified 0 entries" cannot be mistaken for "verified a trail". A break is
+    reported as data (``200`` with ``verified: false``), not as an error: the
+    request succeeded, and the finding is the payload. An error status would be
+    indistinguishable from a request that failed to run at all.
+    """
+
+    verified: bool
+    checked: int
+    reason: str | None = None
+    first_break: ChainBreakResponse | None = None
+
+    @classmethod
+    def from_domain(cls, verdict: ChainVerdict) -> ChainVerdictResponse:
+        first = verdict.first_break
+        return cls(
+            verified=verdict.verified,
+            checked=verdict.checked,
+            reason=verdict.reason,
+            first_break=(
+                ChainBreakResponse(
+                    sequence=first.sequence,
+                    invocation_id=first.invocation_id,
+                    reason=first.reason,
+                )
+                if first is not None
+                else None
+            ),
+        )
 
 
 # -- envelopes ------------------------------------------------------------

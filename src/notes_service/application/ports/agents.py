@@ -139,6 +139,20 @@ class ToolInvocationRepository(Protocol):
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[ToolInvocation]: ...
 
+    def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
+        """The position and predecessor hash for this agent's next entry.
+
+        Returns ``(1, GENESIS_HASH)`` for an agent with no entries. Read inside
+        the same transaction that inserts the entry, so two concurrent attempts
+        cannot both claim one sequence number: the unique constraint on
+        ``(agent_id, chain_sequence)`` rejects the loser and the caller retries.
+        """
+        ...
+
+    def list_chain(self, agent_id: AgentId) -> list[ToolInvocation]:
+        """The agent's whole trail in ``chain_sequence`` order, for verification."""
+        ...
+
 
 @runtime_checkable
 class AgentRunRepository(Protocol):

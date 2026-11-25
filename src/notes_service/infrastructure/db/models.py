@@ -564,12 +564,21 @@ class ToolInvocationRow(Base):
     )
     invoked_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    chain_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('started','succeeded','failed','denied')", name="status_valid"),
         CheckConstraint("length(arguments_digest) = 64", name="digest_sha256"),
+        CheckConstraint("length(previous_hash) = 64", name="previous_hash_sha256"),
+        CheckConstraint("length(intent_hash) = 64", name="intent_hash_sha256"),
         UniqueConstraint(
             "agent_id", "idempotency_key", name="uq_tool_invocations_agent_idempotency"
+        ),
+        UniqueConstraint(
+            "agent_id", "chain_sequence", name="uq_tool_invocations_agent_chain_sequence"
         ),
         Index("ix_tool_invocations_agent_invoked_at", "agent_id", "invoked_at"),
     )

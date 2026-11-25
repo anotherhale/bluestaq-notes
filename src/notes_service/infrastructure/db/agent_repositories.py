@@ -20,6 +20,7 @@ from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
+from notes_service.domain.agent.audit_chain import GENESIS_HASH
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import (
@@ -141,6 +142,10 @@ def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
         ),
         invoked_at=row.invoked_at,
         completed_at=row.completed_at,
+        chain_sequence=row.chain_sequence,
+        previous_hash=row.previous_hash,
+        intent_hash=row.intent_hash,
+        outcome_hash=row.outcome_hash,
     )
 
 
@@ -422,6 +427,10 @@ class SqlAlchemyToolInvocationRepository:
                 ),
                 invoked_at=invocation.invoked_at,
                 completed_at=invocation.completed_at,
+                chain_sequence=invocation.chain_sequence,
+                previous_hash=invocation.previous_hash,
+                intent_hash=invocation.intent_hash,
+                outcome_hash=invocation.outcome_hash,
             )
         )
 
@@ -433,6 +442,10 @@ class SqlAlchemyToolInvocationRepository:
         row.status = invocation.status.value
         row.outcome = invocation.outcome
         row.completed_at = invocation.completed_at
+        # The outcome seal is written with the verdict it covers, in the same
+        # UPDATE: a crash between the two would leave a completed row whose
+        # outcome_hash is missing, which the verifier reports as tampering.
+        row.outcome_hash = invocation.outcome_hash
 
     def get(self, invocation_id: ToolInvocationId) -> ToolInvocation | None:
         row = self._session.get(ToolInvocationRow, _as_uuid(invocation_id))
@@ -463,6 +476,36 @@ class SqlAlchemyToolInvocationRepository:
                 .order_by(ToolInvocationRow.invoked_at.desc())
                 .limit(limit)
                 .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+        return [_invocation_to_domain(row) for row in rows]
+
+    def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
+        row = self._session.execute(
+            select(ToolInvocationRow.chain_sequence, ToolInvocationRow.intent_hash)
+            .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
+            .order_by(ToolInvocationRow.chain_sequence.desc())
+            .limit(1)
+        ).first()
+        if row is None:
+            return 1, GENESIS_HASH
+        return row[0] + 1, row[1]
+
+    def list_chain(self, agent_id: AgentId) -> list[ToolInvocation]:
+        """The agent's entire trail in chain order, for verification.
+
+        Unpaginated on purpose: a partial trail cannot be verified, because the
+        first entry of a window does not carry the hash of the entry before it.
+        Callers are the owner-only verification use case, so this is not a
+        general-purpose listing.
+        """
+        rows = (
+            self._session.execute(
+                select(ToolInvocationRow)
+                .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
+                .order_by(ToolInvocationRow.chain_sequence.asc())
             )
             .scalars()
             .all()

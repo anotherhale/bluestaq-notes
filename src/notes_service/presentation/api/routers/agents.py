@@ -35,6 +35,7 @@ from notes_service.presentation.schemas import (
     ApprovalRequestListResponse,
     ApprovalRequestOpenRequest,
     ApprovalRequestResponse,
+    ChainVerdictResponse,
     DelegationGrantRequest,
     DelegationResponse,
     PageMeta,
@@ -252,6 +253,30 @@ def list_tool_invocations(
     return ToolInvocationAuditListResponse(
         items=items, meta=PageMeta(total=len(items), limit=limit, offset=offset)
     )
+
+
+@router.get(
+    "/{agent_id}/tool-invocations/verification",
+    response_model=ChainVerdictResponse,
+    summary="Recompute an agent's audit chain and report any contradiction",
+    dependencies=[RateLimitDep],
+)
+def verify_tool_invocation_chain(
+    agent_id: UUID, principal: PrincipalDep, container: ContainerDep
+) -> ChainVerdictResponse:
+    """Check the audit trail instead of trusting it.
+
+    The listing endpoint returns what the rows *say*. This recomputes each row's
+    seals from its own stored fields plus its predecessor's hash, so a deleted,
+    reordered or edited row surfaces as ``verified: false`` with the first
+    contradiction. The whole chain is checked because a page cannot be: its first
+    row links to a predecessor the page does not hold.
+
+    Owner-only, and a non-owner gets 404 rather than 403 — the same rule as the
+    listing, so this cannot be used to probe for another user's agent.
+    """
+    verdict = container.verify_tool_invocation_chain().run(principal, agent_id=str(agent_id))
+    return ChainVerdictResponse.from_domain(verdict)
 
 
 @router.post(
