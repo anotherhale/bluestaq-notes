@@ -33,8 +33,10 @@ Three properties are structural:
   telemetry can aggregate them; values are capped, so a field cannot become an
   unbounded blob that a hashed-but-recoverable body slips through as.
 
-Envelopes are built with :meth:`ContextEnvelope.from_fields`, and the only
-sanctioned way to turn one into a question is
+Envelopes are built with :meth:`ContextEnvelope.from_fields` (caller has already
+bounded every value) or :meth:`ContextEnvelope.from_candidates` (values come from
+records and may exceed the cap — those are withheld and named, never raised). The
+only sanctioned way to turn one into a question is
 :meth:`DecisionRequest.from_context`.
 """
 
@@ -43,7 +45,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from notes_service.domain.errors import ValidationError
@@ -95,6 +97,19 @@ _RANK: dict[DataClassification, int] = {
 DEFAULT_CEILING = DataClassification.INTERNAL
 
 
+def _validate_field_name(name: object) -> str:
+    """Reject a name that is not a stable, aggregate-able identifier.
+
+    Extracted so the withholding constructor can check a name *before* deciding
+    whether the value is small enough to include, without duplicating the rule.
+    """
+    if not isinstance(name, str) or not _FIELD_NAME_RE.match(name):
+        raise ValidationError(
+            "a context field name must be a lowercase identifier of at most 64 characters"
+        )
+    return name
+
+
 @dataclass(frozen=True, slots=True)
 class ContextField:
     """One named, classified piece of context.
@@ -109,10 +124,7 @@ class ContextField:
     value: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not _FIELD_NAME_RE.match(self.name):
-            raise ValidationError(
-                "a context field name must be a lowercase identifier of at most 64 characters"
-            )
+        _validate_field_name(self.name)
         if not isinstance(self.classification, DataClassification):
             raise ValidationError("a context field requires a DataClassification")
         if not isinstance(self.value, str):
@@ -203,6 +215,11 @@ class ContextEnvelope:
 
     fields: tuple[ContextField, ...]
     ceiling: DataClassification
+    #: Names withheld because their value exceeded ``MAX_FIELD_VALUE_LENGTH``.
+    #: Kept separate from ``fields`` so a withheld value is never constructed —
+    #: storing it and filtering later would leave the raw subject text in memory
+    #: and one refactor away from entering the digest.
+    withheld_field_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.ceiling, DataClassification):
@@ -214,6 +231,16 @@ class ContextEnvelope:
             raise ValidationError("restricted context may never leave the process")
         if len(self.fields) > MAX_FIELDS:
             raise ValidationError(f"an envelope may hold at most {MAX_FIELDS} fields")
+        # A withheld name must still be a legal name, and must not also be present
+        # as a field: "withheld" and "included" are contradictory statements about
+        # one input, and an audit reader would have no way to choose between them.
+        present = {field.name for field in self.fields}
+        for name in self.withheld_field_names:
+            _validate_field_name(name)
+            if name in present:
+                raise ValidationError(f"a field cannot be both included and withheld: {name!r}")
+        if len(set(self.withheld_field_names)) != len(self.withheld_field_names):
+            raise ValidationError("withheld field names must not repeat")
 
     @classmethod
     def from_fields(
@@ -237,6 +264,54 @@ class ContextEnvelope:
             seen.add(field.name)
         return cls(fields=materialised, ceiling=ceiling)
 
+    @classmethod
+    def from_candidates(
+        cls,
+        candidates: (
+            tuple[tuple[str, DataClassification, str], ...]
+            | list[tuple[str, DataClassification, str]]
+        ),
+        *,
+        ceiling: DataClassification = DEFAULT_CEILING,
+    ) -> ContextEnvelope:
+        """Build an envelope from record-derived values that may exceed the cap.
+
+        :meth:`from_fields` requires the caller to have bounded every value, which
+        is correct for hand-authored references but wrong for subject content: a
+        note title is legal at the notes domain's ``MAX_TITLE_LENGTH`` and can
+        reach this module already validated. Passing such a value to
+        :class:`ContextField` raises, which would turn "the title is long" into a
+        failed advisory — a denial of a read the caller is entitled to.
+
+        Here an over-cap value is **withheld instead**: the field is not
+        constructed, so it cannot enter the digest, and its name is recorded in
+        :attr:`excluded_field_names` so the audit trail still says the input
+        existed. This mirrors the classification rule one level down — the
+        envelope already withholds what it may not send rather than refusing the
+        request, and an over-long value is withheld for the same reason: it is not
+        a reference, so it must not travel.
+
+        The two caps are independent on purpose. ``MAX_TITLE_LENGTH`` belongs to
+        the notes domain; ``MAX_FIELD_VALUE_LENGTH`` belongs to context
+        minimisation. They happen to both be 200 today, and this constructor is
+        what makes that coincidence harmless.
+        """
+        included: list[ContextField] = []
+        withheld: set[str] = set()
+        for name, classification, value in candidates:
+            _validate_field_name(name)
+            if not isinstance(value, str):
+                raise ValidationError("a context field value must be a string")
+            if len(value) > MAX_FIELD_VALUE_LENGTH:
+                withheld.add(name)
+                continue
+            included.append(ContextField(name=name, classification=classification, value=value))
+        envelope = cls.from_fields(included, ceiling=ceiling)
+        # Union rather than replace: the ceiling already withholds some names, and
+        # an over-cap field that is *also* above the ceiling must still be named
+        # once, not shadowed.
+        return replace(envelope, withheld_field_names=tuple(sorted(withheld)))
+
     def _is_included(self, field: ContextField) -> bool:
         return field.classification.rank <= self.ceiling.rank
 
@@ -247,8 +322,14 @@ class ContextEnvelope:
 
     @property
     def excluded_field_names(self) -> tuple[str, ...]:
-        """Names withheld from the digest, for honest audit without the values."""
-        return tuple(sorted(field.name for field in self.fields if not self._is_included(field)))
+        """Names withheld from the digest, for honest audit without the values.
+
+        Two distinct reasons are folded into one list because an audit reader
+        needs the same fact either way — *this input was held back*. Above-ceiling
+        classification and an over-cap value are both "present, not sent".
+        """
+        by_classification = {field.name for field in self.fields if not self._is_included(field)}
+        return tuple(sorted(by_classification | set(self.withheld_field_names)))
 
     @property
     def context_hash(self) -> ContextHash:

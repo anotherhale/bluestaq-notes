@@ -221,3 +221,82 @@ class TestEvaluationCarriesTheExclusionRecord:
 
         assert evaluation.excluded_context_fields == ("owner_email",)
         assert evaluation.context_hash == envelope.context_hash
+
+
+class TestWithholdingAnOverCapValue:
+    """A record-derived value over the cap is withheld, never a failed request.
+
+    The two caps are independent constants: ``MAX_TITLE_LENGTH`` (200) belongs to
+    the notes domain, ``MAX_FIELD_VALUE_LENGTH`` (200) to context minimisation.
+    They agree today by coincidence. ``from_fields`` refuses an over-cap value,
+    which is right for hand-authored references but wrong for subject content: a
+    legal note title would turn into a denied advisory. ``from_candidates``
+    withholds it instead and names it, so the audit trail still says the input
+    existed.
+    """
+
+    def test_over_cap_value_is_withheld_and_named(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [f.name for f in envelope.fields] == ["note_kind"]
+        assert "note_title" in envelope.excluded_field_names
+
+    def test_a_withheld_value_never_reaches_the_digest(self) -> None:
+        """The load-bearing property: withheld content cannot influence the hash.
+
+        Two envelopes that differ *only* in an over-cap value must hash
+        identically, exactly as they do for an above-ceiling value.
+        """
+        first = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "a" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+        other = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "b" * (MAX_FIELD_VALUE_LENGTH + 2)),
+            ]
+        )
+
+        assert first.context_hash == other.context_hash
+        assert first.excluded_field_names == ("note_title",)
+
+    def test_a_value_at_the_cap_is_included(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.INTERNAL, "x" * MAX_FIELD_VALUE_LENGTH)]
+        )
+
+        assert [f.name for f in envelope.fields] == ["note_title"]
+        assert envelope.excluded_field_names == ()
+
+    def test_ceiling_and_over_cap_withholding_are_unioned(self) -> None:
+        """Both reasons fold into one audit list without shadowing each other."""
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert envelope.excluded_field_names == ("note_title", "owner_email")
+
+    def test_a_withheld_name_still_has_to_be_a_legal_name(self) -> None:
+        with pytest.raises(ValidationError, match="lowercase identifier"):
+            ContextEnvelope.from_candidates(
+                [("Note Title", DataClassification.PUBLIC, "x" * (MAX_FIELD_VALUE_LENGTH + 1))]
+            )
+
+    def test_a_name_cannot_be_both_included_and_withheld(self) -> None:
+        with pytest.raises(ValidationError, match="both included and withheld"):
+            ContextEnvelope(
+                fields=(_field("note_kind", "memo", DataClassification.PUBLIC),),
+                ceiling=DEFAULT_CEILING,
+                withheld_field_names=("note_kind",),
+            )

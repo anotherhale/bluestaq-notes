@@ -46,7 +46,6 @@ from notes_service.application.use_cases.agents import load_owned_agent
 from notes_service.application.use_cases.base import UnitOfWorkFactory, UseCase
 from notes_service.domain.agent.context import (
     ContextEnvelope,
-    ContextField,
     DataClassification,
 )
 from notes_service.domain.agent.decisioning import (
@@ -143,41 +142,35 @@ class RecommendApprovalDecision(UseCase):
         ``CONFIDENTIAL`` and so falls above the default ``INTERNAL`` ceiling: it
         is present in the envelope, withheld from the digest, and named in
         ``excluded_context_fields``.
+
+        Built with :meth:`ContextEnvelope.from_candidates` rather than
+        ``from_fields`` because the title is record-derived and can legitimately
+        reach ``MAX_TITLE_LENGTH``. The context field cap is an independent
+        constant; if it were ever below the title cap, a long-but-valid title
+        must be *withheld and named*, not turned into a failed advisory for a
+        read the caller is entitled to. Both withholding reasons land in the same
+        audit list, so "we asked with less than we held" stays visible.
         """
         now = self._clock.now()
         age_seconds = max(0, int((now - request.requested_at).total_seconds()))
 
-        fields = [
+        candidates: list[tuple[str, DataClassification, str]] = [
             # PUBLIC: the capability is a fixed vocabulary item, not user data.
-            ContextField(
-                name="capability",
-                classification=DataClassification.PUBLIC,
-                value=request.capability.value,
-            ),
-            ContextField(
-                name="resource_kind",
-                classification=DataClassification.PUBLIC,
-                value=request.resource_ref.split(":", 1)[0],
+            ("capability", DataClassification.PUBLIC, request.capability.value),
+            (
+                "resource_kind",
+                DataClassification.PUBLIC,
+                request.resource_ref.split(":", 1)[0],
             ),
             # INTERNAL: how long a human has had to consider it.
-            ContextField(
-                name="request_age_seconds",
-                classification=DataClassification.INTERNAL,
-                value=str(age_seconds),
-            ),
+            ("request_age_seconds", DataClassification.INTERNAL, str(age_seconds)),
         ]
 
         title = self._note_title(uow, principal=principal, request=request)
         if title is not None:
-            fields.append(
-                ContextField(
-                    name="note_title",
-                    classification=DataClassification.CONFIDENTIAL,
-                    value=title,
-                )
-            )
+            candidates.append(("note_title", DataClassification.CONFIDENTIAL, title))
 
-        return ContextEnvelope.from_fields(fields)
+        return ContextEnvelope.from_candidates(candidates)
 
     def _note_title(
         self, uow: UnitOfWork, *, principal: Principal, request: ApprovalRequest

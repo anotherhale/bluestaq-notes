@@ -38,10 +38,12 @@ from notes_service.application.use_cases.approval_advisory import (
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.decisioning import EvaluateDecision
 from notes_service.application.use_cases.notes import CreateNote
+from notes_service.domain.agent.context import MAX_FIELD_VALUE_LENGTH
 from notes_service.domain.agent.decisioning import AbstentionReason, Decision
 from notes_service.domain.agent.value_objects import ApprovalStatus, Capability
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
+from notes_service.domain.notes.value_objects import MAX_CONTENT_BYTES, MAX_TITLE_LENGTH
 from notes_service.infrastructure.db.seed import DEMO_USERS
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
@@ -261,6 +263,72 @@ def test_unreadable_note_title_is_not_offered(h: Harness) -> None:
 
     # The note does not exist, so no confidential field was even built.
     assert "note_title" not in advisory.excluded_context_fields
+
+
+def test_a_title_over_the_context_cap_is_withheld_not_a_denied_advisory(
+    h: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two caps are independent; the advisory must survive them diverging.
+
+    ``MAX_TITLE_LENGTH`` (notes domain) and ``MAX_FIELD_VALUE_LENGTH`` (context
+    minimisation) both happen to be 200 today, which hides the defect: a title at
+    the domain maximum sits exactly *at* the context cap, so a coincidence looks
+    like a guarantee. Shrinking the context cap simulates the day they diverge.
+
+    A title that is legal for a note but over the context cap must be withheld and
+    named — never raise. Raising here would deny a read the caller is entitled to
+    because their title was long, which is the wrong failure for an advisory.
+    """
+    from notes_service.domain.agent import context as context_module
+
+    principal = principal_for(ALICE)
+    note = h.create_note.run(principal, title="t" * MAX_TITLE_LENGTH, content="body")
+    request = h.pending_approval(principal, f"note:{note.id}")
+
+    monkeypatch.setattr(context_module, "MAX_FIELD_VALUE_LENGTH", 50)
+
+    advisory = h.recommend.run(principal, approval_id=str(request.id))
+
+    assert isinstance(advisory, ApprovalAdvisory)
+    assert advisory.excluded_context_fields == ("note_title",)
+    # Still advisory-only: a withheld title did not tip the request into a decision.
+    with h.uow() as uow:
+        assert uow.approvals.get(request.id).status is ApprovalStatus.PENDING
+
+
+def test_a_note_at_the_content_ceiling_still_produces_an_advisory(h: Harness) -> None:
+    """NEX-031: the context bounds must hold against real stored note text.
+
+    Until now the envelope had only ever met approval data — short titles and a
+    capability string. The real subject is a note whose body may be
+    ``MAX_CONTENT_BYTES`` (64 KiB) of UTF-8, roughly 300x the context field cap.
+    The advisory reads only the *title*, so a maximum-size body must not leak
+    into the envelope, must not raise, and must not move the digest: the body is
+    not an input to this question at all.
+
+    This is the production-data check the checkpoint named: the bounds are now
+    validated by a body the notes domain actually permits, not by a fixture.
+    """
+    principal = principal_for(ALICE)
+    body = "b" * MAX_CONTENT_BYTES
+    note = h.create_note.run(principal, title="Quarterly plan", content=body)
+    request = h.pending_approval(principal, f"note:{note.id}")
+
+    advisory = h.recommend.run(principal, approval_id=str(request.id))
+
+    assert isinstance(advisory, ApprovalAdvisory)
+    # The title is CONFIDENTIAL, above the default INTERNAL ceiling, so it is
+    # withheld by classification — not by length. The 64 KiB body is never a
+    # candidate at all, so it can neither raise nor reach the digest.
+    assert advisory.excluded_context_fields == ("note_title",)
+    with h.uow() as uow:
+        stored = uow.notes.get(note.id)
+        assert stored is not None
+        # The stored body really is far past the context field cap, so the test
+        # would fail if the advisory ever started feeding body text into the
+        # envelope: the cap would either raise or withhold.
+        assert len(stored.content.encode("utf-8")) > MAX_FIELD_VALUE_LENGTH
+        assert uow.approvals.get(request.id).status is ApprovalStatus.PENDING
 
 
 # --------------------------------------------------------------------------
