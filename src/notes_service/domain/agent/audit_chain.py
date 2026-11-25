@@ -45,6 +45,11 @@ from typing import Protocol
 #: a caller cannot distinguish "genesis" from "unset" by type.
 GENESIS_HASH = "0" * 64
 
+#: The one status that may legitimately carry no outcome seal. Kept as a literal
+#: rather than importing ``InvocationStatus``: ``domain.agent.tools`` imports this
+#: module for the two hash functions, so importing it back would be a cycle.
+_STARTED_STATUS = "started"
+
 _MAX_REASON = 200
 
 
@@ -313,6 +318,22 @@ def verify_chain(entries: Sequence[VerifiableEntry]) -> ChainVerdict:
                     sequence=entry.chain_sequence,
                     invocation_id=str(entry.id),
                     reason="completed invocation carries no outcome hash",
+                ),
+            )
+        elif entry.status != _STARTED_STATUS:
+            # A terminal verdict carrying no seal at all. Only ``started`` may
+            # legitimately lack one, because its outcome is not known yet.
+            # Erasing the seal is the cheapest forgery there is: rewrite a
+            # ``denied`` row to ``succeeded``, null the hash and the completion
+            # time, and a verifier that keyed only off ``outcome_hash is None``
+            # would have nothing left to recompute against.
+            return ChainVerdict(
+                verified=False,
+                checked=expected_sequence - 1,
+                first_break=ChainBreak(
+                    sequence=entry.chain_sequence,
+                    invocation_id=str(entry.id),
+                    reason="terminal invocation carries no outcome hash",
                 ),
             )
 
