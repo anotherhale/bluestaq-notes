@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from notes_service.application.errors import AccessDenied, InvalidInput, ResourceNotFound
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.base import UseCase
+from notes_service.application.use_cases.tenant_access import resolve_tenant_access
 from notes_service.domain.agent.audit_chain import ChainVerdict, verify_chain
 from notes_service.domain.agent.delegation import DelegatedAuthorization, attenuate
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
@@ -45,6 +46,7 @@ from notes_service.domain.agent.value_objects import (
 )
 from notes_service.domain.errors import InvariantViolation
 from notes_service.domain.identity.principal import Principal
+from notes_service.domain.organization.tenant_access import TenantAccessStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,6 +284,20 @@ class ResolveAgentToken(UseCase):
                 raise AccessDenied("agent token exceeds its delegation")
             if not token.capabilities <= agent.capabilities:
                 raise AccessDenied("agent token exceeds the agent's capabilities")
+
+            # The agent acts *as its delegator*, so it must not outlive the
+            # delegator's entitlement to a tenant. Without this, suspending or
+            # deprovisioning a person left their agent fully operational — the
+            # same offboarding gap ``ensure_tenant_access`` closes on the three
+            # human identity paths, reopened here because token resolution is a
+            # fourth way to establish an identity. ``UNAFFILIATED`` is allowed
+            # (a brand-new identity must be able to bootstrap), but every
+            # per-resource check still runs as the delegator downstream.
+            if (
+                resolve_tenant_access(uow, user_id=delegation.delegator_user_id).status
+                is TenantAccessStatus.DENIED
+            ):
+                raise AccessDenied("agent token delegator is not entitled to any tenant")
 
             return ResolvedToken(agent=agent, delegation=delegation, token=token)
 

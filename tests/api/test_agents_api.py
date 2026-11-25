@@ -527,6 +527,79 @@ class TestRevocationIsImmediate:
         assert still_active.json()["status"] == "active"
 
 
+class TestDelegatorTenantAccess:
+    """An agent's authority is its delegator's authority, and no more.
+
+    ``_actor_principal`` makes every tool call act *as the delegator*, so an
+    agent must not outlive the delegator's entitlement to the tenant. The human
+    paths already enforce this (NEX-006: OIDC callback, session resolution,
+    bearer provider all call ``ensure_tenant_access``), but token resolution is
+    a fourth way to establish an identity and it did not. A suspended or
+    deprovisioned delegator therefore kept a fully working agent: the offboarding
+    gap NEX-006 closed for people, reopened one layer up for their agents.
+    """
+
+    def _suspended_delegator_token(self, client: TestClient) -> tuple[dict, str, str]:
+        """Bob's agent token, with Bob's only membership suspended.
+
+        Bob delegates (he owns the agent) but Alice introspects, because the
+        resolution endpoint needs *an* authenticated human, not the delegator.
+        Bob cannot call it himself once suspended — his own requests are 401 at
+        the human boundary — which is exactly why the check has to exist on the
+        resolution path: nothing else looks at the delegator.
+        """
+        org = client.post(
+            "/api/v1/organizations",
+            headers=auth_headers(ALICE),
+            json={"name": "Acme", "slug": "acme"},
+        )
+        assert org.status_code == 201, org.text
+        org_id = org.json()["id"]
+
+        invited = client.post(
+            f"/api/v1/organizations/{org_id}/members",
+            headers=auth_headers(ALICE),
+            json={"user_id": BOB, "role": "org_member"},
+        )
+        assert invited.status_code == 201, invited.text
+        bob_membership_id = invited.json()["id"]
+
+        agent = register_agent(client, BOB, capabilities=[READ])
+        delegation = grant(client, agent["id"], [READ], actor=BOB)
+        token = issue_token(client, delegation["id"], capabilities=[READ], actor=BOB)
+
+        # Live while Bob still belongs to a tenant.
+        assert resolve(client, token["secret"]).status_code == 200
+
+        suspended = client.post(
+            f"/api/v1/organizations/{org_id}/members/{bob_membership_id}/suspend",
+            headers=auth_headers(ALICE),
+        )
+        assert suspended.status_code == 200, suspended.text
+        return token, org_id, bob_membership_id
+
+    def test_a_suspended_delegators_agent_token_is_refused(self, client: TestClient) -> None:
+        token, _org_id, _membership_id = self._suspended_delegator_token(client)
+
+        # Bob has no standing in any tenant, so the agent he delegated to must
+        # stop working on the very next request.
+        assert resolve(client, token["secret"]).status_code == 403
+
+    def test_reactivating_the_delegator_restores_the_agent(self, client: TestClient) -> None:
+        token, org_id, membership_id = self._suspended_delegator_token(client)
+        assert resolve(client, token["secret"]).status_code == 403
+
+        restored = client.post(
+            f"/api/v1/organizations/{org_id}/members/{membership_id}/reactivate",
+            headers=auth_headers(ALICE),
+        )
+        assert restored.status_code == 200, restored.text
+
+        # Suspension is a reversible pause, so the refusal must lift with it —
+        # otherwise the check would be indistinguishable from a broken token.
+        assert resolve(client, token["secret"]).status_code == 200
+
+
 class TestApprovalHttp:
     def test_a_sensitive_action_opens_a_pending_request(self, client: TestClient) -> None:
         agent = register_agent(client, capabilities=[DELETE])
