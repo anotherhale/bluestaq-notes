@@ -249,6 +249,6 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "`commit` names the last commit carrying real content: 240a446, NEX-031's product commit. Commits after it are docs promotion and checkpoint bookkeeping and carry no implementation. `head_at_checkpoint` is the head observed when this file was written.",
-  "head_at_checkpoint": "240a446",
+  "head_at_checkpoint": "4298148",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them."
 }
