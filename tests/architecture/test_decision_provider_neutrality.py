@@ -111,3 +111,56 @@ def test_vendor_adapters_are_confined_to_one_package() -> None:
                     if any(token in alias.name.lower() for token in VENDOR_TOKENS):
                         offenders.append(f"{relative} imports {alias.name}")
     assert not offenders, "vendor adapter outside its package:\n" + "\n".join(offenders)
+
+
+#: Modules that make up the judgment path. A decision may inform behaviour; it
+#: must never be able to *establish* authority, so none of these may import the
+#: authorization provider or the organization authorization port.
+DECISIONING_MODULES = (
+    "domain/agent/decisioning.py",
+    "domain/agent/context.py",
+    "application/ports/decisioning.py",
+    "application/use_cases/decisioning.py",
+    "infrastructure/decisioning/stub.py",
+)
+
+#: Substrings that mark an authorization import. Kept concrete so an innocent
+#: identifier (``DecisionKind``) does not trip the check.
+AUTHORIZATION_IMPORTS = (
+    "organization_authorization",
+    "use_cases.organization_policy",
+    "domain.organization",
+)
+
+
+def test_decisioning_path_cannot_reach_authorization() -> None:
+    """An advice path that can read the authorization provider can become one."""
+    violations: list[str] = []
+    for relative in DECISIONING_MODULES:
+        path = SRC / relative
+        assert path.exists(), f"decisioning module moved: {relative}"
+        for module in _imported_modules(path):
+            if any(token in module for token in AUTHORIZATION_IMPORTS):
+                violations.append(f"{relative} imports {module}")
+    assert not violations, "decisioning reached authorization:\n" + "\n".join(violations)
+
+
+def test_context_module_is_pure_domain() -> None:
+    """Context assembly must not import a framework, a vendor, or a transport."""
+    path = SRC / "domain" / "agent" / "context.py"
+    imports = _imported_modules(path)
+    allowed_prefixes = (
+        "hashlib",
+        "json",
+        "re",
+        "dataclasses",
+        "enum",
+        "__future__",
+        "notes_service.domain.errors",
+    )
+    unexpected = {
+        module
+        for module in imports
+        if not any(module == p or module.startswith(p + ".") for p in allowed_prefixes)
+    }
+    assert not unexpected, f"context module has unexpected imports: {sorted(unexpected)}"

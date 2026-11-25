@@ -27,7 +27,9 @@ conventional:
 
 Note the input side: a request carries a SHA-256 of the context the caller used,
 not the context itself. Raw note text is never handed to a judgment service by
-default, so there is nothing to retain, leak, or inject into.
+default, so there is nothing to retain, leak, or inject into. *What* is hashed is
+decided by :mod:`notes_service.domain.agent.context`, because a digest of
+sensitive content is still a fingerprint of it — hashing is not declassification.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from notes_service.domain.agent.context import ContextEnvelope
 from notes_service.domain.errors import ValidationError
 
 _CONTEXT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -140,6 +143,12 @@ class DecisionRequest:
     context_hash: str
     candidates: tuple[str, ...] = ()
     correlation_id: str | None = None
+    #: Names (never values) of context fields withheld from ``context_hash``
+    #: because they exceeded the ceiling. Recorded so an audit trail can say the
+    #: provider was asked about less than the caller held — a silent drop would
+    #: make "we discarded the relevant input" indistinguishable from "there was
+    #: none".
+    excluded_context_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_context_hash(self.context_hash)
@@ -168,6 +177,33 @@ class DecisionRequest:
             raise ValidationError(
                 f"correlation_id may be at most {MAX_CORRELATION_LENGTH} characters"
             )
+
+    @classmethod
+    def from_context(
+        cls,
+        kind: DecisionKind,
+        envelope: ContextEnvelope,
+        *,
+        candidates: tuple[str, ...] = (),
+        correlation_id: str | None = None,
+    ) -> DecisionRequest:
+        """Build a request from a classified envelope.
+
+        This is the only sanctioned way to turn context into a question, because
+        it is what guarantees the hash the provider sees was computed over
+        content a :class:`ContextEnvelope` approved. Hand-assembling a
+        ``context_hash`` is still possible — the field is a plain string — but a
+        caller doing so has taken on the declassification decision itself.
+        """
+        if not isinstance(envelope, ContextEnvelope):
+            raise ValidationError("a decision request requires a ContextEnvelope")
+        return cls(
+            kind=kind,
+            context_hash=envelope.context_hash,
+            candidates=candidates,
+            correlation_id=correlation_id,
+            excluded_context_fields=envelope.excluded_field_names,
+        )
 
 
 @dataclass(frozen=True, slots=True)

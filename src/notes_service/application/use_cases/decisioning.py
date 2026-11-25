@@ -63,6 +63,10 @@ class DecisionEvaluation:
     decision: Decision
     latency_ms: float
     threshold: float
+    #: Context field names the caller withheld before asking, carried through so
+    #: an audit reader can tell "we asked with less than we had" from "there was
+    #: nothing else". Names only; no value reaches this record.
+    excluded_context_fields: tuple[str, ...] = ()
 
     @property
     def is_decided(self) -> bool:
@@ -180,6 +184,7 @@ class EvaluateDecision:
             decision=decision,
             latency_ms=latency_ms,
             threshold=self._min_confidence,
+            excluded_context_fields=request.excluded_context_fields,
         )
 
     def _elapsed_ms(self, started: float) -> float:
