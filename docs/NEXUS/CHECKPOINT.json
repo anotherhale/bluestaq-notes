@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-25-25",
   "timestamp": "2026-11-25T11:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c367746",
+  "commit": "58768a6",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-023 all VERIFIED. NEX-023 (a ruling must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z.",
   "active_task": "none selected - NEX-023 VERIFIED; next Phase-5 slice to be chosen from ROADMAP.md",
   "task_statuses": {
@@ -194,10 +194,10 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Take the next dependency-ready Phase-5 slice from the ROADMAP.md Phase 5 section. Read it before choosing; do not invent a slice from a run summary.",
+  "next_task": "1) Refresh the PR #3 body: it still states head e549e94 / 30,749 additions / 741 tests / fourteen verified slices, while the branch is 58768a6 / 31,146 additions / 744 collected / fifteen verified slices. A rewrite script was attempted this run and failed on a corrupted heredoc; it was NOT applied and the body is unchanged. Re-fetch the body to a file, edit it with the file editor, and PATCH via gh api. 2) Then take the next dependency-ready Phase-5 slice from the ROADMAP.md Phase 5 section. Read it before choosing; do not invent a slice from a run summary.",
   "next_action": "1. Re-read ROADMAP.md Phase 5 and pick the next dependency-ready slice (P1/P2). 2. Refresh PR #3's body at the then-current head, recomputing counters from the PR object (additions, deletions, changed_files, commits) plus `pytest --collect-only` - never per-file sums or a local two-dot diff (R21). 3. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform, head c367746. NEX-001..NEX-023 all VERIFIED, most recently NEX-023 at c367746 (4/4, polled 2026-11-25T11:50:20Z). Working tree clean. PR #3 is draft and must never be auto-merged. The CAS audit of infrastructure/db/ is closed. Next: choose the next Phase-5 slice from ROADMAP.md.",
-  "ci_status": "c367746 (NEX-023): 4/4 completed/success, polled 2026-11-25T11:50:20Z. Prior greens: 1156f6e 4/4 (11:27Z), e459f98 4/4 (10:46Z), 23a36dc 4/4 (10:29Z), 460a26a 4/4 (10:16Z), 66e8cd6, 2b3beb7, 9a90e3a, 990557d, b9b7207 all 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform, head 58768a6. NEX-001..NEX-023 all VERIFIED, most recently NEX-023 at c367746 (4/4, polled 2026-11-25T11:50:20Z). 58768a6 is the docs-only promotion of NEX-023; its own CI run was still in_progress at 11:52Z and was not observed to completion. Working tree clean. PR #3 is draft and must never be auto-merged. Its body is STALE (names e549e94 / 741 tests); refresh it first. The CAS audit of infrastructure/db/ is closed. Next: choose the next Phase-5 slice from ROADMAP.md.",
+  "ci_status": "c367746 (NEX-023): 4/4 completed/success, polled 2026-11-25T11:50:20Z, head_sha equal to the polled commit (Backend x2: ruff/mypy/pytest/migrations; Frontend x2: typecheck/lint/test/build), for the push and pull-request events. 58768a6 (docs-only promotion of NEX-023): observed in_progress/queued at 11:52Z, NOT observed to completion. Prior greens: 1156f6e 4/4 (11:27Z), e459f98 4/4 (10:46Z), 23a36dc 4/4 (10:29Z), 460a26a 4/4 (10:16Z), 66e8cd6, 2b3beb7, 9a90e3a, 990557d, b9b7207 all 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
