@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-12",
-  "timestamp": "2026-11-25T05:52:00Z",
+  "timestamp": "2026-11-25T05:53:30Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "3aade7c",
   "commit_note": "3aade7c contains NEX-012 (tamper-evident audit chain). Its gates are verified locally only; CI has not been observed for it. The docs commit carrying this file is its child.",
@@ -71,9 +71,10 @@
     "R12 (low, process): writing prose or scripts through a shell heredoc corrupts them in this environment. Write scripts and messages to files with file_editor and execute the file. It recurred this run and aborted a STATE.md update before it wrote anything.",
     "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
     "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one.",
-    "R15 (new, low): the audit chain seals each invocation over its predecessor, but the chain head is not anchored outside the database. An attacker who can rewrite the whole table can produce a self-consistent chain. Anchoring the head hash externally is the next hardening step, not a regression."
+    "R15 (new, low): the audit chain seals each invocation over its predecessor, but the chain head is not anchored outside the database. An attacker who can rewrite the whole table can produce a self-consistent chain. Anchoring the head hash externally is the next hardening step, not a regression.",
+    "R15 (low, open): the audit chain head is not anchored outside the database, so an attacker able to rewrite the whole table could forge a self-consistent chain. External anchoring of the head hash is the next hardening step for NEX-012."
   ],
-  "next_task": "Refresh PR #3 body, then the next Phase-5 slice",
+  "next_task": "Observe CI on 122eb13, then select the next dependency-ready slice: NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token exchange) both read TESTED and need CI observation before promotion.",
   "next_action": "1) Recompute PR #3 body metrics (git diff --shortstat main...HEAD = 101 files / 25,316 insertions; pytest --collect-only -o addopts='' = 681) and update the body; it still carries the pre-NEX-012 figures. 2) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
   "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). No task is in flight. Next: refresh PR #3's body, then pick the next Phase-5 slice from ROADMAP.md. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {

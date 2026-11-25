@@ -1529,3 +1529,22 @@ PR #3's body now states those figures, replaces the stale `f50a78d` CI claim wit
 slices promoted to VERIFIED on observed CI.
 
 PR #3 remains **open, draft, unmerged** for human review. No merge performed.
+
+### Run NEX-2026-11-25-12 — tracking issue update, and R12 again
+
+Tracking Issue #2 received the NEX-012 verification comment. The first attempt posted
+corrupted text: the shell heredoc mangled it into a repeated partial block, exactly the
+R12 failure mode, now seen a fourth time. The comment was rewritten with `file_editor`
+and patched via `gh api -X PATCH`, and verified clean afterwards (zero corruption
+markers, 46 lines). Do not write prose through a heredoc in this repository, and check
+any already-posted text for corruption before calling it done — the corruption happens
+before the write, so it will be published silently.
+
+Also recorded as a new risk, **R15 (low)**: the audit chain head is not anchored
+outside the database, so an attacker who can rewrite the whole table could produce a
+self-consistent chain. External anchoring is the next hardening step for NEX-012.
+
+**Next action for the following run.** Select the next dependency-ready slice from
+`BACKLOG.md` — NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token
+exchange) both still read **TESTED**, so each needs CI observation before promotion.
+Observe CI on the current head first; the branch is at `122eb13`.
