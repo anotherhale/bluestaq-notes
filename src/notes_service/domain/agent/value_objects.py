@@ -207,8 +207,17 @@ class DelegationStatus(StrEnum):
 
 
 class ApprovalStatus(StrEnum):
-    """State of a human approval for a sensitive agent action."""
+    """State of a human approval for a sensitive agent action.
+
+    ``REVOKED`` is distinct from ``DENIED``: a denial is a refusal to grant,
+    while a revocation withdraws a grant that had already been made. The
+    security architecture (§11) names expired, revoked, and invalidated as
+    separate states, and all of them block execution. Collapsing revocation into
+    denial would erase the difference between "never allowed" and "allowed, then
+    withdrawn" from the audit record.
+    """
 
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
+    REVOKED = "revoked"

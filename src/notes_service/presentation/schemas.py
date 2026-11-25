@@ -721,6 +721,12 @@ class ApprovalRequestOpenRequest(StrictModel):
     resource_ref: str = Field(min_length=1, max_length=512)
 
 
+class ApprovalRevokeRequest(StrictModel):
+    """A human withdrawing an approval they previously granted."""
+
+    reason: str | None = Field(default=None, max_length=512)
+
+
 class ApprovalDecisionRequest(StrictModel):
     """A human's decision on a pending approval request."""
 
@@ -742,6 +748,9 @@ class ApprovalRequestResponse(ResponseModel):
     reason: str | None = None
     expires_at: datetime | None = None
     consumed_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_by_user_id: uuid.UUID | None = None
+    revoke_reason: str | None = None
 
     @classmethod
     def from_domain(cls, request: ApprovalRequest) -> ApprovalRequestResponse:
@@ -761,6 +770,13 @@ class ApprovalRequestResponse(ResponseModel):
             reason=request.reason,
             expires_at=request.expires_at,
             consumed_at=request.consumed_at,
+            revoked_at=request.revoked_at,
+            revoked_by_user_id=(
+                uuid.UUID(str(request.revoked_by_user_id))
+                if request.revoked_by_user_id is not None
+                else None
+            ),
+            revoke_reason=request.revoke_reason,
         )
 
 

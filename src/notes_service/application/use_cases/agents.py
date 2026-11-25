@@ -384,6 +384,40 @@ class DecideApprovalRequest(UseCase):
             return request
 
 
+class RevokeApprovalRequest(UseCase):
+    """Withdraw an approval that was granted but not yet spent.
+
+    ``DecideApprovalRequest`` covers a request that is still pending. This covers
+    the gap after a human says yes and before the agent acts: an approval is live
+    authority from the moment it is granted, so a mistaken or no-longer-desired
+    grant must be cancellable without waiting for its validity window to lapse.
+
+    Ownership is checked exactly as on the decision path — the caller must own the
+    agent the request belongs to — and a non-owner gets 404 rather than 403, so an
+    approval id cannot be used to probe for another user's agent.
+    """
+
+    def run(
+        self,
+        principal: Principal,
+        *,
+        approval_id: str,
+        reason: str | None = None,
+    ) -> ApprovalRequest:
+        now = self._clock.now()
+        with self._uow_factory() as uow:
+            request = uow.approvals.get(ApprovalRequestId.parse(approval_id))
+            if request is None:
+                raise ResourceNotFound("approval request not found")
+            agent = uow.agents.get(request.agent_id)
+            if agent is None or agent.owner_user_id != principal.user_id:
+                raise ResourceNotFound("approval request not found")
+            request.revoke(revoked_by_user_id=principal.user_id, now=now, reason=reason)
+            uow.approvals.save(request)
+            uow.commit()
+            return request
+
+
 class ListApprovalRequests(UseCase):
     """List pending approvals for one of the caller's agents."""
 

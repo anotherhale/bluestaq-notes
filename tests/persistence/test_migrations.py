@@ -127,3 +127,74 @@ class TestApprovalValidityBackfill:
         assert expires_at.startswith("2026-01-04"), expires_at
         assert consumed_at is None, "backfill must not mark an unspent approval as used"
         assert expires_at > requested_at
+
+
+class TestRevocationDowngradeFoldsRevokedRows:
+    """Downgrading must rewrite a real ``revoked`` row, not just an empty table.
+
+    ``e5a3b9c04f21`` widens the status CHECK to admit ``revoked`` and its
+    downgrade narrows it again. A narrow CHECK constraint cannot be recreated
+    while a ``revoked`` row still exists, so the downgrade folds those rows into
+    ``denied`` first. Run against the empty database the rest of this suite uses,
+    that ``UPDATE`` touches nothing and the ordering could be wrong without any
+    test noticing — the upgrade would then fail on a production downgrade.
+    """
+
+    REVOCABLE_REVISION = "e5a3b9c04f21"
+
+    def _seed_revoked_approval(self, db_path: Path) -> None:
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO agent_approval_requests"
+                " (id, agent_id, capability, resource_ref, status, requested_at,"
+                "  expires_at, revoked_at, revoked_by_user_id, revoke_reason)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "aaaaaaaa-0000-0000-0000-000000000002",
+                    "11111111-1111-1111-1111-111111111111",
+                    "delete_note",
+                    "note:revoked",
+                    "revoked",
+                    "2026-01-01 00:00:00.000000",
+                    "2026-01-04 00:00:00.000000",
+                    "2026-01-02 00:00:00.000000",
+                    "11111111-1111-1111-1111-111111111111",
+                    "customer withdrew consent",
+                ),
+            )
+
+    def test_downgrade_over_a_revoked_row_succeeds_and_folds_to_denied(
+        self, tmp_path: Path
+    ) -> None:
+        db_path = tmp_path / "downgrade.db"
+        result = _alembic(db_path, "upgrade", self.REVOCABLE_REVISION)
+        assert result.returncode == 0, f"upgrade failed:\n{result.stderr}"
+        self._seed_revoked_approval(db_path)
+
+        result = _alembic(db_path, "downgrade", "d4c8e2a71f05")
+        assert result.returncode == 0, f"downgrade failed:\n{result.stderr}"
+
+        with sqlite3.connect(db_path) as connection:
+            status = connection.execute("SELECT status FROM agent_approval_requests").fetchone()[0]
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(agent_approval_requests)")
+            }
+
+        assert status == "denied", "a revoked row must fold to denied, not vanish"
+        assert "revoked_at" not in columns, "downgrade must drop the revocation columns"
+
+    def test_the_folded_row_can_be_upgraded_again(self, tmp_path: Path) -> None:
+        """The fold is not a one-way door: re-upgrading must still work."""
+        db_path = tmp_path / "roundtrip.db"
+        assert _alembic(db_path, "upgrade", self.REVOCABLE_REVISION).returncode == 0
+        self._seed_revoked_approval(db_path)
+        assert _alembic(db_path, "downgrade", "d4c8e2a71f05").returncode == 0
+        result = _alembic(db_path, "upgrade", "head")
+        assert result.returncode == 0, f"re-upgrade failed:\n{result.stderr}"
+
+        with sqlite3.connect(db_path) as connection:
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(agent_approval_requests)")
+            }
+
+        assert {"revoked_at", "revoked_by_user_id", "revoke_reason"} <= columns

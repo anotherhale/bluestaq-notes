@@ -124,6 +124,11 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
         reason=row.reason,
         expires_at=row.expires_at,
         consumed_at=row.consumed_at,
+        revoked_at=row.revoked_at,
+        revoked_by_user_id=(
+            UserId.parse(row.revoked_by_user_id) if row.revoked_by_user_id else None
+        ),
+        revoke_reason=row.revoke_reason,
     )
 
 
@@ -360,6 +365,12 @@ class SqlAlchemyApprovalRequestRepository:
                 # undoing the bound the aggregate stamped in ``open``.
                 expires_at=request.expires_at,
                 consumed_at=request.consumed_at,
+                revoked_at=request.revoked_at,
+                revoked_by_user_id=(
+                    _as_uuid(request.revoked_by_user_id)
+                    if request.revoked_by_user_id is not None
+                    else None
+                ),
             )
         )
 
@@ -407,6 +418,11 @@ class SqlAlchemyApprovalRequestRepository:
         row.reason = request.reason
         row.expires_at = request.expires_at
         row.consumed_at = request.consumed_at
+        row.revoked_at = request.revoked_at
+        row.revoked_by_user_id = (
+            _as_uuid(request.revoked_by_user_id) if request.revoked_by_user_id is not None else None
+        )
+        row.revoke_reason = request.revoke_reason
 
     def consume(self, approval_id: ApprovalRequestId, *, now: datetime) -> bool:
         result = self._session.execute(
@@ -420,6 +436,9 @@ class SqlAlchemyApprovalRequestRepository:
                 # permanent grant, which is the bug this predicate guards.
                 ApprovalRequestRow.expires_at.is_not(None),
                 ApprovalRequestRow.expires_at > now,
+                # A revoked grant is not spendable even if a concurrent writer
+                # has not yet flipped the status column.
+                ApprovalRequestRow.revoked_at.is_(None),
             )
             .values(consumed_at=now)
         )

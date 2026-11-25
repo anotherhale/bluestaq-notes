@@ -48,6 +48,7 @@ from notes_service.application.use_cases.agents import (
     RegisterAgent,
     ResolveAgentToken,
     RevokeAgent,
+    RevokeApprovalRequest,
     RevokeDelegation,
     VerifyToolInvocationChain,
 )
@@ -212,6 +213,7 @@ class Container:
     resolve_agent_token: Callable[[], ResolveAgentToken]
     open_approval_request: Callable[[], OpenApprovalRequest]
     decide_approval_request: Callable[[], DecideApprovalRequest]
+    revoke_approval_request: Callable[[], RevokeApprovalRequest]
     list_approval_requests: Callable[[], ListApprovalRequests]
     # Reading the audit trail is the owning human's authority, matching approvals:
     # the trail names which tools an agent reached for, which is private to its
@@ -466,6 +468,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         resolve_agent_token=make(ResolveAgentToken),
         open_approval_request=make(OpenApprovalRequest),
         decide_approval_request=make(DecideApprovalRequest),
+        revoke_approval_request=make(RevokeApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
         list_tool_invocations=make(ListToolInvocations),
         verify_tool_invocation_chain=make(VerifyToolInvocationChain),

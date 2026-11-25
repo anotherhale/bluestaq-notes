@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.use_cases.agents import RegisterAgent
 from notes_service.domain.agent.entities import DEFAULT_APPROVAL_TTL, ApprovalRequest
-from notes_service.domain.agent.value_objects import Capability
+from notes_service.domain.agent.value_objects import ApprovalStatus, Capability
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.db.seed import DEMO_USERS
@@ -164,3 +164,81 @@ class TestAMissingBoundFailsClosed:
 
         with uow:
             assert uow.approvals.consume(request.id, now=stored.requested_at) is False
+
+
+class TestRevocationSurvivesPersistence:
+    """The withdrawal must be readable back, with both audit reasons intact.
+
+    ``revoke()`` fixes a defect where the revocation overwrote the approver's
+    justification. That fix lives in the entity, but a repository that failed to
+    persist ``revoke_reason`` would make it invisible after a reload — and the
+    whole point of the field is the audit trail, which is only ever read back.
+    """
+
+    def _approved(self, uow, agent) -> ApprovalRequest:
+        request = ApprovalRequest.open(
+            agent=agent,
+            capability=Capability.DELETE_NOTE,
+            resource_ref="note:abc",
+        )
+        with uow:
+            uow.approvals.add(request)
+            uow.commit()
+
+        with uow:
+            stored = uow.approvals.get(request.id)
+            assert stored is not None
+            stored.approve(
+                approver_user_id=ALICE,
+                now=stored.requested_at,
+                reason="customer signed off",
+            )
+            uow.approvals.save(stored)
+            uow.commit()
+        return stored
+
+    def test_a_reloaded_row_reports_revoked(self, uow, agent) -> None:
+        approved = self._approved(uow, agent)
+
+        with uow:
+            stored = uow.approvals.get(approved.id)
+            assert stored is not None
+            stored.revoke(
+                revoked_by_user_id=ALICE,
+                now=stored.requested_at,
+                reason="customer withdrew consent",
+            )
+            uow.approvals.save(stored)
+            uow.commit()
+
+        with uow:
+            reloaded = uow.approvals.get(approved.id)
+
+        assert reloaded is not None
+        assert reloaded.status is ApprovalStatus.REVOKED
+        assert reloaded.revoked_at is not None
+        assert reloaded.revoked_by_user_id == ALICE
+        assert reloaded.is_usable() is False
+
+    def test_a_reloaded_row_keeps_both_reasons(self, uow, agent) -> None:
+        """Grant justification and withdrawal reason are separate facts."""
+        approved = self._approved(uow, agent)
+
+        with uow:
+            stored = uow.approvals.get(approved.id)
+            assert stored is not None
+            stored.revoke(
+                revoked_by_user_id=ALICE,
+                now=stored.requested_at,
+                reason="customer withdrew consent",
+            )
+            uow.approvals.save(stored)
+            uow.commit()
+
+        with uow:
+            reloaded = uow.approvals.get(approved.id)
+
+        assert reloaded is not None
+        assert reloaded.reason == "customer signed off"
+        assert reloaded.revoke_reason == "customer withdrew consent"
+        assert reloaded.decided_by_user_id == ALICE

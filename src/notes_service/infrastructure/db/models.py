@@ -528,9 +528,19 @@ class ApprovalRequestRow(Base):
     # written before these columns existed; the aggregate always sets them.
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # A granted approval can be withdrawn before it is spent. The stamp is what
+    # distinguishes "allowed, then taken back" from "never allowed" in the audit
+    # record, so it is recorded rather than folded into the status alone.
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Why the grant was withdrawn, kept apart from ``reason`` so the approval
+    # justification is not lost when the authorisation is taken back.
+    revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
-        CheckConstraint("status IN ('pending','approved','denied')", name="status_valid"),
+        CheckConstraint("status IN ('pending','approved','denied','revoked')", name="status_valid"),
         Index("ix_agent_approval_requests_agent_status", "agent_id", "status"),
     )
 

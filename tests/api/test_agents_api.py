@@ -634,3 +634,109 @@ class TestApprovalHttp:
         response = client.get(f"/api/v1/agents/{agent['id']}/approvals", headers=auth_headers(BOB))
 
         assert response.status_code == 404, response.text
+
+
+class TestApprovalRevocationHttp:
+    """Withdrawing a grant over HTTP, before the agent can spend it."""
+
+    @staticmethod
+    def _approved(client: TestClient, owner: str = ALICE) -> dict:
+        agent = register_agent(client, owner, capabilities=[DELETE])
+        opened = client.post(
+            f"/api/v1/agents/{agent['id']}/approvals",
+            headers=auth_headers(owner),
+            json={"capability": DELETE, "resource_ref": "note-42"},
+        ).json()
+        approved = client.post(
+            f"/api/v1/agents/approvals/{opened['id']}/decision",
+            headers=auth_headers(owner),
+            json={"approve": True, "reason": "verified with the customer"},
+        )
+        assert approved.status_code == 200, approved.text
+        return approved.json()
+
+    def test_the_owner_can_withdraw_an_unspent_grant(self, client: TestClient) -> None:
+        approved = self._approved(client)
+
+        response = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "customer changed their mind"},
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "revoked"
+        assert body["revoked_by_user_id"] == ALICE
+        assert body["revoked_at"] is not None
+        assert body["revoke_reason"] == "customer changed their mind"
+
+    def test_withdrawal_keeps_the_approvers_original_reason(self, client: TestClient) -> None:
+        """Both halves of the audit story must survive the round trip."""
+        approved = self._approved(client)
+
+        response = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "customer changed their mind"},
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["reason"] == "verified with the customer"
+        assert body["revoke_reason"] == "customer changed their mind"
+        assert body["decided_by_user_id"] == ALICE
+
+    def test_a_non_owner_cannot_withdraw_and_gets_404(self, client: TestClient) -> None:
+        approved = self._approved(client, ALICE)
+
+        response = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(BOB),
+            json={"reason": "not mine"},
+        )
+
+        assert response.status_code == 404, response.text
+
+    def test_a_pending_request_is_not_revocable(self, client: TestClient) -> None:
+        """Pending is answered with a decision, not withdrawn."""
+        agent = register_agent(client, capabilities=[DELETE])
+        opened = client.post(
+            f"/api/v1/agents/{agent['id']}/approvals",
+            headers=auth_headers(ALICE),
+            json={"capability": DELETE, "resource_ref": "note-42"},
+        ).json()
+
+        response = client.post(
+            f"/api/v1/agents/approvals/{opened['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "too early"},
+        )
+
+        assert response.status_code == 403, response.text
+
+    def test_a_grant_cannot_be_withdrawn_twice(self, client: TestClient) -> None:
+        approved = self._approved(client)
+        first = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "first"},
+        )
+        assert first.status_code == 200, first.text
+
+        second = client.post(
+            f"/api/v1/agents/approvals/{approved['id']}/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "again"},
+        )
+
+        assert second.status_code == 403, second.text
+
+    def test_an_unknown_approval_is_not_found(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/agents/approvals/00000000-0000-0000-0000-000000000000/revoke",
+            headers=auth_headers(ALICE),
+            json={"reason": "nothing here"},
+        )
+
+        assert response.status_code == 404, response.text

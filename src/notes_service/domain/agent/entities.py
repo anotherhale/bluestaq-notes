@@ -195,6 +195,9 @@ class ApprovalRequest:
     reason: str | None = None
     expires_at: datetime | None = None
     consumed_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_by_user_id: UserId | None = None
+    revoke_reason: str | None = None
 
     @classmethod
     def open(
@@ -259,6 +262,12 @@ class ApprovalRequest:
             return False
         if self.consumed_at is not None:
             return False
+        # Belt to the status check's braces: a row that carries a revocation
+        # stamp is not usable even if its status column still reads approved.
+        # The gateway must fail closed on contradictory rows, not trust the
+        # column that happens to permit execution.
+        if self.revoked_at is not None:
+            return False
         if self.expires_at is None:
             return False
         moment = now or _utcnow()
@@ -305,6 +314,51 @@ class ApprovalRequest:
         self.decided_by_user_id = approver
         self.decided_at = now or _utcnow()
         self.reason = reason
+
+    def revoke(
+        self,
+        *,
+        revoked_by_user_id: UserId | str | None,
+        now: datetime | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Withdraw an approval that has already been granted.
+
+        An approved-but-unspent request is live authority: the gateway will
+        honour it on the next matching call. Until this existed, the only way to
+        stop it was to wait for expiry or spend it, so a human who approved by
+        mistake had no way to take it back. Revocation is that way.
+
+        Only an approved request can be revoked. A pending one is denied
+        instead, and an already-consumed one has already authorised its action —
+        revoking it would rewrite history rather than prevent an act, so it is
+        refused rather than silently no-op'd.
+
+        Separation of duties is enforced here for the same reason it is on
+        ``approve``: an agent has no user id, so an agent cannot withdraw the
+        consent it asked for.
+        """
+        revoker = UserId.parse(revoked_by_user_id) if revoked_by_user_id is not None else None
+        if revoker is None:
+            raise InvariantViolation(
+                "an agent cannot revoke its own approval; a human approver is required"
+            )
+        if self.status is not ApprovalStatus.APPROVED:
+            raise InvariantViolation(
+                f"only an approved request can be revoked; this one is {self.status.value}"
+            )
+        if self.consumed_at is not None:
+            raise InvariantViolation(
+                "approval request has already been spent and cannot be revoked"
+            )
+        self.status = ApprovalStatus.REVOKED
+        self.revoked_at = now or _utcnow()
+        self.revoked_by_user_id = revoker
+        # Keep the approver's original justification intact and record the
+        # withdrawal separately: overwriting ``reason`` would erase why the grant
+        # was made, which is exactly what an auditor needs to compare against why
+        # it was taken back.
+        self.revoke_reason = reason
 
     def consume(self, *, now: datetime | None = None) -> None:
         """Spend this approval on exactly one action.

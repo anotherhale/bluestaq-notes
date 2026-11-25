@@ -35,6 +35,7 @@ from notes_service.presentation.schemas import (
     ApprovalRequestListResponse,
     ApprovalRequestOpenRequest,
     ApprovalRequestResponse,
+    ApprovalRevokeRequest,
     ChainVerdictResponse,
     DelegationGrantRequest,
     DelegationResponse,
@@ -296,5 +297,35 @@ def decide_approval_request(
         approval_id=str(approval_id),
         approve=payload.approve,
         reason=payload.reason,
+    )
+    return ApprovalRequestResponse.from_domain(request)
+
+
+@router.post(
+    "/approvals/{approval_id}/revoke",
+    response_model=ApprovalRequestResponse,
+    summary="Withdraw an approved request before it is spent (human only)",
+    dependencies=[RateLimitDep],
+)
+def revoke_approval_request(
+    approval_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    payload: ApprovalRevokeRequest | None = None,
+) -> ApprovalRequestResponse:
+    """Cancel a grant that has not yet been used.
+
+    Distinct from the decision endpoint: that one answers a *pending* request,
+    this one takes back an answer already given. A request that is still pending
+    is refused here (deny it instead) and a spent one is refused too, so this
+    cannot be used to rewrite an authorisation that already happened.
+
+    Owner-only. A non-owner gets 404, not 403, for the same reason as the rest of
+    the approvals endpoints.
+    """
+    request = container.revoke_approval_request().run(
+        principal,
+        approval_id=str(approval_id),
+        reason=payload.reason if payload else None,
     )
     return ApprovalRequestResponse.from_domain(request)

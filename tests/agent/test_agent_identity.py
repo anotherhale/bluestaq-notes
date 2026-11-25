@@ -417,3 +417,84 @@ class TestApprovalRequest:
         ApprovalRequest.open(agent=agent, capability=Capability.DELETE_NOTE, resource_ref="note-42")
 
         assert agent.capabilities == before
+
+    def _approved(self) -> ApprovalRequest:
+        agent = self._sensitive_agent()
+        request = ApprovalRequest.open(
+            agent=agent, capability=Capability.DELETE_NOTE, resource_ref="note-42"
+        )
+        request.approve(approver_user_id=ALICE)
+        return request
+
+    def test_a_human_can_revoke_a_grant_and_is_recorded(self) -> None:
+        request = self._approved()
+        assert request.is_usable()
+
+        request.revoke(revoked_by_user_id=ALICE, reason="approved by mistake")
+
+        assert request.status is ApprovalStatus.REVOKED
+        assert request.revoked_by_user_id == ALICE
+        assert request.revoked_at is not None
+        assert request.revoke_reason == "approved by mistake"
+
+    def test_a_revoked_grant_is_not_usable(self) -> None:
+        """The whole point: a withdrawn authorisation must not run the action."""
+        request = self._approved()
+        request.revoke(revoked_by_user_id=ALICE)
+
+        assert not request.is_usable()
+
+    def test_an_agent_cannot_revoke_its_own_approval(self) -> None:
+        # No human id => the agent is trying to withdraw consent it did not give.
+        request = self._approved()
+
+        with pytest.raises(InvariantViolation, match="human approver"):
+            request.revoke(revoked_by_user_id=None)
+
+    def test_a_pending_request_cannot_be_revoked(self) -> None:
+        # Nothing was granted, so there is nothing to withdraw; deny it instead.
+        agent = self._sensitive_agent()
+        request = ApprovalRequest.open(
+            agent=agent, capability=Capability.DELETE_NOTE, resource_ref="note-42"
+        )
+
+        with pytest.raises(InvariantViolation, match="only an approved request"):
+            request.revoke(revoked_by_user_id=ALICE)
+
+    def test_a_spent_request_cannot_be_revoked(self) -> None:
+        # Revoking after the fact would rewrite history instead of preventing an
+        # act, so it is refused rather than silently accepted.
+        request = self._approved()
+        request.consume()
+
+        with pytest.raises(InvariantViolation, match="already been spent"):
+            request.revoke(revoked_by_user_id=ALICE)
+
+    def test_a_revoked_request_cannot_be_consumed(self) -> None:
+        request = self._approved()
+        request.revoke(revoked_by_user_id=ALICE)
+
+        with pytest.raises(InvariantViolation, match="not usable"):
+            request.consume()
+
+    def test_revocation_preserves_the_approvers_justification(self) -> None:
+        """The audit record must hold *both* halves of the story.
+
+        An earlier draft overwrote ``reason`` with the revocation note, which
+        erased why the grant was made. An auditor comparing "why allowed" with
+        "why withdrawn" needs both, so they are separate fields.
+        """
+        agent = self._sensitive_agent()
+        request = ApprovalRequest.open(
+            agent=agent, capability=Capability.DELETE_NOTE, resource_ref="note-42"
+        )
+        request.approve(approver_user_id=ALICE, reason="verified with the customer")
+        approver = request.decided_by_user_id
+        decided_at = request.decided_at
+
+        request.revoke(revoked_by_user_id=BOB, reason="customer changed their mind")
+
+        assert request.decided_by_user_id == approver
+        assert request.decided_at == decided_at
+        assert request.reason == "verified with the customer"
+        assert request.revoke_reason == "customer changed their mind"
