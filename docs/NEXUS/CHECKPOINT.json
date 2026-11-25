@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-16",
-  "timestamp": "2026-11-25T08:44:00Z",
+  "timestamp": "2026-11-25T08:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "b9b7207",
   "commit_note": "b9b7207 is the NEX-016 product commit, pushed, and now CI-verified 4/4. The docs commits beneath/above it (10ae3c7 and the one carrying this file) are unobserved, as expected - they change Markdown and JSON only.",
@@ -66,7 +66,7 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "a9f7322",
+    "head": "c08c1de",
     "body_refreshed": "2026-11-25T08:23:26Z at head eab423c. Corrected three stale counters (707 tests, 195 ruff files, 97 mypy sources) to 718 / 196 / 98, refreshed the CI-evidence line to the observed b9b7207 result, and added NEX-016 to the defect list.",
     "metrics_at_head": {
       "additions": 28079,
@@ -80,7 +80,16 @@
     "note": "PR #3 head moved to 414a222. Metrics measured with `git diff --shortstat main HEAD` (two-dot; the clone is grafted so three-dot fails) and `pytest --collect-only`. Remains draft and unmerged; automated merging is prohibited.",
     "body_current_at": "eab423c",
     "metrics": "27,659 insertions / 10 deletions / 104 files, measured with git diff --shortstat origin/main...HEAD on a full clone; matches the PR object. Per-file sums from /pulls/3/files (20,309) and /compare (19,366) are truncated and must not be quoted.",
-    "body_metrics_verified": true
+    "body_metrics_verified": true,
+    "ci_verified_head": "b9b7207",
+    "docs_heads_superseded": [
+      "eab423c",
+      "24dd693",
+      "a9f7322",
+      "5c4a1ab",
+      "72e5396",
+      "c08c1de"
+    ]
   },
   "tracking_issue": {
     "number": 2,
@@ -127,7 +136,7 @@
     }
   ],
   "next_task": "Refresh PR #3 body/metrics at the current head, then select the next Phase-5 slice.",
-  "next_action": "Select the next dependency-ready Phase-5 slice from ROADMAP.md and implement it end to end (domain + use case + adapter + API + tests). Before marking anything VERIFIED, poll the exact head's check-runs and require 4/4 completed/success on that SHA. Never merge PR #3.",
+  "next_action": "Poll 4/4 completed/success on c08c1de (docs-only; earlier heads read cancelled because each push supersedes the last). Then select the next dependency-ready Phase-5 slice from ROADMAP.md and implement it end to end \u2014 the two TESTED-but-unverified tasks NEX-003 and NEX-006 are the highest-value candidates. Never merge PR #3.",
   "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is VERIFIED at b9b7207 (CI 4/4) - do not re-implement. Carry R22 forward: for a governance control, test the full decision-to-effect path, not each half separately. The clone is grafted, so three-dot diffs fail with 'no merge base' even with a standard refspec; use PR object counters for metrics. Never merge PR #3. Write scripts to /tmp via file_editor; never use a heredoc.",
   "ci_status": "b9b7207: 4/4 completed/success (the only observed green head; NEX-016 is VERIFIED on it). Later heads eab423c / 24dd693 / a9f7322 are docs-only and completed/cancelled - superseded, not passing.",
   "notes_on_pr_body": "Body refreshed at eab423c on 2026-11-25T08:23:26Z; its counters match the PR object (106 files / 28,079 additions / 10 deletions / 79 commits / 718 tests collected).",
@@ -140,7 +149,7 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "a9f7322",
+    "head": "c08c1de",
     "body_updated": "2026-11-25T08:23:26Z",
     "body_metrics_verified": true,
     "merge": "prohibited - must remain unmerged for human review"
