@@ -659,6 +659,10 @@ None currently. The following are known open items, not blockers:
 1. ~~**Promote NEX-023 on CI.**~~ **Satisfied** — 4/4 `completed/success` at `c367746`,
    polled 2026-11-25T11:50:20Z, with `head_sha` equal to the polled commit. NEX-023 is
    VERIFIED on its own SHA. Do not re-derive the local result and do not re-promote it.
+   ~~**Promote NEX-024 on CI.**~~ **Also satisfied** — 4/4 `completed/success` at
+   `eaaae23`, polled 2026-11-25T12:16Z, every `head_sha` equal to the polled commit (this
+   is a run at the slice's own SHA, not descendant-CI). NEX-024 is VERIFIED. R27 is now
+   closed on both settle paths: resolve (NEX-023) and abort (NEX-024).
 2. **The CAS audit is closed — do not re-open it without new evidence.** Every
    repository under `infrastructure/db/` has been classified (table in the NEX-021 section
    above). `DelegatedAuthorization`, `AgentToken` and `ToolInvocation` carry no version and
@@ -668,9 +672,11 @@ None currently. The following are known open items, not blockers:
 3. **Next dependency-ready slice (P1/P2, Phase 5).** Re-read the Phase 5 section of
    `ROADMAP.md` before choosing; do not invent a slice from a run summary.
 4. **Refresh the PR #3 body at the current head.** Its counters were measured at an earlier
-   commit and now predate NEX-023 (`c367746`). Recompute from the PR object (`additions`, `deletions`,
-   `changed_files`, `commits`) plus a `pytest --collect-only` count; do not quote a local
-   two-dot diff, which counts the grafted root commit (R21).
+   commit and now predate NEX-023 (`c367746`) and NEX-024 (`eaaae23`). At `517208f` the PR
+   object reports 31,481 additions / 10 deletions / 111 files / 113 commits — re-read it
+   after your own final push, because a docs commit moves the head and the counters with it.
+   Pair that with a `pytest --collect-only` count; do not quote a local two-dot diff, which
+   counts the grafted root commit (R21).
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate
