@@ -23,7 +23,7 @@
     "NEX-009-HTTP": "TESTED",
     "NEX-011": "VERIFIED",
     "NEX-012": "VERIFIED",
-    "NEX-013": "TESTED"
+    "NEX-013": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -78,7 +78,7 @@
     "R16 (new, low): an approval's expires_at is nullable and is_usable treats NULL as 'never expires'. Needed only for rows written by an older app version during a rolling deploy; the backfill populates every pre-existing row. Tighten to NOT NULL once no old writer can exist.",
     "R17 (new, low, process): a data-backfill migration tested only against an empty database is untested and will stay green while it crashes on the first real row. NEX-013 shipped exactly that - 'requested_at + timedelta' raised TypeError on SQLite's string value, aborting the upgrade and leaving expires_at NULL (i.e. unbounded). Any migration that reads existing rows needs a test that seeds a row at the previous revision; see tests/persistence/test_migrations.py::TestApprovalValidityBackfill."
   ],
-  "next_task": "Observe CI on the NEX-013 commit and promote it to VERIFIED if green (or fix what CI reports). Then refresh PR #3's body, which predates NEX-013, and select the next Phase 5 slice from ROADMAP.md.",
+  "next_task": "Next Phase 5 slice - re-read ROADMAP.md Phase 5 before selecting; do not invent one from this run's summary.",
   "next_action": "1) gh api repos/anotherhale/bluestaq-notes/commits/<nex013-sha>/check-runs - confirm 4/4 completed/success before promoting NEX-013. 2) Recompute PR #3 metrics (git diff --shortstat main...HEAD; pytest --collect-only -o addopts='') and update the body. 3) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
   "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). NEX-013 (approval validity + single-use) is TESTED on local gates only and awaits CI observation. No task is in flight. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). Any migration that reads existing rows needs a non-empty-table test (R17). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
@@ -95,5 +95,9 @@
     "observed": "2026-11-25T05:49Z",
     "note": "Last observed green commit is 3aade7c: 4/4 completed/success (backend + frontend, push and pull_request). No CI observed yet for the NEX-013 commit."
   },
-  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures."
+  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures.",
+  "validation_status": {
+    "local_gates": "green on a50a9a0 (ruff format/check, mypy, pytest 680 passed / 4 skipped)",
+    "ci": "run 45559723156 completed/success on head e2bf7bc (backend ruff/mypy/pytest/migrations + frontend typecheck/lint/test/build)"
+  }
 }

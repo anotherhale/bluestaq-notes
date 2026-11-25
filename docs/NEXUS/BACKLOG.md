@@ -619,7 +619,7 @@ dependency.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P1 (security) |
-| Status | **TESTED** (run `NEX-2026-11-25-13`; local gates green; CI not yet observed) |
+| Status | **VERIFIED** (run `NEX-2026-11-25-13`; product commit `a50a9a0`, CI run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) `completed/success` on head `e2bf7bc` — backend ruff/mypy/pytest/migrations + frontend typecheck/lint/test/build) |
 | Dependencies | NEX-005 (gateway), NEX-003 (approval request lifecycle) |
 
 **Objective:** an approval was an unlimited-use, never-expiring authorisation.

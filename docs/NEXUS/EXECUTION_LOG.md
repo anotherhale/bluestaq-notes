@@ -1634,3 +1634,74 @@ conflation R10 warns about.
 promote it to VERIFIED if green, or fix what it reports. Then refresh PR #3's
 body — it predates NEX-013 and must pick up the new migration and counts — and
 select the next Phase 5 slice from `ROADMAP.md`. Never merge PR #3.
+
+---
+
+## Run NEX-2026-11-25-14 — NEX-013 verified on observed CI
+
+**Timestamp:** 2026-11-25T07:05Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `11a4cec`
+**Ending commit:** docs commit following this entry
+**Run window:** 30 min hard cap; DEADLINE honoured
+
+### Tasks completed
+
+- Committed the NEX-013 product slice as `a50a9a0` (9 files, 318 insertions):
+  `expires_at` + `consumed_at` on `ApprovalRequest`, a single conditional-UPDATE
+  `consume()` in the gateway, migration `d4c8e2a71f05`, and two regression tests.
+- Committed the state reconciliation as `e2bf7bc` (4 files).
+- Pushed both to the authorized branch (`11a4cec..e2bf7bc`, fast-forward) and
+  verified against the real remote with `git ls-remote` — local head and remote
+  head both `e2bf7bc`. The cached `origin/` ref is not treated as evidence.
+- Observed CI on `e2bf7bc`, 4/4 green: push run
+  [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156)
+  and pull_request run
+  [45559732372](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559732372),
+  both `completed/success`. Both jobs green in the push run — backend
+  (ruff, mypy, pytest, migrations) and frontend (typecheck, lint, test, build).
+  Re-derived from the API this run; not carried forward from a prior summary.
+- Promoted NEX-013 from TESTED to **VERIFIED** in `BACKLOG.md`, `STATE.md` and
+  `CHECKPOINT.json` on that evidence.
+
+### Gates (bare, as CI runs them)
+
+| Gate | Result |
+| --- | --- |
+| `ruff format --check` | 193 files already formatted |
+| `ruff check` | All checks passed |
+| `mypy` | no issues in 98 source files |
+| `pytest` | 680 passed, 4 skipped (684 collected) |
+
+Run bare and unscoped, including the docs: ruff formats Python inside Markdown
+fences, and a `--check src tests` run would not look at `docs/`.
+
+### Decisions
+
+- **NEX-013 is VERIFIED, not MERGED.** CI green on the commit is the strongest
+  evidence available to automation; merging remains prohibited.
+- **R16 recorded rather than fixed.** `expires_at` stays nullable because
+  `is_usable` reads NULL as "never expires", which is needed only for
+  rolling-deploy compatibility with pre-NEX-013 writers. Tightening to NOT NULL
+  is a separate slice, listed as next-best action 3.
+- **NEX-008's "no CI at all" finding is superseded.** `.github/workflows/ci.yml`
+  now exists and runs two jobs. The earlier finding was correct when measured;
+  it is stale now, and this run re-derived it by probing rather than copying it.
+
+### Risks identified
+
+- **R17 restated:** a backfill migration tested only against an empty database
+  is untested. NEX-013's own backfill crashed on the first real row while every
+  test stayed green. The fix seeds a legacy row at the previous revision.
+- The workspace briefly reported branch `main` mid-run. Investigation confirmed
+  the authorized branch and the NEX-013 slice were intact; no work was lost. A
+  heredoc-based Python edit corrupted mid-transcript and was abandoned without
+  touching the file — verified by line count and content grep before retrying
+  with a file-based script.
+
+### Next action for the following run
+
+Select the next Phase 5 slice from `ROADMAP.md` — re-read that section rather
+than inferring from this summary. Refresh PR #3's body with recomputed counts
+(it predates NEX-013). Never merge PR #3.
+

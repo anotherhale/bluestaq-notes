@@ -7,24 +7,22 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **TESTED** (local only) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity VERIFIED (`a50a9a0`, CI 2/2) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `11a4cec` |
-| Head commit (run end) | docs commit following this slice; product head is the NEX-013 commit |
-| Last CI result | **4/4 green on `3aade7c`** (NEX-012): backend + frontend, push and pull_request, all `completed/success`, observed 2026-11-25T05:49Z. **NEX-013's commit has no observed CI yet.** |
+| Head commit (run end) | `e2bf7bc` — docs commit; NEX-013 product commit is `a50a9a0` |
+| Last CI result | **Green on `e2bf7bc`** (contains NEX-013), 4/4: push run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) and pull_request run [45559732372](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559732372), both `completed/success`; jobs backend (ruff/mypy/pytest/migrations) + frontend (typecheck/lint/test/build) each `success`. Observed 2026-11-25T06:21Z. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:51Z: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-013 is TESTED** (local gates only) — approvals are now
-bounded in time and spent exactly once. It needs observed CI before it can be
-promoted to VERIFIED.
+None in flight. **NEX-013 is VERIFIED** — approvals are bounded in time and
+spent exactly once, with local gates and CI both observed green.
 
-Next dependency-ready work: observe CI on the NEX-013 commit, then continue the
-Phase 5 slice sequence — see Next Best Actions and the Phase 5 section of
-`ROADMAP.md`.
+Next dependency-ready work: the next Phase 5 slice — see Next Best Actions and
+the Phase 5 section of `ROADMAP.md`.
 
 
 ## Last completed task
@@ -315,9 +313,10 @@ The organization slice is implemented across all layers:
 | Migration chain | new head `d4c8e2a71f05`; verified upgrade → downgrade → upgrade round-trip and the backfill on a **non-empty** table |
 | Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
 
-> **CI is the evidence.** The last commit with observed green CI is `3aade7c`
-> (4/4 check runs). NEX-013's commit is **TESTED only** — CI has not been observed
-> for it. Local gates are recorded above for reproducibility, not as proof (R10).
+> **CI is the evidence.** The last commit with observed green CI is `e2bf7bc`
+> (run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156),
+> `completed/success`), which contains NEX-013. NEX-013 is therefore VERIFIED.
+> Local gates are recorded above for reproducibility, not as proof (R10).
 
 ## Blockers
 
@@ -398,17 +397,18 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Observe CI on the NEX-013 commit, then promote it to VERIFIED** (or fix what
-   CI finds). It is TESTED only right now; local gates are not evidence (R10).
-2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
+1. **Next dependency-ready slice (P2, Phase 5).** The durable runtime is reachable
    over HTTP, its audit trail is readable and tamper-evident, and approvals are
-   now bounded and single-use. Re-read the Phase 5 section of `ROADMAP.md` before
+   bounded and single-use. Re-read the Phase 5 section of `ROADMAP.md` before
    choosing; do not invent a slice from the last run's summary alone.
-3. **Keep the PR #3 body measured, not remembered.** It has understated this
+2. **Keep the PR #3 body measured, not remembered.** It has understated this
    branch on every recent run. Recompute with `git diff --shortstat main...HEAD`
    and `pytest --collect-only -o addopts=""` — the repo's `addopts = "-q"` hides
    the count line, and a plain `pytest --collect-only -q | grep -c ::` returns 0.
    It must also be refreshed for NEX-013 (new migration, new counts).
+3. **Consider tightening `expires_at` to NOT NULL (R16)** once no pre-NEX-013
+   writer can exist. Today NULL means "never expires", kept only for
+   rolling-deploy compatibility.
 
 **Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP, NEX-011
 and NEX-012 each reached TESTED on local runs and then VERIFIED only when CI went
