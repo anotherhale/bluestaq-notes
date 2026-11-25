@@ -4917,3 +4917,121 @@ by default must be checked in the code before it is built on.
 
 Secondary and unchanged: the `nexus037-duplicate-local` decision.
 
+
+## Run `NEX-2026-11-25-41` — 2026-11-25T19:46Z → 2026-11-25T20:15Z
+
+**Run ID:** `NEX-2026-11-25-41`
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `49814cc` (remote head; local clone was shallow at `f4388fc`)
+**Ending commit:** `6e7141e` (implementation; docs commit follows)
+**Task:** NEX-041 — coordination substrate (lease + claims)
+
+### Reconciliation at start
+
+The local clone was **shallow at `f4388fc`**, three commits behind the remote
+(`49814cc`): NEX-039's delivery, NEX-040's planning, and the first real
+`DecisionProvider` adapter. `git status -sb` reported `main`, not the authorized
+branch. Before switching I checked for uncommitted work and found only untracked
+`tools/` and modified `pyproject.toml` from the interrupted previous run — no
+tracked-file modifications, so a fast-forward could not lose anything. Verified
+`f4388fc` was a strict ancestor of `49814cc` (`merge-base --is-ancestor`), then
+fast-forwarded and checked out the authorized branch. Untracked work preserved
+throughout; nothing reset, nothing cleaned.
+
+### Why this slice, ahead of NEX-040
+
+NEX-040 remains the next decisioning slice and is untouched. This was taken first
+because it is a hazard to *every* run, including the one that would implement
+NEX-040.
+
+NEXUS coordinates through plain files on one git branch. A branch is
+last-writer-wins at file level, so two overlapping runs that both read
+`CHECKPOINT.json`, both edit it, and both push leave a tree containing one of the
+two edits, chosen by push order. **Nothing errors.** The losing run reports
+success and its state update is gone. That is visible in this programme's own
+history: runs opening several commits behind the remote, and this run opening
+three behind. A substrate whose failure mode is silent loss cannot be made
+reliable by being careful, because the failure is invisible to the agent causing
+it.
+
+### Delivered
+
+`tools/nexus_coord` — the atomic primitive, built on git refs, the only
+server-side compare-and-swap available without new infrastructure:
+
+- `refs/locks/nexus/lease` — single-writer lease; holder, expiry and run id in
+  the commit message. 45-minute TTL against a 30-minute run cap, so a healthy run
+  never loses it but a crashed one frees it quickly.
+- `refs/claims/nexus/<task>` — per-task claim. Creating a ref is atomic, so
+  exactly one agent wins a task. Reported stale after `STALE_AFTER_SECONDS`,
+  never taken over silently: the original holder may still be alive.
+- Every mutation is a compare-and-swap the remote enforces — plain push to
+  acquire, `--force-with-lease=<observed sha>` to take over or renew, sha-guarded
+  delete to release. Nothing uses `--force`; nothing resets or cleans.
+
+Design reasoning and rejected alternatives (branch lockfile, DB row, lock
+service, force pushes, scheduler-only serialisation) are in **ADR-013**.
+
+### A gate-wiring defect caught before it shipped
+
+The 32 tests were written at `tools/tests/`. `pyproject.toml` sets
+`testpaths = ["tests"]`, so **CI would never have collected them** — 32 tests
+passing locally, zero running in CI, and the suite reporting green either way.
+That is the same class of defect as the coordination bug this slice fixes: a
+green result that does not mean what it appears to. Relocated to
+`tests/coordination/`, and `ruff` `src` plus the `mypy` `packages` list now
+include `tools` and `nexus_coord` so the package is linted and strict-typed
+rather than escaping both (mypy 109 → 115 source files).
+
+### Validation
+
+- `ruff format --check` clean (240 files); `ruff check` clean.
+- `mypy` strict: **no issues in 115 source files**.
+- `pytest`: **1016 passed, 4 skipped**. Baseline **measured, not inferred** —
+  984 with `tests/coordination` ignored, plus exactly 32 in that directory.
+- **Negative control:** replacing the live-lease guard in `acquire()` with
+  `if False:` turned `test_second_agent_is_refused_while_the_first_holds_it`
+  **red** (1 failed, 31 passed). `lease.py` restored from backup, guard re-grepped
+  (1 match), then pytest 32 passed, ruff clean, mypy 115 clean. The tests detect a
+  broken CAS; they are not merely passing.
+- **CI: 4/4 `completed/success` at `6e7141e`**, every check run reporting
+  `head_sha` `6e7141e`, polled 2026-11-25T20:0xZ. A plain green-at-this-SHA claim:
+  the polled SHA is the head CI built.
+
+### A tenth heredoc corruption — and what it cost
+
+While updating `STATE.md` I used a heredoc for a Python payload, against a rule
+already in memory from nine prior occurrences. The payload was mangled into a
+wall of repeated fragments and the shell reported `SyntaxError`, so Python never
+executed. **Verified disk rather than the terminal:** `git status --porcelain`
+showed `STATE.md` unmodified and `grep -c "Base commit (run start)"` returned 1,
+confirming the file was untouched. The update was then written through the
+file-editor tool to `/tmp/nex041_state.py` and applied, with the line count
+unchanged at 1240 (rows replaced in place). No repair was needed; the lesson was
+confirmed the expensive way for the tenth time.
+
+### Delivery debt recorded, not hidden
+
+PR #3's body and tracking issue #2 do not yet carry NEX-039 or NEX-041. This is
+recorded in `CHECKPOINT.json.delivery_state` (`pr_updated: false`,
+`tracking_issue_updated: false`) and in `STATE.md`, rather than being left as an
+unstated gap for the next run to discover.
+
+### Correction: mislabelled commit subject
+
+`6e7141e`'s subject reads `(NEX-040)`; the slice is **NEX-041**. NEX-040 is the
+decisioning task and is untouched. The mistake is in the commit *subject* only —
+`CHECKPOINT.json`, `STATE.md`, `BACKLOG.md` and ADR-013 all correctly name
+NEX-041. It is not corrected by rewriting history: `6e7141e` is already pushed and
+force-pushing is prohibited. The mapping is recorded here so a future reader
+grepping commit subjects is not misled into thinking NEX-040 shipped.
+
+### Next action
+
+**NEX-040, unchanged:** verify whether any production route actually reaches a
+configured live vendor. The adapter exists and the container selects a provider,
+but "nothing configures one by default" is a claim to check in the code before
+building on it.
+
+Secondary: post NEX-039 and NEX-041 to PR #3 and issue #2 to clear the delivery
+debt.

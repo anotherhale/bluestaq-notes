@@ -2191,3 +2191,93 @@ The adapter exists and the container selects one, but "nothing configures one by
 a claim to check in the code before building on it — the last several `next_action` fields
 each needed correcting.
 
+## NEX-041 (run `NEX-2026-11-25-41`) — the coordination substrate had no compare-and-swap
+
+### Why this slice, ahead of NEX-040
+
+NEX-040 is the next decisioning slice and remains unstarted; nothing here changes it. This
+slice was taken first because it is a **hazard to every run**, including the one that would
+implement NEX-040.
+
+NEXUS coordinates through plain files on one git branch. A git branch is last-writer-wins at
+file level. Two runs that both read `CHECKPOINT.json`, both edit it, and both push produce a
+tree containing one of the two edits, chosen by push order rather than intent. **Nothing
+errors.** The losing run reports success and its state update is simply gone.
+
+That is not hypothetical in this repository. The execution log records runs whose opening
+reconciliation found the local branch commits behind the remote, including `NEX-2026-11-25-37`
+which had to fast-forward four commits before it could begin, and this run itself opened on a
+shallow local `f4388fc` while the remote was at `49814cc` — three commits of NEX-039 work it
+had never seen. A substrate whose failure mode is silent data loss cannot be made reliable by
+being careful, because the failure is invisible to the agent causing it.
+
+### What shipped
+
+`tools/nexus_coord`, built on the only server-side compare-and-swap available without new
+infrastructure: git refs.
+
+| Ref | Purpose |
+| --- | --- |
+| `refs/locks/nexus/lease` | single-writer lease; holder, expiry, run id in the commit message |
+| `refs/claims/nexus/<task>` | per-task claim; creating a ref is atomic, so exactly one agent wins |
+
+Every mutation is a compare-and-swap the remote enforces:
+
+- acquire a free lock — plain push; a second writer is rejected non-fast-forward
+- acquire an expired lock, or renew — `--force-with-lease=<observed sha>`; refused if anyone
+  moved it in between
+- release — delete guarded by the sha we hold
+
+Nothing uses `--force`, and nothing resets or cleans. `--force-with-lease` is the opposite of
+a force push: it *refuses* to write when the remote has moved since the caller looked.
+
+### The two design decisions that matter
+
+**The lease is bounded, not permanent.** A run that dies must not block the programme until a
+human notices. Expiry travels inside the lease, so any agent can decide — without trusting the
+holder — whether the lock is live. Expiry is deliberately not treated as correctness: a holder
+whose lease expires mid-run can be superseded, so it must renew inside the window and must stop
+writing if renewal fails. TTL is 45 minutes against a 30-minute run cap, so a healthy run never
+loses it but a crashed one frees it quickly.
+
+**Claims are reported stale, never taken over.** A task may legitimately take hours, so a claim
+has no expiry. One older than `STALE_AFTER_SECONDS` is *reported* as stale so a human or an
+explicit takeover can clear it. Silently reassigning long-running work would be worse than
+asking, because the original holder may still be alive and about to push.
+
+### A gate-wiring defect caught before it shipped
+
+The tests were originally at `tools/tests/`. `pyproject.toml` sets `testpaths = ["tests"]`, so
+CI would **never have run them** — 32 tests passing locally and zero running in CI, with the
+suite reporting green either way. They now live at `tests/coordination/`. `ruff` `src` and the
+`mypy` `packages` list also gained `tools` and `nexus_coord`, so the package is linted and
+strict-typed in CI rather than escaping both (mypy 109 → 115 source files).
+
+### Validation
+
+- `ruff format --check` clean (240 files), `ruff check` clean, `mypy` strict clean over 115 files.
+- `pytest`: **1016 passed / 4 skipped**. Baseline **measured**, not inferred — 984 with
+  `tests/coordination` ignored, plus exactly 32 in that directory.
+- **Negative control:** replacing the live-lease guard in `acquire()` with `if False:` turns
+  `test_second_agent_is_refused_while_the_first_holds_it` red. File restored from backup and
+  re-verified green, with `ruff` and `mypy` re-run afterwards.
+- **CI: 4/4 `completed/success` at `6e7141e`**, every check run reporting `head_sha` `6e7141e`
+  (Backend and Frontend, one pair per push and pull_request event), polled 2026-11-25T20:0xZ.
+
+### Recorded limits
+
+Stated in ADR-013 rather than left for a reader to discover:
+
+- The primitive coordinates agents **that use it**. It cannot stop a run that ignores the lease
+  from pushing anyway — enforcement is convention, not server policy. This is why it is a tool,
+  not a gate.
+- Ref names are repository-global, so the lock is per-repository, not per-branch.
+- Expiry is compared against the local clock; a badly skewed host can misjudge a live lease.
+  The TTL absorbs ordinary skew, not a wrong clock.
+- `commit-tree` leaves dangling commits; they are unreachable and garbage-collected.
+
+### Next
+
+**NEX-040, unchanged:** verify whether any production route actually reaches a configured live
+vendor. The adapter exists and the container selects one, but "nothing configures one by
+default" is a claim to check in the code before building on it.
