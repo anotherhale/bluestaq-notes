@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 120
     rate_limit_window_seconds: int = 60
 
+    # -- decisioning ------------------------------------------------------
+    # Off by default. Judgment is an enhancement, never a precondition: with the
+    # flag off every evaluation abstains and deterministic behaviour applies.
+    decisioning_enabled: bool = False
+    # Confidence a provider must reach before its opinion is usable at all.
+    decisioning_min_confidence: float = 0.5
+
     # -- logging ----------------------------------------------------------
     log_level: str = "INFO"
     log_json: bool = True

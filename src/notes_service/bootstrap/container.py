@@ -62,6 +62,7 @@ from notes_service.application.use_cases.authentication import (
 )
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.base import UseCase
+from notes_service.application.use_cases.decisioning import EvaluateDecision
 from notes_service.application.use_cases.folders import (
     CreateFolder,
     DeleteFolder,
@@ -117,6 +118,7 @@ from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.bootstrap.config import Settings
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
 from notes_service.infrastructure.identity.demo_provider import DemoIdentityProvider
 from notes_service.infrastructure.identity.oidc_provider import OidcIdentityProvider
 from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRelyingParty
@@ -237,6 +239,12 @@ class Container:
     resolve_interrupted_step: Callable[[], ResolveInterruptedStep]
     abort_agent_run: Callable[[], AbortAgentRun]
 
+    # Judgment. ``evaluate_decision`` asks the configured provider one bounded
+    # question. It is the *only* route to a decision, so the disabled flag, the
+    # confidence threshold, and malformed-output policing apply to every caller.
+    # Nothing it returns can grant authority.
+    evaluate_decision: Callable[[], EvaluateDecision]
+
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
     """Construct the full dependency graph from validated settings.
@@ -337,6 +345,16 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         limit=settings.rate_limit_requests,
         window_seconds=settings.rate_limit_window_seconds,
     )
+
+    # The stub is the only adapter today. It is deterministic and abstains under
+    # any real threshold, so enabling the flag alone does not start handing out
+    # opinions; a real provider is a separate, reviewed slice.
+    def make_decision_evaluator() -> EvaluateDecision:
+        return EvaluateDecision(
+            provider=StubDecisionProvider(),
+            enabled=settings.decisioning_enabled,
+            min_confidence=settings.decisioning_min_confidence,
+        )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:
@@ -482,4 +500,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         list_agent_runs=make(ListAgentRuns),
         resolve_interrupted_step=make(ResolveInterruptedStep),
         abort_agent_run=make(AbortAgentRun),
+        evaluate_decision=make_decision_evaluator,
     )
