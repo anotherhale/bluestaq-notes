@@ -7,25 +7,51 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED; OIDC verifier now TESTED) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `5ecfd3f` |
-| Head commit (run end) | `e1cb0c5` |
+| Base commit (run start) | `e93a3e9` |
+| Head commit (run end) | _set after commit_ |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-007** is **VERIFIED** at `e1cb0c5` — committed, pushed,
-local gates green, and CI green on that commit (4/4 check runs
-`completed/success`). The next dependency-ready task is **NEX-009** (durable
-agentic runtime, renumbered from a duplicate NEX-006 id); see Next best actions.
+None in flight. **NEX-010** is **TESTED** (run `NEX-2026-11-25-07`) — committed
+and pushed, local gates green; it becomes **VERIFIED** when CI is green on the
+commit carrying it. The next dependency-ready task is **NEX-009** (durable
+agentic runtime); see Next best actions.
 
 
 ## Last completed task
 
-**NEX-007 — Tenant-scoped capability answer** (run `NEX-2026-11-25-06`,
+**NEX-010 — Direct tests for the OIDC token verifier** (run `NEX-2026-11-25-07`).
+`HttpOidcRelyingParty._verify_id_token` was the only security-critical code in the
+identity stack that **no test imported**: every login test injected
+`FakeRelyingParty`, so NEX-002's criterion "an ID token with wrong
+issuer/audience/expiry is rejected" was asserted only against the fake. It now
+has `tests/authentication/test_oidc_relying_party.py` — 21 tests using real
+in-process RSA keys and real RS256 signatures, stubbing only the JWKS lookup so
+no network is touched.
+
+The point of the slice was that the tests must be able to *fail*, so that was
+proved by mutation rather than assumed: disabling `verify_aud`, `verify_iss`,
+`verify_exp`, `verify_iat`, `verify_signature`, the nonce check, the nonce
+comparison, the blank-subject guard, or the algorithm allowlist each turned the
+suite red. (Deleting the `"require"` list survives — it is defence in depth, not
+the enforcing mechanism; the behaviour it guards is still pinned by
+`test_token_without_{expiry,issued_at,issuer,audience}_is_rejected`.)
+
+Writing the tests found a **real defect**, fixed in this slice: the nonce
+comparison called `secrets.compare_digest(nonce, expected_nonce)` on `str`, which
+raises `TypeError: comparing strings with non-ASCII characters is not supported`
+when the untrusted `nonce` claim contains non-ASCII. A hostile IdP response
+therefore produced a **500 at the edge** instead of a refusal. It now compares
+UTF-8 encodings — still constant-time, and unable to raise.
+
+NEX-002 moves **IMPLEMENTED → TESTED** on this evidence.
+
+Previously, **NEX-007 — Tenant-scoped capability answer** (run `NEX-2026-11-25-06`,
 `e1cb0c5`). `ListMyOrganizations` filtered on membership rows alone, so a
 **suspended or archived tenant was listed with its full capability set** while
 `GetOrganization` refused the same tenant with `404` — a client would render a
@@ -120,9 +146,9 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-06`, at `e1cb0c5`) |
+| Gate | Result (run `NEX-2026-11-25-07`, pre-commit) |
 | --- | --- |
-| `pytest` (full) | **614 passed, 4 skipped** (618 collected) |
+| `pytest` (full) | **639 passed, 4 skipped** (643 collected, 0 failures/errors) |
 | `pytest tests/architecture` | passed (layering invariant intact) |
 | `ruff format --check` | clean |
 | `ruff check` | clean |
@@ -130,12 +156,11 @@ The organization slice is implemented across all layers:
 | Frontend `typecheck`/`lint`/`test`/`build` | passed at `3f1d855` (127 tests, 9 files); no frontend files changed since |
 | `alembic upgrade head` → `downgrade base` | passed on fresh SQLite (unchanged this run) |
 
-> Local gates are **not** CI evidence, so CI was observed separately. On
-> `e1cb0c5` (this run's commit) both the push and pull_request runs succeeded;
-> all four check runs report `completed/success` — Backend
-> ruff+mypy+pytest+migrations ×2, Frontend typecheck+lint+test+build ×2. CI is
-> **verified green at `e1cb0c5`**. CI earned that trust earlier by catching a real
-> defect on its first execution — see the R3 entry and NEX-008 in `BACKLOG.md`.
+> Local gates are **not** CI evidence. CI is green at `e1cb0c5` (4/4 check runs
+> `completed/success`); this run's commit still needs its own CI result before
+> NEX-010 and NEX-002 can be called **VERIFIED**. CI earned that trust earlier by
+> catching a real defect on its first execution — see the R3 entry and NEX-008 in
+> `BACKLOG.md`.
 
 ## Blockers
 
@@ -189,21 +214,18 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-010 — Direct tests for the OIDC token verifier** (P1, small, newly
-   filed): `HttpOidcRelyingParty._verify_id_token` — the only code that checks a
-   token's signature, `iss`, `aud`, `exp`/`iat`, and nonce — is imported by **no
-   test**; every login test injects `FakeRelyingParty`. NEX-002's criterion "an ID
-   token with wrong issuer/audience/expiry is rejected" is therefore asserted only
-   against the fake. Write `tests/authentication/test_oidc_relying_party.py` with
-   in-process RSA keys and a stubbed JWKS lookup. Full spec in the backlog.
-2. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
+1. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
    runs checkpoint progress and resume after interruption without repeating
-   completed side effects. NEX-005 and NEX-007 are done, so this is
-   dependency-ready, but it is *large* — scope the first slice to run-checkpoint
-   persistence plus a resume test rather than attempting the whole task. (P2.)
-3. **Keep PR #3 honest as slices accumulate.** The body was refreshed this run
-   (title now "Implement enterprise organization, identity, delegation, and tool
-   gateway"; 20,576 insertions / 89 files / 614 tests). Re-check
-   `git diff --stat main...HEAD` against the body whenever a slice lands, because
-   the body has understated the branch before.
+   completed side effects. NEX-005, NEX-007, and now NEX-010 are done, so this is
+   the highest-value dependency-ready task — but it is *large*. Scope the first
+   slice to run-checkpoint persistence plus a resume test rather than attempting
+   the whole task. (P2.)
+2. **Confirm CI on the NEX-010 commit.** Once the run that carries
+   `tests/authentication/test_oidc_relying_party.py` reports green check runs,
+   move **NEX-010** and **NEX-002** from TESTED to VERIFIED. Do not promote them
+   on local gates alone — that is exactly the conflation R9 was filed about.
+3. **Keep PR #3 honest as slices accumulate.** The body records 20,576 insertions
+   / 89 files / 614 tests as of `e1cb0c5`; this run adds a test module and a
+   production fix. Re-check `git diff --stat main...HEAD` against the body
+   whenever a slice lands, because the body has understated the branch before.
 

@@ -955,3 +955,102 @@ kill boundary. The next run starts there with a fully specified task.
 Write `tests/authentication/test_oidc_relying_party.py` per NEX-010, then promote
 NEX-002 to TESTED (and VERIFIED once CI confirms).
 
+---
+
+## Run NEX-2026-11-25-07 — 2026-11-25T03:31Z–03:45Z
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `e93a3e9` |
+| Ending commit | _this commit_ |
+| Task | **NEX-010** — direct tests for the OIDC token verifier |
+| Status reached | **TESTED** (local gates green); CI pending |
+
+### What was built
+
+`tests/authentication/test_oidc_relying_party.py` — 21 tests that import
+`HttpOidcRelyingParty` itself, generate RSA keys in-process, and sign real RS256
+tokens. Only `PyJWKClient.get_signing_key_from_jwt` is stubbed, so the signature,
+`iss`, `aud`, `exp`/`iat`, nonce, and subject checks all run for real and no
+network is touched.
+
+Coverage: valid token → `VerifiedIdToken` with expected claims; wrong signing key;
+wrong `iss`; wrong `aud`; expired `exp`; future `iat`; nonce mismatch; absent
+nonce; non-ASCII nonce; blank `sub`; `alg: none`; and an HS256 token crafted to
+use the public key as an HMAC secret (algorithm-confusion). Plus construction
+refusing an unsafe algorithm list and the authorization URL carrying PKCE + nonce.
+
+### The tests were proved able to fail
+
+A green suite proves nothing unless it can go red, so each guard was disabled in
+turn and the suite re-run:
+
+| Guard disabled | Result |
+| --- | --- |
+| `verify_aud` | caught |
+| `verify_iss` | caught |
+| `verify_exp` | caught |
+| `verify_iat` | caught |
+| `verify_signature` | caught |
+| nonce check | caught |
+| nonce comparison | caught |
+| blank-subject guard | caught |
+| algorithm allowlist | caught |
+| `"require"` claim list | **survived** |
+
+The `"require"` survival is not a gap: `issuer=`/`audience=` and the
+`_as_datetime` timestamp guard already refuse those tokens, so the list is defence
+in depth rather than the enforcing mechanism. The *behaviour* is still pinned —
+`test_token_without_{expiry,issued_at,issuer,audience}_is_rejected` and
+`test_required_claims_must_be_present` go red if the gap ever opens.
+
+### Real defect found and fixed
+
+The nonce comparison was:
+
+```python
+secrets.compare_digest(nonce, expected_nonce)   # both str
+```
+
+`compare_digest` on `str` raises `TypeError: comparing strings with non-ASCII
+characters is not supported`. The `nonce` claim comes from the IdP and is
+untrusted, so a non-ASCII nonce produced a **500 at the edge** instead of an
+`AuthenticationError` — an unhandled exception in the one function that decides
+whether a login token is genuine. Fixed by comparing UTF-8 encodings:
+
+```python
+secrets.compare_digest(
+    nonce.encode("utf-8", "surrogatepass"), expected_nonce.encode("utf-8")
+)
+```
+
+Still constant-time, and now unable to raise for any claim value. Confirmed
+load-bearing: reverting just this line turns
+`test_non_ascii_nonce_is_a_refusal_not_a_crash` red.
+
+### Gates
+
+`pytest` full suite **639 passed, 4 skipped, 643 collected, 0 failures/errors**
+(counted from JUnit XML — this project's pytest config suppresses the summary
+line, so parsing stdout silently yields nothing). `ruff format` and `ruff check`
+clean, `mypy` clean across 94 source files, `tests/architecture` green.
+
+### Files changed
+
+`tests/authentication/test_oidc_relying_party.py` (new, 311 lines),
+`src/notes_service/infrastructure/identity/oidc_relying_party.py` (nonce guard,
++7/−2), `docs/NEXUS/{BACKLOG,STATE,CHECKPOINT,EXECUTION_LOG}`.
+
+### Not claimed
+
+NEX-010 and NEX-002 are **TESTED**, not VERIFIED. Local gates are not CI
+evidence, and this run's commit has no CI result yet. Promoting them on local
+green alone would repeat exactly the conflation that produced R9.
+
+### Next exact action
+
+Read the check runs for this commit; on green, promote NEX-010 and NEX-002 to
+VERIFIED. Then start NEX-009 with the first slice scoped to run-checkpoint
+persistence plus a resume test.
+

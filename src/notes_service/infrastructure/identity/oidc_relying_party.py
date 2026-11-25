@@ -165,9 +165,14 @@ class HttpOidcRelyingParty:
             raise AuthenticationError("identity token failed validation") from exc
 
         nonce = claims.get("nonce")
-        if not isinstance(nonce, str) or not secrets.compare_digest(nonce, expected_nonce):
+        if not isinstance(nonce, str) or not secrets.compare_digest(
+            nonce.encode("utf-8", "surrogatepass"), expected_nonce.encode("utf-8")
+        ):
             # A missing or mismatched nonce means the token was not minted for
-            # this login attempt: a replay or an injected token.
+            # this login attempt: a replay or an injected token. Comparing the
+            # UTF-8 encodings keeps this constant-time for any claim value;
+            # compare_digest on str raises TypeError for non-ASCII, which would
+            # turn a hostile token into a 500 instead of a refusal.
             raise AuthenticationError("identity token nonce does not match this login")
 
         subject = claims.get("sub")

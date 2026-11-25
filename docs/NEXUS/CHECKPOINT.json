@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-06",
-  "timestamp": "2026-11-25T03:22:00Z",
+  "run_id": "NEX-2026-11-25-07",
+  "timestamp": "2026-11-25T03:45:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "e93a3e9",
   "commit_note": "The last commit whose gates and CI were verified (4/4 green). The docs commit recording this run is its child.",
-  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED)",
+  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED; OIDC verifier now TESTED)",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
-    "NEX-002": "IMPLEMENTED",
+    "NEX-002": "TESTED",
     "NEX-006": "TESTED",
     "NEX-003": "TESTED",
     "NEX-005": "VERIFIED",
@@ -18,7 +18,7 @@
     "NEX-007": "VERIFIED",
     "NEX-005-HTTP": "VERIFIED",
     "NEX-008": "VERIFIED",
-    "NEX-010": "TODO"
+    "NEX-010": "TESTED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -28,22 +28,24 @@
     "NEX-004",
     "NEX-008",
     "NEX-005-HTTP",
-    "NEX-007"
+    "NEX-007",
+    "NEX-010"
   ],
   "validation": {
-    "pytest_full": "614 passed, 4 skipped (618 collected)",
+    "pytest_full": "639 passed, 4 skipped (643 collected, 0 failures/errors) - counted from JUnit XML because this project's pytest config suppresses the summary line",
     "pytest_architecture": "passed (within full suite)",
     "ruff_format": "clean",
     "ruff_check": "clean",
     "mypy": "clean (94 source files)",
     "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed at 3f1d855; no frontend files changed since",
     "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
-    "ci_observed": true,
-    "ci_note": "CI is green on e93a3e9: the check-runs API reports 4 check runs, all completed/success (Backend ruff+mypy+pytest+migrations x2, Frontend typecheck+lint+test+build x2). Confirmed against the authoritative remote (git ls-remote and the branches API both report e93a3e9), not the cached origin/ ref, which was stale.",
+    "mutation_check": "each of verify_aud, verify_iss, verify_exp, verify_iat, verify_signature, the nonce check, the nonce comparison, the blank-subject guard, and the algorithm allowlist was disabled in turn and each produced a red suite; deleting the 'require' claim list survives because issuer=/audience= and the _as_datetime guard already refuse those tokens",
+    "ci_observed": false,
+    "ci_note": "CI is green at e1cb0c5 (4/4 check runs completed/success). The commit from this run has no CI result yet, so NEX-010 and NEX-002 are TESTED, not VERIFIED.",
     "verified_at_commit": "e1cb0c5",
     "verified_by_run": "NEX-2026-11-25-06"
   },
-  "uncommitted_work": "none after this run commits the docs update (BACKLOG, STATE, CHECKPOINT, EXECUTION_LOG)",
+  "uncommitted_work": "none after this run commits: the new test module, the nonce fix, and the docs update (BACKLOG, STATE, CHECKPOINT, EXECUTION_LOG)",
   "pr_state": {
     "pr": 3,
     "state": "draft",
@@ -63,11 +65,11 @@
     "R5 (CLOSED 2026-11-25): the gateway had no HTTP exposure. POST /api/v1/agents/tools/invoke now exposes it, pinned by tests/api/test_tool_gateway_api.py (9 tests) and green in CI at c18bac7.",
     "R6 (CLOSED 2026-11-25): gateway denial replay and revocation mapping are pinned by tests/agent/test_tool_gateway.py; keep that file or both defects can return silently.",
     "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers.",
-    "R9 (NEW 2026-11-25, OPEN): the OIDC token verifier (HttpOidcRelyingParty._verify_id_token) has no direct test. No file under tests/ imports infrastructure/identity/oidc_relying_party; every login test injects FakeRelyingParty. So NEX-002 criterion \"wrong issuer/audience/expiry is rejected\" is asserted only against the fake, and the real signature/iss/aud/exp/nonce checks could regress with a green suite. Filed as NEX-010 (P1, small)."
+    "R9 (CLOSED 2026-11-25, run NEX-2026-11-25-07, NEX-010): the OIDC token verifier (HttpOidcRelyingParty._verify_id_token) had no direct test; no file under tests/ imported infrastructure/identity/oidc_relying_party and every login test injected FakeRelyingParty, so the real signature/iss/aud/exp/nonce checks could regress with a green suite. Now pinned by tests/authentication/test_oidc_relying_party.py (21 tests, real in-process RSA keys, only the JWKS lookup stubbed), with each guard proved load-bearing by mutation. Writing it found and fixed a real defect: a non-ASCII nonce claim raised TypeError out of secrets.compare_digest on str, so a hostile token produced a 500 instead of a refusal. Residual: the JWKS client itself is still stubbed, so network key discovery remains untested by design."
   ],
-  "next_task": "NEX-010",
-  "next_action": "Write tests/authentication/test_oidc_relying_party.py (NEX-010): generate an RSA key pair in-process, sign real JWTs, stub only PyJWKClient.get_signing_key_from_jwt, and assert AuthenticationError for a wrong signing key, wrong iss, wrong aud, expired exp, nonce mismatch, absent nonce, and missing sub; assert a valid token yields VerifiedIdToken. Then NEX-002 can move from IMPLEMENTED to TESTED.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform, head e93a3e9 (remote confirmed via ls-remote). NEX-007 VERIFIED; NEX-002 IMPLEMENTED with its only gap being the untested verifier (NEX-010). NEX-009 (durable runtime) is dependency-ready but large; slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
+  "next_task": "NEX-009",
+  "next_action": "Read the check runs for this run's commit; on green, promote NEX-010 and NEX-002 from TESTED to VERIFIED. Then start NEX-009 (durable agentic runtime) with the first slice scoped to run-checkpoint persistence plus a resume test rather than the whole task: prove a run that checkpoints progress resumes after interruption without repeating completed side effects.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-010 and NEX-002 are TESTED (local gates green, CI pending on this commit); everything through NEX-008 plus NEX-007 is VERIFIED. Confirm CI before promoting anything. NEX-009 (durable runtime) is the next dependency-ready task and is large - slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,

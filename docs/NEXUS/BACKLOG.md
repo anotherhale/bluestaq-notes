@@ -51,7 +51,7 @@ skipped.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 |
-| Status | **IMPLEMENTED** (not TESTED — see gap note) |
+| Status | **TESTED** (local gates green; awaiting CI — was IMPLEMENTED pending NEX-010) |
 | Dependencies | NEX-001 |
 
 **Objective:** replace demo-only authentication with a real OIDC authorization-
@@ -102,6 +102,16 @@ assertions in `test_login_router.py:202`, and the production demo-auth refusals
 in `test_identity_provider.py`).
 
 Closing the gap is a bounded, well-specified slice — see NEX-010.
+
+**Gap closed (NEX-2026-11-25-07, NEX-010):** the verifier now has direct tests —
+`tests/authentication/test_oidc_relying_party.py`, 21 tests importing
+`HttpOidcRelyingParty` itself with real in-process RSA keys and real RS256
+signatures. Each `jwt.decode` option and the nonce check is pinned by a test that
+goes red when that option is removed (verified by mutation). Writing them found a
+real defect — a non-ASCII `nonce` claim raised `TypeError` out of
+`secrets.compare_digest` on `str`, turning a hostile token into a 500 instead of a
+refusal — now fixed. The criterion above is covered; NEX-002 is **TESTED** and
+becomes **VERIFIED** once CI is green on the commit carrying that file.
 
 ---
 
@@ -469,7 +479,7 @@ push and pull request, and it has demonstrably caught a real defect.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 (security — closes an unverified acceptance criterion) |
-| Status | TODO |
+| Status | **TESTED** (local gates green; awaiting CI) |
 | Dependencies | NEX-002 |
 | Complexity | small |
 
@@ -505,4 +515,34 @@ move to TESTED, and to VERIFIED once CI confirms it.
 
 **Security considerations:** test keys are generated in-process and never
 committed; no real IdP is contacted; no secrets in fixtures.
+
+**Outcome (run `NEX-2026-11-25-07`):** delivered —
+`tests/authentication/test_oidc_relying_party.py`, 21 tests, real in-process RSA
+keys and real RS256 signatures with only `PyJWKClient.get_signing_key_from_jwt`
+stubbed.
+
+Writing the tests found a **real production defect**, fixed here: the nonce
+comparison was `secrets.compare_digest(nonce, expected_nonce)` on `str`, which
+raises `TypeError: comparing strings with non-ASCII characters is not supported`
+whenever the untrusted `nonce` claim contains non-ASCII. A hostile or merely
+misbehaving IdP response therefore produced a **500 at the edge** instead of an
+`AuthenticationError` refusal — a fail-open-on-availability path in the one
+function that decides whether a login token is genuine. It now compares the
+UTF-8 encodings, which keeps the comparison constant-time for any claim value
+and cannot raise.
+
+The acceptance criterion ("a test fails if the corresponding `jwt.decode` option
+or the nonce check is removed") was verified by mutation, not assumed: each of
+`verify_aud`, `verify_iss`, `verify_exp`, `verify_iat`, `verify_signature`, the
+nonce check, the nonce comparison, the blank-subject guard, and the algorithm
+allowlist was disabled in turn, and each produced a red suite. The one mutation
+that survives is deleting the `"require"` list — it is genuine defence in depth
+rather than the enforcing mechanism, because `issuer=`/`audience=` and the
+`_as_datetime` timestamp guard already refuse those tokens. The behaviour is
+still pinned by `test_token_without_{expiry,issued_at,issuer,audience}_is_rejected`
+and `test_required_claims_must_be_present`, so a future edit that opens the gap
+is caught even though that particular line is redundant.
+
+**Remaining step to VERIFIED:** CI green on the commit carrying this file.
+NEX-002 likewise moves to TESTED now and to VERIFIED with that CI evidence.
 
