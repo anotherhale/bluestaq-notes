@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-25-33",
   "timestamp": "2026-11-25T15:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "PENDING_FILL",
+  "commit": "3fc6464",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-028 all VERIFIED. NEX-029 (give the judgment path its first production caller) is IMPLEMENTED, TESTED and PUSHED at f71745e but NOT yet VERIFIED: its CI has not been polled. M2.6 decisioning now has a live route; R31 is partially mitigated (the context bounds have now met a real approval record, but not real note text).",
   "active_task": null,
   "task_statuses": {
@@ -194,7 +194,7 @@
   ],
   "next_task": "Refresh PR #3 body at the current head (counters re-measured from the PR object, not from memory) and update tracking issue #2 with NEX-029 and NEX-030 as VERIFIED. Then select the next dependency-ready slice: the decisioning path's next honest gap is that ContextEnvelope bounds have never met real note text.",
   "next_action": "PATCH /pulls/3 with a body quoting the current head, then comment on issue #2 recording NEX-029 VERIFIED (descendant-CI at e3b8517) and NEX-030 VERIFIED (4/4 success at 0727628).",
-  "recovery_instructions": "Tree is clean and pushed at the docs head. Read this checkpoint, then git log --oneline -3 to confirm. R31 is closed; do not reopen it without reading ADR-012 and the ContextHash docstring's stated limit (str.__new__ still bypasses the guard by design).",
+  "recovery_instructions": "Tree is clean and pushed. HEAD is a small docs commit on top of 3fc6464 (the run's content head); `git log --oneline -3` confirms the ordering 0727628 (NEX-030 product) -> 3fc6464 (docs promotion) -> HEAD. R31 is closed; do not reopen it without reading ADR-012 and the stated limit in the ContextHash docstring (str.__new__ still bypasses the guard by design). First action next run: refresh PR #3, whose body is stale.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
     "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
@@ -238,6 +238,6 @@
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "commit = a3d1b32, the NEX-028 slice (domain module + tests + ADR-012) and the commit whose CI was polled. Every commit after it is docs-only: verify with `git log --oneline a3d1b32..HEAD --name-only`, which should list nothing outside docs/NEXUS/ and docs/ADR/. head_at_checkpoint is deliberately NOT a sha - it is the commit that contains this checkpoint file, so a recovery run must read HEAD, not this field, to find it.",
-  "head_at_checkpoint": "PENDING_FILL"
+  "commit_scope": "`commit` names the last commit carrying real content: 3fc6464, the docs promotion for run NEX-2026-11-25-33. The checkpoint cannot name its own containing commit, so a follow-up 'checkpoint self-reference' commit sits on top of it; read `git log --oneline -1` for the true HEAD. Verify `git merge-base --is-ancestor 3fc6464 HEAD` rather than string-comparing.",
+  "head_at_checkpoint": "3fc6464"
 }
