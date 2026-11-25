@@ -232,6 +232,19 @@ class RunStep:
         if now is not None:
             self.started_at = self.started_at or now
 
+    def defer(self) -> None:
+        """Return a step that never ran to ``pending``.
+
+        Only reachable when the gateway refused *before* entering a handler — a
+        pending human approval is the case this exists for. ``started`` means "the
+        handler was entered", so a step that was merely deferred must not be left
+        there: it would masquerade as an interrupted step and require an owner to
+        rule on an effect that never happened.
+        """
+        self._require(StepStatus.STARTED, action="defer")
+        self.status = StepStatus.PENDING
+        self.started_at = None
+
     def resolve_interrupted(
         self,
         *,
@@ -387,6 +400,26 @@ class AgentRun:
     ) -> None:
         self._step(step_id).fail(outcome=outcome, now=now)
         self._after_settle(now)
+
+    def defer_step(self, step_id: RunStepId, *, now: datetime | None = None) -> None:
+        """Park a step that is waiting on a human, leaving the run unfinished.
+
+        A failed step is a decision, and this is the absence of one: the step never
+        ran, so nothing has been decided and nothing can have landed. Marking it
+        failed would make the run terminal and strand the approval a human may yet
+        grant, so the run stays open with the step back at ``pending``.
+        """
+        if self.status.is_terminal:
+            raise InvariantViolation(
+                f"run {self.id} is {self.status.value} and cannot defer a step"
+            )
+        self._step(step_id).defer()
+        # Nothing is in flight and nothing failed, so the run is not "running".
+        # PENDING is the honest available state: work remains and a resume can
+        # pick it up. The reason travels to the caller as the advance's halt text
+        # and to the approver as the open approval request.
+        self.status = RunStatus.PENDING
+        self._bump(now)
 
     def _after_settle(self, now: datetime | None) -> None:
         if self.is_complete:

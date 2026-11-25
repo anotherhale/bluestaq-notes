@@ -42,14 +42,16 @@ Two limits are stated rather than implied:
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 from uuid import UUID
 
 from notes_service.application.errors import (
     AccessDenied,
     ApplicationError,
+    ApprovalRequired,
     Conflict,
     InvalidInput,
 )
@@ -67,13 +69,14 @@ from notes_service.application.use_cases.notes import (
 )
 from notes_service.domain.agent.entities import ApprovalRequest
 from notes_service.domain.agent.tools import (
+    _MAX_IDEMPOTENCY_KEY,
     InvocationStatus,
     ToolDefinition,
     ToolInvocation,
     resolve_tool,
     validate_arguments,
 )
-from notes_service.domain.agent.value_objects import TokenAudience
+from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
@@ -265,29 +268,12 @@ class InvokeTool(UseCase):
 
         approval = self._approved_request(resolved=resolved, tool=tool, resource_ref=resource_ref)
         if approval is None:
-            # Open the request rather than executing, and record the invocation
-            # as denied-for-now. The agent must come back after a human decides.
-            with self._uow_factory() as uow:
-                request = ApprovalRequest.open(
-                    agent=resolved.agent,
-                    capability=tool.capability,
-                    resource_ref=resource_ref,
-                )
-                invocation = self._begin_invocation(
-                    uow,
-                    resolved=resolved,
-                    tool=tool,
-                    cleaned=cleaned,
-                    resource_ref=resource_ref,
-                    idempotency_key=idempotency_key,
-                    approval_request_id=request.id,
-                )
-                invocation.deny(outcome=f"human approval required for {tool.capability.value}")
-                uow.approvals.add(request)
-                uow.tool_invocations.add(invocation)
-                uow.commit()
-            raise AccessDenied(
-                f"tool {tool.name} requires human approval; request {request.id} opened"
+            self._defer_awaiting_approval(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
             )
 
         # Spend the approval before the side effect, in the same transaction as
@@ -335,6 +321,49 @@ class InvokeTool(UseCase):
 
         self._finalise(invocation, failed=False, outcome="ok")
         return ToolResult(invocation=invocation, output=output)
+
+    def _defer_awaiting_approval(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+    ) -> NoReturn:
+        """Open (or reuse) an approval request and park this attempt, never failing it.
+
+        The denial is audited under a *deferred* key, not the caller's operational
+        one. ``(agent_id, idempotency_key)`` is unique, so recording the refusal
+        under the real key would permanently occupy it: the retry after a human
+        approves would find the denial, replay it, and the approval could never be
+        honoured. The deferred key keeps the audit trail complete while leaving the
+        operational key free for the attempt that actually runs.
+        """
+        deferred_key = _deferred_idempotency_key(idempotency_key)
+        with self._uow_factory() as uow:
+            request = _open_or_reuse_approval_request(
+                uow, resolved=resolved, tool=tool, resource_ref=resource_ref
+            )
+            already_recorded = uow.tool_invocations.find_by_idempotency_key(
+                resolved.agent.id, deferred_key
+            )
+            if already_recorded is None:
+                invocation = self._begin_invocation(
+                    uow,
+                    resolved=resolved,
+                    tool=tool,
+                    cleaned=cleaned,
+                    resource_ref=resource_ref,
+                    idempotency_key=deferred_key,
+                    approval_request_id=request.id,
+                )
+                invocation.deny(outcome=f"human approval required for {tool.capability.value}")
+                uow.tool_invocations.add(invocation)
+            uow.commit()
+        raise ApprovalRequired(
+            f"tool {tool.name} requires human approval; request {request.id} is awaiting a decision"
+        )
 
     def _approved_request(
         self, *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
@@ -525,6 +554,51 @@ class InvokeTool(UseCase):
             authorization=self._authorization,
             clock=self._clock,
         )
+
+
+def _deferred_idempotency_key(idempotency_key: str) -> str:
+    """A sibling key for the audit row of a deferred attempt.
+
+    Readable for short keys, and digests the operational key when the combined
+    form would exceed the column limit, so a long caller-supplied key cannot turn
+    a pause into a validation error.
+    """
+    suffix = "#awaiting-approval"
+    if len(idempotency_key) + len(suffix) <= _MAX_IDEMPOTENCY_KEY:
+        return f"{idempotency_key}{suffix}"
+    digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+    return f"deferred:{digest}"[: _MAX_IDEMPOTENCY_KEY - len(suffix)] + suffix
+
+
+def _open_or_reuse_approval_request(
+    uow: UnitOfWork,
+    *,
+    resolved: ResolvedToken,
+    tool: ToolDefinition,
+    resource_ref: str,
+) -> ApprovalRequest:
+    """Reuse this agent's open request for the same action, or open a new one.
+
+    Advancing a paused run repeatedly must not pile up duplicate requests for one
+    decision: the human revisits the queue and would face the same approval many
+    times over. Only a still-decidable request for the identical
+    (capability, resource) pair is reused; anything else opens afresh.
+    """
+    for existing in uow.approvals.list_for_agent(resolved.agent.id):
+        if (
+            existing.status is ApprovalStatus.PENDING
+            and existing.capability is tool.capability
+            and existing.resource_ref == resource_ref
+            and not existing.is_expired
+        ):
+            return existing
+    request = ApprovalRequest.open(
+        agent=resolved.agent,
+        capability=tool.capability,
+        resource_ref=resource_ref,
+    )
+    uow.approvals.add(request)
+    return request
 
 
 def _resource_ref(tool: ToolDefinition, arguments: dict[str, object]) -> str:

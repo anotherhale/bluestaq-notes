@@ -34,6 +34,19 @@ class AccessDenied(ApplicationError):
     code = "forbidden"
 
 
+class ApprovalRequired(AccessDenied):
+    """The action is permitted in principle but a human has not yet approved it.
+
+    Distinct from :class:`AccessDenied` because the correct response is to *wait*,
+    not to give up: a caller that treats this as a refusal fails work that a later
+    human decision would have allowed. It inherits the 403 mapping — the caller is
+    known and the resource is not a secret — and remains an ``AccessDenied`` so
+    existing refusal handling keeps its meaning.
+    """
+
+    code = "approval_required"
+
+
 class ResourceNotFound(ApplicationError):
     """The resource does not exist, or is deliberately hidden from the caller.
 

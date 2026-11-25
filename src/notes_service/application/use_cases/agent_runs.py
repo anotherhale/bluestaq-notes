@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from notes_service.application.errors import (
     AccessDenied,
     ApplicationError,
+    ApprovalRequired,
     InvalidInput,
     ResourceNotFound,
 )
@@ -215,6 +216,17 @@ class AdvanceAgentRun(_RunUseCase):
                     tool_name=step.tool_name,
                     arguments=step.arguments,
                     idempotency_key=step.idempotency_key,
+                )
+            except ApprovalRequired as exc:
+                # Waiting on a human is not a decision, so the step is parked and
+                # the run stays open. Failing it here would make the run terminal
+                # and strand the approval a human may still grant.
+                run.defer_step(step.id)
+                self._save(run)
+                return RunAdvance(
+                    run=run,
+                    outcomes=outcomes,
+                    halted_reason=f"awaiting human approval: {exc}",
                 )
             except ApplicationError as exc:
                 run.fail_step(step.id, outcome=f"{exc.code}: {exc}")
