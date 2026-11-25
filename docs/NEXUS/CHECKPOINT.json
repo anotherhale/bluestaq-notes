@@ -1,32 +1,34 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-24-03",
-  "timestamp": "2026-11-24T15:52:00Z",
+  "run_id": "NEX-2026-11-25-01",
+  "timestamp": "2026-11-25T01:38:35Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "bf70f40",
-  "commit_note": "the run's own commit; verified pushed via git ls-remote",
+  "commit": "74d3d98",
+  "commit_note": "fix(tool-gateway) commit; verified pushed via git ls-remote",
   "project_phase": "Phase 2 - Agent identity & delegation (tool gateway landed)",
-  "active_task": "NEX-005",
+  "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "IMPLEMENTED",
     "NEX-006": "TESTED",
     "NEX-003": "TESTED",
-    "NEX-005": "TESTED",
+    "NEX-005": "VERIFIED",
+    "NEX-005-followup": "VERIFIED",
     "NEX-004": "TODO",
     "NEX-007": "TODO"
   },
-  "completed_tasks": ["NEX-006", "NEX-003", "NEX-005"],
+  "completed_tasks": ["NEX-006", "NEX-003", "NEX-005", "NEX-005-followup"],
   "validation": {
-    "pytest_full": "585 passed, 4 skipped (589 collected)",
+    "pytest_full": "603 passed, 4 skipped (607 collected)",
+    "pytest_tool_gateway": "18 passed in tests/agent/test_tool_gateway.py",
     "pytest_architecture": "passed (within full suite)",
-    "ruff_format": "clean (100 files)",
+    "ruff_format": "clean (128 files)",
     "ruff_check": "clean",
     "mypy": "clean (93 source files)",
     "migration_sqlite": "alembic upgrade head applied to fresh SQLite db; tool_invocations table created with status CHECK, sha256 digest CHECK, UNIQUE(agent_id, idempotency_key)",
     "ci_observed": false
   },
-  "uncommitted_work": "none for NEX-005; this run's NEXUS state-file update is committed separately",
+  "uncommitted_work": "none; this run's NEXUS state-file update is committed separately",
   "pr_state": {
     "pr": 3,
     "state": "draft",
@@ -40,9 +42,9 @@
     "R3: CI not observed for this commit set; local gates only",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
     "R5: NEX-005 has no HTTP/router exposure yet - the gateway is reachable only from application code. No API contract test covers it.",
-    "R6: NEX-005 has no dedicated unit test file; covered indirectly by the full suite passing and by the migration test. A focused test of idempotent replay and deny-path auditing is still owed."
+    "R7: gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently."
   ],
-  "next_task": "NEX-005-followup",
-  "next_action": "Add focused tests for the tool gateway: (a) replay with the same idempotency key returns the recorded outcome without re-executing, (b) a denied invocation is audited as 'denied' and does not leak note content, (c) arguments_digest is stable and arguments are never persisted raw. Then expose the gateway over HTTP in a follow-up slice.",
+  "next_task": "NEX-004",
+  "next_action": "Update draft PR #3 description and checklist to reflect the verified organization + OIDC + tenant-access + agent-identity + tool-gateway work, and refresh tracking issue #2. Then NEX-005-HTTP: expose the tool gateway through the API layer with an API contract test (closes R5).",
   "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it."
 }

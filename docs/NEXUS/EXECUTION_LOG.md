@@ -291,3 +291,60 @@ a push the rule is a follow-up commit.
 NEX-005-followup — focused gateway tests (idempotent replay, deny-path audit,
 digest stability), then HTTP exposure. See `CHECKPOINT.json`.
 
+
+---
+
+## Run NEX-2026-11-25-01 — 2026-11-25T01:38:35Z
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `7f8ec53` (origin, in sync)
+- **Ending commit:** `74d3d98`
+- **Task:** NEX-005-followup — focused tool-gateway tests (risk R6)
+
+### What was done
+
+Added `tests/agent/test_tool_gateway.py` (18 tests) covering idempotent replay,
+deny-path auditing, revocation re-resolution, and argument digest stability.
+Writing the tests found two **real defects**, not test problems:
+
+1. **A retried denial raised `IntegrityError`.** The deny branch in
+   `InvokeTool.run` never consulted the idempotency lookup, so a second call
+   with the same key collided with the `(agent_id, idempotency_key)` unique
+   constraint. Fixed by performing the prior-invocation lookup *before* the
+   capability check, so a retried denial replays the recorded refusal.
+2. **A revoked delegation produced a 500.** `ResolveAgentToken.run` let the
+   domain `InvariantViolation` from `token.assert_live` / `delegation.assert_usable`
+   propagate. Revocation is a refusal, not a broken invariant, so it is now
+   translated to `AccessDenied` at the application seam. (Also fixed a missing
+   `InvariantViolation` import that the change exposed.)
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `pytest` (full) | 603 passed, 4 skipped |
+| `pytest tests/agent/test_tool_gateway.py` | 18 passed |
+| `ruff format --check` | clean (128 files) |
+| `ruff check` | clean |
+| `mypy` | clean (93 source files) |
+
+CI not observed for this commit set — local gates only (R3 stands).
+
+### Files changed
+
+- `src/notes_service/application/use_cases/tools.py` — idempotency lookup on deny path
+- `src/notes_service/application/use_cases/agents.py` — revocation mapped to `AccessDenied`
+- `tests/agent/test_tool_gateway.py` — new, 18 tests
+
+### Process note
+
+A shell heredoc corrupted the checkpoint-writing script (known terminal defect
+in this repo). No data was lost: the heredoc failed before writing, and the
+checkpoint was updated with the file editor instead. **Do not use heredocs for
+file writes here.**
+
+### Next action
+
+NEX-004 — update draft PR #3 and tracking issue #2. Then NEX-005-HTTP, which
+closes R5.
+

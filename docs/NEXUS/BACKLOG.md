@@ -223,7 +223,7 @@ complete and human review is requested.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | TODO |
+| Status | VERIFIED |
 | Dependencies | NEX-003 |
 
 **Objective:** a single governed path for agent tool invocation with schema
@@ -234,6 +234,56 @@ declared schema; every invocation audited with actor, capability, and outcome;
 repeated idempotency key does not duplicate the side effect.
 
 **Complexity:** large.
+
+---
+
+## NEX-005-followup — Tool gateway focused tests
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 |
+| Priority | P2 |
+| Status | VERIFIED |
+| Dependencies | NEX-005 |
+
+**Objective:** prove the gateway's idempotency and audit invariants directly
+rather than inferring them from a green full suite.
+
+**Acceptance criteria:** replay with the same idempotency key returns the
+recorded outcome without re-executing; a denied invocation is audited as denied
+and cannot be replayed into an execution; a revoked delegation refuses rather
+than erroring; `arguments_digest` is stable and raw arguments are never stored.
+
+**Outcome:** `tests/agent/test_tool_gateway.py`, 18 tests, all passing. Found
+two real defects (retried denial raising `IntegrityError`; revoked delegation
+surfacing `InvariantViolation` as a 500). Both fixed in `74d3d98`.
+
+**Complexity:** small.
+
+---
+
+## NEX-005-HTTP — Expose the tool gateway over HTTP
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 |
+| Priority | P2 |
+| Status | TODO |
+| Dependencies | NEX-005 |
+
+**Objective:** make the gateway reachable through the API layer, so agents can
+invoke tools over HTTP under the same governed path.
+
+**Acceptance criteria:** a router exposes tool invocation; the auth dependency
+resolves an agent token for `TokenAudience.TOOL_GATEWAY` and rejects tokens
+minted for the Notes API; a denied invocation returns a refusal status, not a
+500; an API contract test covers the deny path and a successful invocation.
+
+**Security:** the caller identity must come from the token, never the body.
+Token audience separation is load-bearing — a Notes API token must not invoke
+tools.
+
+**Complexity:** medium. Closes risk R5.
 
 ---
 

@@ -111,20 +111,24 @@ None currently. The following are known open items, not blockers:
   multiply.
 - **R5 (medium):** The tool gateway has no HTTP/router exposure. It is reachable
   only from application code, so no API contract test covers it.
-- **R6 (medium):** The tool gateway has no dedicated test file. It is covered
-  only indirectly, by the full suite passing and by the migration test. Idempotent
-  replay and deny-path auditing are unproven by a focused assertion.
+- **R6 (closed 2026-11-25):** the tool gateway now has a dedicated test file,
+  `tests/agent/test_tool_gateway.py` (18 tests). Writing it found two real
+  defects, both fixed in `74d3d98`: a retried *denial* hit the
+  `(agent_id, idempotency_key)` unique constraint and raised `IntegrityError`
+  instead of replaying the recorded refusal, and a revoked delegation surfaced
+  the domain `InvariantViolation` (a 500 at the edge) instead of a refusal.
+  Do not delete that file; both bugs return silently without it.
 
 
 ## Next best actions
 
-1. **NEX-005-followup — Tool gateway tests + HTTP exposure**: add focused tests
-   for idempotent replay, deny-path auditing, and digest stability (R6), then
-   expose the gateway through the API layer. (P2, the gateway is the seam every
-   agent action will flow through; it currently has no direct test and no route.)
-2. **NEX-004 — Update PR #3** description and checklist to reflect the verified
+1. **NEX-004 — Update PR #3 and tracking issue #2**: describe the verified
    organization + OIDC + tenant-access + agent-identity + tool-gateway work, and
-   refresh tracking issue #2. (P4 hygiene, safe and immediate; also mitigates R1.)
+   add the validation evidence. (P4 hygiene, safe and immediate; also mitigates R1.)
+2. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
+   an auth dependency that resolves the agent token for `TokenAudience.TOOL_GATEWAY`,
+   and an API contract test for a denied invocation. (P2; closes R5, the last
+   gateway gap.)
 3. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
