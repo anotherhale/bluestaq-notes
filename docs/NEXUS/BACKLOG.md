@@ -1269,7 +1269,7 @@ promote to VERIFIED.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P0 (security: a durable run could outlive the consent that started it) |
-| Status | **TESTED** — 2 new tests pass, full suite 737 passed / 4 skipped, gates clean, negative control verified. Not VERIFIED: no CI observation at this commit |
+| Status | **VERIFIED** — 4/4 `completed/success` at `1156f6e` (polled 2026-11-25T11:27:56Z, every check run reporting that `head_sha`). 2 new tests pass, full suite 737 passed / 4 skipped, gates clean, negative control verified |
 | Dependencies | NEX-003 (agent identity), NEX-017 (delegator re-check per step) |
 
 **Objective:** close the gap between what the run use cases *claim* and what they
@@ -1334,5 +1334,5 @@ honest answer, consistent with ADR-008.
 **Not delivered, deliberately:** no migration (the column and its FK already exist) and no
 change to the plan path (it was already correct). This is a read-path fix.
 
-**Next action:** observe CI on the commit carrying this slice; on 4/4 `completed/success`
-at that `head_sha`, promote to VERIFIED.
+**Verified:** CI is 4/4 `completed/success` at `1156f6e`, the commit that carries the fix, its tests and this documentation — so the run covered the whole slice rather than an ancestor.
+**Next action:** none for this slice; take the next dependency-ready Phase-5 task.

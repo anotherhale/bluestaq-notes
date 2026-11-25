@@ -2981,3 +2981,14 @@ leaves the other 14 in the file green; the check was restored and the file re-ve
 
 NEX-022 is **TESTED**, not VERIFIED: no CI observation exists at the commit carrying it.
 CI must be polled and 4/4 `completed/success` observed at that `head_sha` before promotion.
+
+### CI and promotion
+
+Pushed `1156f6e` to `origin/feature/agentic-enterprise-platform` and confirmed with
+`git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `1156f6e`) before
+polling. Polled the commit's check runs: **4/4 `completed/success`**, all four reporting
+`head_sha` `1156f6e` (two Backend `ruff, mypy, pytest, migrations` and two Frontend
+`typecheck, lint, test, build`, for the push and pull-request events). Polled 2026-11-25T11:27:56Z.
+
+NEX-022 is therefore **VERIFIED** at `1156f6e` — a run at the slice's own commit, not
+descendant-CI, because the code, the tests and this documentation landed in that one commit.
