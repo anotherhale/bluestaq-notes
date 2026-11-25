@@ -122,150 +122,28 @@
   "blockers": [],
   "risks": [
     {
-      "id": "R35",
-      "severity": "medium",
-      "summary": "An advisory attached to a settled request reads as the opinion behind the decision.",
-      "detail": "NEX-036 found that RecommendApprovalDecision built an advisory for any approval the caller owned, including ones already approved, denied or revoked, while its docstring and the route summary described advice about a *pending* approval. A score attached to a settled request invites a reviewer to read it as the opinion that produced the decision, and a later reader to read it as one that informed it - in an audit trail that is exactly the wrong inference. It also spent provider time and a withholding count on a question nobody could act on. Fixed: the use case now refuses with 409 when the request is not pending, or when its bound has passed under the use case's own clock (never the wall clock - see R29). Pinned by four mutation-checked tests plus one asserting the live case still works.",
-      "status": "closed by NEX-036 (local gates green; CI not yet polled for 90eea0c)"
-    },
-    {
       "id": "R34",
-      "severity": "low",
-      "summary": "Withholding is counted per process but nothing exports the count.",
-      "detail": "NEX-033 introduced the WithholdingRecorder port and NEX-032 made each advisory report which fields were withheld and why. Both are per-response or per-process observations. An operator cannot currently answer 'how often are advisories thinner than they should be' without reading individual responses, so a systematic over-cap withholding would be visible in aggregate nowhere. This is a monitoring gap, not a correctness gap: the security invariant (withhold rather than leak) holds. Carried forward as NEX-037.",
-      "status": "open - carried to NEX-037"
+      "severity": "medium",
+      "summary": "Withholding is counted per process and reported per response, but never aggregated. A systematically thin advisory is visible in no aggregate view, so the one signal that would show context starvation at scale is unreadable.",
+      "next": "NEX-037."
     },
     {
       "id": "R31",
-      "severity": "low",
-      "summary": "A bounded context contract has now met real note text; the hand-assembled-declassification gap is closed by type.",
-      "detail": "NEX-028 caps a context field's value at 200 characters and an envelope at 32 fields, and names fields with stable lowercase identifiers. Every current caller is a test, so none of those bounds has met real note text or a real note title. The first production caller (tool-gateway classification or the approval-recommendation path) is the first genuine test; if a bound is too tight, widening it is a contract change requiring review, not a tweak to a constant. Related honest gap, documented on DecisionRequest.from_context: context_hash is a plain str, so a caller can hand-assemble one, which means taking the declassification decision personally. A later slice can narrow the field to a type only an envelope can construct. UPDATE (NEX-029): ContextEnvelope now has a production caller - the advisory route builds one from a real stored approval record, so the 32-field and 200-char bounds have met real approval data. They have still not met real note text, and context_hash is still a plain str. CLOSED (NEX-030): context_hash is now ContextHash, constructible only through ContextHash._mint, which only ContextEnvelope calls. A caller-assembled string is rejected by decisioning._validate_context_hash. The bounds (32 fields, 200 chars) have still not met real note text - that remains a live observation, not a code gap. CLOSED (NEX-031): the bounds have now met a real stored note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) and an over-cap record-derived value is withheld rather than raising, so a legal note can no longer deny the advisory. The note-text observation is closed; the stated str.__new__ residual on ContextHash is unchanged and deliberate.",
-      "status": "closed (NEX-030 + NEX-031)"
-    },
-    {
-      "id": "R30",
-      "severity": "low",
-      "summary": "The decision contract's bounds had only ever met a stub; a conformance suite now exercises each against a hostile payload, and building it found four real defects.",
-      "detail": "NEX-027 caps a decision's rationale at 400 characters, its confidence/score at [0.0, 1.0], and its choice set at the caller's candidates. The stub adapter always answers cheaply, so no bound had met a payload that tested it. NEX-035 ships tests/agent/test_decision_provider_conformance.py: assert_provider_conformance is the contract a real vendor adapter is run through, with meta-tests proving the suite rejects a hostile fake one violation at a time. Building it exposed a blind spot the bounds never covered - the provider's own NAME. EvaluateDecision guarded everything a provider answered and nothing about what it called itself, though a name is third-party input that lands in audit records, log fields and API responses. Fixed: validate_provider_name enforces the declared 80-char bound plus an identifier shape (a newline in a name is a log-injection vector); _safe_provider_name reads the name once, before anything else can fail, and degrades to 'unidentified' on a raise or a non-identifier, so third-party code cannot break a caller that has a deterministic fallback; and a ValidationError raised through decide is classified MALFORMED_OUTPUT rather than PROVIDER_ERROR, so an operator is not sent to check connectivity when the payload is the problem. Residual: the suite proves a CONFORMING adapter behaves. It cannot prove a vendor's model produces good judgments - that is an evaluation question, not a contract one.",
-      "status": "closed (NEX-035, 4/4 completed/success at 12f6fa9, polled 2026-11-25T18:14Z)"
-    },
-    {
-      "id": "R29",
-      "severity": "high",
-      "summary": "A validity bound written by one clock and read by another gives the wrong answer in both directions.",
-      "detail": "NEX-026: ApprovalRequest.open stamped expires_at from the caller's Clock port, but the decision path called is_expired, which reads the module wall clock. A request opened on a clock behind the wall clock was judged already lapsed, so a human could not decide a live request; a request opened on a clock ahead of the wall clock was judged still valid after its bound passed, so consent outlived the bound it was granted under. Every existing expiry test used one clock for both open and decide, so the two readings always agreed and the defect was structurally invisible. The repository adapter was already correct, which is why no integration test caught it either. General rule: for every bound, name the clock that writes it and assert the reader uses the same one - and test the disagreement, not just the happy path, because a single-clock suite cannot see this class at all.",
-      "status": "closed by NEX-026, VERIFIED at b46e2e3"
-    },
-    {
-      "id": "R28",
-      "severity": "high",
-      "summary": "A grant can outlive the consent that justified it, because the grant does not name the consent.",
-      "detail": "An approval records agent_id and no delegation, so it cannot be attributed to a surviving delegation when one is withdrawn - and nothing withdrew it. RevokeDelegation revoked the delegation and its tokens but left the agent operational, so after re-delegation a token from the new delegation could spend an approval granted under the withdrawn one. RevokeAgent left approvals approved too: latent while the agent check blocks use, but any reactivation path would inherit pre-emergency-stop grants. Closed by NEX-025 on both paths. General rule: for every piece of live authority, ask what revokes it and follow the chain to the end - revoking the container is not enough if the authority is keyed to something that survives it. Same shape as R23 and R26.",
-      "status": "closed on both revocation paths by NEX-025 (d481bd0), 4/4 completed/success observed 2026-11-25T13:18Z"
-    },
-    {
-      "id": "R27",
-      "severity": "high",
-      "summary": "A terminal state in one record is not a terminal state in the record that describes the same event.",
-      "detail": "NEX-023 closed this on the resolve path: InvokeTool commits its ToolInvocation as `started` before entering the handler (correct - a crash must leave a trace), and ResolveInterruptedStep had settled the run without closing that row. NEX-024 found the same defect on the other settle path: AbortAgentRun flipped the run to aborted and never sealed the link, while AgentRun.abort also left a `started` step inside a terminal run. Both halves now settle, in one transaction. General rule, now proven to recur once: any operation that makes a run terminal must settle its mid-flight steps AND seal their invocations in the same transaction. A third settle path reopens this. Two records that disagree are not a partial success.",
-      "status": "closed on both existing settle paths (resolve: NEX-023; abort: NEX-024)"
-    },
-    {
-      "id": "R26",
-      "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
-    },
-    {
-      "id": "R23",
-      "severity": "high",
-      "summary": "A control enforced on every path someone thought of can still miss a path that establishes the same identity.",
-      "detail": "NEX-006 closed the offboarding gap by calling ensure_tenant_access on the three human identity paths (OIDC callback, session resolution, bearer provider). Agent-token resolution was a fourth way to establish an identity and never called it, so a suspended delegator's agent stayed fully operational for as long as its token lived. The gap survived because the shared seam looked complete: every caller of ensure_tenant_access was correct, and nothing enumerated the callers that were missing. Lesson: when a check is 'the one place', list every identity-establishing path and assert each one calls it, rather than trusting the seam's existence. Closed for agent tokens by 990557d."
-    },
-    {
-      "id": "R22",
-      "severity": "high",
-      "summary": "A governance gate can be structurally unusable while every test stays green.",
-      "detail": "NEX-016: human approval was implemented end to end (requests, decisions, expiry, revocation, HTTP routes, 8 tests) yet a durable run could never honour an approval. Two independent defects each alone made resumption impossible: the run failed terminally on the pause, and the unique (agent_id, idempotency_key) constraint was permanently consumed by the denial record. No test covered 'approve, then continue', so the suite was green through a decorative control. The general lesson: a security control needs a test of the full decision-to-effect path, not tests of each half."
-    },
-    {
-      "id": "R20",
       "severity": "medium",
-      "summary": "A governance record can be unreachable through the API without any error, while the data is intact in storage.",
-      "detail": "NEX-015: approvals were persisted correctly and list_for_agent existed on the port, but the use case only ever called list_pending_for_agent, so every decided approval was invisible to its owner. No test failed and no exception was raised, because nothing asserted that a decision remained readable. The class is general: for each state a record can enter, check that some read path returns it. Closed for approvals by 414a222."
-    },
-    {
-      "id": "R18",
-      "severity": "high",
-      "summary": "A slice can pass its tests and CI while the adapter that stores its invariant drops the field the check reads.",
-      "detail": "NEX-013 was VERIFIED on green CI while ApprovalRequestRepository.add() omitted expires_at, so the bound was inert for every gateway-created approval. The test used save(), which does write the columns. Pin security-relevant fields through the write path production uses. Closed for NEX-013 by 12584a1."
-    },
-    {
-      "id": "R19",
-      "severity": "medium",
-      "summary": "A migration downgrade can be untested because the suite upgrades an empty database.",
-      "detail": "e5a3b9c04f21's downgrade folds 'revoked' rows to 'denied' before narrowing the status CHECK. On an empty table that UPDATE touches nothing, so a wrong ordering would pass. Now pinned by TestRevocationDowngradeFoldsRevokedRows."
-    },
-    {
-      "id": "R12",
-      "severity": "medium",
-      "summary": "Heredocs corrupt or hang in this environment.",
-      "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run: a `cat > /tmp/x.py <<'PY'` block corrupted its own command text and had to be abandoned."
-    },
-    {
-      "id": "R21",
-      "severity": "low",
-      "summary": "GitHub per-file diff stats truncate silently on a large PR.",
-      "detail": "On a diff over 20,000 lines, /pulls/{n}/files reports additions:0 for 20 files (every test file) and /pulls/{n}/diff returns HTTP 406, with no error on the stats endpoints to signal the truncation. Per-file sums gave 20,309 and /compare gave 19,366 against a true 27,659. Quote the PR object's additions field or `git diff --shortstat origin/main...HEAD` on a full clone."
-    },
-    {
-      "id": "R24",
-      "title": "Coordinator CI notes go stale silently and read as current forever",
-      "detail": "Three claims in this repo's own docs were false at run start. STATE.md called ca15eb1 'docs-only and unclaimed' when it was 4/4 completed/success at that exact SHA. STATE.md carried PR counters of 28,385 additions / 88 commits when the PR object said 28,409 / 89. BACKLOG.md said 'CI has not yet run on c18bac7' when c18bac7 was 4/4 green. Each was written once at push time and never revisited. A note phrased 'CI has not yet run on X' has no expiry and is indistinguishable, to a later reader, from 'CI failed on X'. Mitigation: name the poll timestamp in any such note, and re-poll any not-yet-observed claim in the next run where that commit is reachable. Polling costs seconds. UPDATE (NEX-2026-11-25-35): a fourth instance was caught by reconciliation rather than by a reader - CHECKPOINT.json recorded NEX-033 as 'pytest 877 passed' when the true baseline at bf84a7c was 873; 877 was the count after NEX-034's tests were added. Corrected in task_statuses.NEX-033. Also caught: next_action named NEX-034 for work NEX-033 had already shipped, which would have re-implemented a delivered feature. Both were stale intent fields, not stale CI notes, so the class is broader than CI: any field recording 'what to do next' or 'what the numbers were' decays the same way.",
-      "severity": "medium",
-      "status": "mitigated - one instance caught this run"
-    },
-    {
-      "id": "R25",
-      "severity": "high",
-      "summary": "A verifier that only checks a seal when the seal exists can be defeated by deleting the seal.",
-      "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
-    },
-    {
-      "id": "R12",
-      "severity": "medium",
-      "summary": "Heredocs corrupt or hang in this environment - confirmed a third time, on a commit message.",
-      "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
-    },
-    {
-      "id": "R32",
-      "severity": "low",
-      "summary": "Withholding is now observable per field; the remaining gap is that nothing aggregates it over time.",
-      "detail": "NEX-031 made an over-cap record-derived value withheld rather than fatal, which is the right failure direction. NEX-032 closes the blind spot that created: every recommendation now reports which fields were withheld and why, so a thinner-than-expected advisory is visible rather than inferred. What remains is aggregation - no metric counts how often an over-cap withholding happens across advisories. If a real note field routinely exceeds MAX_FIELD_VALUE_LENGTH, the per-recommendation record will show it but nothing will alert on it. That is a monitoring task, not a correctness gap; the security invariant holds.",
-      "status": "closed by NEX-032 (per-field observability); aggregation is a separate follow-up"
-    },
-    {
-      "id": "R33",
-      "severity": "low",
-      "summary": "The redactor's vocabulary is finite; the structural hole is closed, the word list is not.",
-      "detail": "NEX-034 replaced an eleven-string exact-match denylist with word-based shape matching, so a credential spelled differently (client_secret vs clientSecret vs CLIENT-SECRET) now reaches one verdict, and a new vendor's spelling is caught without editing a set. What remains is vocabulary: a credential named with a word on neither _SENSITIVE_WORDS nor _SENSITIVE_WORD_PAIRS would still pass. This is a strictly better failure mode than the predecessor - widening vocabulary is additive and cheap, whereas the old matcher required one entry per spelling. Do not treat this as closed; if a real credential name is found to leak, add the word AND a test naming that exact spelling.",
-      "status": "open - accepted residual, documented"
+      "summary": "Carried forward; see docs/NEXUS/STATE.md for the current statement.",
+      "next": "After NEX-037."
     }
   ],
   "next_task": "NEX-037",
   "next_action": "NEX-037: close R34 by exporting the withholding rate. Verify the premise against the code FIRST - grep -rn 'WithholdingRecorder' src/notes_service - because the last four next_action fields each needed correcting against the tree. Candidate scope: expose the existing counters through health/readiness or a metrics endpoint, with a test asserting a withheld field increments exactly one counter and that a 409 refusal increments none. Delivery debt is CLEARED this run (PR #3 body and issue #2 comment both carry NEX-036).",
   "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-036 is 90eea0c on feature/agentic-enterprise-platform; a docs promotion follows in a separate commit, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-036 local gates are green; its CI was NOT polled to completion, so poll 90eea0c before calling it CI-verified. Then start NEX-037, verifying the premise against the code first.",
   "ci_status": {
-    "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
-    "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
-    "nex028_slice_a3d1b32": "OBSERVED 4/4 completed/success, polled 2026-11-25T14:42Z.",
-    "note": "A docs-only commit reads completed/cancelled once superseded in the CI concurrency group - neither pass nor fail, and never evidence. Poll the product commit, not the docs commit.",
-    "nex031_slice_240a446": "OBSERVED 4/4 completed/success at 240a446, every check run head_sha=240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25 (ids 139340978511, 139340978877, 139341004059, 139341004430), completed 2026-11-25T16:20:51-16:21:32Z, polled 2026-11-25T16:22Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event.",
-    "nex032_slice_fe5eadc": "OBSERVED 4/4 completed/success at fe5eadc, every check run head_sha=fe5eadca918b26412cea4374ac5a02b162cb086b, started 2026-11-25T16:43:38-43Z, completed 2026-11-25T16:44:33-16:45:13Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event. Polled 2026-11-25T16:47Z.",
-    "nex033_slice_bf84a7c": "OBSERVED Backend completed/success + Frontend completed/success at bf84a7c, plus the duplicate pull_request pair completed/cancelled by the CI concurrency group. Polled 2026-11-25T17:33Z.",
-    "nex034_slice_e386e02": "OBSERVED 4/4 completed/success at e386e02, every check run head_sha=e386e02 (13935724602-series). Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build), one pair per push and pull_request event. Polled 2026-11-25T17:41Z. RE-POLLED 2026-11-25T18:15Z in run NEX-2026-11-25-36: still 4/4 completed/success, confirming the docs commit above it did NOT disturb it.",
-    "nex035_slice_12f6fa9": "OBSERVED 4/4 completed/success at 12f6fa9, every check run head_sha=12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec, started 2026-11-25T18:13:11-18Z, polled 2026-11-25T18:14Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build), one pair per push and pull_request event.",
-    "nex036_slice_90eea0c": "OBSERVED green at 90eea0c, polled 2026-11-25T18:45Z: Backend completed/success (id 139429822539, started 18:41:54Z, completed 18:43:19Z) and Frontend completed/success (id 139429823232, started 18:41:54Z, completed 18:42:42Z). One complete pair. A second Backend run (id 139429874630, started 18:42:00Z) reads completed/cancelled at 18:43:27Z: the CI concurrency group cancelled the superseded event run. That run is neither pass nor fail and is NOT counted as evidence. Note the shape differs from NEX-034/NEX-035, which were 4/4 success; here the concurrency group cancelled one duplicate, which is the normal and documented behaviour, not a failure."
+    "product_slice_sha": "90eea0c",
+    "product_slice_result": "VERIFIED GREEN, polled 2026-11-25T18:45Z. Backend completed/success (id 139429822539), Frontend completed/success (id 139429823232), one complete pair.",
+    "docs_heads": "c37037f and 21ccfaf are docs-only commits that follow the product commit. They carry no source change, so a red or cancelled run on them says nothing about the code - and 90eea0c is an ancestor of both.",
+    "head_21ccfaf_observed": "2026-11-25T18:48Z: 4 check runs, all queued or in_progress, none concluded. This is a STAMPED OBSERVATION, not a result. It was queued when the run ended and must be re-polled; do not read it as pass or fail.",
+    "rule": "Poll the PRODUCT commit before pushing its docs commit. A docs head superseded by the concurrency group reads completed/cancelled, which is neither pass nor fail and must never be counted as either.",
+    "evidence_basis": "90eea0c: direct green poll at that SHA. Any later docs commit: descendant-CI - green at an ancestor whose tree contains the code, which is weaker than a green poll at the SHA itself and is labelled as such rather than folded in."
   },
   "verified_tasks": [
     "NEX-001",
