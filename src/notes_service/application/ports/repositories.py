@@ -12,6 +12,7 @@ from typing import Protocol, Self, runtime_checkable
 
 from notes_service.application.ports.agents import (
     AgentRepository,
+    AgentRunRepository,
     AgentTokenRepository,
     ApprovalRequestRepository,
     DelegationRepository,
@@ -216,6 +217,7 @@ class UnitOfWork(Protocol):
     agent_tokens: AgentTokenRepository
     approvals: ApprovalRequestRepository
     tool_invocations: ToolInvocationRepository
+    agent_runs: AgentRunRepository
 
     def __enter__(self) -> Self: ...
 

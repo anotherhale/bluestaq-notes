@@ -11,6 +11,7 @@ that works unchanged on SQLite and PostgreSQL without a JSON column.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
 from typing import Any, cast
@@ -21,6 +22,14 @@ from sqlalchemy.orm import Session
 
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
+from notes_service.domain.agent.runs import (
+    AgentRun,
+    AgentRunId,
+    RunStatus,
+    RunStep,
+    RunStepId,
+    StepStatus,
+)
 from notes_service.domain.agent.token import AgentToken
 from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
@@ -38,6 +47,8 @@ from notes_service.domain.agent.value_objects import (
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import (
     AgentRow,
+    AgentRunRow,
+    AgentRunStepRow,
     AgentTokenRow,
     ApprovalRequestRow,
     DelegationRow,
@@ -459,8 +470,172 @@ class SqlAlchemyToolInvocationRepository:
         return [_invocation_to_domain(row) for row in rows]
 
 
+class SqlAlchemyAgentRunRepository:
+    """SQLAlchemy adapter for durable agent runs.
+
+    A run and its steps are written as one aggregate. ``save`` rewrites the step
+    rows rather than diffing them, which keeps a single code path for "the
+    in-memory aggregate is the truth" and avoids the case where a step's status
+    moved in memory but its row did not.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, run: AgentRun) -> None:
+        self._session.add(_run_row(run))
+        for step in run.ordered_steps:
+            self._session.add(_step_row(run.id, step))
+
+    def save(self, run: AgentRun) -> None:
+        row = self._session.get(AgentRunRow, _as_uuid(run.id))
+        if row is None:
+            self.add(run)
+            return
+        row.status = run.status.value
+        row.version = run.version
+        row.last_error = run.last_error
+        row.updated_at = run.updated_at
+        row.started_at = run.started_at
+        row.finished_at = run.finished_at
+        existing = {
+            step_row.id: step_row
+            for step_row in self._session.execute(
+                select(AgentRunStepRow).where(AgentRunStepRow.run_id == _as_uuid(run.id))
+            )
+            .scalars()
+            .all()
+        }
+        for step in run.ordered_steps:
+            step_row = existing.pop(_as_uuid(step.id), None)
+            if step_row is None:
+                self._session.add(_step_row(run.id, step))
+                continue
+            step_row.status = step.status.value
+            step_row.outcome = step.outcome
+            step_row.started_at = step.started_at
+            step_row.completed_at = step.completed_at
+
+    def get(self, run_id: AgentRunId) -> AgentRun | None:
+        row = self._session.get(AgentRunRow, _as_uuid(run_id))
+        if row is None:
+            return None
+        return self._hydrate(row)
+
+    def list_for_agent(
+        self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
+    ) -> list[AgentRun]:
+        rows = (
+            self._session.execute(
+                select(AgentRunRow)
+                .where(AgentRunRow.agent_id == _as_uuid(agent_id))
+                .order_by(AgentRunRow.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+        return [self._hydrate(row) for row in rows]
+
+    def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
+        resumable = (RunStatus.PENDING.value, RunStatus.RUNNING.value, RunStatus.INTERRUPTED.value)
+        rows = (
+            self._session.execute(
+                select(AgentRunRow)
+                .where(
+                    AgentRunRow.agent_id == _as_uuid(agent_id),
+                    AgentRunRow.status.in_(resumable),
+                )
+                .order_by(AgentRunRow.created_at.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return [self._hydrate(row) for row in rows]
+
+    def _hydrate(self, row: AgentRunRow) -> AgentRun:
+        step_rows = (
+            self._session.execute(
+                select(AgentRunStepRow)
+                .where(AgentRunStepRow.run_id == row.id)
+                .order_by(AgentRunStepRow.sequence.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return _run_to_domain(row, list(step_rows))
+
+
+def _run_row(run: AgentRun) -> AgentRunRow:
+    return AgentRunRow(
+        id=_as_uuid(run.id),
+        agent_id=_as_uuid(run.agent_id),
+        delegation_id=(_as_uuid(run.delegation_id) if run.delegation_id is not None else None),
+        status=run.status.value,
+        version=run.version,
+        last_error=run.last_error,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+    )
+
+
+def _step_row(run_id: AgentRunId, step: RunStep) -> AgentRunStepRow:
+    return AgentRunStepRow(
+        id=_as_uuid(step.id),
+        run_id=_as_uuid(run_id),
+        sequence=step.sequence,
+        tool_name=step.tool_name,
+        capability=step.capability.value,
+        idempotency_key=step.idempotency_key,
+        arguments_digest=step.arguments_digest,
+        arguments=json.dumps(step.arguments, sort_keys=True, ensure_ascii=True),
+        resource_ref=step.resource_ref,
+        status=step.status.value,
+        outcome=step.outcome,
+        started_at=step.started_at,
+        completed_at=step.completed_at,
+    )
+
+
+def _run_to_domain(row: AgentRunRow, step_rows: list[AgentRunStepRow]) -> AgentRun:
+    return AgentRun(
+        id=AgentRunId.parse(row.id),
+        agent_id=_as_uuid(row.agent_id),
+        delegation_id=_as_uuid(row.delegation_id) if row.delegation_id else None,
+        steps=[_step_to_domain(step_row) for step_row in step_rows],
+        status=RunStatus(row.status),
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        last_error=row.last_error,
+    )
+
+
+def _step_to_domain(row: AgentRunStepRow) -> RunStep:
+    return RunStep(
+        id=RunStepId.parse(row.id),
+        sequence=row.sequence,
+        tool_name=row.tool_name,
+        capability=Capability(row.capability),
+        idempotency_key=row.idempotency_key,
+        arguments_digest=row.arguments_digest,
+        arguments=json.loads(row.arguments),
+        resource_ref=row.resource_ref,
+        status=StepStatus(row.status),
+        outcome=row.outcome,
+        started_at=row.started_at,
+        completed_at=row.completed_at,
+    )
+
+
 __all__ = [
     "SqlAlchemyAgentRepository",
+    "SqlAlchemyAgentRunRepository",
     "SqlAlchemyAgentTokenRepository",
     "SqlAlchemyApprovalRequestRepository",
     "SqlAlchemyDelegationRepository",

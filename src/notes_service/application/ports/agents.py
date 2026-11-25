@@ -12,6 +12,7 @@ from typing import Protocol, runtime_checkable
 
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
+from notes_service.domain.agent.runs import AgentRun, AgentRunId
 from notes_service.domain.agent.token import AgentToken
 from notes_service.domain.agent.tools import ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
@@ -139,8 +140,34 @@ class ToolInvocationRepository(Protocol):
     ) -> list[ToolInvocation]: ...
 
 
+@runtime_checkable
+class AgentRunRepository(Protocol):
+    """Persistence port for durable agent runs.
+
+    The aggregate is loaded and saved whole: a run's steps are part of its
+    identity, and a partial save could record a step as started while losing an
+    earlier step's completion. Lookups are scoped by agent, so one agent cannot
+    read another's run.
+    """
+
+    def add(self, run: AgentRun) -> None: ...
+
+    def get(self, run_id: AgentRunId) -> AgentRun | None: ...
+
+    def list_for_agent(
+        self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
+    ) -> list[AgentRun]: ...
+
+    def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
+        """Runs for this agent that stopped without reaching a terminal state."""
+        ...
+
+    def save(self, run: AgentRun) -> None: ...
+
+
 __all__ = [
     "AgentRepository",
+    "AgentRunRepository",
     "AgentTokenRepository",
     "ApprovalRequestRepository",
     "DelegationRepository",

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.agents import (
     AgentRepository,
+    AgentRunRepository,
     AgentTokenRepository,
     ApprovalRequestRepository,
     DelegationRepository,
@@ -43,6 +44,7 @@ from notes_service.application.ports.sessions import (
 )
 from notes_service.infrastructure.db.agent_repositories import (
     SqlAlchemyAgentRepository,
+    SqlAlchemyAgentRunRepository,
     SqlAlchemyAgentTokenRepository,
     SqlAlchemyApprovalRequestRepository,
     SqlAlchemyDelegationRepository,
@@ -92,6 +94,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     agent_tokens: AgentTokenRepository
     approvals: ApprovalRequestRepository
     tool_invocations: ToolInvocationRepository
+    agent_runs: AgentRunRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -123,6 +126,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.agent_tokens = SqlAlchemyAgentTokenRepository(self._session)
         self.approvals = SqlAlchemyApprovalRequestRepository(self._session)
         self.tool_invocations = SqlAlchemyToolInvocationRepository(self._session)
+        self.agent_runs = SqlAlchemyAgentRunRepository(self._session)
         return self
 
     def __exit__(

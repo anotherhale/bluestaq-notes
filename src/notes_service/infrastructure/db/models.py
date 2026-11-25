@@ -575,8 +575,76 @@ class ToolInvocationRow(Base):
     )
 
 
+class AgentRunRow(Base):
+    """One durable agent run: an ordered plan of governed tool steps.
+
+    Unlike ``tool_invocations``, which stores only a digest of the arguments,
+    a run row persists each step's arguments. Durability needs the inputs — a
+    resumed run cannot re-derive what a step was asked to do — and the row is
+    owner-scoped working state rather than a broadly readable audit trail.
+    """
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    delegation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("agent_delegations.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','interrupted','completed','failed','aborted')",
+            name="status_valid",
+        ),
+        Index("ix_agent_runs_agent_status", "agent_id", "status"),
+    )
+
+
+class AgentRunStepRow(Base):
+    """One step of a durable run, with the inputs a resume needs to replay it."""
+
+    __tablename__ = "agent_run_steps"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUIDType, primary_key=True)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    capability: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    arguments_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    arguments: Mapped[str] = mapped_column(Text, nullable=False)
+    resource_ref: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    outcome: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','started','succeeded','failed','interrupted')",
+            name="status_valid",
+        ),
+        CheckConstraint("length(arguments_digest) = 64", name="digest_sha256"),
+        UniqueConstraint("run_id", "sequence", name="uq_agent_run_steps_run_sequence"),
+    )
+
+
 __all__ = [
     "AgentRow",
+    "AgentRunRow",
+    "AgentRunStepRow",
     "AgentTokenRow",
     "ApprovalRequestRow",
     "DelegationRow",
