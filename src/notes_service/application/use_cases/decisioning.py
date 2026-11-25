@@ -23,6 +23,17 @@ the reason for any abstention. It carries the request's context hash rather than
 the context itself, so a decision can be traced to *which* inputs produced it
 without retaining the sensitive content.
 
+Rule 2 covers the provider's *answer*, but the provider also supplies its own
+*identity* through the port's ``name`` property, and that is third-party code
+too. An adapter that builds its name from a config lookup or a health probe can
+raise there, and a name is not an unbounded free-text channel: it is an
+identifier recorded in telemetry and returned to API clients. So the name is
+read once, defensively, and reduced to a bounded identifier before it reaches any
+record. A provider whose name cannot be read or is not identifier-shaped is
+recorded under :data:`UNIDENTIFIED_PROVIDER` rather than taking down a caller
+that has a deterministic fallback — an unidentifiable provider is itself the
+useful signal.
+
 What this use case cannot do is the point of the whole module: :class:`Decision`
 has no field naming a capability, a principal, or a scope, and nothing here
 imports the authorization provider. An evaluation is advice. Enforcement stays
@@ -44,12 +55,41 @@ from notes_service.domain.agent.decisioning import (
     DecisionOutcome,
     DecisionRequest,
     validate_against,
+    validate_provider_name,
 )
 from notes_service.domain.errors import ValidationError
 
 #: Any caller whose threshold is above the stub's 0.1 confidence abstains, which
 #: is the safe default for a provider that is not actually judging anything.
 DEFAULT_MIN_CONFIDENCE = 0.5
+
+#: Recorded when a provider cannot name itself in an identifier-shaped way.
+#: Deliberately a valid provider name, so a record never carries an empty or
+#: unusable field; an operator alerting on this value is alerting on adapters
+#: whose identity is broken, which is a real defect rather than noise.
+UNIDENTIFIED_PROVIDER = "unidentified"
+
+
+def _safe_provider_name(provider: DecisionProvider) -> str:
+    """Read a provider's name without letting third-party code break the caller.
+
+    ``name`` is a property on a protocol implemented by an adapter, so it is as
+    much third-party code as ``decide`` is. An adapter that derives its name from
+    a config lookup or a health probe can raise there, and that must not escape:
+    the whole point of this use case is that a caller never has to wrap it to stay
+    up. A name that is not an identifier is equally unusable, so both failures
+    degrade to :data:`UNIDENTIFIED_PROVIDER`.
+    """
+    try:
+        raw = provider.name
+    except Exception:
+        # Broad for the same reason as in ``run``: a vendor property can fail on
+        # anything from a missing config key to a socket.
+        return UNIDENTIFIED_PROVIDER
+    try:
+        return validate_provider_name(raw)
+    except ValidationError:
+        return UNIDENTIFIED_PROVIDER
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,18 +153,25 @@ class EvaluateDecision:
 
     @property
     def provider_name(self) -> str:
-        return self._provider.name
+        return _safe_provider_name(self._provider)
 
     @property
     def enabled(self) -> bool:
         return self._enabled
 
     def run(self, request: DecisionRequest) -> DecisionEvaluation:
+        # Read the name once, before anything else can fail, so every record this
+        # run produces names the same provider. Reading it lazily inside
+        # ``_evaluation`` would read it on the disabled path too, where the
+        # provider was never called and its name may not be resolvable.
+        provider_name = _safe_provider_name(self._provider)
+
         if not self._enabled:
             return self._evaluation(
                 request,
                 Decision.abstain(request.kind, AbstentionReason.DISABLED),
                 latency_ms=0.0,
+                provider_name=provider_name,
             )
 
         started = self._timer()
@@ -133,6 +180,21 @@ class EvaluateDecision:
             # but an adapter is third-party code and the guard below is the only
             # thing standing between a bad payload and a caller that trusts it.
             raw = cast(object, self._provider.decide(request))
+        except ValidationError:
+            # An adapter that constructs its ``Decision`` from a vendor payload
+            # lets this module's own bounds reject an out-of-contract answer, and
+            # the raise then escapes through ``decide``. That is a *malformed
+            # payload*, not an unreachable vendor: the two are operationally
+            # different, and reporting a contract violation as PROVIDER_ERROR
+            # sends an operator to look at connectivity when the payload is the
+            # problem. Caught before the broad clause below, which would
+            # otherwise swallow it.
+            return self._evaluation(
+                request,
+                Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT),
+                latency_ms=self._elapsed_ms(started),
+                provider_name=provider_name,
+            )
         except Exception:
             # Broad by necessity: the port contract says "do not raise for a
             # business condition", but a vendor client can still fail on a
@@ -142,6 +204,7 @@ class EvaluateDecision:
                 request,
                 Decision.abstain(request.kind, AbstentionReason.PROVIDER_ERROR),
                 latency_ms=self._elapsed_ms(started),
+                provider_name=provider_name,
             )
         latency_ms = self._elapsed_ms(started)
 
@@ -150,6 +213,7 @@ class EvaluateDecision:
                 request,
                 Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT),
                 latency_ms=latency_ms,
+                provider_name=provider_name,
             )
         decision = raw
 
@@ -160,6 +224,7 @@ class EvaluateDecision:
                 request,
                 Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT),
                 latency_ms=latency_ms,
+                provider_name=provider_name,
             )
 
         if (
@@ -174,18 +239,26 @@ class EvaluateDecision:
                     confidence=decision.confidence,
                 ),
                 latency_ms=latency_ms,
+                provider_name=provider_name,
             )
 
-        return self._evaluation(request, decision, latency_ms=latency_ms)
+        return self._evaluation(
+            request, decision, latency_ms=latency_ms, provider_name=provider_name
+        )
 
     def _evaluation(
-        self, request: DecisionRequest, decision: Decision, *, latency_ms: float
+        self,
+        request: DecisionRequest,
+        decision: Decision,
+        *,
+        latency_ms: float,
+        provider_name: str,
     ) -> DecisionEvaluation:
         return DecisionEvaluation(
             request_kind=request.kind,
             context_hash=request.context_hash,
             correlation_id=request.correlation_id,
-            provider_name=self._provider.name,
+            provider_name=provider_name,
             decision=decision,
             latency_ms=latency_ms,
             threshold=self._min_confidence,

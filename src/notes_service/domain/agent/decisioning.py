@@ -34,6 +34,7 @@ sensitive content is still a fingerprint of it — hashing is not declassificati
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -47,6 +48,39 @@ MAX_CANDIDATE_LENGTH = 120
 MAX_RATIONALE_LENGTH = 400
 MAX_CORRELATION_LENGTH = 120
 MAX_PROVIDER_NAME_LENGTH = 80
+
+#: A provider names itself through the port's ``name`` property, so the value is
+#: third-party input: it must be an identifier, not free text. Telemetry keys and
+#: log fields are built from it, so a newline or a control character is a
+#: log-injection vector rather than a cosmetic issue.
+_PROVIDER_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def validate_provider_name(value: object) -> str:
+    """Check a provider-supplied name is a bounded telemetry identifier.
+
+    A provider name travels into audit records, structured log fields, and API
+    responses. Accepting an arbitrary string there means accepting an unbounded
+    field, a log-injection vector, and a value that will not aggregate in
+    telemetry. The bound is checked, not the shape alone, so a provider cannot
+    smuggle a paragraph in under a name that happens to start with a letter.
+
+    Raises :class:`ValidationError` rather than coercing: a caller that silently
+    truncated or sanitised the value would record a *different* provider than the
+    one that answered, which is worse than recording none.
+    """
+    if not isinstance(value, str):
+        raise ValidationError("provider name must be a string")
+    if not value:
+        raise ValidationError("provider name must not be empty")
+    if len(value) > MAX_PROVIDER_NAME_LENGTH:
+        raise ValidationError(f"provider name may be at most {MAX_PROVIDER_NAME_LENGTH} characters")
+    if not _PROVIDER_NAME_PATTERN.fullmatch(value):
+        raise ValidationError(
+            "provider name must be a lowercase identifier of [a-z0-9._-], "
+            "starting with a letter or digit"
+        )
+    return value
 
 
 class DecisionKind(StrEnum):
@@ -326,4 +360,5 @@ __all__ = [
     "DecisionOutcome",
     "DecisionRequest",
     "validate_against",
+    "validate_provider_name",
 ]
