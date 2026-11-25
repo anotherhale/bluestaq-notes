@@ -7,15 +7,59 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-035 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-036 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held (a pending request stays `pending` after an advisory, and abstentions reach the caller rather than being swallowed), but the audit found that `RecommendApprovalDecision` produced advice for requests already approved, denied or revoked. Fixed with a status/liveness guard returning **409** — see **R35**. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `8551099` — the NEX-034 docs promotion over product commit `e386e02`. |
-| Head commit (run end) | `12f6fa9` — NEX-035's product commit (docs promotion follows above it). |
-| Last CI result | **`12f6fa9` (NEX-035): VERIFIED** — 4/4 `completed/success`, every check run reporting `head_sha` `12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec` (both the push and the pull_request run), polled 2026-11-25T18:14Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Base commit (run start) | `72957e4` — the NEX-035 docs promotion over product commit `12f6fa9`. |
+| Head commit (run end) | `90eea0c` — NEX-036's product commit (docs promotion follows above it). |
+| Last CI result | **`12f6fa9` (NEX-035): VERIFIED** — 4/4 `completed/success`, polled 2026-11-25T18:14Z. **`90eea0c` (NEX-036): NOT POLLED** — pushed with roughly 15 minutes of window left and CI had not completed, so NEX-036 is **VERIFIED on local evidence only**. Poll `90eea0c` before calling it CI-verified. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-036 (run `NEX-2026-11-25-37`) — the caller was audited, and the advisory outlived its question
+
+The previous run's `next_action` asked for a caller audit on one question: does any
+production caller ignore a `DecisionEvaluation` and proceed, silently turning "the provider
+could not judge" into "allowed"? The premise was checked against the code first, because the
+two preceding runs had both left stale `next_action` fields.
+
+`RecommendApprovalDecision` is the only production caller. It was probed end to end through
+the real use case with a stub provider, before any fix:
+
+- A **pending** request returns score `0.5` and its status is still `pending` afterwards.
+  Advice never decides.
+- A **`DISABLED`** provider returns score `None` with reason `DISABLED`. The abstention
+  reaches the caller; nothing swallows it. This is the fail-closed property the audit existed
+  to test, and it held.
+- The subject's content does not travel: the note title is withheld by the classification
+  ceiling and named in `excluded_context_fields`, distinct from `over_cap_context_fields`.
+- **An `APPROVED` request produced an advisory. So did a `REVOKED` one.**
+
+That last finding is the defect. The use case's own docstring and the route summary both
+described advice about a *pending* approval, and the code asked only whether the caller owned
+the agent. A score attached to a settled request invites a reviewer to read it as the opinion
+that produced the decision, and a later reader — an auditor — to read it as one that informed
+it. In an approval trail that is precisely the wrong inference, and it is the kind a
+regulator is entitled to draw from the record. It also spent provider time and a withholding
+count on a question nobody could act on.
+
+The fix is a precondition, not a transition:
+
+- `RecommendApprovalDecision` refuses with `409` when the request is not `PENDING`, or when
+  its validity bound has passed. Nothing is mutated, so the check belongs in the use case
+  rather than the aggregate, whose guards are written for state changes.
+- Expiry is judged with the use case's **own clock** — the one that stamped the bound — never
+  the wall clock. R29 is the same defect in a different place, and a single-clock test suite
+  cannot see either.
+- The docstring and route summary were corrected to state the 409, so the contract the code
+  keeps and the contract the prose claims are now the same contract.
+
+Five tests pin it: four refusals (approved, denied, revoked, expired-under-the-advising-clock)
+and one asserting the live case still returns an advisory, so the fix cannot pass by refusing
+everything. The four refusal tests were verified to **fail** with the guard removed — the
+negative control was run on disk, then the file was restored from a backup and re-verified
+line by line, because a heredoc in this environment corrupted the command that ran it.
 
 ## NEX-035 (run `NEX-2026-11-25-36`) — the adapter was policed on its answer and trusted on its name
 

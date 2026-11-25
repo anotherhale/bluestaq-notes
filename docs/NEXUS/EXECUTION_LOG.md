@@ -4532,3 +4532,87 @@ provider could not judge" into "allowed". **Verify the premise first** —
 fields were both stale. Then pin, for each real caller, what it does on `ABSTAIN` with
 reason `DISABLED`, `PROVIDER_ERROR` and `MALFORMED_OUTPUT`. This is the fail-closed
 question and the one part of M2.6 no test covers yet.
+
+
+---
+
+## NEX-2026-11-25-37 — NEX-036: audit the decisioning path's production caller
+
+**Branch** `feature/agentic-enterprise-platform`
+**Starting commit** `72957e4` (NEX-035 docs promotion)
+**Ending commit** `90eea0c` (NEX-036 product commit; docs promotion follows above it)
+**Window** 25 min. Clock established with `date -u +%s` before any work.
+
+### Task
+
+The prior run's `next_action` asked for a caller audit: does any production caller ignore a
+`DecisionEvaluation` and proceed, silently turning "the provider could not judge" into
+"allowed"? The premise was verified against the code first — `RecommendApprovalDecision` is
+the only production caller — because the two preceding runs each left a stale `next_action`.
+
+### Probed before fixing
+
+The advisory path was driven end to end through the real use case with a stub provider:
+
+- pending → score `0.5`, status still `pending` afterwards: advice never decides.
+- `DISABLED` provider → score `None`, reason `DISABLED`: the abstention reaches the caller.
+- note title withheld by the classification ceiling and named in `excluded_context_fields`,
+  distinct from `over_cap_context_fields`: the subject's content does not travel.
+- **`APPROVED` → advisory produced. `REVOKED` → advisory produced.** Defect.
+
+### Defect and fix
+
+`RecommendApprovalDecision` checked ownership and nothing else, while its docstring and the
+route summary described advice about a *pending* approval. A score attached to a settled
+request reads as the opinion behind the decision, and to a later auditor as one that informed
+it. It also spent provider time and a withholding count on an unactionable question.
+
+Fixed with a precondition in the use case — not the aggregate, because nothing is mutated:
+
+- not `PENDING` → `409`; bound passed → `409`.
+- Expiry judged with the use case's own clock, the one that stamped the bound (R29's class).
+- Docstring and route summary corrected to state the 409.
+
+### Files changed
+
+- `src/notes_service/application/use_cases/approval_advisory.py`
+- `src/notes_service/presentation/api/routers/agents.py`
+- `tests/agent/test_approval_advisory.py`
+- `tests/api/test_approval_advisory_api.py`
+
+### Validation
+
+- `ruff format` clean (1 file reformatted), `ruff check` all checks passed.
+- `mypy` clean, 107 source files.
+- `pytest` **916 passed / 4 skipped**. Baseline 911 at NEX-035; this slice adds exactly 5.
+- **Negative control, run on disk:** with both guard branches replaced by `if False:`, the
+  four refusal tests (approved, denied, revoked, expired) all failed. The file was then
+  restored from a backup and re-verified — guard lines present, module parses. A heredoc
+  corrupted the command that ran this check, so the restoration was verified on **disk**, not
+  from the terminal output.
+- Fifth test asserts the pending case still returns an advisory, so the fix cannot pass by
+  refusing everything.
+
+### Delivery
+
+- Commit `90eea0c`; push verified against `git ls-remote` — remote and local both `90eea0c`.
+- **CI not polled.** The slice landed with ~15 minutes of window left; CI had not completed.
+  NEX-036 is recorded as VERIFIED on **local** evidence only, and `ci_status` says explicitly
+  that `90eea0c` is neither pass nor fail until polled.
+
+### What this run did not do
+
+- Did not claim CI green. A 15-minute-old push with unfinished checks is not evidence, and
+  the run's own rule is that a status is only ever what evidence establishes.
+- Did not touch the aggregate's guards. The refusal is a precondition on the question, so
+  putting it in `ApprovalRequest` would have conflated "cannot answer" with "cannot change".
+
+### Next action
+
+**NEX-037 — close R34: export the withholding rate.** The `WithholdingRecorder` port counts
+withholdings per process and NEX-032 reports them per response, but nothing exports the
+aggregate, so an operator cannot see that advisories are routinely thinner than expected.
+Verify the premise against the code first (`grep -rn 'WithholdingRecorder' src/notes_service`)
+— the last three `next_action` fields each needed correcting. Candidate scope: expose the
+existing counters through health/readiness or a metrics endpoint, with a test asserting a
+withheld field increments exactly one counter and a 409 refusal increments none.
