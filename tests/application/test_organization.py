@@ -616,3 +616,45 @@ class TestPersistenceConstraints:
             path = uow.organization_units.ancestor_path(leaf.id)
         assert path == [root.id, mid.id]
         assert OrganizationUnitId(str(mid.id)) in path
+
+
+class TestSuspendedTenantIsNotListed:
+    """A suspended tenant must not be listed as one the caller can act in.
+
+    ``GetOrganization`` refuses a suspended tenant (404) and the domain tenant
+    rule treats a non-operational organization as no access at all, so the
+    listing must agree. Otherwise the list tells the client "you have these
+    capabilities here" and every other call refuses it.
+    """
+
+    def test_suspended_organization_is_omitted_from_my_organizations(
+        self,
+        harness: Harness,
+        org,  # type: ignore[no-untyped-def]
+    ) -> None:
+        harness.make(UpdateOrganization).run(
+            principal_for(ALICE),
+            organization_id=org.organization.id,
+            status=OrganizationStatus.SUSPENDED.value,
+        )
+
+        assert harness.make(ListMyOrganizations).run(principal_for(ALICE)) == []
+        assert harness.make(ListMyOrganizations).run(principal_for(BOB)) == []
+
+    def test_other_tenants_survive_one_tenant_being_suspended(
+        self,
+        harness: Harness,
+        org,  # type: ignore[no-untyped-def]
+    ) -> None:
+        """Suspending one tenant must not hide the caller's remaining tenants."""
+        other = harness.make(CreateOrganization).run(
+            principal_for(ALICE), name="Globex", slug="globex"
+        )
+        harness.make(UpdateOrganization).run(
+            principal_for(ALICE),
+            organization_id=org.organization.id,
+            status=OrganizationStatus.SUSPENDED.value,
+        )
+
+        mine = harness.make(ListMyOrganizations).run(principal_for(ALICE))
+        assert [v.organization.id for v in mine] == [other.organization.id]

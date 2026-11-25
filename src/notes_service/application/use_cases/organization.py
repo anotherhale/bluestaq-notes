@@ -28,6 +28,7 @@ from notes_service.application.ports.organization_authorization import (
 )
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.base import UseCase
+from notes_service.application.use_cases.tenant_access import actionable_organization_ids
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.organization.entities import (
@@ -195,13 +196,24 @@ class CreateOrganization(OrganizationUseCase):
 
 
 class ListMyOrganizations(OrganizationUseCase):
-    """List the organizations the caller is an active member of."""
+    """List the organizations the caller can currently act in.
+
+    Filters through :func:`actionable_organization_ids` rather than membership
+    rows alone, so a suspended or archived tenant is omitted here exactly as
+    ``GetOrganization`` refuses it. Listing it would advertise capabilities that
+    every other call then denies.
+    """
 
     def run(self, principal: Principal) -> list[OrganizationView]:
         with self._uow_factory() as uow:
+            actionable = actionable_organization_ids(uow, user_id=principal.user_id)
+            if not actionable:
+                return []
             organizations = uow.organizations.list_for_user(principal.user_id)
             views: list[OrganizationView] = []
             for organization in organizations:
+                if organization.id not in actionable:
+                    continue
                 membership = uow.organization_memberships.get_for_user(
                     organization.id, principal.user_id
                 )

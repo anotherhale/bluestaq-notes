@@ -62,4 +62,18 @@ def ensure_tenant_access(uow: UnitOfWork, *, user_id: str | UserId) -> TenantAcc
     return access
 
 
-__all__ = ["ensure_tenant_access", "resolve_tenant_access"]
+def actionable_organization_ids(
+    uow: UnitOfWork, *, user_id: str | UserId
+) -> frozenset[OrganizationId]:
+    """The tenants the caller may currently act in.
+
+    This is the single answer to "which tenants count for this caller", so
+    tenant-scoped use cases stop re-deriving it from memberships and status
+    themselves. A caller with no actionable tenant gets an empty set, never a
+    broader one: the empty result is what makes a listing agree with the
+    per-tenant reads that refuse a non-operational tenant outright.
+    """
+    return resolve_tenant_access(uow, user_id=user_id).organization_ids
+
+
+__all__ = ["actionable_organization_ids", "ensure_tenant_access", "resolve_tenant_access"]

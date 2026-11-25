@@ -132,6 +132,52 @@ mypy clean. Detail in `EXECUTION_LOG.md`.
 
 ---
 
+## NEX-007 — Tenant-scoped capability answer
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 |
+| Priority | P1 |
+| Status | **TESTED** (local gates green) |
+| Dependencies | NEX-006 |
+
+**Objective:** give one authoritative answer to "which tenants may this caller act
+in", so tenant-scoped use cases stop re-deriving it from membership rows and
+organization status themselves.
+
+**Scope:** the domain rule already computed this set
+(`TenantAccess.organization_ids`) but nothing consumed it. Expose it through the
+existing application seam and make the tenant listing use it.
+
+**Defect closed:** `ListMyOrganizations` filtered on membership rows only, so a
+**suspended or archived tenant was listed with its full capability set** while
+`GetOrganization` refused the same tenant with `404`. A client would render a
+tenant it could not then use.
+
+**Acceptance criteria**
+
+- `actionable_organization_ids(uow, user_id=...)` returns exactly the tenants the
+  caller may act in: active membership *and* operational organization.
+- A suspended or archived tenant is absent from the set, and therefore absent
+  from `ListMyOrganizations`.
+- Suspending one tenant does not hide the caller's other tenants.
+- The listing agrees with the per-tenant read: what the list shows, the read
+  serves.
+- `domain/` and `application/` stay free of FastAPI/SQLAlchemy imports.
+
+**Required tests:** `tests/application/test_organization.py::TestSuspendedTenantIsNotListed`
+— suspended tenant omitted; other tenants survive suspension.
+
+**Security considerations:** tenant isolation. A suspended tenant granting
+capabilities in a listing is an inconsistency that leaks organizational state and
+misleads clients into issuing calls that must fail. No caching: the answer is
+re-derived per request, so a status change is reflected immediately.
+
+**Complexity:** small. **Outcome:** `pytest` 614 passed / 4 skipped; ruff and mypy
+clean. Detail in `EXECUTION_LOG.md`.
+
+---
+
 ## NEX-003 — Agent identity and token exchange
 
 | Field | Value |
