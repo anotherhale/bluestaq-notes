@@ -3,8 +3,8 @@
   "run_id": "NEX-2026-11-25-33",
   "timestamp": "2026-11-25T15:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3fc6464",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-028 all VERIFIED. NEX-029 (give the judgment path its first production caller) is IMPLEMENTED, TESTED and PUSHED at f71745e but NOT yet VERIFIED: its CI has not been polled. M2.6 decisioning now has a live route; R31 is partially mitigated (the context bounds have now met a real approval record, but not real note text).",
+  "commit": "2c626f9",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-030 all VERIFIED. NEX-029 (first production caller of the judgment path) is VERIFIED on evidence_basis descendant-CI: its own commit f71745e reads completed/cancelled on all four runs (superseded in the CI concurrency group by the docs commit e3b8517), and e3b8517 is 4/4 completed/success over a tree that contains all three NEX-029 product files. NEX-030 (ContextHash minted only by a ContextEnvelope) is VERIFIED with direct CI 4/4 success at 0727628. R31 is closed; its stated residual limit is that str.__new__ still bypasses the mint deliberately. M2.6 decisioning has a live route.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
