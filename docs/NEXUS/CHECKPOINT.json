@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-19",
-  "timestamp": "2026-11-25T08:50:00Z",
+  "run_id": "NEX-2026-11-25-20",
+  "timestamp": "2026-11-25T09:22:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "4ff4f62",
-  "commit_note": "Docs commit 4ff4f62 pushed and verified against origin/feature/agentic-enterprise-platform (local and remote SHAs identical). The docs commit carrying this line is its child.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4) and NEX-017 VERIFIED at 990557d (CI 4/4, observed 2026-11-25T08:56Z). Three tasks remain TESTED-but-unverified: NEX-003, NEX-006 and their SHAs must be re-polled before promotion.",
+  "commit": "PENDING - the commit carrying this checkpoint",
+  "commit_note": "The run started with the clone on main at d6f92d0. git ls-remote showed the authorized branch at ad21e5b; it was fetched and checked out and the working edits carried across cleanly. All gates were re-run on the feature branch after the checkout, because a green run on main says nothing about the branch that will be pushed.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4) and NEX-017 VERIFIED at 990557d (CI 4/4). NEX-018 IMPLEMENTED + TESTED locally, awaiting CI observation.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -27,7 +27,8 @@
     "NEX-014": "VERIFIED",
     "NEX-015": "VERIFIED",
     "NEX-016": "VERIFIED",
-    "NEX-017": "VERIFIED"
+    "NEX-017": "VERIFIED",
+    "NEX-018": "TESTED"
   },
   "completed_tasks": [
     "NEX-001",
@@ -47,44 +48,42 @@
     "NEX-014",
     "NEX-015",
     "NEX-016",
-    "NEX-017"
+    "NEX-017",
+    "NEX-003",
+    "NEX-006"
   ],
   "validation": {
-    "pytest_full": "716 passed, 4 skipped, run bare at 990557d this session (720 collected).",
-    "ruff_format": "clean (bare, repo-wide) - 196 files left unchanged, run this session",
-    "ruff_check": "All checks passed, run this session",
-    "mypy": "Success: no issues found in 98 source files, run this session",
-    "architecture": "tests/architecture 5 passed (layering boundary intact; the new import is application->application)",
-    "mutation_check": "The two new tests were observed FAILING before the fix (resolve returned 200 for a suspended delegator's token) and passing after.",
-    "migration_chain": "no migration added by NEX-017; head remains e5a3b9c04f21 (revocable_approvals)",
+    "pytest_full": "722 passed, 4 skipped, exit 0 - run bare on the feature branch this session (726 collected).",
+    "ruff_format": "clean (bare, repo-wide) - 197 files already formatted, run on the feature branch this session",
+    "ruff_check": "All checks passed, run on the feature branch this session",
+    "mypy": "Success: no issues found in 98 source files, run on the feature branch this session",
+    "new_tests_alone": "tests/agent/test_audit_chain.py - 6 passed",
+    "mutation_check": "The forgery was reproduced before the fix: a chain with a terminal entry whose status was flipped and whose outcome_hash/completed_at were nulled printed 'verified: True | reason: None'. After the fix the same input prints 'verified: False | reason: terminal invocation carries no outcome hash'.",
+    "architecture": "layering test untouched by this slice; audit_chain.py stays pure and framework-free",
+    "migration_chain": "no migration added by NEX-018; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "4ff4f62 4/4 completed/success, head_sha confirmed on all four runs",
-    "ci_note": "990557d: 4/4 completed/success, all four check runs reporting head_sha 990557de5d4daaa551d6613d41c0880dd34f8c60 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, each seen twice by the check-runs API). Verified by reading head_sha, not by assuming the commit association.",
-    "verified_at_commit": "990557d",
+    "ci_observed": "NONE for this run's commit",
+    "ci_note": "No CI result has been read for the commit carrying NEX-018. The most recent observed green is 4ff4f62, 4/4 completed/success, head_sha confirmed on all four runs at 2026-11-25T09:05Z - that run predates this code change and does not cover it.",
+    "verified_at_commit": "990557d (NEX-017, previous run)",
     "verified_by_run": "NEX-2026-11-25-18",
     "evidence_basis": {
-      "note": "NEX-003 and NEX-006 are promoted on a DESCENDANT-CI basis, stated explicitly rather than folded into a plain 'CI green at this SHA' claim. Neither product commit has its own check runs.",
-      "nex_003_commit": "e5f1bb4",
-      "nex_006_commit": "4c5a6ef",
-      "direct_ci_on_product_commits": "none - check-runs and actions/runs both report total 0 for e5f1bb4 and 4c5a6ef",
-      "ancestry": "git merge-base --is-ancestor confirms both e5f1bb4 and 4c5a6ef are ancestors of fa387a9",
-      "descendant_ci": "fa387a9 and ca15eb1 each observed 4/4 completed/success (Backend ruff/mypy/pytest/migrations + Frontend typecheck/lint/test/build), every run reporting head_sha equal to the commit polled. Because both product commits are ancestors, that green run executed their code and their tests.",
-      "local_rerun": "239 passed in 2.56s on 2026-11-25 (run NEX-2026-11-25-19) over tests/agent/test_agent_identity.py, tests/agent/test_delegation.py, tests/domain/test_tenant_access.py, tests/authentication/test_tenant_access_bearer.py, tests/authentication/test_login_use_cases.py, tests/api/test_agents_api.py.",
-      "criterion_coverage": "Each NEX-003 acceptance criterion maps to a direct test against the real domain modules (no fake): principal registered with owner+capabilities (test_owner_is_taken_from_the_argument_not_the_body, test_capabilities_are_a_ceiling_not_a_grant); attenuation child-subset-of-parent incl. 3-hop chains (test_no_pair_of_subsets_ever_grows, test_authority_never_grows_across_three_hops); over-broad request denial (test_excess_capability_raises_rather_than_being_trimmed); revocation immediacy (test_a_revoked_token_fails_closed_even_before_expiry, test_a_revoked_delegation_fails_closed); self-approval denial (test_an_agent_cannot_approve_its_own_action, test_an_agent_cannot_revoke_its_own_approval). NEX-006: three identity paths converge on one seam (test_login_use_cases, test_tenant_access_bearer, ResolveSession) plus the approve-then-effect path for agent tokens in tests/api/test_agents_api.py."
+      "note": "NEX-018 is NOT verified. It is IMPLEMENTED + TESTED. Verifying requires 4/4 completed/success observed with head_sha equal to the commit that carries it.",
+      "nex_018_commit": "the commit carrying this checkpoint - re-read git log -1",
+      "criterion_coverage": "Each rule is pinned by a test against the real ToolInvocation aggregate: a genuine chain verifies; an honest unfinished 'started' entry still verifies (so the fix cannot pass by refusing everything); the exact forgery - flip status, null outcome_hash and completed_at - fails; the same forgery behind a valid link fails at the right sequence; the pre-existing completed_at-only guard still fires; a stale seal after a status edit still fails."
     },
     "gates_this_run": {
-      "ruff_format_check": "pass - 196 files already formatted, run bare so docs fenced python was included",
+      "ruff_format_check": "pass - 197 files already formatted, run bare",
       "ruff_check": "pass - All checks passed",
       "mypy": "pass - no issues in 98 source files",
-      "pytest_acceptance_set": "239 passed in 2.56s (NEX-003 / NEX-006 acceptance set)"
+      "pytest_full": "pass - 722 passed, 4 skipped, exit 0"
     }
   },
-  "uncommitted_work": "none - tree clean after commit 4ff4f62",
+  "uncommitted_work": "none after this checkpoint's commit; the tree was clean before the docs commit.",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "fa387a9",
+    "head": "ad21e5b at run start; the NEX-018 commits are newer and not yet reflected in the body",
     "body_refreshed": "2026-11-25T08:23:26Z at head eab423c. Corrected three stale counters (707 tests, 195 ruff files, 97 mypy sources) to 718 / 196 / 98, refreshed the CI-evidence line to the observed b9b7207 result, and added NEX-016 to the defect list.",
     "metrics_at_head": {
       "additions": 28409,
@@ -97,7 +96,7 @@
       "measured_at": "fa387a9",
       "method": "PR object counters from GET /repos/anotherhale/bluestaq-notes/pulls/3 at this head"
     },
-    "note": "PR #3 head is fa387a9 (docs). Body refreshed 2026-11-25T08:46:30Z: counters re-measured at fa387a9 (28,409 additions / 10 deletions / 106 files / 89 commits, from the PR object), every 'measured at' reference moved to fa387a9, and no stale 28,385 / '88 commits' string remains. Remains open, draft, unmerged; automated merging is prohibited.",
+    "note": "PR #3 remains open, draft and unmerged. The body was NOT refreshed this run: the counters were last measured at fa387a9 and are now stale by two commits. Refreshing it is the next run's job once CI on the NEX-018 commit is known, so the body can cite a verified SHA.",
     "body_metrics_verified": true,
     "ci_verified_head": "b9b7207"
   },
@@ -156,24 +155,30 @@
       "detail": "Three claims in this repo's own docs were false at run start. STATE.md called ca15eb1 'docs-only and unclaimed' when it was 4/4 completed/success at that exact SHA. STATE.md carried PR counters of 28,385 additions / 88 commits when the PR object said 28,409 / 89. BACKLOG.md said 'CI has not yet run on c18bac7' when c18bac7 was 4/4 green. Each was written once at push time and never revisited. A note phrased 'CI has not yet run on X' has no expiry and is indistinguishable, to a later reader, from 'CI failed on X'. Mitigation: name the poll timestamp in any such note, and re-poll any not-yet-observed claim in the next run where that commit is reachable. Polling costs seconds.",
       "severity": "medium",
       "status": "mitigated-this-run"
+    },
+    {
+      "id": "R25",
+      "severity": "high",
+      "summary": "A verifier that only checks a seal when the seal exists can be defeated by deleting the seal.",
+      "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Select the next dependency-ready Phase-5 slice from ROADMAP.md. NEX-003 and NEX-006 are now VERIFIED, which unblocks agent-identity dependent work.",
-  "next_action": "1. Read the current Phase-5 section of ROADMAP.md and the unchecked items in BACKLOG.md. 2. Pick the highest-value dependency-ready slice whose dependencies are all VERIFIED. 3. Implement one complete vertical slice with a real-path end-to-end test. Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. VERIFIED now includes NEX-003 and NEX-006. Those two rest on descendant CI at fa387a9/ca15eb1 plus a 239-test local rerun; see validation.evidence_basis before re-litigating them. PR #3 is open, draft and must stay unmerged. The PR body is current at fa387a9.",
-  "ci_status": "4ff4f62: 4/4 completed/success (Backend x2, Frontend x2), every run reporting head_sha 4ff4f62; observed 2026-11-25T09:05Z via commits/{sha}/check-runs. fa387a9: 4/4 completed/success (08:52Z). ca15eb1: 4/4 completed/success. 990557d: 4/4 completed/success. b9b7207: 4/4 completed/success. c18bac7: 4/4 completed/success - corrected this run, the backlog had said CI had not run on it. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006): no check runs of their own; their CI evidence is descendant-CI, both confirmed ancestors of 4ff4f62 with git merge-base --is-ancestor. A docs commit pushed after this observation reads completed/cancelled; that is neither a pass nor a failure.",
+  "next_task": "Poll CI for the commit carrying NEX-018 and promote it to VERIFIED only on 4/4 completed/success reporting that head_sha. Then select the next dependency-ready Phase-5 slice from ROADMAP.md.",
+  "next_action": "1. GET /repos/anotherhale/bluestaq-notes/commits/{sha}/check-runs and confirm head_sha matches the NEX-018 commit. 2. Promote NEX-018 to VERIFIED in BACKLOG.md, STATE.md and this checkpoint only on 4/4 completed/success. 3. Pick the next Phase-5 slice. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-018 is the newest task: IMPLEMENTED + TESTED, not VERIFIED. Its fix is in domain/agent/audit_chain.py with tests in tests/agent/test_audit_chain.py. Before promoting it, poll commits/{sha}/check-runs for the commit carrying it and require 4/4 completed/success with a matching head_sha. PR #3 is open, draft and must stay unmerged. Do not use heredocs in this environment (R12).",
+  "ci_status": "NEX-018 commit: NOT POLLED. Last observed green: 4ff4f62 4/4 completed/success (head_sha confirmed) at 2026-11-25T09:05Z; fa387a9 4/4; ca15eb1 4/4; 990557d 4/4; b9b7207 4/4; c18bac7 4/4. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006) have no check runs of their own; their evidence is descendant-CI. A docs commit pushed after another reads completed/cancelled, which is neither a pass nor a failure.",
   "notes_on_pr_body": "Body refreshed at 2026-11-25T08:46:30Z; counters match the PR object at fa387a9 (106 files / 28,409 additions / 10 deletions / 89 commits / 720 tests collected / 10 migrations / 11 routers).",
   "validation_status": {
-    "gates": "local at fa387a9: ruff format --check clean, ruff check clean; pytest 239 passed on the NEX-003/NEX-006 acceptance set.",
-    "ci": "fa387a9: 4/4 completed/success (head_sha confirmed on all four runs). ca15eb1: 4/4 completed/success.",
-    "note": "NEX-003 and NEX-006 are VERIFIED on descendant CI plus a 239-test local rerun; the basis is recorded in validation.evidence_basis."
+    "gates": "local on the feature branch: ruff format --check clean (197 files), ruff check clean, mypy clean (98 sources), pytest 722 passed / 4 skipped.",
+    "ci": "not observed for the NEX-018 commit",
+    "note": "IMPLEMENTED + TESTED is not VERIFIED. Do not promote without a polled 4/4."
   },
   "pr_status": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "4ff4f62",
-    "body_updated": "2026-11-25T08:46:30Z",
+    "head": "newer than 4ff4f62; re-measure before quoting",
+    "body_updated": "2026-11-25T08:46:30Z (not refreshed this run)",
     "body_metrics_verified": true,
     "merge": "prohibited - must remain unmerged for human review",
     "mergeable_state": "clean",
@@ -202,8 +207,7 @@
     "NEX-006"
   ],
   "in_progress_tasks": {
-    "NEX-006": "TESTED",
-    "NEX-003": "TESTED"
+    "NEX-018": "TESTED"
   },
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }

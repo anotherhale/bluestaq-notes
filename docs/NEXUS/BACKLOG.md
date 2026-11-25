@@ -1004,3 +1004,49 @@ person's agent retained live authority over the delegator's resources.
 
 **Next action:** done — VERIFIED on 4/4 `completed/success` at `990557d`.
 
+## NEX-018 — Erasing an outcome seal must not launder a verdict
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P1 (security: audit integrity) |
+| Status | **IMPLEMENTED + TESTED locally** — awaiting commit, push and CI observation |
+| Dependencies | NEX-012 (audit chain), NEX-005 (gateway write path) |
+
+**Objective:** close the cheapest forgery against the audit chain. NEX-012 sealed
+each entry's verdict in `outcome_hash`, but `verify_chain` only recomputed that
+seal when it was *present*. An operator with database write access could rewrite
+a `denied` row to `succeeded`, then null both `outcome_hash` and `completed_at`.
+That left nothing to recompute, so the verifier reported `verified: True` — the
+exact threat NEX-012 exists to detect.
+
+**Root cause:** the verifier keyed only off `outcome_hash is not None` and
+`completed_at is not None`. Absence of a seal was never itself treated as
+suspicious for a *terminal* row. Only `started` may honestly have no seal.
+
+**Delivered:**
+
+- `domain/agent/audit_chain.py` — `verify_chain` now rejects a non-`started`
+  entry that carries no outcome seal, reason `"terminal invocation carries no
+  outcome hash"`. `_STARTED_STATUS = "started"` is a literal, not an import of
+  `InvocationStatus`, because `domain.agent.tools` imports this module (a cycle).
+- `tests/agent/test_audit_chain.py` — 6 domain tests against the real
+  `ToolInvocation` aggregate: genuine chain verifies; an honest unfinished
+  `started` entry still verifies; the exact forgery (flip verdict, null hash and
+  completion time) fails; the same forgery behind a valid link fails at the right
+  sequence; the pre-existing `completed_at`-only guard still fires; a stale seal
+  after a status edit still fails.
+
+**Why the existing test missed it:** `tests/api/test_audit_chain_verification_api.py`
+flipped `status` but left `outcome_hash` intact, so the stale-seal branch caught
+it. The stronger forgery — nulling the seal too — had no test. This is R18 again:
+the test exercised a weaker attack than the one the control must survive.
+
+**Gates (local, on the feature branch):** `ruff format --check` clean (197
+files), `ruff check` clean, `mypy` clean (98 sources), full `pytest` 722 passed /
+4 skipped. CI not yet observed — do not promote past TESTED until 4/4
+`completed/success` is seen on this commit.
+
+**Next action:** observe CI on the commit that carries this fix; promote to
+VERIFIED only on 4/4 `completed/success`.
+

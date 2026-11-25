@@ -2360,3 +2360,92 @@ value rather than unblocking.
 
 
 
+
+---
+
+## Run NEX-2026-11-25-20 — 2026-11-25T09:01Z
+
+**Run ID:** NEX-2026-11-25-20
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `ad21e5b`
+**Ending commit:** the commit carrying this entry
+**Project phase:** 5 (durable runtime)
+
+### Tasks
+
+- **NEX-018 (new):** closed a verdict-forgery hole in the audit-chain verifier.
+  IMPLEMENTED + TESTED locally. Not VERIFIED — no CI result has been read for
+  this commit.
+
+### What was wrong
+
+`verify_chain` recomputed an entry's `outcome_hash` only when one was present. A
+row rewritten from `denied` to `succeeded` with `outcome_hash` and
+`completed_at` both nulled had nothing left to recompute, so it verified clean.
+That is the cheapest forgery against the control NEX-012 added, and it defeated
+it silently.
+
+Reproduced before fixing against the real `verify_chain`: the forged chain
+printed `verified: True | reason: None`. After the fix it prints
+`verified: False | reason: terminal invocation carries no outcome hash`.
+
+### Why the existing test did not catch it
+
+`tests/api/test_audit_chain_verification_api.py` flips `status` to `succeeded`
+but leaves `outcome_hash` in place, so the stale-seal branch fires. Clearing the
+seal too was never exercised. Same shape as R18: the test attacked a weaker
+version of the threat than the control must survive.
+
+### Files changed
+
+- `src/notes_service/domain/agent/audit_chain.py` — `verify_chain` rejects any
+  non-`started` entry carrying no outcome seal.
+- `tests/agent/test_audit_chain.py` — new, 6 domain tests on the real aggregate.
+- `docs/NEXUS/BACKLOG.md`, `docs/NEXUS/EXECUTION_LOG.md`, `docs/NEXUS/STATE.md`,
+  `docs/NEXUS/CHECKPOINT.json` — coordination state.
+
+### Gates (local, on the feature branch)
+
+- `ruff format --check` (bare, repo-wide): clean — 197 files already formatted.
+- `ruff check`: All checks passed.
+- `mypy`: Success, no issues in 98 source files.
+- `pytest` (bare): 722 passed, 4 skipped, exit 0.
+- New file alone: 6 passed.
+
+### Reconciliation note
+
+The run began with the clone on `main` at `d6f92d0` while the checkpoint named
+`4ff4f62` on the feature branch. `git ls-remote` showed the authorized branch at
+`ad21e5b`; it was fetched and checked out and the working edits carried across
+cleanly (`git diff --stat` compared before and after). Every gate above was then
+re-run **on the feature branch**, because a green run on `main` says nothing
+about the branch that will be pushed. An incidental `uv.lock` from installing
+the dev extra was removed, not committed.
+
+### Decisions
+
+- Kept `_STARTED_STATUS` a string literal rather than importing
+  `InvocationStatus`: `domain.agent.tools` imports this module for the hash
+  functions, so importing back would be a cycle.
+- The new tests live in `tests/agent/` against the domain aggregate, not only in
+  the API test. The API test cannot cheaply build a forged row that still has a
+  valid intent hash; the domain test can, and the rule under test is a domain
+  rule.
+
+### Tooling note
+
+A `cat >> file <<'EOF'` heredoc corrupted its own command text and had to be
+abandoned; the target file was verified unmodified afterwards. Wrote the entry
+to a temp file and appended it with `cat tmp >> target` instead. This is R12
+recurring — do not use heredocs here.
+
+### CI
+
+**No CI result has been read for the commit carrying this entry.** Per R24, that
+is stated as an absence, not a pass. The next run must poll it.
+
+### Next action
+
+Poll CI for the commit carrying this fix. Promote NEX-018 to VERIFIED only on
+4/4 `completed/success` reporting that `head_sha`. Then resume Phase-5 selection
+from `ROADMAP.md`.

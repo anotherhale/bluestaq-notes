@@ -9,13 +9,34 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED (NEX-003 promoted this run). Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `fa387a9` — all edits in this run are docs committed on top of it. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
-| Head commit (run end) | `4ff4f62` (docs: NEX-003/NEX-006 promoted, three stale CI claims corrected; pushed and verified against origin). The docs commit carrying this line is its child. |
-| Last CI result | **Green on `4ff4f62`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), every run reporting `head_sha` `4ff4f62`, polled 2026-11-25T09:05Z. `fa387a9` was also 4/4 green at 08:52Z. Locally this run: `ruff format --check` 196 files clean, `ruff check` clean, `mypy` 98 files clean, 239 acceptance tests passed. |
+| Base commit (run start) | `ad21e5b` — the clone started on `main` at `d6f92d0`; `git ls-remote` showed the authorized branch at `ad21e5b`, which was fetched and checked out before any gate was trusted. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
+| Head commit (run end) | the commit carrying this line — `feat(agent): reject a terminal verdict with no outcome seal` (NEX-018), plus its docs commit. Re-read `git log -1`; do not assume. |
+| Last CI result | **No CI result has been read for the NEX-018 commit.** Green on `4ff4f62`, 4/4 `completed/success`, every run reporting `head_sha` `4ff4f62`, polled 2026-11-25T09:05Z — that is the previous run's evidence and does not cover this run's code change. Locally this run **on the feature branch**: `ruff format --check` 197 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` 722 passed / 4 skipped. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `fa387a9`. Body last **refreshed 2026-11-25T08:46:30Z** at that head: **106 files, 28,409 insertions, 10 deletions, 89 commits**, 720 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at `fa387a9`. |
-| CI status | **`fa387a9`: 4/4 `completed/success`**; `ca15eb1`: 4/4 `completed/success`; `990557d`: 4/4; `b9b7207`: 4/4. `e5f1bb4` (NEX-003) and `4c5a6ef` (NEX-006) have **no check runs of their own** — they are ancestors of the green heads above. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `ad21e5b` locally at run start; the NEX-018 commits are newer and not yet reflected in the body. Body last **refreshed 2026-11-25T08:46:30Z** at that head: **106 files, 28,409 insertions, 10 deletions, 89 commits**, 720 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at `fa387a9`. |
+| CI status | **NEX-018 commit: not yet polled.** `fa387a9`: 4/4 `completed/success`; `ca15eb1`: 4/4 `completed/success`; `990557d`: 4/4; `b9b7207`: 4/4. `e5f1bb4` (NEX-003) and `4c5a6ef` (NEX-006) have **no check runs of their own** — they are ancestors of the green heads above. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-018 (run `NEX-2026-11-25-20`) — erasing the seal laundered the verdict
+
+`verify_chain` recomputed an entry's `outcome_hash` only when one was present, so
+the cheapest possible forgery worked: rewrite a `denied` row to `succeeded`, null
+`outcome_hash` *and* `completed_at`, and there was nothing left to recompute. The
+forged chain verified clean. Reproduced before the fix (`verified: True`), and
+rejected after it (`terminal invocation carries no outcome hash`).
+
+The existing API test flipped `status` but left `outcome_hash` intact, so the
+stale-seal branch caught it. The stronger forgery was never exercised — R18's
+shape again: the test attacked a weaker threat than the control must survive.
+
+Fix: a non-`started` entry carrying no seal is now a break. Only `started` may
+honestly lack one, because its outcome is not known yet. `_STARTED_STATUS` is a
+literal, not an import, to avoid a cycle with `domain.agent.tools`.
+
+Status: **IMPLEMENTED + TESTED locally. Not VERIFIED** — no CI result has been
+read for the commit. Six domain tests in `tests/agent/test_audit_chain.py`,
+including the honest unfinished-`started` case, so the fix cannot be "pass" by
+refusing everything.
 
 ## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable
 
