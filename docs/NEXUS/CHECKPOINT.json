@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-07",
-  "timestamp": "2026-11-25T03:45:00Z",
+  "run_id": "NEX-2026-11-25-08",
+  "timestamp": "2026-11-25T03:46:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e93a3e9",
-  "commit_note": "The last commit whose gates and CI were verified (4/4 green). The docs commit recording this run is its child.",
-  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED; OIDC verifier now TESTED)",
+  "commit": "0fcc078",
+  "commit_note": "The last commit whose gates and CI were verified (4/4 green on both push and pull_request). The docs commit recording this run is its child.",
+  "project_phase": "Phase 2 complete - agent identity & delegation VERIFIED (tool gateway incl. HTTP surface, tenant-scoped capability answer, OIDC token verifier). Next: Phase 5 durable agentic runtime.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
-    "NEX-002": "TESTED",
+    "NEX-002": "VERIFIED",
     "NEX-006": "TESTED",
     "NEX-003": "TESTED",
     "NEX-005": "VERIFIED",
@@ -18,7 +18,7 @@
     "NEX-007": "VERIFIED",
     "NEX-005-HTTP": "VERIFIED",
     "NEX-008": "VERIFIED",
-    "NEX-010": "TESTED"
+    "NEX-010": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -29,7 +29,8 @@
     "NEX-008",
     "NEX-005-HTTP",
     "NEX-007",
-    "NEX-010"
+    "NEX-010",
+    "NEX-002"
   ],
   "validation": {
     "pytest_full": "639 passed, 4 skipped (643 collected, 0 failures/errors) - counted from JUnit XML because this project's pytest config suppresses the summary line",
@@ -40,18 +41,19 @@
     "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed at 3f1d855; no frontend files changed since",
     "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
     "mutation_check": "each of verify_aud, verify_iss, verify_exp, verify_iat, verify_signature, the nonce check, the nonce comparison, the blank-subject guard, and the algorithm allowlist was disabled in turn and each produced a red suite; deleting the 'require' claim list survives because issuer=/audience= and the _as_datetime guard already refuse those tokens",
-    "ci_observed": false,
-    "ci_note": "CI is green at e1cb0c5 (4/4 check runs completed/success). The commit from this run has no CI result yet, so NEX-010 and NEX-002 are TESTED, not VERIFIED.",
-    "verified_at_commit": "e1cb0c5",
-    "verified_by_run": "NEX-2026-11-25-06"
+    "ci_observed": true,
+    "ci_note": "4/4 check runs completed/success on 0fcc078 for both the push (45541856292) and pull_request (45541862595) events. 0fcc078 descends from 2dd7a0c, so CI ran the full suite including the 21 new OIDC verifier tests. This is what promotes NEX-010 and NEX-002 from TESTED to VERIFIED.",
+    "verified_at_commit": "0fcc078",
+    "verified_by_run": "NEX-2026-11-25-08",
+    "ci_first_push_was_red": "2dd7a0c failed the backend job at ruff format --check on a Python fence in docs/NEXUS/EXECUTION_LOG.md. Not a test or product defect: CI runs the gate bare and repo-wide and ruff formats Python inside Markdown, while the pre-push local run had been scoped to `src tests` and skipped docs/. Fixed in 0fcc078; the trap is now recorded in AGENTS.md."
   },
-  "uncommitted_work": "none after this run commits: the new test module, the nonce fix, and the docs update (BACKLOG, STATE, CHECKPOINT, EXECUTION_LOG)",
+  "uncommitted_work": "none",
   "pr_state": {
     "pr": 3,
     "state": "draft",
     "merged": false,
     "description_updated": "2026-11-25T03:12:00Z",
-    "note": "Open and still draft (isDraft=true, state=OPEN, never merged). Title and body were refreshed this run: title is \"Implement enterprise organization, identity, delegation, and tool gateway\"; body records 20,576 insertions / 89 files / 614 tests, the 4 new routers, 4 migrations, and ADR-011. The body previously claimed specification-only work, understating the branch by an order of magnitude."
+    "note": "Open and still draft (isDraft=true, state=OPEN, never merged). Body still records 20,576 insertions / 89 files / 614 tests while the branch is now 21,190 / 90 / 643 and does not yet mention NEX-010. Numbers are directionally honest, not current - refreshing the body is queued as the next bookkeeping action, after NEX-009 work."
   },
   "tracking_issue": {
     "number": 2,
@@ -60,16 +62,14 @@
   },
   "blockers": [],
   "risks": [
-    "R3 (CLOSED 2026-11-25): CI was absent entirely; it now runs on every push and pull request and is green at c18bac7. Residual: CI covers the documented gates only, so a gap no test exercises is still a gap.",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
-    "R5 (CLOSED 2026-11-25): the gateway had no HTTP exposure. POST /api/v1/agents/tools/invoke now exposes it, pinned by tests/api/test_tool_gateway_api.py (9 tests) and green in CI at c18bac7.",
-    "R6 (CLOSED 2026-11-25): gateway denial replay and revocation mapping are pinned by tests/agent/test_tool_gateway.py; keep that file or both defects can return silently.",
     "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers.",
-    "R9 (CLOSED 2026-11-25, run NEX-2026-11-25-07, NEX-010): the OIDC token verifier (HttpOidcRelyingParty._verify_id_token) had no direct test; no file under tests/ imported infrastructure/identity/oidc_relying_party and every login test injected FakeRelyingParty, so the real signature/iss/aud/exp/nonce checks could regress with a green suite. Now pinned by tests/authentication/test_oidc_relying_party.py (21 tests, real in-process RSA keys, only the JWKS lookup stubbed), with each guard proved load-bearing by mutation. Writing it found and fixed a real defect: a non-ASCII nonce claim raised TypeError out of secrets.compare_digest on str, so a hostile token produced a 500 instead of a refusal. Residual: the JWKS client itself is still stubbed, so network key discovery remains untested by design."
+    "R9 (CLOSED 2026-11-25, NEX-010): the OIDC token verifier had no direct test; no file under tests/ imported infrastructure/identity/oidc_relying_party and every login test injected FakeRelyingParty. Now pinned by tests/authentication/test_oidc_relying_party.py (21 tests, real in-process RSA keys, only the JWKS lookup stubbed), each guard proved load-bearing by mutation, and green in CI at 0fcc078. Writing it found and fixed a real defect: a non-ASCII nonce claim raised TypeError out of secrets.compare_digest on str, so a hostile token produced a 500 instead of a refusal. Residual: the JWKS client itself is still stubbed, so network key discovery remains untested by design.",
+    "R10 (low, process): a green local gate run is only evidence if it invokes the same command CI invokes. Scoping ruff to `src tests` let a docs Markdown fence fail CI. Run the gates bare; see AGENTS.md."
   ],
   "next_task": "NEX-009",
-  "next_action": "Read the check runs for this run's commit; on green, promote NEX-010 and NEX-002 from TESTED to VERIFIED. Then start NEX-009 (durable agentic runtime) with the first slice scoped to run-checkpoint persistence plus a resume test rather than the whole task: prove a run that checkpoints progress resumes after interruption without repeating completed side effects.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-010 and NEX-002 are TESTED (local gates green, CI pending on this commit); everything through NEX-008 plus NEX-007 is VERIFIED. Confirm CI before promoting anything. NEX-009 (durable runtime) is the next dependency-ready task and is large - slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
+  "next_action": "Start NEX-009 (durable agentic runtime) with the first slice scoped to run-checkpoint persistence plus a resume test rather than the whole task: prove a run that checkpoints progress resumes after interruption without repeating completed side effects. Secondary, if the clock is short: refresh the PR #3 body counts (21,190 insertions / 90 files / 643 tests) and add NEX-010 to its status table.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. Everything through NEX-010 is VERIFIED with CI evidence at 0fcc078 (4/4 green, push and pull_request). NEX-009 (durable runtime) is the next dependency-ready task and is large - slice it to run-checkpoint persistence plus a resume test. Never merge PR #3. Push to the feature branch only. Run the quality gates bare, exactly as CI does, or a docs code block can fail CI. If the tree is dirty, inspect before discarding; do not reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -81,7 +81,7 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T03:12Z",
-    "note": "Green on e1cb0c5 on both push and pull_request events; all four check runs completed/success."
+    "observed": "2026-11-25T03:46Z",
+    "note": "Green on 0fcc078 for both push (45541856292) and pull_request (45541862595); all four check runs completed/success."
   }
 }

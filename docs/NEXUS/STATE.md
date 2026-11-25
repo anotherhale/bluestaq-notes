@@ -7,19 +7,21 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED; OIDC verifier now TESTED) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED (tool gateway incl. HTTP surface; tenant-scoped capability answer; OIDC token verifier). Next: Phase 5 durable runtime |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `e93a3e9` |
-| Head commit (run end) | _set after commit_ |
+| Base commit (run start) | `2dd7a0c` |
+| Head commit (run end) | `0fcc078` (CI-verified) plus this run's docs commit |
+| Last CI result | **4/4 green** on `0fcc078` — push `45541856292`, pull_request `45541862595` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-010** is **TESTED** (run `NEX-2026-11-25-07`) — committed
-and pushed, local gates green; it becomes **VERIFIED** when CI is green on the
-commit carrying it. The next dependency-ready task is **NEX-009** (durable
+None in flight. **NEX-010** is **VERIFIED** (run `NEX-2026-11-25-08`): CI ran the
+full suite on `0fcc078`, a descendant of the commit that added the tests, and all
+four check runs passed on both the push and pull_request events. That is the
+evidence, not the local run. The next dependency-ready task is **NEX-009** (durable
 agentic runtime); see Next best actions.
 
 
@@ -49,7 +51,9 @@ when the untrusted `nonce` claim contains non-ASCII. A hostile IdP response
 therefore produced a **500 at the edge** instead of a refusal. It now compares
 UTF-8 encodings — still constant-time, and unable to raise.
 
-NEX-002 moves **IMPLEMENTED → TESTED** on this evidence.
+NEX-002 moves **IMPLEMENTED → TESTED → VERIFIED**. It became VERIFIED in run
+`NEX-2026-11-25-08` when CI ran the full suite on `0fcc078` (4/4 green), because
+local gates are not CI evidence and this run refused to conflate them.
 
 Previously, **NEX-007 — Tenant-scoped capability answer** (run `NEX-2026-11-25-06`,
 `e1cb0c5`). `ListMyOrganizations` filtered on membership rows alone, so a
@@ -146,21 +150,26 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-07`, pre-commit) |
+| Gate | Result (run `NEX-2026-11-25-08`, bare as CI runs them) |
 | --- | --- |
-| `pytest` (full) | **639 passed, 4 skipped** (643 collected, 0 failures/errors) |
-| `pytest tests/architecture` | passed (layering invariant intact) |
-| `ruff format --check` | clean |
+| `ruff format --check` | clean — **182 files** (repo-wide, includes `docs/` Markdown fences) |
 | `ruff check` | clean |
 | `mypy` | clean (94 source files) |
+| `pytest` (full) | **639 passed, 4 skipped** — as reported by CI on `0fcc078` |
 | Frontend `typecheck`/`lint`/`test`/`build` | passed at `3f1d855` (127 tests, 9 files); no frontend files changed since |
-| `alembic upgrade head` → `downgrade base` | passed on fresh SQLite (unchanged this run) |
 
-> Local gates are **not** CI evidence. CI is green at `e1cb0c5` (4/4 check runs
-> `completed/success`); this run's commit still needs its own CI result before
-> NEX-010 and NEX-002 can be called **VERIFIED**. CI earned that trust earlier by
-> catching a real defect on its first execution — see the R3 entry and NEX-008 in
-> `BACKLOG.md`.
+> **CI is the evidence, and it is green.** `0fcc078` reports 4/4 check runs
+> `completed/success` on both the push (`45541856292`) and pull_request
+> (`45541862595`) events, and it descends from the commit that added the OIDC
+> tests, so the full suite ran. That is what promoted NEX-010 and NEX-002 to
+> **VERIFIED** in run `NEX-2026-11-25-08`.
+>
+> The first push of this slice (`2dd7a0c`) was **red**, and the reason is worth
+> keeping: CI runs `ruff format --check` bare and repo-wide, and ruff formats
+> Python inside Markdown, so an unformatted Python fence in `EXECUTION_LOG.md`
+> failed the backend job. The pre-push local run had been scoped to `src tests`
+> and never looked at `docs/`. Local gates are only evidence when they invoke the
+> same command CI invokes — see R10.
 
 ## Blockers
 
@@ -210,22 +219,26 @@ None currently. The following are known open items, not blockers:
   instead of replaying the recorded refusal, and a revoked delegation surfaced
   the domain `InvariantViolation` (a 500 at the edge) instead of a refusal.
   Do not delete that file; both bugs return silently without it.
-
+- **R10 (low, process — new this run):** a green local gate run is only evidence
+  if it invokes the *same command CI invokes*. The pre-push run for `2dd7a0c` was
+  scoped to `src tests`, so it skipped `docs/`, where ruff then failed the build
+  on a Markdown-embedded Python fence. Run the gates bare. Recorded in
+  `AGENTS.md` so the next run does not relearn it.
 
 ## Next best actions
 
 1. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
    runs checkpoint progress and resume after interruption without repeating
-   completed side effects. NEX-005, NEX-007, and now NEX-010 are done, so this is
-   the highest-value dependency-ready task — but it is *large*. Scope the first
-   slice to run-checkpoint persistence plus a resume test rather than attempting
-   the whole task. (P2.)
-2. **Confirm CI on the NEX-010 commit.** Once the run that carries
-   `tests/authentication/test_oidc_relying_party.py` reports green check runs,
-   move **NEX-010** and **NEX-002** from TESTED to VERIFIED. Do not promote them
-   on local gates alone — that is exactly the conflation R9 was filed about.
-3. **Keep PR #3 honest as slices accumulate.** The body records 20,576 insertions
-   / 89 files / 614 tests as of `e1cb0c5`; this run adds a test module and a
-   production fix. Re-check `git diff --stat main...HEAD` against the body
-   whenever a slice lands, because the body has understated the branch before.
+   completed side effects. NEX-005, NEX-007, NEX-010, and NEX-002 are all done, so
+   this is now unambiguously the highest-value dependency-ready task — but it is
+   *large*. Scope the first slice to run-checkpoint persistence plus a resume test
+   rather than attempting the whole task. (P2.)
+2. **Refresh the PR #3 body.** It records 20,576 insertions / 89 files / 614 tests
+   as of `e1cb0c5`; the branch is now 21,190 insertions / 90 files / 643 tests and
+   the body does not mention NEX-010 or the nonce defect. Compare against
+   `git diff --stat main...HEAD` — the body has understated this branch before, and
+   a reviewer reading it would misjudge the size by an order of magnitude.
+3. **Promote nothing on local gates alone.** NEX-010 and NEX-002 are VERIFIED
+   because CI ran them, not because the suite was green locally. That conflation is
+   exactly what R9 was filed about, and R10 is the same mistake one layer down.
 

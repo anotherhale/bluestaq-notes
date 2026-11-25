@@ -51,7 +51,7 @@ skipped.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 |
-| Status | **TESTED** (local gates green; awaiting CI — was IMPLEMENTED pending NEX-010) |
+| Status | **VERIFIED** (CI 4/4 green on `0fcc078`, run `NEX-2026-11-25-08`) |
 | Dependencies | NEX-001 |
 
 **Objective:** replace demo-only authentication with a real OIDC authorization-
@@ -110,8 +110,9 @@ signatures. Each `jwt.decode` option and the nonce check is pinned by a test tha
 goes red when that option is removed (verified by mutation). Writing them found a
 real defect — a non-ASCII `nonce` claim raised `TypeError` out of
 `secrets.compare_digest` on `str`, turning a hostile token into a 500 instead of a
-refusal — now fixed. The criterion above is covered; NEX-002 is **TESTED** and
-becomes **VERIFIED** once CI is green on the commit carrying that file.
+refusal — now fixed. The criterion above is covered. NEX-002 is **VERIFIED**:
+CI ran the full suite on `0fcc078` (a descendant of the commit carrying the tests)
+and all four check runs passed on both the push and pull_request events.
 
 ---
 
@@ -479,7 +480,7 @@ push and pull request, and it has demonstrably caught a real defect.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 (security — closes an unverified acceptance criterion) |
-| Status | **TESTED** (local gates green; awaiting CI) |
+| Status | **VERIFIED** (CI 4/4 green on `0fcc078`, run `NEX-2026-11-25-08`) |
 | Dependencies | NEX-002 |
 | Complexity | small |
 
@@ -543,6 +544,9 @@ still pinned by `test_token_without_{expiry,issued_at,issuer,audience}_is_reject
 and `test_required_claims_must_be_present`, so a future edit that opens the gap
 is caught even though that particular line is redundant.
 
-**Remaining step to VERIFIED:** CI green on the commit carrying this file.
-NEX-002 likewise moves to TESTED now and to VERIFIED with that CI evidence.
+**Promoted to VERIFIED (run `NEX-2026-11-25-08`):** CI reported 4/4 check runs
+`completed/success` on `0fcc078`, on both the push (`45541856292`) and
+pull_request (`45541862595`) events. Because `0fcc078` descends from the commit
+that added the tests, CI executed this file's 21 tests — the evidence is CI's
+result, not the local run. NEX-002 was promoted on the same evidence.
 

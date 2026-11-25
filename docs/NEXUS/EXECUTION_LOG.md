@@ -1086,3 +1086,68 @@ Lesson worth more than the fix: a green local gate run is only evidence if it
 invokes the same command CI invokes. "I ran the gates" and "I ran CI's gates"
 are different claims, and conflating them is how a red push gets reported as
 validated.
+
+---
+
+## Run `NEX-2026-11-25-08` — 2026-11-25T03:31Z → 03:52Z
+
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `2dd7a0c`
+**Ending commit:** this run's docs commit (parent `0fcc078`, CI-verified)
+**Task:** close out NEX-010 on CI evidence; do not start a new slice.
+
+### What this run actually did
+
+This was a **verification and truth-repair run**, not an implementation run. The
+preceding run had left NEX-010 and NEX-002 as TESTED with a red CI run on
+`2dd7a0c`. The whole job was to make CI green and then promote status only on
+what CI proved.
+
+1. Diagnosed the red backend job on `2dd7a0c`. The failure was
+   `ruff format --check` on a Python fence in `docs/NEXUS/EXECUTION_LOG.md`, not
+   a test failure and not a product defect. CI runs the gate **bare and
+   repo-wide**, and ruff formats Python inside Markdown; the pre-push local run
+   had been scoped to `src tests`, so it never looked at `docs/`. Fixed by
+   formatting the file (2 insertions, 4 deletions) and recording the trap in
+   `AGENTS.md`.
+2. Re-ran all three gates exactly as CI runs them, bare: `ruff format --check`
+   (182 files clean), `ruff check` (passed), `mypy` (94 files, no issues).
+3. Committed as `0fcc078`, fetched, confirmed the remote head was my parent
+   (`2dd7a0c`), pushed fast-forward, and verified with the authoritative
+   `git ls-remote` that remote == local == `0fcc078`.
+4. Read the check runs: **4/4 `completed/success`** on `0fcc078` for both the
+   push (`45541856292`) and pull_request (`45541862595`) events. Since `0fcc078`
+   descends from the commit that added the OIDC tests, CI ran those 21 tests.
+5. Promoted **NEX-010** and **NEX-002** from TESTED to **VERIFIED** on that
+   evidence, in `CHECKPOINT.json`, `STATE.md`, and `BACKLOG.md`.
+
+### A trap this run walked into
+
+My first attempt to edit `BACKLOG.md` used a `python3 - <<'PY'` heredoc. The
+terminal corrupted it — the script body was duplicated and spliced mid-string,
+and it died with `TypeError: replace() argument 2 must be str, not int`. Nothing
+was written: `git diff --stat` confirmed `BACKLOG.md` was untouched, so no
+damage. Re-did the four edits with `file_editor`. This is the third time a
+heredoc has mangled a command in this workspace; the standing rule is to write
+scripts to a file first, or use `file_editor` for prose.
+
+### Verification status, stated precisely
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| NEX-010 | **VERIFIED** | CI 4/4 green on `0fcc078`, which contains the 21 tests |
+| NEX-002 | **VERIFIED** | same CI result covers the criterion NEX-010 pinned |
+| `0fcc078` pushed | **PUSHED** | `git ls-remote` == local HEAD |
+| This run's docs commit | **COMMITTED** | see the commit; CI not yet observed on it |
+| PR #3 | **PR OPEN, DRAFT, UNMERGED** | body counts stale — queued as next action |
+
+Note the last two rows honestly: the docs commit carrying this log has no CI
+result yet at the time of writing, and it is a docs-only change whose gate risk
+is the Markdown-fence trap just fixed. I did not mark the PR updated because I
+did not update it.
+
+### Next exact action
+
+Start **NEX-009** (durable agentic runtime). Slice it: persist run checkpoints
+and prove, with a test, that an interrupted run resumes without repeating
+completed side effects. Do not attempt the whole task in one run.
