@@ -215,7 +215,10 @@
   "ci_status": {
     "product_slice_sha": "6e7141e",
     "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 6e7141e, every check run reporting head_sha 6e7141e (Backend and Frontend, one pair per push and pull_request event), polled 2026-11-25T20:0xZ. This is a plain 'green at this SHA' claim: the polled SHA is the head that CI built.",
-    "polled_at": "2026-11-25T20:05Z"
+    "polled_at": "2026-11-25T20:05Z",
+    "docs_commit_sha": "736298b",
+    "docs_commit_result": "VERIFIED GREEN - 4/4 completed/success at 736298b (Backend and Frontend, one pair per push and pull_request event), every check run reporting head_sha 736298b, polled 2026-11-25T20:32Z. Docs-only change; the product slice it records is 6e7141e.",
+    "unobserved": "The commit that writes this line is itself a docs-only change and its CI has not been observed at write time. Do not read its absence as a failure. Product code last changed in 6e7141e, green at 4/4."
   },
   "verified_tasks": [
     "NEX-001",
@@ -286,7 +289,8 @@
     "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 6e7141ee66f15ac26a182d465a52f9facf8ee945, identical to local HEAD. Verified with ls-remote, not the local origin/* tracking ref.",
     "pr_updated": false,
     "tracking_issue_updated": false,
-    "note": "PR #3 body and tracking issue #2 do not yet carry NEX-041; recorded as delivery debt."
+    "note": "PR #3 body and tracking issue #2 do not yet carry NEX-041; recorded as delivery debt.",
+    "head_pushed": "736298b (docs commit, verified via ls-remote)"
   },
   "run_summary": "NEX-2026-11-25-41. Reconciled a shallow local f4388fc against remote 49814cc (three NEX-039 commits never seen locally) and fast-forwarded with uncommitted tools/ work preserved. Delivered NEX-041: tools/nexus_coord with a git-ref lease and per-task claims, 32 tests, ADR-013. Caught a gate-wiring defect before shipping: the tests were at tools/tests, which testpaths=[\"tests\"] would never have collected, so CI would have run zero of them while reporting green. Relocated to tests/coordination and extended ruff/mypy scope to tools/. Committed 6e7141e, pushed, CI 4/4 green.",
   "head_observation": {
@@ -297,5 +301,11 @@
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
   "run_id_collision": "NEX-2026-11-25-35 was ALREADY used by at least four earlier entries in docs/NEXUS/EXECUTION_LOG.md (grep -c 'NEX-2026-11-25-35' returned 7). This run therefore uses NEX-2026-11-25-36. Run ids have been reused for at least 4 consecutive runs (-28..-35 all show 3-7 occurrences), so the id is NOT a unique key and must not be used to address a run. Address runs by commit SHA. The collision is recorded rather than silently renumbered so the log stays honest about what it already contains.",
-  "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array."
+  "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
+  "head_observed": {
+    "sha": "736298b3c3575dc0dd8459e544a33e08aeb1ede9",
+    "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+    "at": "2026-11-25T20:31Z",
+    "note": "Equals local HEAD at the time of reading. The docs commit that writes this file advances the head past this value; re-read with ls-remote."
+  }
 }
