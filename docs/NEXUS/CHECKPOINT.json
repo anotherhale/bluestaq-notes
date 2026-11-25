@@ -215,8 +215,8 @@
   ],
   "next_task": "Read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice. NEX-001..NEX-025 are all VERIFIED. Also refresh PR #3's body from the PR object to include NEX-025 (d481bd0) and R28.",
   "next_action": "Read ROADMAP.md Phase 5, pick the next slice from BACKLOG.md, and implement it as one vertical slice.",
-  "recovery_instructions": "HEAD is one docs commit (7229b73) ahead of the `commit` field d481bd0: confirm with `git log --oneline -3`. NEX-001..NEX-025 are all VERIFIED. PR #3 is draft and unmerged. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md and refresh PR #3's body to cover NEX-025.",
-  "ci_status": "d481bd0 (NEX-025 code slice): 4/4 completed/success, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z. Docs head 7229b73 was pushed after the poll; its own runs are not yet observed and a superseded docs head reads completed/cancelled, which is neither a pass nor a failure.",
+  "recovery_instructions": "HEAD is TWO docs commits (7229b73 checkpoint-at-TESTED, ae64d4c promotion) ahead of the `commit` field d481bd0: confirm with `git log --oneline -4`. Both docs commits change only docs/NEXUS/. NEX-001..NEX-025 are all VERIFIED and R28 is closed on both revocation paths. PR #3 is draft and unmerged. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md and refresh PR #3's body to cover NEX-025 (d481bd0) and R28.",
+  "ci_status": "d481bd0 (NEX-025 code slice): 4/4 completed/success, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z. Docs heads 7229b73 and ae64d4c were pushed after that poll and their own runs are not observed; a superseded docs head reads completed/cancelled, which is neither a pass nor a failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -249,5 +249,5 @@
   ],
   "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "d481bd0 is the NEX-025 code slice and the commit its CI evidence belongs to. The commit that writes this checkpoint is its child (docs-only), so `git rev-parse HEAD` will normally be one commit ahead of the `commit` field - expected, not staleness."
+  "commit_scope": "d481bd0 is the NEX-025 code slice and the commit its CI evidence belongs to. Two docs-only commits follow it (7229b73, ae64d4c), so `git rev-parse HEAD` is two commits ahead of the `commit` field - expected, not staleness. Poll d481bd0 directly for its CI; the docs heads' own runs are superseded and read completed/cancelled."
 }
