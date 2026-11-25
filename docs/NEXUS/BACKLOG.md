@@ -418,11 +418,63 @@ The third is covered in the sense that matters — a run whose step was found
 `started` does resume, and the test proves the second step then runs while the
 first is not repeated.
 
-**Remaining:** there is **no HTTP surface** for runs yet — the use cases are not
-wired into `presentation/`, so a client cannot plan or advance a run. That is
-tracked as **NEX-009-HTTP**, mirroring how NEX-005 preceded NEX-005-HTTP.
+**Remaining:** none at the use-case level. The HTTP surface is delivered by
+**NEX-009-HTTP** (below), mirroring how NEX-005 preceded NEX-005-HTTP.
 
-**Complexity:** large (slice 1 complete and VERIFIED; slice 2 = HTTP surface).
+**Complexity:** large (slice 1 VERIFIED; slice 2 = HTTP surface, TESTED).
+
+---
+
+## NEX-009-HTTP — Expose durable agent runs over HTTP
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 |
+| Priority | P2 |
+| Status | **TESTED** (run `NEX-2026-11-25-10`; CI not yet observed on the commit) |
+| Dependencies | NEX-009 |
+
+**Objective:** make the durable-run use cases reachable through the API layer, so
+an agent can plan and advance a run over HTTP and a human can read, resolve, and
+abort one — through the same governed use cases, never around them.
+
+**Acceptance criteria:** a router exposes plan, advance, get, list, resolve, and
+abort; planning and advancing require an agent token and reject a Notes-API token
+or a demo-identity header; reading, resolving, and aborting are owner-scoped and
+return 404 for a non-owner; an interrupted step can only be settled by the owner,
+never by the agent; a refusal is 401/403/404/409/422 and never a 500; an API
+contract test covers each boundary.
+
+**Delivered:** `src/notes_service/presentation/api/routers/agent_runs.py`, mounted
+under `/api/v1/agent-runs`, plus request/response schemas in
+`presentation/schemas.py` and DI wiring in `bootstrap/container.py`.
+`tests/api/test_agent_runs_api.py` (9 tests) pins the edge: agent-token-only
+planning, a step the token cannot reach refused, a full plan→advance→complete
+cycle, a caller-supplied `capability` rejected, a non-owner getting 404, an agent
+refused the resolve endpoint, abort being owner-scoped and terminal, listing
+scoped to the caller's agent, and advance idempotent on a completed run.
+
+The router makes no security decision of its own — it authenticates and delegates
+— so audience, revocation, capability, approval, ordering, and audit stay in the
+use cases and the gateway.
+
+**Hardening in the same slice:** `PlannedStep.capability` is now **derived from
+the tool catalog** and is not an init field, so a plan can no longer declare a
+weaker capability than the step it schedules. The mismatch is unrepresentable
+rather than merely rejected, and the now-obsolete validation block in the use
+case was removed. Pinned by
+`tests/agent/test_agent_runs.py::test_a_planned_step_takes_its_capability_from_the_tool_catalog`
+and `::test_a_planned_step_naming_an_unknown_tool_is_rejected`.
+
+**Status note:** TESTED, not VERIFIED — CI has not yet run on the commit. Local
+gates are recorded for reproducibility, not as CI evidence (R10).
+
+**Security:** the run row is what an operator reads when deciding whether an
+interrupted step's effect landed, so a plan that could understate its own
+authority would corrupt the audit of an ambiguous step. Only the owning human may
+settle such a step; an agent has no endpoint that resolves its own ambiguity.
+
+**Complexity:** medium. Closes risk R11.
 
 ---
 

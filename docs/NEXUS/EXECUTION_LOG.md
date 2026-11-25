@@ -1246,3 +1246,73 @@ NEX-009 slice 1: **VERIFIED** — committed (`0e74d4f`), **PUSHED** (verified wi
 the push and pull_request events. **No HTTP surface** for runs exists — that is
 slice 2 (`NEX-009-HTTP`), and NEX-009 must not be described as fully delivered
 until it lands.
+
+---
+
+## Run `NEX-2026-11-25-10` — 2026-11-25T04:31Z
+
+**Task:** NEX-009-HTTP — expose durable agent run use cases over HTTP.
+**Branch:** `feature/agentic-enterprise-platform`. **Starting commit:** `1699247`.
+**Ending commit:** recorded in `CHECKPOINT.json` (docs commit is the child of the
+product commit, which is `1699247`'s child).
+
+### Completed
+
+- `src/notes_service/presentation/api/routers/agent_runs.py` — the HTTP surface,
+  mounted at `/api/v1/agent-runs`: `POST ""` (plan), `POST /{run_id}/advance`,
+  `GET ""` (list by agent, optional `resumable_only`), `GET /{run_id}`,
+  `POST /{run_id}/resolve`, `POST /{run_id}/abort`. Thin edge: authenticate and
+  delegate, so audience, revocation, capability, approval, ordering, and audit
+  stay in the use cases and the gateway.
+- Request/response schemas in `presentation/schemas.py`; container wiring in
+  `bootstrap/container.py` (six factories, `AdvanceAgentRun` composed with the
+  tool gateway so a run cannot reach a tool its token lacks by construction);
+  router registered in `presentation/api/__init__.py`.
+- Hardening: `PlannedStep.capability` is now derived from the tool catalog and is
+  not an init field. The caller-supplied field let a plan name a privileged tool
+  while declaring a weaker capability, and the run row is what an operator reads
+  when ruling on an interrupted effect — so understating authority would corrupt
+  the audit of the one case that matters. Removed the now-obsolete mismatch
+  validation block in the use case.
+- `tests/api/test_agent_runs_api.py` (9 tests): agent-token-only planning, a step
+  the token cannot reach refused, plan→advance→complete, caller-supplied
+  `capability` rejected, non-owner 404, an agent refused `resolve`, abort
+  owner-scoped and terminal, listing scoped to the caller's agent, advance
+  idempotent on a completed run.
+- Two new domain tests in `tests/agent/test_agent_runs.py`: the derived-capability
+  invariant (including that `capability=` is a `TypeError`) and an unknown tool
+  being rejected at plan time.
+
+### Tests and gates (bare, as CI runs them)
+
+- `pytest` full: **662 passed, 4 skipped** (was 651 + 4; +9 API, +2 domain).
+- `ruff format`: 188 files clean. `ruff check`: clean. `mypy`: clean, 97 files.
+- No migration this run — HTTP surface only.
+
+### Decisions
+
+- **Two authorities on one resource is the design, not an accident.** Planning
+  and advancing are the agent's (agent token, nothing else read); reading,
+  resolving, and aborting are the owner's, because an interrupted step means the
+  runtime cannot tell whether an effect landed and only the owning human may rule
+  on it. An agent has no endpoint that settles its own ambiguity.
+- **The prefix is `/agent-runs`, not a child of `/agents`.** `GET /agents/{agent_id}`
+  is typed as a UUID, so a sibling literal segment would be shadowed and answer
+  422 instead of reaching the run handler.
+- **Deriving `capability` beats validating it.** Validation can be forgotten on a
+  new construction path; making it a non-init field means the mismatch cannot be
+  expressed.
+
+### Status
+
+NEX-009-HTTP: **TESTED**, not VERIFIED — CI has not been observed on the commit.
+Local gates are recorded for reproducibility, not as evidence (R10). R11 closed at
+TESTED. Nothing promoted on local runs alone.
+
+### Next exact action
+
+Observe CI on the pushed commit
+(`gh api repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs`); promote
+NEX-009-HTTP to VERIFIED only if all four check runs are `completed/success`.
+Then refresh PR #3's body from `git diff --shortstat main...HEAD` and re-read the
+Phase 5 section of `ROADMAP.md` before choosing the next slice.
