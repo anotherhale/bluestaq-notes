@@ -1010,7 +1010,7 @@ in depth rather than the enforcing mechanism. The *behaviour* is still pinned �
 The nonce comparison was:
 
 ```python
-secrets.compare_digest(nonce, expected_nonce)   # both str
+secrets.compare_digest(nonce, expected_nonce)  # both str
 ```
 
 `compare_digest` on `str` raises `TypeError: comparing strings with non-ASCII
@@ -1020,9 +1020,7 @@ untrusted, so a non-ASCII nonce produced a **500 at the edge** instead of an
 whether a login token is genuine. Fixed by comparing UTF-8 encodings:
 
 ```python
-secrets.compare_digest(
-    nonce.encode("utf-8", "surrogatepass"), expected_nonce.encode("utf-8")
-)
+secrets.compare_digest(nonce.encode("utf-8", "surrogatepass"), expected_nonce.encode("utf-8"))
 ```
 
 Still constant-time, and now unable to raise for any claim value. Confirmed
@@ -1054,3 +1052,37 @@ Read the check runs for this commit; on green, promote NEX-010 and NEX-002 to
 VERIFIED. Then start NEX-009 with the first slice scoped to run-checkpoint
 persistence plus a resume test.
 
+
+### CI outcome for `2dd7a0c` — first push was red, root cause was local gate scoping
+
+`2dd7a0c` was pushed and verified on the remote, then CI's backend job **failed**
+on the very first gate:
+
+```
+unformatted: File would be reformatted
+    --> docs/NEXUS/EXECUTION_LOG.md:1013:48
+```
+
+Not a test failure and not a defect in the shipped code. CI runs `ruff format
+--check` **bare and repo-wide**, and ruff formats Python inside Markdown fences.
+The ```` ```python ```` block I had just written into this log was not
+formatted. My local gate run had been scoped to `src tests`, which skipped
+`docs/`, so it reported clean and I reported clean. The gate that mattered was
+never run the way CI runs it.
+
+Fixed by formatting the doc file (2 insertions, 4 deletions — reflowing the two
+example lines) and re-running all three gates bare:
+
+| Gate | Command (exactly as CI) | Result |
+| --- | --- | --- |
+| Format | `ruff format --check` | 182 files already formatted |
+| Lint | `ruff check` | All checks passed |
+| Types | `mypy` | no issues in 94 source files |
+
+Recorded in `AGENTS.md` so the next run does not repeat it: run the gates bare,
+and format any doc file whose code blocks were edited.
+
+Lesson worth more than the fix: a green local gate run is only evidence if it
+invokes the same command CI invokes. "I ran the gates" and "I ran CI's gates"
+are different claims, and conflating them is how a red push gets reported as
+validated.

@@ -20,6 +20,12 @@ things that are easy to get wrong and expensive to rediscover.
   `tests/architecture/test_layering.py`; keep it green.
 - Run gates: `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/mypy`,
   `.venv/bin/python -m pytest`.
+- Run them **bare, exactly as CI does** (`.github/workflows/ci.yml`). CI's
+  `ruff format --check` is repo-wide and also formats Python inside Markdown
+  fences, so a fenced Python block in `docs/` can fail the gate. Scoping a local
+  run to `src tests` hides that: it passed locally, then CI failed on
+  `docs/NEXUS/EXECUTION_LOG.md`. If you touch docs containing code blocks,
+  format the doc file too.
 - Local run for the frontend:
   ```bash
   DATABASE_PROVIDER=sqlite DATABASE_URL="sqlite:///./notes.db" \
