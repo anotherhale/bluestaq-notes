@@ -1483,7 +1483,7 @@ seal their invocations in the same transaction."
 | --- | --- |
 | Phase | 5 (durable runtime) / approval governance |
 | Priority | P0 (R29: the approval control returns the wrong answer in both directions whenever the deciding clock differs from the opening clock) |
-| Status | **TESTED** — committed and pushed at `b46e2e3`. Local gates green: `ruff format`/`ruff check` clean, `mypy` 98 files clean, full `pytest` **754 passed / 4 skipped** (baseline 748; delta is exactly the 6 new tests). Negative control verified. CI **not yet observed** at `b46e2e3` — not VERIFIED. |
+| Status | **VERIFIED** — CI observed at `b46e2e3`: **4/4 `completed/success`**, every check run reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z (Backend ruff/mypy/pytest/migrations, Frontend typecheck/lint/test/build). Local gates green: `ruff format`/`ruff check` clean, `mypy` 98 files clean, full `pytest` **754 passed / 4 skipped** (baseline 748; delta is exactly the 6 new tests). Negative control verified: reverting only `entities.py` turns 5 of the 6 new tests red. The docs commit `8742faa` pushed afterwards did not disturb it. |
 | Dependencies | NEX-013 (the expiry bound), NEX-016 (approve-then-continue), NEX-020 (stale-decision authority), NEX-025 (revocation) |
 
 **Objective:** close R29 — compare one instant against another, never two clocks.

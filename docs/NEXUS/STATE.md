@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-025 VERIFIED; NEX-026 TESTED.** NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4); NEX-024 abort-orphaned audit link **VERIFIED** (`eaaae23`, CI 4/4) — R27 closed on both settle paths; NEX-025 approval revocation on delegation/agent revoke **VERIFIED (`d481bd0`, CI 4/4)** — R28 closed on both revocation paths; **NEX-026 two-clock approval judgement TESTED (`b46e2e3`, pushed, CI not yet observed)** — R29 closed at the aggregate and the gateway, pending CI. The compare-and-set audit of `infrastructure/db/` is **closed**. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-026 all VERIFIED.** NEX-026 — an approval judged against the clock that stamped it (R29) — VERIFIED at `b46e2e3`. Remaining for M2.6: decisioning and context assembly. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `855becb` — the docs-only checkpoint head left by run `NEX-2026-11-25-28`. |
-| Head commit (run end) | `b46e2e3` — the NEX-026 slice (code + tests + a clean commit message), pushed to `origin/feature/agentic-enterprise-platform`. Verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, which returned `b46e2e3` — the local remote-tracking ref in this grafted clone is stale and must not be trusted without `ls-remote`. |
-| Last CI result | **`d481bd0` (NEX-025): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z.** **No CI claim is made for `b46e2e3` (NEX-026)** — its runs had not been observed when this file was written. Local gates on the NEX-026 tree: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **754 passed / 4 skipped**, negative control verified (5 of 6 new tests red against the pre-slice `entities.py`). |
+| Head commit (run end) | `8742faa` — the docs-only checkpoint commit for run `NEX-2026-11-25-29`. The NEX-026 code slice is `b46e2e3`, which is the commit whose CI was polled. Verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` → `8742faae7fd1f7268a26faac40551e53c83a534d` (this grafted clone's local tracking ref lags and must not be trusted). |
+| Last CI result | **`b46e2e3` (NEX-026): 4/4 `completed/success`, every check run reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and the promotion are split across `b46e2e3` (code) and `8742faa` (docs), this run covers the whole NEX-026 tree. The later docs push did **not** disturb it. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Head `fd223f4`, body refreshed 2026-11-25T13:21Z at head `fd223f4` and verified byte-equal after the PATCH. It now reads 32,161 additions / 10 deletions / 112 files / 126 commits, 752 tests, eleven migrations, eleven routers, and names NEX-023 (`c367746`), NEX-024 (`eaaae23`) and NEX-025 (`d481bd0`) among the CI-verified commits. Counters come from the pull-request object, never a local diff. |
-| CI status | **`d481bd0` (NEX-025 code slice): 4/4 `completed/success`, every check run reporting `head_sha` `d481bd0`, polled 2026-11-25T13:18Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and state landed in this one commit, the run covers the whole tree. **`b46e2e3` (NEX-026): not observed — no claim.** Prior: **`e511fc9` (docs-only head): 4/4 `completed/success`, every run reporting `head_sha` `e511fc9`, read 12:41Z.** Prior: **`eaaae23` (NEX-024): 4/4 `completed/success`, polled 12:16Z.** Earlier observations, all `completed/success` with matching `head_sha`: `c367746` 4/4 (11:50Z), `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| CI status | **`b46e2e3` (NEX-026): 4/4 `completed/success`, every check run reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events. Because code, tests and the promotion are split across `b46e2e3` (code) and `8742faa` (docs), this run covers the whole NEX-026 tree. The later docs push did **not** disturb it. `8742faa`'s own runs were in flight when this was written and will be superseded by the concurrency group, so that head will read `completed/cancelled` — neither a pass nor a failure. Prior: **`d481bd0` (NEX-025): 4/4 `completed/success`, polled 13:18Z.** |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-026 (run `NEX-2026-11-25-29`) — an approval must be judged against the clock that stamped it
@@ -53,12 +53,14 @@ that stamped it, and the same clock must judge it. The general question for any 
 writes this, and does the reader use the same one?* A new expiry-like field that reads a module
 clock instead of the caller's reopens this class.
 
-Status: **TESTED.** Committed and pushed at `b46e2e3`; CI had not been observed when this was
-written, so it is not VERIFIED. Local gates: `ruff format` clean, `ruff check` clean, `mypy`
-clean over 98 sources, full `pytest` **754 passed / 4 skipped** (was 748; the delta is exactly
-the 6 new tests in `tests/agent/test_approval_clock.py`). Negative control: reverting only
-`entities.py` to its pre-slice version turns 5 of those 6 red; the sixth asserts the wall-clock
-property and must keep passing.
+Status: **VERIFIED.** CI observed at `b46e2e3`: **4/4 `completed/success`**, every check run
+reporting `head_sha` `b46e2e3`, polled 2026-11-25T13:34Z. The docs commit `8742faa` pushed
+afterwards did not disturb it — `b46e2e3` still reads 4/4 success while `8742faa`'s own runs are
+in flight. Local gates: `ruff format` clean, `ruff check` clean, `mypy` clean over 98 sources,
+full `pytest` **754 passed / 4 skipped** (was 748; the delta is exactly the 6 new tests in
+`tests/agent/test_approval_clock.py`). Negative control: reverting only `entities.py` to its
+pre-slice version turns 5 of those 6 red; the sixth asserts the wall-clock property and must keep
+passing.
 
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority

@@ -4,8 +4,8 @@
   "timestamp": "2026-11-25T13:33:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "b46e2e3",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-025 VERIFIED, NEX-026 TESTED. NEX-026 (an approval must be judged against the clock that stamped it) is committed and pushed at b46e2e3 with local gates green; its CI had NOT been observed when this checkpoint was written, so it is TESTED and not VERIFIED.",
-  "active_task": "NEX-026 - TESTED, awaiting CI observation at b46e2e3",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-026 all VERIFIED. NEX-026 (an approval must be judged against the clock that stamped it) verified at b46e2e3.",
+  "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -35,7 +35,7 @@
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
     "NEX-025": "VERIFIED - 4/4 completed/success at d481bd0, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z",
-    "NEX-026": "TESTED - committed and pushed at b46e2e3; local gates green (ruff format/check clean, mypy 98 files clean, pytest 754 passed / 4 skipped, negative control verified). CI not yet observed at b46e2e3."
+    "NEX-026": "VERIFIED - CI observed 4/4 completed/success at b46e2e3 with head_sha b46e2e3 (polled 2026-11-25T13:34Z). Local gates green: ruff format/check clean, mypy 98 files clean, pytest 754 passed / 4 skipped, negative control verified (5 of 6 new tests red on revert)."
   },
   "completed_tasks": [
     "NEX-001",
@@ -65,7 +65,8 @@
     "NEX-022",
     "NEX-023",
     "NEX-024",
-    "NEX-025"
+    "NEX-025",
+    "NEX-026"
   ],
   "validation": {
     "pytest_full": "754 passed, 4 skipped, exit 0 - run bare this session on the NEX-026 tree. Baseline 748; delta is exactly the 6 new tests in tests/agent/test_approval_clock.py.",
@@ -78,14 +79,15 @@
     "architecture": "layering test untouched and green; entities.py is pure domain with no framework import, and the use cases pass the Clock port they already held",
     "migration_chain": "No migration. approval_requests.expires_at was already persisted; only which clock judges it changed.",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NOT OBSERVED for b46e2e3. No CI claim is made about NEX-026. The last observed green is d481bd0 (NEX-025) 4/4 completed/success, polled 2026-11-25T13:18Z.",
+    "ci_observed": "b46e2e3 (NEX-026): 4/4 completed/success, every check run reporting head_sha b46e2e3 (Backend ruff/mypy/pytest/migrations x2, Frontend typecheck/lint/test/build x2 - push and pull_request events), polled 2026-11-25T13:34Z. The docs commit 8742faa pushed afterwards did NOT disturb it: b46e2e3 still reads 4/4 success while 8742faa's own runs are in_progress/queued.",
     "ci_note": "NEX-021 is deliberately TESTED, not VERIFIED. Local gates are recorded above for reproducibility, not as proof (R9/R10). This run put code, tests and docs in one commit specifically so the next run can observe a single CI run covering the whole tree, instead of having to reason about descendant-CI.",
     "evidence_basis": {
-      "note": "NEX-026 is TESTED, not VERIFIED. b46e2e3 has not been observed green.",
+      "note": "NEX-026 is VERIFIED on an observed 4/4 completed/success at b46e2e3.",
       "nex_025_commit": "d481bd0",
       "nex_026_commit": "b46e2e3",
       "criterion_coverage": "NEX-026: an approval's validity bound is judged against the clock that stamped it. expired_at(now=...) is the single comparison; is_expired delegates to it so the NULL-means-lapsed rule is stated once; approve/deny use the caller's instant for both the decidability check and decided_at.",
-      "negative_control": "Reverting only entities.py turns 5 of 6 new tests red; the wall-clock guard stays green."
+      "negative_control": "Reverting only entities.py turns 5 of 6 new tests red; the wall-clock guard stays green.",
+      "nex_026_ci": "b46e2e3 (NEX-026): 4/4 completed/success, every check run reporting head_sha b46e2e3 (Backend ruff/mypy/pytest/migrations x2, Frontend typecheck/lint/test/build x2 - push and pull_request events), polled 2026-11-25T13:34Z. The docs commit 8742faa pushed afterwards did NOT disturb it: b46e2e3 still reads 4/4 success while 8742faa's own runs are in_progress/queued."
     },
     "gates_this_run": {
       "ruff_format_check": "pass - 201 files already formatted",
@@ -103,8 +105,8 @@
       "note": "A run at the slice's own commit: code, tests and docs landed in this one commit, so coverage is direct rather than descendant-CI."
     },
     "environment": ".venv created with `uv venv` (CPython 3.13.15) and `uv pip install -e \".[dev]\"`; all gates ran from .venv/bin.",
-    "verified_at_commit": "d481bd0 (NEX-025) - NEX-026 is not verified",
-    "verified_by_run": "NEX-2026-11-25-28 (NEX-025)"
+    "verified_at_commit": "b46e2e3 (NEX-026) and d481bd0 (NEX-025)",
+    "verified_by_run": "NEX-2026-11-25-29 (NEX-026), NEX-2026-11-25-28 (NEX-025)"
   },
   "uncommitted_work": "none - the docs commit that follows b46e2e3 carries this checkpoint",
   "pr_state": {
@@ -139,7 +141,7 @@
       "severity": "high",
       "summary": "A validity bound written by one clock and read by another gives the wrong answer in both directions.",
       "detail": "NEX-026: ApprovalRequest.open stamped expires_at from the caller's Clock port, but the decision path called is_expired, which reads the module wall clock. A request opened on a clock behind the wall clock was judged already lapsed, so a human could not decide a live request; a request opened on a clock ahead of the wall clock was judged still valid after its bound passed, so consent outlived the bound it was granted under. Every existing expiry test used one clock for both open and decide, so the two readings always agreed and the defect was structurally invisible. The repository adapter was already correct, which is why no integration test caught it either. General rule: for every bound, name the clock that writes it and assert the reader uses the same one - and test the disagreement, not just the happy path, because a single-clock suite cannot see this class at all.",
-      "status": "closed at the aggregate and the gateway by NEX-026 (b46e2e3); CI not yet observed"
+      "status": "closed by NEX-026, VERIFIED at b46e2e3"
     },
     {
       "id": "R28",
@@ -223,10 +225,10 @@
       "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
     }
   ],
-  "next_task": "Poll CI at b46e2e3 and promote NEX-026 to VERIFIED only on an observed 4/4 completed/success whose head_sha is b46e2e3. Then refresh PR #3's body from the PR object to include NEX-026 and R29.",
-  "next_action": "gh api /repos/anotherhale/bluestaq-notes/commits/b46e2e3/check-runs -> require 4/4 completed/success with head_sha b46e2e3; then PATCH PR #3's body from the pull-request object.",
-  "recovery_instructions": "HEAD is the docs commit that follows the NEX-026 slice b46e2e3; every commit after b46e2e3 touches only docs/NEXUS/. Confirm with `git log --oneline -4` and `git log --oneline b46e2e3..HEAD --name-only`. Verify the remote with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` - the local remote-tracking ref in this grafted clone was stale and read 855becb while the remote was already at b46e2e3. NEX-001..NEX-025 VERIFIED, NEX-026 TESTED pending CI, PR #3 draft and unmerged. Next: poll b46e2e3, then refresh PR #3's body.",
-  "ci_status": "b46e2e3 (NEX-026): NOT OBSERVED - no claim made. Last observed green: d481bd0 (NEX-025) 4/4 completed/success, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z. Any docs head pushed after b46e2e3 will have its own run superseded and read completed/cancelled, which is neither a pass nor a failure.",
+  "next_task": "Refresh PR #3's body from the pull-request object so it covers NEX-026 (b46e2e3) and R29; the body still describes the tree before this slice. Then select the next dependency-ready slice from BACKLOG (M2.6 remaining: decisioning and context assembly).",
+  "next_action": "GET /repos/anotherhale/bluestaq-notes/pulls/3 -> build body from its own additions/deletions/changed_files/commits -> PATCH /pulls/3 -> GET it back and assert specific substrings.",
+  "recovery_instructions": "HEAD 8742faa is the docs commit for run NEX-2026-11-25-29; the NEX-026 slice is b46e2e3 and is VERIFIED. Every commit after b46e2e3 touches only docs/NEXUS/ (verify with `git log --oneline b46e2e3..HEAD --name-only`). NEX-001..NEX-026 all VERIFIED; PR #3 draft and unmerged. Next: refresh PR #3's body from the PR object, then pick the next slice.",
+  "ci_status": "b46e2e3 (NEX-026): 4/4 completed/success, all head_sha b46e2e3, polled 2026-11-25T13:34Z - VERIFIED. The docs head 8742faa (pushed after) has its own runs in flight; per the concurrency group its result will be superseded, so 8742faa will read completed/cancelled and that is neither a pass nor a failure. Prior observed green: d481bd0 (NEX-025) 4/4, polled 13:18Z.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -255,11 +257,10 @@
     "NEX-022",
     "NEX-023",
     "NEX-024",
-    "NEX-025"
+    "NEX-025",
+    "NEX-026"
   ],
-  "in_progress_tasks": {
-    "NEX-026": "TESTED at b46e2e3 - needs an observed 4/4 completed/success whose head_sha is b46e2e3 before promotion to VERIFIED"
-  },
+  "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "commit = b46e2e3, the NEX-026 slice (code + tests) and the commit whose CI must be polled. Every commit after it is docs-only: verify with `git log --oneline b46e2e3..HEAD --name-only`, which should list nothing outside docs/NEXUS/. head_at_checkpoint is deliberately NOT a sha.",
   "head_at_checkpoint": "the commit that contains this checkpoint file"

@@ -3625,3 +3625,21 @@ then `os.replace`d.
 pull-request object to include NEX-026 (`b46e2e3`) and R29 — the body still describes the tree
 before this slice.
 
+
+**Promotion to VERIFIED (same run, after the checkpoint commit).** CI was polled at `b46e2e3`
+and returned **4/4 `completed/success`**, every check run reporting `head_sha` `b46e2e3`
+(2026-11-25T13:34Z). NEX-026 is therefore **VERIFIED**, not merely TESTED, and the checkpoint,
+BACKLOG and STATE were corrected in a follow-up docs commit.
+
+Two facts about *when* that observation happened, because they decide how much it is worth:
+
+- The docs commit `8742faa` was pushed **before** the poll. It did not disturb `b46e2e3`: the
+  earlier commit's four check runs stayed `completed/success` at their own `head_sha` while
+  `8742faa`'s own runs were still `in_progress`/`queued`. A later push does not retroactively
+  cancel an earlier commit's completed runs — only a run still in flight gets superseded.
+- `8742faa` itself will read `completed/cancelled` once the concurrency group cancels it, which
+  is neither a pass nor a failure. Nothing in this run claims otherwise.
+
+The earlier `TESTED` status was correct when written and was superseded by observation, not by
+optimism: the sequence was commit → push → poll → promote. The status files were updated only
+after the check runs were read.
