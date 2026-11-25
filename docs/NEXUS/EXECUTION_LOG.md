@@ -1510,6 +1510,22 @@ heredoc here.
 
 **Next action.** Observe CI on `3aade7c`; if 4/4 `completed/success`, promote
 NEX-012 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json`. Then refresh
-PR #3's body — it still carries the pre-NEX-012 figures (24,283 / 98 / 674) while
-the branch is now 25,316 insertions / 101 files / 681 collected. PR #3 remains
+PR #3's body — it still carried pre-NEX-012 figures while
+the branch had moved on. PR #3 remains
 **open, draft, unmerged**. No merge performed.
+
+### Run NEX-2026-11-25-12 — PR #3 body refresh (same run, after verification)
+
+Recomputed rather than copied: `git diff --shortstat main...HEAD` now reports
+**25,511 insertions across 101 files**, `git diff --numstat main...HEAD -- tests/`
+gives **6,538** added test lines, and `pytest --collect-only -o addopts=""` gives
+**681 collected**. The migrations and routers counts were re-derived from
+`git diff --name-status` too, and both still hold at **six migrations and five new
+routers** — NEX-012 added the sixth migration but no new router, since the
+verification endpoint went onto the existing `routers/agents.py`.
+
+PR #3's body now states those figures, replaces the stale `f50a78d` CI claim with
+`3aade7c` (4/4 `completed/success`, observed 05:49Z), and records four — not three —
+slices promoted to VERIFIED on observed CI.
+
+PR #3 remains **open, draft, unmerged** for human review. No merge performed.

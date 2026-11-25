@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-12",
-  "timestamp": "2026-11-25T05:50:00Z",
+  "timestamp": "2026-11-25T05:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "3aade7c",
   "commit_note": "3aade7c contains NEX-012 (tamper-evident audit chain). Its gates are verified locally only; CI has not been observed for it. The docs commit carrying this file is its child.",
@@ -55,7 +55,7 @@
     "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote on these."
   },
   "uncommitted_work": "none; docs commit follows",
-  "pr_state": "PR #3 open, draft, unmerged (human review required). Body still carries the pre-NEX-012 figures (24,283 insertions / 98 files / 674 tests). The branch is now 25,316 insertions / 101 files / 681 tests at 3aade7c, so the body needs a refresh.",
+  "pr_state": "PR #3 open, draft, unmerged (human review required). Body refreshed 2026-11-25T05:51Z with recomputed figures: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers / 6,538 test lines, and the CI claim moved from f50a78d to 3aade7c (4/4 completed/success). Recompute these on every run; this body has understated the branch repeatedly.",
   "tracking_issue": {
     "number": 2,
     "state": "open",
@@ -67,7 +67,7 @@
     "R8 (low): migration tests once shelled out to '.venv/bin/alembic' and never ran in CI; fixed in 6f30020. Prefer sys.executable in test helpers.",
     "R9 (CLOSED 2026-11-25, NEX-010): OIDC verifier pinned by tests/authentication/test_oidc_relying_party.py (21 tests, real RSA keys). Residual: JWKS network discovery still stubbed by design.",
     "R10 (low, process): a green local gate run is only evidence if it invokes the same command CI invokes. Run the gates bare.",
-    "R11 (CLOSED 2026-11-25): the durable-run use cases had no HTTP surface; closed by NEX-009-HTTP (VERIFIED on e817d04). The same class of gap in the audit trail - a trail written but unreadable - is closed by NEX-011 at TESTED.",
+    "R11 (CLOSED 2026-11-25): the durable-run use cases had no HTTP surface; closed by NEX-009-HTTP (VERIFIED on e817d04). The same class of gap in the audit trail - a trail written but unreadable - was closed by NEX-011 (VERIFIED on f50a78d) and hardened against tampering by NEX-012 (VERIFIED on 3aade7c).",
     "R12 (low, process): writing prose or scripts through a shell heredoc corrupts them in this environment. Write scripts and messages to files with file_editor and execute the file. It recurred this run and aborted a STATE.md update before it wrote anything.",
     "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
     "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one.",

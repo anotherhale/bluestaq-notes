@@ -13,7 +13,7 @@ truth; this file records intent and reconciliation.
 | Head commit (run end) | docs commit following `3aade7c`; product head `3aade7c` |
 | Last CI result | **4/4 green on `3aade7c`** (NEX-012): backend + frontend, push and pull_request, all `completed/success`, observed 2026-11-25T05:49Z |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body still carries pre-NEX-012 figures (24,283 insertions / 98 files / 674 collected); branch is now 25,316 / 101 / 681 |
+| Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:51Z: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
