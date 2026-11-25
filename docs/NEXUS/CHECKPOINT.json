@@ -285,7 +285,8 @@
     "evidence_basis": "5c0575b: direct green poll at that SHA, all four check runs reporting head_sha 5c0575b. 90eea0c: direct green poll at that SHA. Any later docs commit (7ac893c and above): descendant-CI - green at an ancestor whose tree contains the code, which is weaker than a green poll at the SHA itself and is labelled as such rather than folded in.",
     "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all.",
     "reconciliation_docs_sha": "83122fc",
-    "reconciliation_docs_result": "VERIFIED GREEN - 4/4 completed/success at 83122fc (docs-only: EXECUTION_LOG, STATE, CHECKPOINT). Polled 2026-11-25T19:22Z. Every check run reported head_sha 83122fc. This commit changes no source, so the green run confirms the tree is unchanged and healthy; it is not new evidence about the product code, which remains verified at 5c0575b."
+    "reconciliation_docs_result": "VERIFIED GREEN - 4/4 completed/success at 83122fc (docs-only: EXECUTION_LOG, STATE, CHECKPOINT). Polled 2026-11-25T19:22Z. Every check run reported head_sha 83122fc. This commit changes no source, so the green run confirms the tree is unchanged and healthy; it is not new evidence about the product code, which remains verified at 5c0575b.",
+    "delivery_this_run": "Issue #2 comment 7172232588 posted 2026-11-25T19:23Z (NEX-037 re-entry report), verified byte-equal to the local file (3026 bytes). PR #3 body was already correct and was not re-PATCHed."
   },
   "verified_tasks": [
     "NEX-001",
