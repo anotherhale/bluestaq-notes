@@ -62,7 +62,7 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "48477da",
+    "head": "fe2188a",
     "body_refreshed": "2026-11-25T06:58Z",
     "metrics_at_head": {
       "additions": 26506,
@@ -72,7 +72,7 @@
       "commits_behind": 1,
       "tests_collected": 690
     },
-    "note": "Body recomputed on 48477da and the NEX-013 overstatement replaced with the correction. Remains draft and unmerged; automated merging is prohibited."
+    "note": "Body recomputed on 48477da (metrics unchanged since: docs-only commits after it). The NEX-013 overstatement is replaced with the correction. PR head is now fe2188a; CI on fe2188a was still queued/in_progress when this run ended, so no result is claimed for it. Remains draft and unmerged; automated merging is prohibited."
   },
   "tracking_issue": {
     "number": 2,
