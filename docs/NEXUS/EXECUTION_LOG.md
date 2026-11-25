@@ -3455,3 +3455,80 @@ Poll `d481bd0`'s 4 check runs until they settle and record the observed result. 
 `docs/NEXUS/ROADMAP.md` Phase 5 and pick the next dependency-ready slice — NEX-001…NEX-025
 with NEX-025 at TESTED.
 
+
+---
+
+## Run `NEX-2026-11-25-28` (continued) — NEX-025 promoted to VERIFIED
+
+**Timestamp:** 2026-11-25T13:19Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `24f1e20`
+**Ending commit:** `f393733`
+**Task:** NEX-025 — withdraw live approvals when authority is revoked
+
+### What this continuation did
+
+The prior portion of this run had already committed and pushed the slice (`d481bd0`)
+with NEX-025 at TESTED, because its four check runs were still `in_progress` at 13:16Z.
+The only thing standing between TESTED and VERIFIED was an observed CI result.
+
+Polled `d481bd0` directly and got **4/4 `completed/success`**, with every check run
+reporting `head_sha` `d481bd0` — the polled commit itself, so the evidence is direct
+rather than descendant-CI. Two Backend (ruff, mypy, pytest, migrations) and two
+Frontend (typecheck, lint, test, build) runs, from the push and pull_request events.
+
+**NEX-025 is VERIFIED.** NEX-001…NEX-025 are all VERIFIED and R28 is closed on both
+revocation paths (delegation and agent).
+
+### Why the docs commits are safe to push after the poll
+
+`d481bd0`'s check runs were already settled before the docs commits were pushed, and a
+later push does not disturb an earlier commit's check runs. The docs heads (`7229b73`,
+`ae64d4c`, `f393733`) have their own runs, which are superseded by the next push in the
+same concurrency group and will read `completed/cancelled` — neither a pass nor a
+failure. **No CI claim is made about them**, and none is needed: the claim is about
+`d481bd0`, which was polled.
+
+### Commits
+
+- `d481bd0` — `fix(agents): withdraw live approvals when authority is revoked` (the slice)
+- `7229b73` — `docs(nexus): checkpoint NEX-025 at TESTED pending CI observation`
+- `ae64d4c` — `docs(nexus): promote NEX-025 to VERIFIED on observed CI`
+- `f393733` — `docs(nexus): correct checkpoint recovery scope to two docs commits`
+
+All pushed; remote head verified at `f393733` with `git ls-remote`.
+
+### Process notes
+
+**A checkpoint written mid-run goes stale within the same run.** `ae64d4c` recorded that
+HEAD would be *one* docs commit ahead of `d481bd0`; the promotion commit was itself a
+second docs commit, so the true distance was two. A recovery run reading "one commit
+ahead" and finding two would have to decide whether the extra commit was untracked work.
+`f393733` corrects it and says explicitly that both are docs-only. This is the same
+failure mode as the stale `commit` field noted in earlier runs: **any prose about HEAD
+distance is wrong as soon as another commit follows it**, so write it as a rule ("the
+docs commits after the slice are docs-only") rather than as a count where possible.
+
+**R12 holds.** Every prose payload this run — three commit messages and the checkpoint
+writes — went through the file editor or a `/tmp/*.py` script, then was read back and
+asserted on. No heredoc was used. The prior portion's violation was not repeated.
+
+**One malformed command.** A `cd` chain was pasted with corrupted paths; it only changed
+the working directory and touched nothing. Recovered by re-running the intended command
+from an absolute path. Worth noting only because a garbled command that *had* contained a
+`git` verb could have been destructive.
+
+### Validation
+
+- CI at `d481bd0`: **4/4 `completed/success`**, all `head_sha` == `d481bd0`, polled 13:18Z.
+- Local gates (same tree, prior portion): `ruff format` clean, `ruff check` clean, `mypy`
+  98 files clean, `pytest` **748 passed / 4 skipped**.
+- Negative control: no-op adapter turns exactly the 3 positive tests red; 3 guard tests stay green.
+- Checkpoint: `completed_tasks` == `verified_tasks` (28 each), `in_progress_tasks` empty.
+
+### Next action
+
+Read `docs/NEXUS/ROADMAP.md` Phase 5, pick the next dependency-ready slice from
+`BACKLOG.md`, and implement it as one vertical slice. Also refresh PR #3's body from the
+PR object's counters — it still describes the tree at `88926ec` and does not mention
+NEX-025 (`d481bd0`) or R28.
