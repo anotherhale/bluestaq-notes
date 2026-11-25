@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -354,6 +354,12 @@ class SqlAlchemyApprovalRequestRepository:
                     else None
                 ),
                 reason=request.reason,
+                # The validity window and single-use stamp belong to the row
+                # from the moment it is created. Omitting them here wrote NULL,
+                # which ``is_usable`` reads as "never expires" — silently
+                # undoing the bound the aggregate stamped in ``open``.
+                expires_at=request.expires_at,
+                consumed_at=request.consumed_at,
             )
         )
 
@@ -409,10 +415,11 @@ class SqlAlchemyApprovalRequestRepository:
                 ApprovalRequestRow.id == _as_uuid(approval_id),
                 ApprovalRequestRow.status == ApprovalStatus.APPROVED.value,
                 ApprovalRequestRow.consumed_at.is_(None),
-                or_(
-                    ApprovalRequestRow.expires_at.is_(None),
-                    ApprovalRequestRow.expires_at > now,
-                ),
+                # Fail closed: a row with no recorded bound is not spendable.
+                # Permitting NULL here would make an unpersisted column a
+                # permanent grant, which is the bug this predicate guards.
+                ApprovalRequestRow.expires_at.is_not(None),
+                ApprovalRequestRow.expires_at > now,
             )
             .values(consumed_at=now)
         )

@@ -43,6 +43,7 @@ from notes_service.application.use_cases.agents import (
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.notes import CreateNote, ListNotes
 from notes_service.application.use_cases.tools import InvokeTool, ToolResult
+from notes_service.domain.agent.entities import DEFAULT_APPROVAL_TTL
 from notes_service.domain.agent.tools import (
     InvocationStatus,
     ToolInvocation,
@@ -449,6 +450,36 @@ class TestApprovalGating:
         with h.uow() as uow:
             spent = uow.approvals.list_for_agent(agent.id)[0]
         assert spent.consumed_at is not None
+
+    def test_an_approval_opened_by_the_gateway_is_time_bounded(self, h: Harness) -> None:
+        """The bound stamped at open must survive the write the gateway performs.
+
+        NEX-013 made an approval lapse after ``DEFAULT_APPROVAL_TTL``, but the
+        bound only exists if ``add`` persists it. ``is_usable`` treats a NULL
+        ``expires_at`` as "never expires", so a repository that dropped the
+        column would leave the gateway authorising a decision indefinitely —
+        while the expiry test above stayed green, because it goes through
+        ``save`` rather than ``add``. This test reads the request back through
+        the same path the gateway uses.
+        """
+        agent, secret = h.secret_for(Capability.DELETE_NOTE)
+        note = h.create_note.run(h.principal, title="Doomed", content="body")
+
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-del-1",
+            )
+
+        with h.uow() as uow:
+            stored = uow.approvals.list_pending_for_agent(agent.id)[0]
+
+        assert stored.expires_at is not None, (
+            "the gateway's approval was written without a validity bound"
+        )
+        assert stored.expires_at - stored.requested_at == DEFAULT_APPROVAL_TTL
 
     def test_an_expired_approval_does_not_authorise_execution(self, h: Harness) -> None:
         """A lapsed approval must fail closed, not execute on a stale decision."""

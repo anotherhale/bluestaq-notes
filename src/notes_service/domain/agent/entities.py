@@ -235,7 +235,11 @@ class ApprovalRequest:
 
     @property
     def is_expired(self) -> bool:
-        return self.expires_at is not None and _utcnow() >= self.expires_at
+        # Fail closed on a missing bound: an approval whose validity was never
+        # recorded is not an approval with unlimited validity. Reading NULL as
+        # "never expires" is how an unpersisted column silently becomes
+        # permanent authority, so the absent case is treated as lapsed.
+        return self.expires_at is None or _utcnow() >= self.expires_at
 
     def is_usable(self, *, now: datetime | None = None) -> bool:
         """Whether this approval may authorise an action right now.
@@ -245,13 +249,20 @@ class ApprovalRequest:
         security architecture (expired / revoked / invalidated all block
         execution), so they are checked separately here rather than collapsed
         into one boolean that a caller could misread.
+
+        A missing ``expires_at`` counts as expired, not as unbounded. The column
+        is nullable only for rows written before it existed, and the security
+        architecture requires those to become unusable rather than retain
+        indefinite authority.
         """
         if self.status is not ApprovalStatus.APPROVED:
             return False
         if self.consumed_at is not None:
             return False
+        if self.expires_at is None:
+            return False
         moment = now or _utcnow()
-        return self.expires_at is None or moment < self.expires_at
+        return moment < self.expires_at
 
     def _assert_decidable(self, approver_user_id: UserId | None) -> UserId:
         if approver_user_id is None:
