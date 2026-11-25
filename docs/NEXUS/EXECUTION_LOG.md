@@ -3893,3 +3893,28 @@ VERIFIED — local gates alone are never enough (R9).
 - **Checkpoint status:** updated atomically, JSON re-validated.
 - **Process defect:** a `git commit -F -` heredoc corrupted its payload again (4th+ occurrence, already logged as R12). Caught it by checking `git rev-parse HEAD` was unchanged and the tree still staged - the commit never ran. Redone via a /tmp message file and byte-verified.
 - **Next action:** poll check-runs at f71745e; promote NEX-029 to VERIFIED only on an observed 4/4 completed/success, then run the skipped negative control and refresh PR #3.
+
+## Run NEX-2026-11-25-33
+
+- **Timestamp:** 2026-11-25T15:31:25Z (RUN_START 1795620685)
+- **Branch:** feature/agentic-enterprise-platform
+- **Starting commit:** e3b8517
+- **Ending commit:** (this run's commits; product commit named below)
+- **Tasks completed:** R31 closure (NEX-030) — `ContextHash` minted only by a `ContextEnvelope`.
+- **Tasks verified:** NEX-029 promoted to VERIFIED on **descendant-CI** evidence; NEX-030 verified locally (CI to be polled next run).
+- **Files changed:** 3 product/test files (`domain/agent/context.py`, `domain/agent/decisioning.py`, `tests/agent/test_decisioning.py`) + NEXUS state docs.
+- **Migrations:** none.
+- **Tests executed:** full suite bare — **846 passed, 4 skipped, 0 failed, 0 errors** (junit: tests=846 failures=0 errors=0 skipped=4). ruff format clean (159 files), ruff check clean, mypy 105 files clean.
+- **Test outcomes:** green. Baseline was 839; delta +7 net (2 new invariant tests added, and the shared `CONTEXT` sentinel was replaced by a minted hash helper).
+- **NEX-029 CI verification (the point of this run):** `f71745e` itself reads `completed/cancelled` on all four check runs — the docs commit `e3b8517` superseded it in the CI concurrency group, exactly the trap recorded in memory. `f71745e` therefore can never be "polled green". Evidence is **descendant-CI**: `git merge-base --is-ancestor f71745e e3b8517` → true; `e3b8517^` == `f71745e`; `git show --stat e3b8517` touches only `docs/NEXUS/CHECKPOINT.json` and `docs/NEXUS/EXECUTION_LOG.md`; and `git ls-tree -r e3b8517` contains all three NEX-029 files (`application/use_cases/approval_advisory.py`, `tests/agent/test_approval_advisory.py`, `tests/api/test_approval_advisory_api.py`). The green run at `e3b8517` is **4/4 `completed/success`**, all `head_sha` = `e3b8517`, completed 2026-11-25T15:27Z (run ids 139313844044, 139313844627, 139313880519, 139313881109). A green run at a docs-only child of `f71745e` built a tree containing the NEX-029 product code, so NEX-029 is VERIFIED with `evidence_basis: descendant-CI`.
+- **Negative control NEX-029 skipped (now run):** demoting the approval subject's title from `CONFIDENTIAL` to `PUBLIC` in `approval_advisory.py` turned **2 tests red** — `test_confidential_title_is_withheld_and_named` (the load-bearing leak test) and `test_title_cannot_change_the_context_hash`. Restored byte-identical (SHA-256 equality asserted) and re-verified green. The tests bind the mechanism, not its shape.
+- **Negative control on the new R31 guard:** disabling the `isinstance(value, ContextHash)` check in `decisioning._validate_context_hash` turns `test_context_hash_must_be_minted_by_an_envelope` red. Restored byte-identical and re-verified. Done with a `/tmp` backup and an in-place targeted edit — **not** `git checkout`, which destroyed this work in the previous run.
+- **Functional proof of the guard** (script run, then deleted): (1) `ContextHash("a"*64)` raises; (2) `DecisionRequest(kind=…, context_hash="a"*64)` raises "must be a ContextHash minted by a ContextEnvelope"; (3) an envelope-minted hash works, `isinstance(str)` holds, and JSON serialises it as the plain digest.
+- **Security findings:** R31's remaining gap is closed at the type level. A caller can no longer hand-assemble a declassification by accident; the documented bypass (`str.__new__`) is deliberate and visible. Honest limit recorded in the class docstring rather than overclaimed.
+- **Commits:** see `git log` — product commit for NEX-030 precedes this docs commit.
+- **Push status:** PUSHED to `feature/agentic-enterprise-platform`.
+- **CI status:** NEX-030's CI not polled this run; must be polled before promoting it. **No green claim is made for it.**
+- **PR status:** #3 open, draft, unmerged. Body not refreshed this run.
+- **Tracking issue:** #2 not updated this run.
+- **Process defect (recurrence):** an inline multi-line `python -c "…"` corrupted itself in this shell (the R12 hazard, now confirmed for `python -c` and not only heredocs). The command failed with `SyntaxError` so **nothing executed**; verified via `git status --porcelain` and an `ast.parse` of all three files that the tree was untouched, then redid the work through a `/tmp` script written with the file editor.
+- **Next action:** poll check-runs for the NEX-030 product commit and quote only an observed status; then refresh PR #3 counters from the PR object.

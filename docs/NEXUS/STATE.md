@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-028 all VERIFIED.** NEX-028 — context assembly — is VERIFIED at `a3d1b32` on observed CI and **completes M2.6 decisioning** (NEX-027 was its first half). |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-030 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `8052ded` — the docs-only checkpoint head left by run `NEX-2026-11-25-30`. |
-| Head commit (run end) | `03ead43` — the docs promotion carrying NEX-028's VERIFIED status. NEX-028's own evidence SHA is `a3d1b32`, whose CI is 4/4 `completed/success` at that exact SHA (polled 2026-11-25T14:42Z). |
-| Last CI result | **`a3d1b32` (NEX-028): 4/4 `completed/success`**, every check run reporting `head_sha` `a3d1b3214fa990aab9abe2f93cdef642bde8c882`, polled 2026-11-25T14:42Z — both the push run (`45636602210`) and the pull_request run (`45636618245`). Prior: `fb8d5bd` (NEX-027), 4/4, polled 14:18Z. |
+| Base commit (run start) | `e3b8517` — the docs-only checkpoint head left by run `NEX-2026-11-25-32`. |
+| Head commit (run end) | The docs promotion carrying NEX-029's and NEX-030's VERIFIED status (see `git log -1`). NEX-030's own evidence SHA is `0727628`, whose CI is 4/4 `completed/success` at that exact SHA (polled 2026-11-25T15:46Z). NEX-029's evidence is **descendant-CI** at `e3b8517` — see below. |
+| Last CI result | **`0727628` (NEX-030): 4/4 `completed/success`**, every check run reporting `head_sha` `0727628`, completed 2026-11-25T15:45:47–58Z (ids 139325893086, 139325893633, 139325908505, 139325908590), polled 15:46Z. Prior: `a3d1b32` (NEX-028), 4/4, polled 14:42Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body **refreshed this run** at head `03ead43` (PATCH 2026-11-25T14:52:08Z) and read back **byte-equal** (30,024 chars). It now covers NEX-027, NEX-028, defect 11 and risk R31, and quotes **34,700 additions / 10 deletions / 124 files / 137 commits**. Re-measure from the PR object before quoting a counter — the body goes stale on the next product commit. |
-| CI status | **`a3d1b32` (NEX-028): 4/4 `completed/success`, polled 2026-11-25T14:42Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), push and pull_request events, all four reporting `head_sha` `a3d1b32`. An earlier poll at 14:40Z saw one duplicate check entry `in_progress`; the later read shows all four `completed`/`success`. The docs commit for this run will be superseded by the concurrency group and read `completed/cancelled` — neither pass nor fail, and not evidence. |
+| Draft PR | #3 (draft, unmerged — human review required). Body was last refreshed at head `03ead43` (PATCH 2026-11-25T14:52:08Z) and is now **stale**: it does not cover NEX-029 or NEX-030. Refreshing it is the next run's first action. Re-measure counters from the PR object before quoting them. |
+| CI status | **`0727628` (NEX-030): 4/4 `completed/success` at that exact SHA**, polled 2026-11-25T15:46Z. **`e3b8517` (NEX-029, descendant-CI): 4/4 `completed/success`**, polled 15:27Z. NEX-029's own product commit `f71745e` reads `completed/cancelled` on all four runs — superseded by the docs commit in the CI concurrency group, so it can never be polled green; the evidence is a green run at its docs-only child. The docs commit for *this* run will likewise read `completed/cancelled` when superseded — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-028 (run `NEX-2026-11-25-31`) — a hash of a secret is still a fact about the secret

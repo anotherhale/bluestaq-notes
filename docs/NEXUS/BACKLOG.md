@@ -1674,8 +1674,8 @@ purity (no framework, no vendor, no transport import).
 
 **Known limit (documented in the `from_context` docstring):** a caller can still hand-assemble
 a `context_hash` string, since it is a plain `str`. Doing so means taking on the
-declassification decision personally. A future slice could narrow the field to a type only an
-envelope can construct.
+declassification decision personally. **Resolved by NEX-030:** `context_hash` is now a
+`ContextHash`, minted only by `ContextEnvelope`; see the NEX-030 section below.
 
 **Migration:** none. **New dependencies:** none.
 
@@ -1683,3 +1683,64 @@ envelope can construct.
 or the approval-recommendation path) so assembly is exercised by production code, not only by
 tests (R31). Promotion is done: CI on `a3d1b32` was observed 4/4 `completed/success` at
 2026-11-25T14:42Z, which is what the VERIFIED status above rests on.
+
+## NEX-029 — the judgment path gets a production caller
+
+**Status:** VERIFIED (`evidence_basis: descendant-CI`, 2026-11-25).
+**Commit:** `f71745e` (product). **Evidence:** green run at `e3b8517`.
+
+The advisory route (`application/use_cases/approval_advisory.py`) is the first non-test
+caller of `ContextEnvelope` + `DecisionRequest`. It builds an envelope from a real stored
+approval record, classifies the subject's **title** `CONFIDENTIAL` (so it exceeds the default
+`INTERNAL` ceiling and is withheld), and records the withheld field *name* — never its value —
+in `excluded_context_fields`. The response carries **no verdict field**, so the contract shape
+prevents the provider's output being read as an approval.
+
+**Why the evidence is descendant-CI and not a bare green SHA.** `f71745e`'s four check runs
+all read `completed/cancelled`: the docs commit `e3b8517` superseded it in the CI concurrency
+group. A superseded run is neither pass nor fail, so `f71745e` can never be polled green.
+`e3b8517` is a **docs-only child** of `f71745e` (`git show --stat` touches only
+`docs/NEXUS/CHECKPOINT.json` and `EXECUTION_LOG.md`) and its tree contains all three NEX-029
+product files; its run is 4/4 `completed/success` at `head_sha=e3b8517`. A green run over a
+tree containing the code is evidence about that code.
+
+**Negative control (run 2026-11-25T15:33Z, deferred from the NEX-029 slice):** demoting the
+title from `CONFIDENTIAL` to `PUBLIC` turned **2 tests red** —
+`test_confidential_title_is_withheld_and_named` and
+`test_title_cannot_change_the_context_hash`. Restored byte-identical and re-verified green.
+The tests bind the mechanism, not its shape.
+
+**Migration:** none. **New dependencies:** none.
+
+## NEX-030 — `ContextHash` is unforgeable by construction (closes R31)
+
+**Status:** VERIFIED. **Commit:** `0727628`. **CI:** 4/4 `completed/success` at that exact
+SHA, polled 2026-11-25T15:46Z.
+
+`DecisionRequest.context_hash` was a plain `str`, so a caller could hand-assemble a digest
+that did not correspond to the envelope it was sending. Asserting a hash asserts "these were
+the inputs", so a caller-assembled value takes on the declassification decision ADR-012 gives
+to `ContextEnvelope` alone.
+
+`ContextHash` subclasses `str` — it serialises, compares and hashes as the plain hex digest in
+JSON, logs and audit records, so it is a **construction-time guard, not a new wire format**.
+Construction requires a module-private token held only by `ContextHash._mint`, and only
+`ContextEnvelope.context_hash` calls it. A malformed digest is still rejected at mint time.
+`_validate_context_hash` is now the type check: a `str` that merely looks like a digest is
+exactly the hand-assembled hash the old docstring warned about, so it is refused.
+
+**Stated limit, not overclaimed:** `str.__new__(ContextHash, …)` still bypasses the guard. The
+goal is to make the mistake impossible to write by accident and the bypass deliberate and
+visible — not to defeat a process already running inside this one. This is recorded in the
+class docstring.
+
+**Negative control:** disabling the `isinstance` check turns
+`test_context_hash_must_be_minted_by_an_envelope` red. Restored byte-identical, re-verified.
+
+**Remaining observation (not a code gap):** the envelope bounds (32 fields, 200 chars/field)
+have still never met real **note text**; they have met real approval data.
+
+**Migration:** none. **New dependencies:** none.
+
+**Next action:** refresh PR #3 at the current head, update tracking issue #2, then pick the
+next dependency-ready slice.

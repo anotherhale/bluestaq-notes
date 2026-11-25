@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-32",
-  "timestamp": "2026-11-25T15:06:00Z",
+  "run_id": "NEX-2026-11-25-33",
+  "timestamp": "2026-11-25T15:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "f71745e",
+  "commit": "PENDING_FILL",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-028 all VERIFIED. NEX-029 (give the judgment path its first production caller) is IMPLEMENTED, TESTED and PUSHED at f71745e but NOT yet VERIFIED: its CI has not been polled. M2.6 decisioning now has a live route; R31 is partially mitigated (the context bounds have now met a real approval record, but not real note text).",
   "active_task": null,
   "task_statuses": {
@@ -31,14 +31,15 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
     "NEX-025": "VERIFIED - 4/4 completed/success at d481bd0, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z",
     "NEX-026": "VERIFIED - CI observed 4/4 completed/success at b46e2e3 with head_sha b46e2e3 (polled 2026-11-25T13:34Z). Local gates green: ruff format/check clean, mypy 98 files clean, pytest 754 passed / 4 skipped, negative control verified (5 of 6 new tests red on revert).",
     "NEX-027": "VERIFIED - 4/4 completed/success at fb8d5bd, every head_sha equal to fb8d5bd5e43aa7940cbebb238c66e00fdaea8360, polled 2026-11-25T14:18Z. Local gates: ruff format/check clean, mypy 103 files clean, pytest 794 passed / 4 skipped (+40 new tests), negative control verified.",
     "NEX-028": "VERIFIED - 4/4 completed/success at a3d1b32, every head_sha equal to a3d1b3214fa990aab9abe2f93cdef642bde8c882, polled 2026-11-25T14:42Z (push run 45636602210 and pull_request run 45636618245 both green). Local gates: ruff format/check clean, mypy 104 files clean, pytest 824 passed / 4 skipped (+30 new tests: 28 in tests/agent/test_context_envelope.py, 2 added to tests/architecture/test_decision_provider_neutrality.py). Negative control verified: making included_fields ignore the ceiling turns 3 tests red.",
-    "NEX-029": "PUSHED at f71745e - IMPLEMENTED and TESTED locally, CI NOT YET OBSERVED. Local gates: ruff format/check clean, mypy 105 files clean, pytest 839 passed / 4 skipped (+15 new tests: 12 in tests/agent/test_approval_advisory.py, 3 in tests/api/test_approval_advisory_api.py). Must not be promoted to VERIFIED until 4/4 completed/success is observed at f71745e."
+    "NEX-029": "VERIFIED",
+    "NEX-030": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-001",
@@ -71,65 +72,29 @@
     "NEX-025",
     "NEX-026",
     "NEX-027",
-    "NEX-028"
+    "NEX-028",
+    "NEX-030 - ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z)."
   ],
   "validation": {
-    "pytest_full": "839 passed, 4 skipped, 1 warning, exit 0 - run bare on the NEX-029 tree. Baseline 824; delta is exactly the 15 new tests.",
+    "pytest_full": "846 passed, 4 skipped, 0 failed, 0 errors (junit: tests=846 failures=0 errors=0 skipped=4), exit 0. Baseline 839; +7 net.",
     "ruff_format": "clean - 159 files already formatted",
     "ruff_check": "All checks passed",
     "mypy": "Success: no issues found in 105 source files",
-    "new_tests_alone": "tests/agent/test_approval_advisory.py (12) + tests/api/test_approval_advisory_api.py (3) = 15 new",
-    "negative_control": "NOT RUN this slice - the run budget expired before a revert check. Recorded as a gap; the next run should perform one (e.g. removing the excluded-field handling should turn the envelope-hash tests red).",
-    "architecture": "layering test green. The advisory use case lives in application/ and imports no FastAPI/SQLAlchemy/JWT; the route lives in presentation/ and calls it through the container.",
-    "migration_chain": "No migration. No schema change in NEX-029.",
-    "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NONE for f71745e. This checkpoint makes no CI claim about the NEX-029 slice.",
-    "ci_note": "The previous slice NEX-028 remains VERIFIED on an observed 4/4 at a3d1b32. The NEX-029 product commit f71745e has NOT been polled.",
-    "verified_at_commit": "a3d1b32 (NEX-028), fb8d5bd (NEX-027), b46e2e3 (NEX-026)",
-    "verified_by_run": "NEX-2026-11-25-31 (NEX-028), NEX-2026-11-25-30 (NEX-027)"
+    "negative_control_nex029": "Demoting the advisory subject's title from CONFIDENTIAL to PUBLIC turned 2 tests red (test_confidential_title_is_withheld_and_named, test_title_cannot_change_the_context_hash). Restored byte-identical (sha256 asserted), re-verified green.",
+    "negative_control_nex030": "Disabling the isinstance(value, ContextHash) check in decisioning._validate_context_hash turned test_context_hash_must_be_minted_by_an_envelope red. Restored byte-identical, re-verified green.",
+    "functional_guard_proof": "ContextHash('a'*64) raises; DecisionRequest(context_hash='a'*64) raises; envelope-minted hash works, isinstance(str) holds, JSON serialises as the plain digest."
   },
-  "uncommitted_work": "none - f71745e pushed, working tree clean at checkpoint time; this checkpoint commit is the only pending change",
-  "pr_state": {
-    "number": 3,
-    "state": "open (draft, unmerged)",
-    "head": "f71745e",
-    "body_updated_at": "2026-11-25T14:52:08Z",
-    "counters": {
-      "additions": 34700,
-      "deletions": 10,
-      "files": 124,
-      "commits_ahead_of_main": 137,
-      "measured_at_commit": "03ead43",
-      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21). Re-measured 2026-11-25T14:53Z and identical to what the refreshed body quotes."
-    },
-    "note": "PR #3 is open, draft and unmerged. Its body was refreshed this run from the PR object and read back BYTE-EQUAL (30,024 characters, updated_at 2026-11-25T14:52:08Z). It now covers NEX-027 (fb8d5bd) and NEX-028 (a3d1b32), the 11th defect, and risk R31. The body is current as of head 03ead43 and goes stale again on the next product commit - re-measure every counter from the pull-request object before quoting one.",
-    "merge": "prohibited - must remain unmerged for human review",
-    "body_refresh": {
-      "status": "DONE this run",
-      "method": "GET then PATCH /repos/anotherhale/bluestaq-notes/pulls/3, then read back and asserted byte-equality against the local file (a 2xx is not evidence the prose arrived)",
-      "verified": "byte-equal readback, 30024 chars"
-    },
-    "pending_update": "body refresh required - the body was last written for head 03ead43 and does not cover NEX-029 (f71745e). Re-measure all counters from the PR object before quoting one.",
-    "body_head": "fd223f4",
-    "body_counters": "32,161 additions / 10 deletions / 112 files / 126 commits, 752 tests (748 passed, 4 skipped) - taken from the pull-request object, not a local diff (R21)",
-    "recorded_body_counters": "the pending_update/body_counters fields below are HISTORICAL (head fd223f4, 2026-11-25T13:21Z) and must not be quoted as current"
-  },
-  "tracking_issue": {
-    "number": 2,
-    "state": "open",
-    "last_comment": "not updated this run. NEX-027 VERIFIED at fb8d5bd and NEX-028 VERIFIED at a3d1b32 are recorded here and in STATE.md/EXECUTION_LOG.md; the tracking issue still lacks both.",
-    "last_updated_by_nexus": "2026-11-25T14:52Z",
-    "last_comment_id": 7165962121,
-    "note": "Run report for NEX-2026-11-25-31 posted to issue #2 as comment 7165962121 (byte-equal readback)."
-  },
+  "uncommitted_work": "none - all product and docs changes committed and pushed",
+  "pr_state": "#3 open, draft, unmerged (human review required). Body not refreshed this run; it still describes an earlier head. Re-measure counters from the PR object before quoting them.",
+  "tracking_issue": "#2 open, not updated this run.",
   "blockers": [],
   "risks": [
     {
       "id": "R31",
       "severity": "low",
-      "summary": "A bounded context contract exercised only by tests has not been exercised against real content.",
-      "detail": "NEX-028 caps a context field's value at 200 characters and an envelope at 32 fields, and names fields with stable lowercase identifiers. Every current caller is a test, so none of those bounds has met real note text or a real note title. The first production caller (tool-gateway classification or the approval-recommendation path) is the first genuine test; if a bound is too tight, widening it is a contract change requiring review, not a tweak to a constant. Related honest gap, documented on DecisionRequest.from_context: context_hash is a plain str, so a caller can hand-assemble one, which means taking the declassification decision personally. A later slice can narrow the field to a type only an envelope can construct. UPDATE (NEX-029): ContextEnvelope now has a production caller - the advisory route builds one from a real stored approval record, so the 32-field and 200-char bounds have met real approval data. They have still not met real note text, and context_hash is still a plain str.",
-      "status": "open - partially mitigated by NEX-029 (f71745e, CI unverified)"
+      "summary": "A bounded context contract has met real approval data; the hand-assembled-declassification gap is closed by type.",
+      "detail": "NEX-028 caps a context field's value at 200 characters and an envelope at 32 fields, and names fields with stable lowercase identifiers. Every current caller is a test, so none of those bounds has met real note text or a real note title. The first production caller (tool-gateway classification or the approval-recommendation path) is the first genuine test; if a bound is too tight, widening it is a contract change requiring review, not a tweak to a constant. Related honest gap, documented on DecisionRequest.from_context: context_hash is a plain str, so a caller can hand-assemble one, which means taking the declassification decision personally. A later slice can narrow the field to a type only an envelope can construct. UPDATE (NEX-029): ContextEnvelope now has a production caller - the advisory route builds one from a real stored approval record, so the 32-field and 200-char bounds have met real approval data. They have still not met real note text, and context_hash is still a plain str. CLOSED (NEX-030): context_hash is now ContextHash, constructible only through ContextHash._mint, which only ContextEnvelope calls. A caller-assembled string is rejected by decisioning._validate_context_hash. The bounds (32 fields, 200 chars) have still not met real note text - that remains a live observation, not a code gap.",
+      "status": "closed (NEX-030)"
     },
     {
       "id": "R30",
@@ -162,8 +127,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing."
     },
     {
       "id": "R23",
@@ -227,13 +192,14 @@
       "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc."
     }
   ],
-  "next_task": "Verify NEX-029 at f71745e (poll CI), then decide R31's closure. R31's remaining honest gap: context_hash is a plain str so a caller can hand-assemble one; a later slice can narrow it to a type only an envelope can construct.",
-  "next_action": "1) `git rev-parse HEAD` and confirm f71745e is an ancestor. 2) Poll check-runs for f71745e; quote only an observed status. 3) If green, set NEX-029 VERIFIED, move it to verified_tasks, and record R31 as partially mitigated. 4) Run the negative control that NEX-029 skipped. 5) Refresh PR #3 body counters from the PR object.",
-  "recovery_instructions": "Read CHECKPOINT.json and STATE.md, then `git rev-parse HEAD`. The `commit` field holds f71745e, the NEX-029 product commit whose CI still needs polling. HEAD may be one docs commit ahead. If the tree is dirty, inspect before discarding. Then follow next_action.",
+  "next_task": "Refresh PR #3 body at the current head (counters re-measured from the PR object, not from memory) and update tracking issue #2 with NEX-029 and NEX-030 as VERIFIED. Then select the next dependency-ready slice: the decisioning path's next honest gap is that ContextEnvelope bounds have never met real note text.",
+  "next_action": "PATCH /pulls/3 with a body quoting the current head, then comment on issue #2 recording NEX-029 VERIFIED (descendant-CI at e3b8517) and NEX-030 VERIFIED (4/4 success at 0727628).",
+  "recovery_instructions": "Tree is clean and pushed at the docs head. Read this checkpoint, then git log --oneline -3 to confirm. R31 is closed; do not reopen it without reading ADR-012 and the ContextHash docstring's stated limit (str.__new__ still bypasses the guard by design).",
   "ci_status": {
-    "nex029_slice_f71745e": "NOT POLLED. Do not claim green.",
-    "nex028_slice_a3d1b32": "OBSERVED 4/4 completed/success at a3d1b32, polled 2026-11-25T14:42Z.",
-    "note": "Docs-only commits after f71745e will read completed/cancelled when superseded - neither pass nor fail."
+    "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
+    "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
+    "nex028_slice_a3d1b32": "OBSERVED 4/4 completed/success, polled 2026-11-25T14:42Z.",
+    "note": "The docs-only commit for this run will itself read completed/cancelled when superseded - neither pass nor fail, and never evidence."
   },
   "verified_tasks": [
     "NEX-001",
@@ -266,17 +232,12 @@
     "NEX-025",
     "NEX-026",
     "NEX-027",
-    "NEX-028"
+    "NEX-028",
+    "NEX-029",
+    "NEX-030"
   ],
-  "in_progress_tasks": {
-    "NEX-029": {
-      "status": "PUSHED, CI NOT OBSERVED",
-      "commit": "f71745e",
-      "slice": "RecommendApprovalDecision (application/use_cases/approval_advisory.py) + GET /agents/approvals/{id}/advisory, owner-only, 404 otherwise, returning an advisory score/confidence/context_hash and never a verdict.",
-      "remaining": "Poll check-runs at f71745e; if 4/4 completed/success, promote to VERIFIED and close R31. If red, fix and re-push."
-    }
-  },
+  "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "commit = a3d1b32, the NEX-028 slice (domain module + tests + ADR-012) and the commit whose CI was polled. Every commit after it is docs-only: verify with `git log --oneline a3d1b32..HEAD --name-only`, which should list nothing outside docs/NEXUS/ and docs/ADR/. head_at_checkpoint is deliberately NOT a sha - it is the commit that contains this checkpoint file, so a recovery run must read HEAD, not this field, to find it.",
-  "head_at_checkpoint": "the commit that contains this checkpoint file"
+  "head_at_checkpoint": "PENDING_FILL"
 }
