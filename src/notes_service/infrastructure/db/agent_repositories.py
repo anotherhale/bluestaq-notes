@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -122,6 +122,8 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
         decided_at=row.decided_at,
         decided_by_user_id=UserId.parse(row.decided_by_user_id) if row.decided_by_user_id else None,
         reason=row.reason,
+        expires_at=row.expires_at,
+        consumed_at=row.consumed_at,
     )
 
 
@@ -397,6 +399,24 @@ class SqlAlchemyApprovalRequestRepository:
             _as_uuid(request.decided_by_user_id) if request.decided_by_user_id is not None else None
         )
         row.reason = request.reason
+        row.expires_at = request.expires_at
+        row.consumed_at = request.consumed_at
+
+    def consume(self, approval_id: ApprovalRequestId, *, now: datetime) -> bool:
+        result = self._session.execute(
+            update(ApprovalRequestRow)
+            .where(
+                ApprovalRequestRow.id == _as_uuid(approval_id),
+                ApprovalRequestRow.status == ApprovalStatus.APPROVED.value,
+                ApprovalRequestRow.consumed_at.is_(None),
+                or_(
+                    ApprovalRequestRow.expires_at.is_(None),
+                    ApprovalRequestRow.expires_at > now,
+                ),
+            )
+            .values(consumed_at=now)
+        )
+        return cast(CursorResult[Any], result).rowcount == 1
 
 
 class SqlAlchemyToolInvocationRepository:

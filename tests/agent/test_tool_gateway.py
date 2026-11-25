@@ -26,6 +26,7 @@ NEX-005-followup), and these assertions are about the use case, not the edge.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
@@ -403,6 +404,83 @@ class TestApprovalGating:
         assert isinstance(result, ToolResult)
         assert result.output == {"deleted": True}
         assert h.list_notes.run(h.principal).total == 0
+
+    def test_an_approval_is_spent_by_the_action_it_authorises(self, h: Harness) -> None:
+        """One human decision authorises one action, not a standing permission.
+
+        Before this was enforced, the gateway matched an ``approved`` row and
+        never spent it, so a single approval to delete a note silently
+        authorised every later delete of that note. The second attempt must be
+        refused, and it must not execute.
+        """
+        agent, secret = h.secret_for(Capability.DELETE_NOTE)
+        first = h.create_note.run(h.principal, title="Doomed", content="body")
+        h.create_note.run(h.principal, title="Spared", content="body")
+
+        with pytest.raises(AccessDenied):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(first.id)},
+                idempotency_key="k-del-1",
+            )
+        with h.uow() as uow:
+            request = uow.approvals.list_pending_for_agent(agent.id)[0]
+        h.decide.run(h.principal, approval_id=str(request.id), approve=True)
+
+        # The approval covers exactly this resource and is spent by this call.
+        h.gateway.run(
+            secret=secret,
+            tool_name="delete_note",
+            arguments={"note_id": str(first.id)},
+            idempotency_key="k-del-2",
+        )
+        assert h.list_notes.run(h.principal).total == 1
+
+        # A second attempt against the same resource finds no usable approval.
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(first.id)},
+                idempotency_key="k-del-3",
+            )
+
+        with h.uow() as uow:
+            spent = uow.approvals.list_for_agent(agent.id)[0]
+        assert spent.consumed_at is not None
+
+    def test_an_expired_approval_does_not_authorise_execution(self, h: Harness) -> None:
+        """A lapsed approval must fail closed, not execute on a stale decision."""
+        agent, secret = h.secret_for(Capability.DELETE_NOTE)
+        note = h.create_note.run(h.principal, title="Doomed", content="body")
+
+        with pytest.raises(AccessDenied):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-del-1",
+            )
+        with h.uow() as uow:
+            request = uow.approvals.list_pending_for_agent(agent.id)[0]
+            # Approve, then push the validity window into the past as the clock
+            # would after 72 hours. This is the state the gateway must refuse.
+            request.approve(approver_user_id=BOB, now=request.requested_at)
+            request.expires_at = request.decided_at - timedelta(seconds=1)
+            uow.approvals.save(request)
+            uow.commit()
+
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-del-2",
+            )
+
+        # Fail closed: the note survives.
+        assert h.list_notes.run(h.principal).total == 1
 
 
 class TestPerResourceAuthorizationIsNotBypassed:

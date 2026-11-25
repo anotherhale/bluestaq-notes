@@ -740,6 +740,8 @@ class ApprovalRequestResponse(ResponseModel):
     decided_at: datetime | None = None
     decided_by_user_id: uuid.UUID | None = None
     reason: str | None = None
+    expires_at: datetime | None = None
+    consumed_at: datetime | None = None
 
     @classmethod
     def from_domain(cls, request: ApprovalRequest) -> ApprovalRequestResponse:
@@ -757,6 +759,8 @@ class ApprovalRequestResponse(ResponseModel):
                 else None
             ),
             reason=request.reason,
+            expires_at=request.expires_at,
+            consumed_at=request.consumed_at,
         )
 
 

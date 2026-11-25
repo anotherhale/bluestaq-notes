@@ -524,6 +524,10 @@ class ApprovalRequestRow(Base):
         UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An approval is bounded in time and spendable once. Nullable only for rows
+    # written before these columns existed; the aggregate always sets them.
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('pending','approved','denied')", name="status_valid"),

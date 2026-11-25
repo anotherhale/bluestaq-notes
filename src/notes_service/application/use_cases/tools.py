@@ -290,7 +290,28 @@ class InvokeTool(UseCase):
                 f"tool {tool.name} requires human approval; request {request.id} opened"
             )
 
+        # Spend the approval before the side effect, in the same transaction as
+        # the audit row. If the conditional UPDATE finds the request already
+        # consumed or expired, this attempt is treated as unapproved rather than
+        # executing on a stale decision.
         with self._uow_factory() as uow:
+            if not uow.approvals.consume(approval.id, now=self._clock.now()):
+                invocation = self._begin_invocation(
+                    uow,
+                    resolved=resolved,
+                    tool=tool,
+                    cleaned=cleaned,
+                    resource_ref=resource_ref,
+                    idempotency_key=idempotency_key,
+                    approval_request_id=approval.id,
+                )
+                invocation.deny(outcome="approval request no longer usable")
+                uow.tool_invocations.add(invocation)
+                uow.commit()
+                raise AccessDenied(
+                    f"approval request {approval.id} is spent or expired; a fresh "
+                    "human approval is required"
+                )
             invocation = self._begin_invocation(
                 uow,
                 resolved=resolved,
@@ -318,13 +339,14 @@ class InvokeTool(UseCase):
     def _approved_request(
         self, *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
     ) -> ApprovalRequest | None:
-        """An approved, still-usable approval for this exact (agent, capability, resource)."""
+        """An approved, unspent, unexpired approval for this (agent, capability, resource)."""
+        now = self._clock.now()
         with self._uow_factory() as uow:
             for request in uow.approvals.list_for_agent(resolved.agent.id):
                 if (
                     request.capability is tool.capability
                     and request.resource_ref == resource_ref
-                    and request.status.value == "approved"
+                    and request.is_usable(now=now)
                 ):
                     return request
         return None

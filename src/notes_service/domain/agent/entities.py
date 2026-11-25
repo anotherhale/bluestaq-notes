@@ -10,7 +10,7 @@ case cannot persist an escalation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from notes_service.domain.agent.value_objects import (
     DEFAULT_MAX_TOKEN_TTL_SECONDS,
@@ -28,6 +28,13 @@ from notes_service.domain.errors import InvariantViolation, ValidationError
 from notes_service.domain.identity.value_objects import UserId
 
 _MAX_DISPLAY_NAME = 120
+
+# An approval authorises one sensitive action, once, and not indefinitely.
+# The security architecture caps approval validity and requires that an expired
+# approval block execution (ENTERPRISE_SECURITY_ARCHITECTURE_V1 §11). Sensitive
+# agent tools sit at the High tier, whose ceiling is 72 hours; this is the
+# platform maximum, and tenant policy may only shorten it.
+DEFAULT_APPROVAL_TTL = timedelta(hours=72)
 
 
 def _utcnow() -> datetime:
@@ -186,6 +193,8 @@ class ApprovalRequest:
     decided_at: datetime | None = None
     decided_by_user_id: UserId | None = None
     reason: str | None = None
+    expires_at: datetime | None = None
+    consumed_at: datetime | None = None
 
     @classmethod
     def open(
@@ -195,6 +204,8 @@ class ApprovalRequest:
         capability: Capability,
         resource_ref: str,
         approval_id: ApprovalRequestId | None = None,
+        ttl: timedelta = DEFAULT_APPROVAL_TTL,
+        now: datetime | None = None,
     ) -> ApprovalRequest:
         if capability not in SENSITIVE_CAPABILITIES:
             raise InvariantViolation(
@@ -206,16 +217,41 @@ class ApprovalRequest:
             )
         if not isinstance(resource_ref, str) or not resource_ref.strip():
             raise ValidationError("approval request must name a resource")
+        if ttl <= timedelta(0):
+            raise ValidationError("approval validity must be positive")
+        opened_at = now or _utcnow()
         return cls(
             id=approval_id or ApprovalRequestId.new(),
             agent_id=agent.id,
             capability=capability,
             resource_ref=resource_ref.strip(),
+            requested_at=opened_at,
+            expires_at=opened_at + ttl,
         )
 
     @property
     def is_pending(self) -> bool:
         return self.status is ApprovalStatus.PENDING
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and _utcnow() >= self.expires_at
+
+    def is_usable(self, *, now: datetime | None = None) -> bool:
+        """Whether this approval may authorise an action right now.
+
+        Three independent conditions, all required: it was approved, nobody has
+        spent it yet, and it has not expired. They are separate statuses in the
+        security architecture (expired / revoked / invalidated all block
+        execution), so they are checked separately here rather than collapsed
+        into one boolean that a caller could misread.
+        """
+        if self.status is not ApprovalStatus.APPROVED:
+            return False
+        if self.consumed_at is not None:
+            return False
+        moment = now or _utcnow()
+        return self.expires_at is None or moment < self.expires_at
 
     def _assert_decidable(self, approver_user_id: UserId | None) -> UserId:
         if approver_user_id is None:
@@ -224,6 +260,11 @@ class ApprovalRequest:
             )
         if self.status is not ApprovalStatus.PENDING:
             raise InvariantViolation(f"approval request is already {self.status.value}")
+        if self.is_expired:
+            # Deciding an expired request would produce an APPROVED row that the
+            # gateway must then refuse; refuse the decision instead, so the
+            # recorded status never claims an authority that has lapsed.
+            raise InvariantViolation("approval request has expired and cannot be decided")
         return approver_user_id
 
     def approve(
@@ -253,3 +294,18 @@ class ApprovalRequest:
         self.decided_by_user_id = approver
         self.decided_at = now or _utcnow()
         self.reason = reason
+
+    def consume(self, *, now: datetime | None = None) -> None:
+        """Spend this approval on exactly one action.
+
+        An approval is an authorisation for one sensitive act, not a standing
+        permission. Without this, a single human decision to delete one note
+        would silently authorise every later delete of that note for as long as
+        the request row lived. Consuming stamps ``consumed_at`` so the gateway's
+        ``is_usable`` check fails for every subsequent attempt.
+        """
+        if not self.is_usable(now=now):
+            raise InvariantViolation(
+                f"approval request {self.id} is not usable and cannot be consumed"
+            )
+        self.consumed_at = now or _utcnow()

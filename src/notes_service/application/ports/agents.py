@@ -108,6 +108,16 @@ class ApprovalRequestRepository(Protocol):
 
     def save(self, request: ApprovalRequest) -> None: ...
 
+    def consume(self, approval_id: ApprovalRequestId, *, now: datetime) -> bool:
+        """Atomically spend an approval; ``False`` if it was not spendable.
+
+        A read-then-write in the use case would let two concurrent invocations
+        both observe an unused approval and both spend it. The check and the
+        stamp therefore happen in one conditional UPDATE, and the caller treats
+        a ``False`` result as "no usable approval".
+        """
+        ...
+
 
 @runtime_checkable
 class ToolInvocationRepository(Protocol):
