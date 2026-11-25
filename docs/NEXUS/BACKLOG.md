@@ -395,7 +395,7 @@ tools.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | TODO |
+| Status | TESTED (slice 1 — durable runs; CI pending on `0e74d4f`) |
 | Dependencies | NEX-005 |
 
 **Objective:** durable runs that checkpoint progress and resume after
@@ -404,7 +404,27 @@ interruption without repeating completed side effects.
 **Acceptance criteria:** a run interrupted mid-step resumes from its last
 checkpoint; completed steps are not re-executed; run state is queryable.
 
-**Complexity:** large.
+**Delivered (slice 1, run `NEX-2026-11-25-09`, commit `0e74d4f`):** the run
+aggregate (`domain/agent/runs.py`), the `AgentRunRepository` port and its
+SQLAlchemy adapter, `agent_runs` / `agent_run_steps` with migration
+`8a4c2e1f9b73`, and the use cases `PlanAgentRun`, `AdvanceAgentRun`,
+`ResolveInterruptedStep`, `AbortAgentRun`, `GetAgentRun`, `ListAgentRuns`.
+Pinned by `tests/agent/test_agent_runs.py` (13 tests).
+
+Two of the three criteria are covered: *completed steps are not re-executed*
+(the crash-halt-resolve path never re-runs the resolved step) and *run state is
+queryable* (`GetAgentRun` / `ListAgentRuns`, plus `list_resumable_for_agent`).
+The third is covered in the sense that matters — a run whose step was found
+`started` does resume, and the test proves the second step then runs while the
+first is not repeated.
+
+**Remaining for VERIFIED:** CI must run the suite on `0e74d4f`. Local gates are
+not CI evidence (R10). Also still open: there is **no HTTP surface** for runs
+yet — the use cases are not wired into `presentation/`, so a client cannot plan
+or advance a run. That is the natural slice 2, mirroring how NEX-005 preceded
+NEX-005-HTTP.
+
+**Complexity:** large (slice 1 complete; slice 2 = HTTP surface).
 
 ---
 

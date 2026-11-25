@@ -7,27 +7,57 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED (tool gateway incl. HTTP surface; tenant-scoped capability answer; OIDC token verifier). Next: Phase 5 durable runtime |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime) **slice 1 landed**: NEX-009 durable runs, CI green on `0e74d4f` (push event) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `2dd7a0c` |
-| Head commit (run end) | `0fcc078` (CI-verified) plus this run's docs commit |
-| Last CI result | **4/4 green** on `0fcc078` — push `45541856292`, pull_request `45541862595` |
+| Base commit (run start) | `759f92a` |
+| Head commit (run end) | `0e74d4f` — durable agent runs, pushed and CI-verified |
+| Last CI result | push event **2/2 green** on `0e74d4f`; pull_request event backend still running at report time |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-010** is **VERIFIED** (run `NEX-2026-11-25-08`): CI ran the
-full suite on `0fcc078`, a descendant of the commit that added the tests, and all
-four check runs passed on both the push and pull_request events. That is the
-evidence, not the local run. The next dependency-ready task is **NEX-009** (durable
-agentic runtime); see Next best actions.
+None in flight. **NEX-009 slice 1** is **TESTED → CI-green on the push event**:
+durable agent runs are committed, pushed, and the backend + frontend jobs both
+report `completed/success` on `0e74d4f`. The `pull_request` event's backend job
+was still running when this run reported, so the checkpoint records the push
+evidence explicitly rather than claiming both.
+
+Slice 2 is **not started**: the run use cases are not yet exposed over HTTP.
 
 
 ## Last completed task
 
-**NEX-010 — Direct tests for the OIDC token verifier** (run `NEX-2026-11-25-07`).
+**NEX-009 slice 1 — Durable agentic runtime** (run `NEX-2026-11-25-09`, `0e74d4f`).
+A governed tool invocation was atomic: it ran or it refused, and nothing survived
+the process. An agent therefore could not carry a multi-step intention across an
+interruption, and a crash mid-effect left no record of what had been attempted.
+
+The run is now an aggregate (`domain/agent/runs.py`): an ordered plan of steps,
+each recording the arguments it was asked to perform, with a lifecycle that
+cannot skip a step or settle one out of order. A step is persisted as `started`
+*before* the gateway is called and saved again on completion, so a resumed run
+replays the persisted plan instead of re-deriving it.
+
+The load-bearing decision is what happens on recovery. A step found `started` is
+marked **INTERRUPTED** and the run **halts**. The runtime cannot know whether the
+effect landed, and guessing is wrong in both directions: assume it landed and the
+effect is silently lost; assume it did not and the effect is applied twice. Only
+an owner may settle it (`ResolveInterruptedStep`), and the settled step is never
+re-executed. That is the difference between durability and an at-least-once retry
+loop, and it is what the tests pin.
+
+Also in the slice, because durability alone is not safety: a run is scoped to the
+agent its token resolves to, so one agent cannot read or abort another's run;
+capabilities are checked at plan time against the token; and a revoked delegation
+stops the run at the next advance rather than at token expiry.
+
+Pinned by `tests/agent/test_agent_runs.py` (13 tests). **What is not done:** there
+is no HTTP surface for runs, so no client can plan or advance one yet. That is
+slice 2.
+
+Previously, **NEX-010 — Direct tests for the OIDC token verifier** (run `NEX-2026-11-25-07`).
 `HttpOidcRelyingParty._verify_id_token` was the only security-critical code in the
 identity stack that **no test imported**: every login test injected
 `FakeRelyingParty`, so NEX-002's criterion "an ID token with wrong
@@ -150,26 +180,19 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-08`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-09`, bare as CI runs them) |
 | --- | --- |
-| `ruff format --check` | clean — **182 files** (repo-wide, includes `docs/` Markdown fences) |
+| `ruff format --check` | clean — **186 files** (repo-wide, includes `docs/` Markdown fences) |
 | `ruff check` | clean |
-| `mypy` | clean (94 source files) |
-| `pytest` (full) | **639 passed, 4 skipped** — as reported by CI on `0fcc078` |
-| Frontend `typecheck`/`lint`/`test`/`build` | passed at `3f1d855` (127 tests, 9 files); no frontend files changed since |
+| `mypy` | clean (96 source files) |
+| `pytest` (full) | **651 passed, 4 skipped** locally; **CI green on `0e74d4f` (push event, 2/2)** |
+| Migration chain | `alembic upgrade head` → `downgrade base` clean, including new `8a4c2e1f9b73_agent_runs` |
+| Frontend `typecheck`/`lint`/`test`/`build` | green on `0e74d4f` (no frontend files changed) |
 
-> **CI is the evidence, and it is green.** `0fcc078` reports 4/4 check runs
-> `completed/success` on both the push (`45541856292`) and pull_request
-> (`45541862595`) events, and it descends from the commit that added the OIDC
-> tests, so the full suite ran. That is what promoted NEX-010 and NEX-002 to
-> **VERIFIED** in run `NEX-2026-11-25-08`.
->
-> The first push of this slice (`2dd7a0c`) was **red**, and the reason is worth
-> keeping: CI runs `ruff format --check` bare and repo-wide, and ruff formats
-> Python inside Markdown, so an unformatted Python fence in `EXECUTION_LOG.md`
-> failed the backend job. The pre-push local run had been scoped to `src tests`
-> and never looked at `docs/`. Local gates are only evidence when they invoke the
-> same command CI invokes — see R10.
+> **CI is the evidence.** On `0e74d4f` the push event reports backend and frontend
+> both `completed/success`. The `pull_request` event's backend job was still
+> running when this run wrote its report, so only the push result is claimed here.
+> Local gates are recorded above for reproducibility, not as proof (R10).
 
 ## Blockers
 
@@ -227,18 +250,21 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
-   runs checkpoint progress and resume after interruption without repeating
-   completed side effects. NEX-005, NEX-007, NEX-010, and NEX-002 are all done, so
-   this is now unambiguously the highest-value dependency-ready task — but it is
-   *large*. Scope the first slice to run-checkpoint persistence plus a resume test
-   rather than attempting the whole task. (P2.)
-2. **Refresh the PR #3 body.** It records 20,576 insertions / 89 files / 614 tests
-   as of `e1cb0c5`; the branch is now 21,190 insertions / 90 files / 643 tests and
-   the body does not mention NEX-010 or the nonce defect. Compare against
-   `git diff --stat main...HEAD` — the body has understated this branch before, and
-   a reviewer reading it would misjudge the size by an order of magnitude.
-3. **Promote nothing on local gates alone.** NEX-010 and NEX-002 are VERIFIED
-   because CI ran them, not because the suite was green locally. That conflation is
-   exactly what R9 was filed about, and R10 is the same mistake one layer down.
+1. **NEX-009 slice 2 — expose durable runs over HTTP.** The use cases exist and
+   are tested but nothing in `presentation/` calls them, so no client can plan,
+   advance, or resolve a run. Mirror NEX-005 → NEX-005-HTTP: thin routers over
+   `PlanAgentRun` / `AdvanceAgentRun` / `ResolveInterruptedStep` / `AbortAgentRun`
+   / `GetAgentRun` / `ListAgentRuns`, with the agent token — not the demo-identity
+   header — as the authority, exactly as `test_tool_gateway_api.py` pins for the
+   gateway. Refusals must be 401/403/404/409/422, never 500. (P2.)
+2. **Refresh the PR #3 body again.** It records 21,310 insertions / 91 files / 643
+   tests; the branch is now **22,819 / 95 / 655** after NEX-009 slice 1. The body
+   has understated this branch three times now — always recompute with
+   `git diff --shortstat main...HEAD` plus a fresh collect, never copy the last
+   number forward.
+3. **Promote nothing on local gates alone.** NEX-009 slice 1 is CI-green on the
+   *push* event only. If the `pull_request` run also goes green, that is a second
+   independent confirmation and worth recording — but do not upgrade the status
+   from TESTED to VERIFIED on the strength of a local suite, which is exactly the
+   R9/R10 mistake.
 

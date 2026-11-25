@@ -1176,3 +1176,65 @@ as pending rather than inferred as green. The run then waited and confirmed:
 `0fcc078` remains the commit that carried the product and test changes; the three
 commits after it are docs-only. The checkpoint's `commit` field now names
 `d2abf48` as the verified tip.
+
+## Run `NEX-2026-11-25-09` — 2026-11-25T04:01Z → 04:2xZ
+
+**Task:** NEX-009 slice 1 — durable agentic runtime.
+**Branch:** `feature/agentic-enterprise-platform`.
+**Starting commit:** `759f92a`. **Ending commit:** `0e74d4f` (product) + docs commit.
+
+### What was built
+
+A governed tool invocation was atomic: it ran or it refused. Nothing survived the
+process, so an agent could not carry a multi-step intention across an
+interruption, and a crash mid-effect left no record of what had been attempted.
+
+The run is now an aggregate (`domain/agent/runs.py`): an ordered plan of steps,
+each recording the arguments it was asked to perform, with a lifecycle that
+cannot skip a step or settle one out of order. A step is persisted `started`
+before the gateway is called and saved again on completion, so a resumed run
+replays the persisted plan rather than re-deriving it.
+
+Files added: `domain/agent/runs.py`, `application/use_cases/agent_runs.py`,
+`migrations/versions/8a4c2e1f9b73_agent_runs.py`, `tests/agent/test_agent_runs.py`.
+Files modified: `application/ports/agents.py`, `application/ports/repositories.py`,
+`infrastructure/db/{agent_repositories,models,uow}.py`.
+
+### The decision that matters
+
+A step found `started` on recovery is marked **INTERRUPTED** and the run **halts**.
+The runtime cannot know whether the effect landed, and guessing is wrong both
+ways: assume it landed and the effect is silently lost; assume it did not and it
+is applied twice. Only an owner may settle it (`ResolveInterruptedStep`), and the
+settled step is never re-executed. That distinction is what separates durability
+from an at-least-once retry loop, and it is what
+`test_a_crashed_step_halts_the_run_until_an_owner_decides` pins.
+
+### Validation
+
+- `pytest` full suite: **651 passed, 4 skipped** (local).
+- `ruff format --check`, `ruff check`, `mypy` (96 files): clean, run bare.
+- Migration chain: `upgrade head` → `downgrade base` clean, including the new
+  revision whose `down_revision` is `5d0b71f8ac34`.
+- **CI: push event 2/2 `completed/success` on `0e74d4f`** (backend + frontend),
+  read from `gh api .../commits/0e74d4f/check-runs`. The `pull_request` event's
+  backend job was still running at report time, so only the push result is
+  claimed.
+
+### Process notes worth keeping
+
+- The `git commit -F -` heredoc **corrupted the message** into repeated fragments
+  and the commit silently did not run — the exact failure already recorded in
+  memory. Recovered by writing the message with `file_editor` and committing with
+  `-F /tmp/nex009_msg.txt` alone. Never write prose through a heredoc here.
+- A `pytest --collect-only` invocation piped to `tail` swallowed the count line;
+  the 655 figure quoted in STATE/PR notes comes from the full run, not that
+  command.
+- The branch is now **22,819 insertions / 95 files / 655 tests** against `main`.
+  PR #3's body says 21,310 / 91 / 643 and is stale for the third run running.
+
+### Status
+
+NEX-009 slice 1: **TESTED**, committed (`0e74d4f`), **PUSHED** (verified with
+`git ls-remote`, not a cached ref), CI-green on the push event. **Not VERIFIED**
+on both events yet. **No HTTP surface** for runs exists — that is slice 2.
