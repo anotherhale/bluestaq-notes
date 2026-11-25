@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-02",
-  "timestamp": "2026-11-25T01:57:00Z",
+  "run_id": "NEX-2026-11-25-03",
+  "timestamp": "2026-11-25T02:20:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "7367aa9",
+  "commit": "7a392dd",
   "commit_note": "Verified HEAD this checkpoint describes: the last commit with verified gates. The checkpoint docs commit that carries this file is its child, so this field is intentionally not self-referential.",
   "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending)",
   "active_task": null,
@@ -17,34 +17,36 @@
     "NEX-004": "VERIFIED",
     "NEX-007": "TODO",
     "NEX-005-HTTP": "TODO",
-    "NEX-008": "TODO"
+    "NEX-008": "PUSHED"
   },
   "completed_tasks": [
     "NEX-006",
     "NEX-003",
     "NEX-005",
     "NEX-005-followup",
-    "NEX-004"
+    "NEX-004",
+    "NEX-008"
   ],
   "validation": {
     "pytest_full": "603 passed, 4 skipped (607 collected)",
-    "pytest_tool_gateway": "18 passed in tests/agent/test_tool_gateway.py",
     "pytest_architecture": "passed (within full suite)",
-    "ruff_format": "clean (128 files)",
+    "ruff_format": "clean (179 files)",
     "ruff_check": "clean",
     "mypy": "clean (93 source files)",
-    "migration_sqlite": "alembic upgrade head applied to fresh SQLite db; tool_invocations table created with status CHECK, sha256 digest CHECK, UNIQUE(agent_id, idempotency_key)",
+    "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed",
+    "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (19 tables created, all dropped)",
     "ci_observed": false,
-    "verified_at_commit": "a3ef9d7",
-    "verified_by_run": "NEX-2026-11-25-02 (independent re-run of the full suite, not a self-report)"
+    "ci_note": "NEX-008 added .github/workflows/ci.yml this run; no GitHub Actions run has been observed yet. CI is CONFIGURED but UNOBSERVED - do not report CI as passing.",
+    "verified_at_commit": "7a392dd",
+    "verified_by_run": "NEX-2026-11-25-03 (all gates executed locally in this run, not self-reported)"
   },
-  "uncommitted_work": "none after this run commits the state-file reconciliation",
+  "uncommitted_work": "none after this run commits the CI workflow and the state-file updates",
   "pr_state": {
     "pr": 3,
     "state": "draft",
     "merged": false,
     "description_updated": "2026-11-25T01:41:35Z",
-    "note": "description rewritten to match branch contents (phases 1-4 implemented, two gateway defects recorded). Still draft; not marked ready for review."
+    "note": "Still draft; not marked ready for review. This run adds the CI workflow to the branch but does not change the PR description."
   },
   "tracking_issue": {
     "number": 2,
@@ -53,19 +55,21 @@
   },
   "blockers": [],
   "risks": [
-    "R3 (raised to high): the repository has NO CI configuration at all - no .github/workflows on any branch, zero check runs on any commit. Local gates (pytest/ruff/mypy) are the only validation. Nothing prevents a regression from reaching main once a human merges PR #3.",
+    "R3 (closed, residual): CI workflow added at .github/workflows/ci.yml; risk is only fully closed once a green GitHub Actions run is observed. Next run must check gh run list and fix any failure.",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
     "R5: NEX-005 has no HTTP/router exposure yet - the gateway is reachable only from application code. No API contract test covers it.",
     "R7: gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently."
   ],
-  "next_task": "NEX-005-HTTP",
-  "next_action": "NEX-005-HTTP: add a presentation router that invokes the tool gateway, an auth dependency resolving an agent token for TokenAudience.TOOL_GATEWAY (rejecting Notes-API tokens), and an API contract test covering a denied invocation plus a successful one. Closes risk R5.",
+  "next_task": "NEX-008-verify",
+  "next_action": "Confirm CI on GitHub: run 'gh run list --branch feature/agentic-enterprise-platform --limit 5' and 'gh pr checks 3'. If the backend or frontend job fails, read the log and fix the workflow (do not weaken a gate to make it pass). Only after a green run may CI be recorded as passing and R3 marked fully closed. If green, proceed to NEX-005-HTTP.",
   "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it.",
   "ci_status": {
-    "configured": false,
-    "workflows_present": 0,
+    "configured": true,
+    "workflows_present": 1,
+    "workflow_files": [".github/workflows/ci.yml"],
+    "jobs": ["backend", "frontend"],
     "check_runs_on_head": 0,
-    "observed": "2026-11-25T01:45Z",
-    "note": "verified via gh run list (empty), .github 404, check-runs total_count 0"
+    "observed": "2026-11-25T02:20Z",
+    "note": "workflow file created and pushed this run; no GitHub Actions run observed yet"
   }
 }

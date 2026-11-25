@@ -308,3 +308,40 @@ interruption without repeating completed side effects.
 checkpoint; completed steps are not re-executed; run state is queryable.
 
 **Complexity:** large.
+
+---
+
+## NEX-008 — Add continuous integration
+
+| Field | Value |
+| --- | --- |
+| Phase | 1 |
+| Priority | P1 |
+| Status | PUSHED (CI run not yet observed) |
+| Dependencies | none |
+
+**Objective:** give the repository a CI gate. Before this task the repository
+had **no CI configuration at all** — no `.github/workflows` on any branch and
+zero check runs on any commit — so every gate documented in `AGENTS.md` ran only
+when a human or agent invoked it by hand (risk R3, the largest process risk in
+the project).
+
+**Acceptance criteria:** a workflow runs on push and pull request; it executes
+the backend gates (`ruff format --check`, `ruff check`, `mypy`, `pytest`) and the
+frontend gates (`typecheck`, `lint`, `test`, `build`); it also proves migrations
+apply to and revert from a fresh database. Every step must be a command already
+verified locally, so the first CI run cannot fail for a reason local runs do not
+reproduce.
+
+**Delivered:** `.github/workflows/ci.yml` — two jobs (`backend`, `frontend`).
+The backend job additionally runs `alembic upgrade head` then `alembic downgrade
+base` against a throwaway SQLite database, so a migration that cannot be
+reverted fails CI rather than only being discovered during an incident.
+
+**Security:** the workflow declares `permissions: contents: read` — CI needs to
+read the repository and nothing more; it must not hold write scope it never
+uses. `pull_request` uses the default (fork-safe) event, so no secrets are
+exposed to untrusted PRs.
+
+**Complexity:** small. Reduces risk R3 to a residual — a green GitHub run is
+still required to close it fully.

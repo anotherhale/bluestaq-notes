@@ -490,3 +490,88 @@ agent-token auth dependency for `TokenAudience.TOOL_GATEWAY`, plus a contract
 test for the deny path. Closes R5. NEX-008 (add CI) is the competing P1 and
 would close R3; both are dependency-ready.
 
+---
+
+## Run NEX-2026-11-25-03 — 2026-11-25T02:01Z
+
+**Starting commit:** `7a392dd` (branch `feature/agentic-enterprise-platform`)
+**Phase:** 2 — Agent identity & delegation
+
+### Task completed
+
+**NEX-008 — Add continuous integration** (status: PUSHED; CI run not yet observed)
+
+The repository had no CI configuration on any branch: `gh run list` was empty,
+`.github` was a 404 on `main`, and `check-runs` on HEAD reported
+`total_count: 0`. Every gate in `AGENTS.md` therefore ran only when a human or
+agent typed it. Nothing would stop a regression reaching `main` after a human
+merged PR #3. NEX-008 closes that gap.
+
+Added `.github/workflows/ci.yml` with two jobs:
+
+- **backend** — `ruff format --check`, `ruff check`, `mypy`, `pytest`, then
+  `alembic upgrade head` followed by `alembic downgrade base` on a throwaway
+  SQLite database.
+- **frontend** — `npm ci`, `typecheck`, `lint`, `test`, `build`.
+
+### Decisions
+
+1. **Every CI step was executed successfully in this run before being written
+   into the workflow.** A first CI run that fails for a reason local runs never
+   reproduce would be worse than no CI at all. So the workflow introduces no new
+   tooling and no service containers.
+2. **The migration check runs both directions.** `upgrade head` alone proves the
+   schema applies; adding `downgrade base` means a migration that cannot be
+   reverted now fails CI instead of surfacing during an incident. Both were
+   verified locally before being committed to the workflow.
+3. **No PostgreSQL job.** The `--postgresql` tests are opt-in and would need a
+   service container plus credentials. That is a deliberate follow-up, recorded
+   rather than silently skipped, so the workflow stays a pure superset of what
+   was actually proven locally.
+4. **`permissions: contents: read`.** CI reads the repository and needs nothing
+   more; it must not hold write scope it never uses. `pull_request` uses the
+   fork-safe default event, so no secrets reach untrusted PRs.
+
+### Validation (all executed locally, this run, at `7a392dd`)
+
+| Gate | Result |
+| --- | --- |
+| `pytest` (full) | 603 passed, 4 skipped (607 collected) |
+| `ruff format --check` | clean, 179 files |
+| `ruff check` | clean |
+| `mypy` | clean, 93 source files |
+| frontend `typecheck` / `lint` / `test` / `build` | all passed (127 tests, 9 files) |
+| `alembic upgrade head` → `downgrade base` | both succeeded on fresh SQLite (19 tables) |
+| CI YAML parse | valid; jobs `backend`, `frontend`; triggers push/pull_request/workflow_dispatch |
+| `git check-ignore` on workflow | not ignored |
+
+### Files changed
+
+`.github/workflows/ci.yml` (new); `docs/NEXUS/BACKLOG.md` (NEX-008 entry added —
+it had existed only as a proposal in STATE.md, which is not the status
+authority); `docs/NEXUS/STATE.md` (base commit, last completed task, gate table,
+R3 closure with residual, next actions); `docs/NEXUS/CHECKPOINT.json` (run
+identity, CI status); `docs/NEXUS/EXECUTION_LOG.md` (this entry). No application
+source changed.
+
+### Truthful status
+
+NEX-008 is **PUSHED**, not **VERIFIED**. The workflow exists and every one of its
+steps has passed locally, but no GitHub Actions run has been observed. R3 is
+recorded as closed with an explicit residual: only a green run closes it fully,
+and a failing gate must be fixed, never softened.
+
+### Tooling note
+
+The `cat >> file <<'EOF'` heredoc corrupted its own echoed output again this run
+(the second run in a row). No repository file was damaged — `git status -s` and
+`git diff --stat` confirm `EXECUTION_LOG.md` was untouched, and the entry was
+re-applied with `file_editor`. **Use `file_editor` for prose and code writes in
+this repository.**
+
+### Next action
+
+Verify CI on GitHub: `gh run list --branch feature/agentic-enterprise-platform`
+and `gh pr checks 3`. If green, record CI as passing, close R3's residual, and
+proceed to NEX-005-HTTP. If red, read the job log and fix the workflow.
+

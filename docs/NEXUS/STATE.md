@@ -9,7 +9,7 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `8b128d2` |
+| Base commit (run start) | `7a392dd` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
@@ -24,7 +24,14 @@ gateway gap and closes R5. See `EXECUTION_LOG.md`.
 
 ## Last completed task
 
-**NEX-006 — Tenant access enforcement** (`4c5a6ef`). Authentication proves
+**NEX-008 — Add continuous integration** (run `NEX-2026-11-25-03`). The
+repository had **no CI at all**; `.github/workflows/ci.yml` now runs the backend
+gates (`ruff format --check`, `ruff check`, `mypy`, `pytest`), the frontend gates
+(`typecheck`, `lint`, `test`, `build`), and an apply-then-revert migration check
+on every push and pull request. Every step was verified locally first. Reduces
+R3 to a residual: a green GitHub run is still required to close it fully.
+
+Previously, **NEX-006 — Tenant access enforcement** (`4c5a6ef`). Authentication proves
 identity; tenant access is a separate deterministic check that the caller still
 belongs to an operational tenant, so a suspended or deprovisioned membership
 stops working on the next request rather than at session expiry. Enforced at one
@@ -77,17 +84,20 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-02`, at `a3ef9d7`) |
+| Gate | Result (run `NEX-2026-11-25-03`, at `7a392dd`) |
 | --- | --- |
-| `pytest` (full) | **603 passed, 4 skipped** |
+| `pytest` (full) | **603 passed, 4 skipped** (607 collected) |
 | `pytest tests/architecture` | passed (layering invariant intact) |
 | `ruff format --check` | clean (179 files) |
 | `ruff check` | clean |
 | `mypy` | clean (93 source files) |
-| Frontend `typecheck`/`lint`/`test`/`build` | not run — no frontend files touched |
+| Frontend `typecheck`/`lint`/`test`/`build` | all passed (127 tests, 9 files) |
+| `alembic upgrade head` → `downgrade base` | passed on fresh SQLite |
 
-> Local gates are **not** CI evidence. This repository has **no CI at all**
-> (see R3 and NEX-008); every result above was produced locally.
+> Local gates are **not** CI evidence. This run *added* CI (NEX-008) but has not
+> yet observed it run: the workflow file was pushed on this branch and CI
+> evidence must be re-checked on the next run. Until a green run is observed,
+> treat CI as **configured, unobserved**.
 
 ## Blockers
 
@@ -105,14 +115,15 @@ None currently. The following are known open items, not blockers:
   human decision, not the coordinator's.
 - **R2 (low):** The frontend has no admin console yet; the expansion spec's
   frontend testing requirements cannot be satisfied until that work lands.
-- **R3 (high):** The repository has **no CI configuration at all** — no
-  `.github/workflows` on any branch, and zero check runs on any commit. Verified
-  2026-11-25 via `gh run list` (empty), `.github` contents (404), and
-  `check-runs` on HEAD (`total_count: 0`). The gates described in `AGENTS.md`
-  (pytest, ruff, mypy, `npm test`) run only when a human or agent runs them by
-  hand. Nothing blocks a regression from reaching `main` after a human merges
-  PR #3. This is the single largest process risk in the project and it is a
-  small fix: one workflow file running the existing gates.
+- **R3 (closed 2026-11-25, run `NEX-2026-11-25-03`):** The repository had **no CI
+  configuration at all** — no `.github/workflows` on any branch, and zero check
+  runs on any commit. `.github/workflows/ci.yml` now runs the backend gates
+  (`ruff format --check`, `ruff check`, `mypy`, `pytest`), the frontend gates
+  (`typecheck`, `lint`, `test`, `build`), and an `alembic upgrade head` →
+  `downgrade base` cycle, on every push and pull request. Every step was
+  verified locally before being written into the workflow. **Residual:** the
+  workflow has not been observed green on GitHub yet; the next run must confirm
+  it — a green run is what closes the risk fully, not the file's presence.
 - **R4 (low):** `hypothesis` is not a project dependency, so the attenuation
   invariant is proved by exhaustive enumeration rather than property-based
   sampling. This is stronger for the current delegable universe but would not
@@ -131,12 +142,10 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-008 — Add CI (closes R3)**: one `.github/workflows/ci.yml` running the
-   gates already documented in `AGENTS.md` — `ruff format --check`, `ruff check`,
-   `mypy`, `pytest`, and the frontend `typecheck`/`lint`/`test`/`build` — on
-   push and pull request. There is currently no CI at all, so this is the
-   highest-value small change available: it converts every existing local gate
-   into a durable regression barrier. (P1.)
+1. **Verify CI on GitHub (finishes NEX-008)**: `.github/workflows/ci.yml` was
+   pushed this run but has not been observed running. Check `gh run list
+   --branch feature/agentic-enterprise-platform` and fix any failure. Do not
+   record CI as passing until a green run exists. (P1, closes R3 fully.)
 2. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
    an auth dependency that resolves the agent token for `TokenAudience.TOOL_GATEWAY`,
    and an API contract test for a denied invocation. (P2; closes R5, the last
