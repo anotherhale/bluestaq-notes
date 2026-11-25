@@ -3,8 +3,8 @@
   "run_id": "NEX-2026-11-25-02",
   "timestamp": "2026-11-25T01:57:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "8b128d2",
-  "commit_note": "reconciliation run; independently re-verified a3ef9d7 (603 passed/4 skipped, ruff+mypy clean) rather than trusting the prior VERIFIED claim",
+  "commit": "7367aa9",
+  "commit_note": "Verified HEAD this checkpoint describes: the last commit with verified gates. The checkpoint docs commit that carries this file is its child, so this field is intentionally not self-referential.",
   "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending)",
   "active_task": null,
   "task_statuses": {
