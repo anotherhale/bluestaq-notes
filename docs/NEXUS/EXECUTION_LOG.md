@@ -2087,3 +2087,53 @@ two GitHub endpoints as a signal that neither is trustworthy.
 Resume Phase 5 product work: pick the next dependency-ready slice from
 `ROADMAP.md`. The coordination files are now internally consistent and
 CI-verified, so no further bookkeeping is owed.
+
+## Run NEX-2026-11-25-16 — 2026-11-25T08:01Z–08:26Z
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `8e3d767` |
+| Ending commit | `b9b7207` (product) + this docs commit |
+| Project phase | 5 (durable runtime) |
+
+**Task completed:** NEX-016 — approval-gated steps park instead of failing the
+run. Status **TESTED**: green local gates, CI not yet observed on `b9b7207`.
+
+**Files changed (product):** `application/errors.py` (new `ApprovalRequired`),
+`domain/agent/runs.py` (`defer_step`, truthful `PENDING`), 
+`application/use_cases/agent_runs.py` (defer on `ApprovalRequired`),
+`application/use_cases/tools.py` (deferred idempotency key, request reuse),
+`tests/api/test_run_approval_gate_api.py` (3 new tests).
+
+**Defect found:** the approval system was complete — requests, decisions,
+expiry, revocation, HTTP routes, 8 tests — and still could not be honoured by a
+durable run. `AdvanceAgentRun` failed the run on `AccessDenied` (terminal), and
+the gateway's pause record consumed the step's unique idempotency key, so the
+post-approval retry replayed the denial forever. No test asserted
+approve-then-continue, so all of it passed CI. Recorded as **R22**.
+
+**Gates (bare, at `b9b7207`):** `ruff format --check` clean (196 files);
+`ruff check` clean; `mypy` clean (98 files); `pytest` **714 passed, 4 skipped**
+(718 collected). mypy initially flagged four `union-attr` errors on the deferral
+helper; typing it `NoReturn` exposed the real truth (it always raises) rather
+than papering over it with `assert`.
+
+**Migration:** none. Head remains `e5a3b9c04f21`.
+
+**Commits / push:** `b9b7207` pushed to `origin/feature/agentic-enterprise-platform`;
+verified by `git ls-remote` matching `git rev-parse HEAD`. The commit message was
+first mangled by shell quoting and amended before the push (safe: unpushed).
+
+**PR:** #3 remains open, draft, unmerged. Body is **stale** at `7ce6f8b` and was
+not refreshed this run — recording that plainly rather than implying it is current.
+
+**Metric note:** `git diff --shortstat origin/main..HEAD` reports 111 files /
+27,998 / 943, which disagrees with the PR object's 106 / 27,936 / 10. The clone
+is grafted and three-dot diffs fail with "no merge base" even though the fetch
+refspec is standard — so the two-dot figure is not a valid substitute here.
+Quoted the PR object instead. This refines, and partly contradicts, the
+2026-11-25-15 conclusion that the refspec was the whole cause.
+
+**Next action:** poll CI for `b9b7207`; on 4/4 promote NEX-016 to VERIFIED.
+Then refresh the PR body and select the next Phase-5 slice.

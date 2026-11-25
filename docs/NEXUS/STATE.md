@@ -7,14 +7,46 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **TESTED** (`b9b7207`, green local gates, CI unobserved) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `7ce6f8b` |
-| Head commit (run end) | `038db7e` (docs-only; pushed). Product slice beneath it is `414a222`, unchanged. |
-| Last CI result | **Green on `038db7e`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T07:53Z. `13ed5b7` and `414a222` were each observed 4/4 green earlier in the run. |
+| Base commit (run start) | `8e3d767` |
+| Head commit (run end) | `b9b7207` (NEX-016 product slice; pushed and verified on the remote). The docs commit carrying this file is its child. |
+| Last CI result | **Not observed on `b9b7207`.** Last green: 4/4 `completed/success` on `038db7e` (polled 2026-11-25T07:53Z) and on `414a222` before it. NEX-016 rests on green local gates only until CI reports. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `038db7e`. Body **refreshed this run** with metrics recomputed at that head: **27,659 insertions / 10 deletions / 104 files, 75 commits** ahead of `main` (1 behind), 715 tests collected. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `b9b7207`. Body **stale**: last written at `7ce6f8b`. Measured at `b9b7207` from the PR object: **106 files, 27,936 insertions, 10 deletions, 77 commits**, 718 tests collected. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable
+
+A run that reached an approval-gated step could never resume. Two independent
+defects each alone made it impossible:
+
+1. `AdvanceAgentRun` caught `AccessDenied` and called `fail_step`; a failed step
+   drives the run to terminal `FAILED`, so the approval about to be granted had
+   nothing left to resume.
+2. The gateway recorded the pause as a `DENIED` invocation under the step's own
+   idempotency key. `(agent_id, idempotency_key)` is unique, so that denial
+   permanently owned the operational key: the retry after approval replayed the
+   denial rather than executing.
+
+The fix separates waiting from failing: `ApprovalRequired` (an `AccessDenied`
+subtype, so the 403 contract is unchanged) causes `Run.defer_step` to return the
+never-started step to `pending` and the run to `PENDING`; the deferral is audited
+under a `#awaiting-approval` sibling key so the operational key stays free; and an
+already-open request for the same capability/resource is reused so repeated
+advances cannot flood the approver's queue.
+
+Why the suite was green throughout: every approval test covered one half of the
+path (that a request is raised, that a decision is stored, that expiry and
+revocation work). None covered approve-then-continue. See risk **R22**.
+
+## Next best actions
+
+1. Observe CI on `b9b7207`; promote NEX-016 to VERIFIED on 4/4, or diagnose the
+   failure before doing anything else.
+2. Refresh the PR #3 body against the PR object counters (106 / 27,936 / 10 / 77 /
+   718) — it is stale at `7ce6f8b`.
+3. Pick the next dependency-ready Phase-5 slice from `ROADMAP.md`.
 
 ## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)
 

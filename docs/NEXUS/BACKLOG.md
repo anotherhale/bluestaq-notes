@@ -909,3 +909,55 @@ Mutation-verified: reverting the use case to `list_pending_for_agent` for every
 status fails the three `?status=` tests, and restoring it passes all eight.
 
 **Next action:** none - complete. Reuse the pattern: for every state a record can enter, assert that some read path returns it (see R20).
+
+## NEX-016 - Park approval-gated steps instead of failing the run
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P0 (a human approval could never be honoured - the gate was unusable) |
+| Status | **TESTED** - full suite `714 passed, 4 skipped` bare at `b9b7207`; the three new tests pass. Not yet CI-observed on this head. |
+| Dependencies | NEX-009 (durable runtime), NEX-003 (approval lifecycle), NEX-013 (approval validity), NEX-014 (revocation) |
+| Architecture | durable execution, explicit authorization, fail-closed governance |
+
+**Objective:** a run that reached an approval-gated step could never resume, so
+the approval mechanism was decorative for durable runs. Two coupled defects:
+
+1. `AdvanceAgentRun` caught `AccessDenied` and called `fail_step`. A failed step
+   drives the run to `FAILED`, which is terminal - the approval a human was
+   about to grant had nothing left to resume.
+2. The gateway recorded the "approval needed" refusal as a `DENIED` invocation
+   under the step's own idempotency key. `(agent_id, idempotency_key)` is
+   unique, so the denial permanently occupied the operational key. The retry
+   after approval found the denial, replayed it, and re-raising was the only
+   possible outcome. The gateway's own comment promised the agent could return
+   after a decision the code made unreachable.
+
+**Delivered:**
+
+- `application/errors.py` - `ApprovalRequired`, an `AccessDenied` subtype, so
+  the HTTP 403 surface and every existing handler are unchanged.
+- `domain/agent/runs.py` - `Run.defer_step` returns the never-started step to
+  `pending` and sets the run to `PENDING`. Honest (nothing is in flight and
+  nothing failed) and resumable (a later advance picks the step up).
+- `application/use_cases/agent_runs.py` - `AdvanceAgentRun` catches
+  `ApprovalRequired` and defers instead of failing.
+- `application/use_cases/tools.py` - audited under a `#awaiting-approval` sibling
+  key via `_deferred_idempotency_key`, leaving the operational key free for the
+  attempt that actually executes. Over-long keys are digested rather than
+  suffixed past the column limit. `_approved_request` / `_defer_awaiting_approval`
+  reuse an open request for the same (capability, resource), so repeatedly
+  advancing a paused run cannot flood the approver's queue.
+
+**Security:** the gate still fails closed - no step executes without a recorded
+approval, and the deferral does not widen any permission. The run is now
+resumable only through the same authenticated advance path, which re-checks the
+approval on every attempt.
+
+**Tests:** `tests/api/test_run_approval_gate_api.py` - 3 tests: an approval-gated
+step pauses the run instead of failing it; a run completes after the human
+approves (the end-to-end path that was previously impossible); a second advance
+does not open a duplicate approval request.
+
+**Next action:** observe CI on `b9b7207`; on 4/4 green promote to VERIFIED.
+
