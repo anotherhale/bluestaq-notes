@@ -764,3 +764,128 @@ verified with `git ls-remote` — both refs resolve to `c18bac7`.
 NEX-007 (tenant-scoped capability checks) is dependency-ready and is the highest
 priority P1 item. See `CHECKPOINT.json.next_action` for the exact scope.
 
+
+---
+
+## Run NEX-2026-11-25-06 — 2026-11-25T03:01Z–03:12Z
+
+### Task
+
+**NEX-007 — Tenant-scoped capability answer.** Continue the tenant-isolation
+work: make one seam answer "which tenants may this caller act in", so
+tenant-scoped use cases stop re-deriving it.
+
+### Starting state
+
+Branch `feature/agentic-enterprise-platform` at `5ecfd3f`. The previous run had
+written failing tests and a partial seam; nothing was committed, and the working
+tree was clean of the earlier heredoc damage.
+
+### Defect
+
+`ListMyOrganizations` filtered on membership rows only. A **suspended or
+archived tenant was therefore listed with its full capability set**, while
+`GetOrganization` refused the same tenant with `404`. A client would render a
+tenant it could not then use — an inconsistency in the one place a client
+decides what to show.
+
+### Change
+
+- `application/use_cases/tenant_access.py`: added
+  `actionable_organization_ids(uow, *, user_id)`, returning
+  `resolve_tenant_access(...).organization_ids`. The domain rule already
+  computed this set (`TenantAccess.organization_ids`); it simply had no
+  consumer. The new function is a thin accessor, not a second rule.
+- `application/use_cases/organization.py`: `ListMyOrganizations` filters through
+  that set, short-circuiting to `[]` when it is empty.
+- `domain/` untouched: the membership-and-status rule remains the single source
+  of truth, so the listing and the per-tenant read cannot drift apart.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `pytest tests/application/test_organization.py` | 34 passed (incl. 2 new) |
+| `pytest` (full) | **614 passed, 4 skipped** (618 collected) |
+| `ruff format --check` | clean |
+| `ruff check` | clean |
+| `mypy` | clean (94 source files) |
+
+Tests added: `TestSuspendedTenantIsNotListed` — a suspended tenant is absent from
+the caller's listing, and suspending one tenant does not hide the caller's
+others. Both failed before the change and pass after it.
+
+### Decisions
+
+- The seam returns the *permitted* set and the caller filters, rather than the
+  seam returning a pre-filtered list of organizations. Keeping the answer
+  tenant-id-shaped means any tenant-scoped use case can consume it, not just the
+  listing — which is the whole point of NEX-007.
+- No caching, consistent with NEX-006: a status change must take effect on the
+  next request.
+
+### Risks
+
+- No new risks. R4 (attenuation proved by enumeration) and R8 (environment-
+  dependent test helpers) stand unchanged.
+
+### Git
+
+Commit `e1cb0c5` `fix(tenancy): list only tenants the caller can act in`
+(4 files, +116/−2). Pushed `5ecfd3f..e1cb0c5` fast-forward, no force. Remote
+verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+— it resolves to `e1cb0c5`, matching local `HEAD`.
+
+### Status: VERIFIED
+
+Local gates were green at `e1cb0c5`, and CI then confirmed it within this run:
+`gh api repos/anotherhale/bluestaq-notes/commits/e1cb0c5/check-runs` reports 4
+check runs, all `completed/success` (Backend ruff+mypy+pytest+migrations ×2,
+Frontend typecheck+lint+test+build ×2). NEX-007 is therefore **VERIFIED**, not
+merely TESTED.
+
+An earlier draft of this entry recorded TESTED, because at the time the docs were
+first written CI was still `in_progress` on `e1cb0c5` (1 of 4 green). That was
+accurate when written; it is corrected here rather than quietly rewritten, since
+"local gates pass" and "CI confirms it" are different evidence.
+
+### Note on tooling
+
+A `cat > file <<'PYEOF'` heredoc was mangled by the terminal again (the same
+failure recorded in prior runs), producing a garbled command. It was aborted
+before writing; `CHECKPOINT.json` was verified intact and then edited with
+`file_editor` instead. Prose and JSON edits should use `file_editor`, never a
+heredoc.
+
+### Next action
+
+1. Confirm CI green on `e1cb0c5`; if so promote NEX-007 to VERIFIED in
+   `BACKLOG.md` and `CHECKPOINT.json`.
+2. Update draft PR #3 body (tool gateway HTTP surface, tenant-scoped capability
+   answer, CI evidence).
+3. Start NEX-009 scoped to a first slice: run-checkpoint persistence + a resume
+   test.
+
+### Reconciliation done at run close
+
+CI came back green on `e1cb0c5` (4/4 `completed/success`), so step 1 above is
+done: NEX-007 is **VERIFIED** in `BACKLOG.md`, `CHECKPOINT.json` (`ci_observed`
+now true, `verified_at_commit`/`verified_by_run` repointed), and `STATE.md`.
+
+Two coordination defects were found while updating the docs, both corrected:
+
+1. **Duplicate task id `NEX-006`.** It named two different tasks — "Tenant access
+   enforcement" (TESTED, already in `completed_tasks`) and "Durable agentic
+   runtime" (TODO). The checkpoint's `next_task: NEX-006` therefore pointed at a
+   completed task, which would have sent the next run to re-do finished work or
+   to the wrong task entirely. The unstarted one is renumbered **NEX-009** in
+   `BACKLOG.md` (no content changed) and `next_task` is repointed. The next run
+   must start NEX-009, not NEX-006.
+2. **Stale `NEX-002` status.** `BACKLOG.md` says `Status: TODO` while the same
+   entry's Outcome note records IMPLEMENTED with four test modules. Left as a
+   recorded discrepancy rather than guessed at: it needs an evidence pass
+   (TESTED vs VERIFIED), which is task 3 of Next best actions in `STATE.md`.
+
+Both were caught by reading `BACKLOG.md` instead of trusting the checkpoint — the
+same lesson as the 2026-11-25-05 run.
+

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-05",
-  "timestamp": "2026-11-25T02:53:00Z",
+  "run_id": "NEX-2026-11-25-06",
+  "timestamp": "2026-11-25T03:10:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c18bac7",
-  "commit_note": "The commit whose gates were verified. The docs commit that records this promotion (and the docs-only commit 1a7a47b before it) are its descendants.",
-  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface)",
+  "commit": "e1cb0c5",
+  "commit_note": "The commit whose gates were verified. The docs commit that records this run is its child.",
+  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED)",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -15,7 +15,7 @@
     "NEX-005": "VERIFIED",
     "NEX-005-followup": "VERIFIED",
     "NEX-004": "VERIFIED",
-    "NEX-007": "TODO",
+    "NEX-007": "VERIFIED",
     "NEX-005-HTTP": "VERIFIED",
     "NEX-008": "VERIFIED"
   },
@@ -26,10 +26,11 @@
     "NEX-005-followup",
     "NEX-004",
     "NEX-008",
-    "NEX-005-HTTP"
+    "NEX-005-HTTP",
+    "NEX-007"
   ],
   "validation": {
-    "pytest_full": "612 passed, 4 skipped (616 collected)",
+    "pytest_full": "614 passed, 4 skipped (618 collected)",
     "pytest_architecture": "passed (within full suite)",
     "ruff_format": "clean",
     "ruff_check": "clean",
@@ -37,17 +38,17 @@
     "frontend": "typecheck, lint, test (127 passed / 9 files), build all passed at 3f1d855; no frontend files changed since",
     "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
     "ci_observed": true,
-    "ci_note": "CI is green on c18bac7 itself: gh api repos/anotherhale/bluestaq-notes/commits/c18bac7/check-runs reports 4 check runs, all completed/success (Backend ruff+mypy+pytest+migrations x2, Frontend typecheck+lint+test+build x2). This is what promotes NEX-005-HTTP from TESTED to VERIFIED.",
-    "verified_at_commit": "c18bac7",
-    "verified_by_run": "NEX-2026-11-25-05 (local gates re-executed at c18bac7; CI confirmation pending for c18bac7)"
+    "ci_note": "CI is green on e1cb0c5 itself: gh api repos/anotherhale/bluestaq-notes/commits/e1cb0c5/check-runs reports 4 check runs, all completed/success (Backend ruff+mypy+pytest+migrations x2, Frontend typecheck+lint+test+build x2). This is what promotes NEX-007 from TESTED to VERIFIED.",
+    "verified_at_commit": "e1cb0c5",
+    "verified_by_run": "NEX-2026-11-25-06"
   },
-  "uncommitted_work": "none after this run commits c18bac7, the docs update, and this promotion",
+  "uncommitted_work": "none after this run commits e1cb0c5 and the docs update",
   "pr_state": {
     "pr": 3,
     "state": "draft",
     "merged": false,
     "description_updated": "2026-11-25T01:41:35Z",
-    "note": "Still draft; not marked ready for review. CI is green at 3f1d855 and has not yet run on c18bac7. The PR description does not yet mention the tool gateway HTTP surface or CI; that is a small follow-up, not a correctness gap."
+    "note": "Still draft; not marked ready for review. The PR body does not yet mention the tool gateway HTTP surface, the tenant-scoped capability answer, or CI; that is a small follow-up, not a correctness gap."
   },
   "tracking_issue": {
     "number": 2,
@@ -62,8 +63,8 @@
     "R6 (CLOSED 2026-11-25): gateway denial replay and revocation mapping are pinned by tests/agent/test_tool_gateway.py; keep that file or both defects can return silently.",
     "R8 (low): the migration tests shelled out to '.venv/bin/alembic' and so never ran outside a local checkout. Fixed in 6f30020, but it shows the local suite can hide environment-dependent assumptions; prefer sys.executable or explicit paths in test helpers."
   ],
-  "next_task": "NEX-007",
-  "next_action": "Implement NEX-007 (tenant-scoped capability checks): extend application/use_cases/tenant_access.py to answer which tenants the caller may act in (organization_ids is already computed but unused), so tenant-scoped use cases stop re-deriving membership themselves. Keep domain/ and application/ free of FastAPI/SQLAlchemy imports so tests/architecture/test_layering.py stays green. Add tests for multi-tenant membership and non-member denial. Run ruff format, ruff check, mypy, pytest, then push and confirm CI.",
+  "next_task": "NEX-009",
+  "next_action": "Start NEX-009 (durable agentic runtime; renumbered from the duplicate NEX-006 id) scoped to a first slice: run-checkpoint persistence plus a resume test, not the whole task. Before starting, update draft PR #3 body to reflect the tool gateway HTTP surface, the tenant-scoped capability answer, and CI evidence, so the PR stops understating what it carries.",
   "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it. CI is live: 'gh run list --branch feature/agentic-enterprise-platform --limit 5' shows the latest runs.",
   "ci_status": {
     "configured": true,
@@ -76,7 +77,7 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T02:53Z",
-    "note": "Green at c18bac7 on both push and pull_request events; all four check runs completed/success. A docs-only commit (1a7a47b) was pushed after it and its CI was in progress at run end."
+    "observed": "2026-11-25T03:12Z",
+    "note": "Green on e1cb0c5 on both push and pull_request events; all four check runs completed/success."
   }
 }

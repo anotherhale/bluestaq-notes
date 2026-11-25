@@ -7,24 +7,38 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED incl. HTTP surface; tenant-scoped capability answer VERIFIED) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `3f1d855` |
+| Base commit (run start) | `5ecfd3f` |
+| Head commit (run end) | `e1cb0c5` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-005-HTTP** is **VERIFIED** at `c18bac7` (committed, pushed,
-and CI green on that commit — all four check runs completed/success). NEX-005
-itself is **VERIFIED** at `a3ef9d7`. The gateway is now reachable over HTTP, which
-closes R5. Next run starts with NEX-007 (see Next best actions).
+None in flight. **NEX-007** is **VERIFIED** at `e1cb0c5` — committed, pushed,
+local gates green, and CI green on that commit (4/4 check runs
+`completed/success`). The next dependency-ready task is **NEX-009** (durable
+agentic runtime, renumbered from a duplicate NEX-006 id); see Next best actions.
 
 
 ## Last completed task
 
-**NEX-005-HTTP — Expose the tool gateway over HTTP** (run `NEX-2026-11-25-05`,
+**NEX-007 — Tenant-scoped capability answer** (run `NEX-2026-11-25-06`,
+`e1cb0c5`). `ListMyOrganizations` filtered on membership rows alone, so a
+**suspended or archived tenant was listed with its full capability set** while
+`GetOrganization` refused the same tenant with `404` — a client would render a
+tenant it could not then use. The domain rule already computed the correct set
+(`TenantAccess.organization_ids`) but nothing consumed it. It is now exposed as
+`actionable_organization_ids(uow, user_id=...)` — the single answer to "which
+tenants count for this caller" — and the listing filters through it. The set
+requires an active membership *and* an operational organization, so suspending
+one tenant does not hide the caller's others. No caching, so a status change
+takes effect on the next request. Pinned by
+`tests/application/test_organization.py::TestSuspendedTenantIsNotListed`.
+
+Previously, **NEX-005-HTTP — Expose the tool gateway over HTTP** (run `NEX-2026-11-25-05`,
 `c18bac7`). `POST /api/v1/agents/tools/invoke` is the thinnest possible edge over
 `InvokeTool`, so audience, revocation, capability, approval, and audit remain in
 exactly one place. Two properties are load-bearing and pinned by
@@ -106,21 +120,22 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-05`, at `c18bac7`) |
+| Gate | Result (run `NEX-2026-11-25-06`, at `e1cb0c5`) |
 | --- | --- |
-| `pytest` (full) | **612 passed, 4 skipped** (616 collected) |
+| `pytest` (full) | **614 passed, 4 skipped** (618 collected) |
 | `pytest tests/architecture` | passed (layering invariant intact) |
 | `ruff format --check` | clean |
 | `ruff check` | clean |
 | `mypy` | clean (94 source files) |
 | Frontend `typecheck`/`lint`/`test`/`build` | passed at `3f1d855` (127 tests, 9 files); no frontend files changed since |
-| `alembic upgrade head` → `downgrade base` | passed on fresh SQLite |
+| `alembic upgrade head` → `downgrade base` | passed on fresh SQLite (unchanged this run) |
 
-> Local gates are **not** CI evidence, so CI was observed separately. Runs
-> `45531483962` (push) and `45531492783` (pull_request) succeeded on `6f30020`;
-> all four check runs report `completed/success`. CI is **verified green**, and
-> it earned that status by catching a real defect on its first execution — see
-> the R3 entry and NEX-008 in `BACKLOG.md`.
+> Local gates are **not** CI evidence, so CI was observed separately. On
+> `e1cb0c5` (this run's commit) both the push and pull_request runs succeeded;
+> all four check runs report `completed/success` — Backend
+> ruff+mypy+pytest+migrations ×2, Frontend typecheck+lint+test+build ×2. CI is
+> **verified green at `e1cb0c5`**. CI earned that trust earlier by catching a real
+> defect on its first execution — see the R3 entry and NEX-008 in `BACKLOG.md`.
 
 ## Blockers
 
@@ -174,15 +189,18 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
-   answer *which* tenants the caller may act in (`organization_ids` is already
-   computed but unused by callers), so tenant-scoped use cases stop re-deriving
-   membership themselves. (P1, builds on NEX-006; dependency-ready.)
-2. **NEX-006 — Durable agentic runtime**: runs checkpoint progress and resume
-   after interruption without repeating completed side effects. NEX-005 is done,
-   so this is dependency-ready, but it is *large* — scope the first slice to
-   run-checkpoint persistence plus a resume test rather than attempting the whole
-   task. (P2.)
-3. **Update draft PR #3** with the tool gateway HTTP surface and the CI-green
-   evidence at `c18bac7`, so the PR body stops understating what it carries.
+1. **Update draft PR #3** with the tool gateway HTTP surface, the tenant-scoped
+   capability answer, and the CI-green evidence at `e1cb0c5`, so the PR body stops
+   understating what it carries.
+2. **NEX-009 — Durable agentic runtime** (renumbered from a duplicate NEX-006 id):
+   runs checkpoint progress and resume after interruption without repeating
+   completed side effects. NEX-005 and NEX-007 are done, so this is
+   dependency-ready, but it is *large* — scope the first slice to run-checkpoint
+   persistence plus a resume test rather than attempting the whole task. (P2.)
+3. **Reconcile NEX-002 (OIDC authentication)** — its Status field still reads
+   `TODO` while its Outcome note records IMPLEMENTED (authorization-code + PKCE,
+   state/nonce, JWKS-validated ID tokens, session cookies, subject→membership
+   linkage) across four test modules. Settle whether it is TESTED or VERIFIED on
+   evidence and correct the field. It blocks all agent-identity work, so a stale
+   `TODO` on it misleads task selection.
 

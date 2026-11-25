@@ -138,7 +138,7 @@ mypy clean. Detail in `EXECUTION_LOG.md`.
 | --- | --- |
 | Phase | 2 |
 | Priority | P1 |
-| Status | **TESTED** (local gates green) |
+| Status | **VERIFIED** (local gates green + CI green on `e1cb0c5`) |
 | Dependencies | NEX-006 |
 
 **Objective:** give one authoritative answer to "which tenants may this caller act
@@ -174,7 +174,8 @@ misleads clients into issuing calls that must fail. No caching: the answer is
 re-derived per request, so a status change is reflected immediately.
 
 **Complexity:** small. **Outcome:** `pytest` 614 passed / 4 skipped; ruff and mypy
-clean. Detail in `EXECUTION_LOG.md`.
+clean. CI green on `e1cb0c5` (all four check runs completed/success). Detail in
+`EXECUTION_LOG.md`.
 
 ---
 
@@ -355,7 +356,11 @@ tools.
 
 ---
 
-## NEX-006 — Durable agentic runtime
+## NEX-009 — Durable agentic runtime
+
+> Renumbered from NEX-006 in run `NEX-2026-11-25-06`: the id was already used by
+> **NEX-006 — Tenant access enforcement** (line ~90), so `next_task: NEX-006` in
+> the checkpoint pointed at a completed task. No content changed.
 
 | Field | Value |
 | --- | --- |
