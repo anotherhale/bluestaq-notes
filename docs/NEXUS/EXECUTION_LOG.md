@@ -1426,3 +1426,90 @@ five/five, and the PR body now says so. Writing a number that sounds right is th
 same defect as copying one forward; both are why this body rots.
 
 PR #3 remains **open, draft, unmerged** for human review. No merge performed.
+
+---
+
+### Run NEX-2026-11-25-12 — NEX-012 tamper-evident audit chain
+
+**Run ID** `NEX-2026-11-25-12` · **Branch** `feature/agentic-enterprise-platform`
+**Start** `434769f` · **End** `3aade7c` (product) + docs commit
+**Window** 05:31:22Z → 05:56:22Z (25-minute working deadline of a 30-minute cap)
+
+**Recovery note — a stale self-report, caught by reading Git.** The run opened on a
+handover that said the slice had been built "on `main` by mistake" and needed
+rebasing. Git disagreed: `HEAD` was already `434769f` on the authorized branch.
+The handover's claim came from an earlier `git status` in the same session; the
+branch had moved since. The uncommitted work was therefore on the right branch all
+along, and no rebase was needed. The lesson is the one this repo keeps teaching:
+re-derive position from `git rev-parse`/`git status`, never from a previous run's
+prose.
+
+The 38 deletions in the pending diff were checked before committing rather than
+assumed benign: they are the chain-aware refactor of `ToolInvocation.begin` call
+sites in `use_cases/tools.py`, not clobbered concurrent work.
+
+**Task completed: NEX-012 — tamper-evident audit chain.** NEX-005 wrote a row for
+every gateway attempt and NEX-011 made the rows readable, but the rows stayed
+mutable — a `denied` verdict could be edited to `succeeded`, or a row deleted, with
+nothing to notice. Each invocation now carries `chain_sequence`, `previous_hash`,
+`intent_hash` and `outcome_hash`, sealed over its predecessor, and
+`GET /api/v1/agents/{agent_id}/tool-invocations/verification` returns
+`{verified, checked, first_break}`.
+
+**Files changed** (12, +1,056/−38): new `domain/agent/audit_chain.py`,
+`tests/api/test_audit_chain_verification_api.py`, and migration
+`b2e5c81f4a07_chain_tool_invocation_audit.py`; modified `ports/agents.py`,
+`use_cases/agents.py`, `use_cases/tools.py`, `domain/agent/tools.py`,
+`infrastructure/db/agent_repositories.py`, `infrastructure/db/models.py`,
+`bootstrap/container.py`, `presentation/api/routers/agents.py`,
+`presentation/schemas.py`.
+
+**Migrations** one: new head `b2e5c81f4a07`, `down_revision 8a4c2e1f9b73`.
+
+**Tests executed** full suite bare: **681 collected, 677 passed, 4 skipped**
+(9.80s). New suite `tests/api/test_audit_chain_verification_api.py`: 7 passed.
+`ruff format` (bare, repo-wide), `ruff check`, `mypy` (98 source files): clean.
+
+**Decisions.** (1) A chain break is *returned* in a `ChainVerdict`, not raised — an
+auditor needs to know where history diverges, not merely that it does. (2)
+`checked` is part of the response contract, so `verified: true` cannot be confused
+with "walked nothing". (3) `list_chain` is deliberately unpaginated: a window's
+first entry does not carry its predecessor's hash, so a window cannot be verified.
+(4) Tampering tests write to the database directly, because that is the threat
+model — tampering through the API would prove nothing.
+
+**Security.** The chain seals the recorded *decision* as well as the arguments, so
+flipping a refusal to a success is detectable, not just editing a payload. The
+verdict is owner-scoped under the 404-not-403 rule, so it cannot be used to probe
+for another user's agents.
+
+**Risk R15 (new, low).** The chain head is not anchored outside the database: an
+attacker who can rewrite the whole table can produce a self-consistent chain.
+External anchoring of the head hash is the next hardening step, recorded rather
+than silently deferred.
+
+**Commits** `3aade7c` feat(agent): tamper-evident audit chain with verification
+endpoint, plus this docs commit. **Push** verified against the remote:
+`git ls-remote` and `git rev-parse HEAD` both returned `3aade7c`.
+
+**CI observed green.** After the docs were drafted, `gh api
+repos/anotherhale/bluestaq-notes/commits/3aade7c/check-runs` returned **4/4
+`completed/success`** (Backend ruff/mypy/pytest/migrations and Frontend
+typecheck/lint/test/build, both push and pull_request) at 2026-11-25T05:49Z.
+NEX-012 is therefore **VERIFIED**, not merely TESTED, and was promoted in
+`BACKLOG.md`, `STATE.md` and `CHECKPOINT.json` within the same run. It is the
+fourth slice to reach VERIFIED on observed CI.
+
+**Process defect, recurred (R12).** A `python3 - <<'PY'` heredoc intended to update
+`CHECKPOINT.json` was corrupted in transit — the script body was duplicated and
+mangled, and Python rejected it with a `SyntaxError`. It failed *before* writing,
+so the checkpoint was untouched; the update was rewritten to `/tmp/ckpt.py` with
+`file_editor` and run from the file, which worked. This is the third occurrence of
+the same failure mode in this repository. Do not write scripts or prose through a
+heredoc here.
+
+**Next action.** Observe CI on `3aade7c`; if 4/4 `completed/success`, promote
+NEX-012 to VERIFIED in `BACKLOG.md`, `STATE.md` and `CHECKPOINT.json`. Then refresh
+PR #3's body — it still carries the pre-NEX-012 figures (24,283 / 98 / 674) while
+the branch is now 25,316 insertions / 101 files / 681 collected. PR #3 remains
+**open, draft, unmerged**. No merge performed.

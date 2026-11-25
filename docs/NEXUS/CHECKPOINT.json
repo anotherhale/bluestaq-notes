@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-11",
-  "timestamp": "2026-11-25T05:26:00Z",
+  "run_id": "NEX-2026-11-25-12",
+  "timestamp": "2026-11-25T05:50:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "f50a78d",
-  "commit_note": "f50a78d is the commit that contains NEX-011 (tool-invocation audit trail over HTTP), CI-verified 4/4 completed/success on 2026-11-25T05:18Z (backend + frontend, push and pull_request). The docs commit carrying this file is its child.",
-  "project_phase": "Phase 2 complete (agent identity & delegation all VERIFIED). Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 tool-invocation audit trail VERIFIED (f50a78d, CI 4/4).",
+  "commit": "3aade7c",
+  "commit_note": "3aade7c contains NEX-012 (tamper-evident audit chain). Its gates are verified locally only; CI has not been observed for it. The docs commit carrying this file is its child.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 audit trail VERIFIED (f50a78d); NEX-012 audit chain VERIFIED (3aade7c, CI 4/4 completed/success).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -21,7 +21,8 @@
     "NEX-010": "VERIFIED",
     "NEX-009": "VERIFIED",
     "NEX-009-HTTP": "TESTED",
-    "NEX-011": "VERIFIED"
+    "NEX-011": "VERIFIED",
+    "NEX-012": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -37,23 +38,24 @@
     "NEX-009-slice1",
     "NEX-009",
     "NEX-009-HTTP",
-    "NEX-011"
+    "NEX-011",
+    "NEX-012"
   ],
   "validation": {
-    "pytest_full": "674 collected, 0 failures, 4 skipped = 670 passed (local, run bare; was 662 + 8 API)",
-    "ruff_format": "clean (189 files, repo-wide incl. docs Markdown)",
+    "pytest_full": "681 collected, 677 passed, 4 skipped (local, run bare)",
+    "ruff_format": "clean (bare, repo-wide incl. docs Markdown)",
     "ruff_check": "clean",
-    "mypy": "clean (97 source files)",
-    "migration_chain": "unchanged this run - read path over an existing table, no new migration",
-    "frontend_gates": "not run locally - no frontend files changed; CI frontend job reported 2/2 completed/success on f50a78d",
+    "mypy": "clean (98 source files)",
+    "migration_chain": "new head b2e5c81f4a07 (chain_tool_invocation_audit), down_revision 8a4c2e1f9b73",
+    "frontend_gates": "not run locally - no frontend files changed",
     "ci_observed": true,
-    "ci_note": "NEX-011 verified: commit f50a78d returned 4/4 completed/success (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, both on push and pull_request), observed 2026-11-25T05:18Z. This is the third slice to reach VERIFIED on observed CI.",
-    "verified_at_commit": "f50a78d",
-    "verified_by_run": "NEX-2026-11-25-11",
+    "ci_note": "NEX-012 verified: commit 3aade7c returned 4/4 completed/success (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, both on push and pull_request), observed 2026-11-25T05:49Z. Fourth slice to reach VERIFIED on observed CI.",
+    "verified_at_commit": "3aade7c",
+    "verified_by_run": "NEX-2026-11-25-12",
     "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote on these."
   },
-  "uncommitted_work": "none",
-  "pr_state": "PR #3 open, draft, unmerged (human review required). Body refreshed 2026-11-25T05:24Z with measured figures: 24,283 insertions / 98 files / 674 tests collected / CI-verified at f50a78d.",
+  "uncommitted_work": "none; docs commit follows",
+  "pr_state": "PR #3 open, draft, unmerged (human review required). Body still carries the pre-NEX-012 figures (24,283 insertions / 98 files / 674 tests). The branch is now 25,316 insertions / 101 files / 681 tests at 3aade7c, so the body needs a refresh.",
   "tracking_issue": {
     "number": 2,
     "state": "open",
@@ -68,11 +70,12 @@
     "R11 (CLOSED 2026-11-25): the durable-run use cases had no HTTP surface; closed by NEX-009-HTTP (VERIFIED on e817d04). The same class of gap in the audit trail - a trail written but unreadable - is closed by NEX-011 at TESTED.",
     "R12 (low, process): writing prose or scripts through a shell heredoc corrupts them in this environment. Write scripts and messages to files with file_editor and execute the file. It recurred this run and aborted a STATE.md update before it wrote anything.",
     "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
-    "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one."
+    "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one.",
+    "R15 (new, low): the audit chain seals each invocation over its predecessor, but the chain head is not anchored outside the database. An attacker who can rewrite the whole table can produce a self-consistent chain. Anchoring the head hash externally is the next hardening step, not a regression."
   ],
-  "next_task": "PR #3 body refresh, then the next Phase-5 slice",
-  "next_action": "Re-read the Phase 5 section of docs/NEXUS/ROADMAP.md and select the next dependency-ready slice. The durable runtime and its tool-invocation audit trail are both reachable over HTTP and VERIFIED, so remaining Phase-5 work consumes those surfaces. Before building UI on the trail, confirm its response contract against docs/FRONTEND_INTEGRATION.md. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP and NEX-011 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d). No task is in flight. The next run should refresh PR #3's stale body, then pick the next Phase-5 slice from ROADMAP.md. Never merge PR #3. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
+  "next_task": "Refresh PR #3 body, then the next Phase-5 slice",
+  "next_action": "1) Recompute PR #3 body metrics (git diff --shortstat main...HEAD = 101 files / 25,316 insertions; pytest --collect-only -o addopts='' = 681) and update the body; it still carries the pre-NEX-012 figures. 2) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). No task is in flight. Next: refresh PR #3's body, then pick the next Phase-5 slice from ROADMAP.md. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,

@@ -541,6 +541,78 @@ created by the control meant to detect one.
 
 ---
 
+## NEX-012 — Tamper-evident audit chain
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P2 |
+| Status | **VERIFIED** (run `NEX-2026-11-25-12`; commit `3aade7c`; CI **4/4 `completed/success`** observed 2026-11-25T05:49Z) |
+| Dependencies | NEX-005 (gateway write path), NEX-011 (read path) |
+
+**Objective:** turn the audit trail from a log into evidence. NEX-005 wrote a
+`ToolInvocation` row for every attempt and NEX-011 made it readable, but the
+rows were mutable: anyone with database write access could edit a `denied`
+verdict to `succeeded`, or delete a row entirely, and nothing would notice. A
+record that cannot prove it is intact is not audit evidence.
+
+**Acceptance criteria:** each invocation is sealed over its predecessor so that
+an edit or deletion is detectable; the seal covers the recorded *decision*, not
+just the arguments; an untouched trail verifies and reports how many entries
+were walked; a break is *reported* with its sequence and reason, not raised; an
+empty trail passes; only the owning human can verify; an API contract test
+covers each boundary.
+
+**Delivered:**
+
+- `domain/agent/audit_chain.py` — `ChainVerdict` and `verify_chain`, pure and
+  framework-free. A break is a return value, not an exception: the caller needs
+  to know *where* history diverges.
+- `application/ports/agents.py` — `next_chain_link(agent_id)` and
+  `list_chain(agent_id)`. `list_chain` is deliberately unpaginated: the first
+  entry of a window does not carry the hash of the entry before it, so a window
+  cannot be verified.
+- `application/use_cases/tools.py` — the gateway seals intent before the call
+  and outcome after it, refusals included.
+- `application/use_cases/agents.py` — `VerifyToolInvocationChain`, owner-only.
+- `presentation/api/routers/agents.py` —
+  `GET /api/v1/agents/{agent_id}/tool-invocations/verification`.
+- migration `b2e5c81f4a07` adds `chain_sequence`, `previous_hash`,
+  `intent_hash`, `outcome_hash` plus a unique `(agent_id, chain_sequence)`.
+
+**Concurrency:** `next_chain_link` is read inside the inserting transaction, so
+two concurrent attempts cannot both claim one sequence number; the unique
+constraint rejects the loser rather than silently forking the chain.
+
+**Tests:** `tests/api/test_audit_chain_verification_api.py` (7 tests). Tampering
+is applied through the database directly, because that is the threat model —
+someone editing history behind the API's back; tampering through the API would
+prove nothing. Covered: untouched trail verifies with `checked` = number of
+invocations; a mixed success/refusal trail verifies; an empty trail passes with
+`checked` = 0; flipping a `denied` verdict to `succeeded` is reported at
+sequence 1 with an outcome-hash reason; deleting a middle row is reported at
+sequence 3 as a sequence gap; a non-owner gets 404; the chain fields are visible
+in the trail listing so the verdict and the listing describe the same data.
+
+**Status note:** VERIFIED. `ruff format` (bare), `ruff check` and `mypy` are
+clean and the full suite is green locally (681 collected, 677 passed, 4 skipped),
+and CI on `3aade7c` returned **4/4 `completed/success`** (Backend
+ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, both push and
+pull_request), observed 2026-11-25T05:49Z. This is the fourth slice to reach
+VERIFIED on observed CI, after NEX-009 slice 1, NEX-009-HTTP and NEX-011.
+
+**Security:** this is the control that detects tampering with the audit trail,
+so its own failure mode matters. `checked` is returned precisely so that
+`verified: true` cannot be confused with "walked nothing" — a verifier that
+reports success without examining rows would be worse than no verifier. The
+verdict is owner-scoped with the 404-not-403 rule, so it cannot be used to probe
+for another user's agents.
+
+**Complexity:** small-to-medium. One migration, one pure domain module, no new
+dependency.
+
+---
+
 ## NEX-008 — Add continuous integration
 
 | Field | Value |

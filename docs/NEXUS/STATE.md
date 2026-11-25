@@ -7,26 +7,59 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail **VERIFIED** (`f50a78d`) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain **TESTED** (`3aade7c`) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `a94d3f6` |
-| Head commit (run end) | `d1b1105` — docs promotion commit; product head `f50a78d` |
-| Last CI result | **4/4 green on `f50a78d`** (NEX-011): backend + frontend, push and pull_request, all `completed/success` |
+| Base commit (run start) | `434769f` |
+| Head commit (run end) | docs commit following `3aade7c`; product head `3aade7c` |
+| Last CI result | **4/4 green on `3aade7c`** (NEX-012): backend + frontend, push and pull_request, all `completed/success`, observed 2026-11-25T05:49Z |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:24Z: 24,283 insertions / 98 files / 674 collected / CI-verified at `f50a78d` |
+| Draft PR | #3 (draft, unmerged — human review required). Body still carries pre-NEX-012 figures (24,283 insertions / 98 files / 674 collected); branch is now 25,316 / 101 / 681 |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-011 is VERIFIED** — the tool-invocation audit trail is
-readable over HTTP, the full suite passes locally, and CI on `f50a78d` returned
-**4/4 `completed/success`** (backend + frontend, push and pull_request).
+None in flight. **NEX-012 is VERIFIED** — every tool invocation is now sealed over
+its predecessor, an owner can verify the chain over HTTP, and CI on `3aade7c`
+returned **4/4 `completed/success`** (backend + frontend, push and pull_request).
 
-Next dependency-ready work is choosing the following Phase 5 slice — see Next
-Best Actions and the Phase 5 section of `ROADMAP.md`.
+Next dependency-ready work: refresh PR #3's body, then choose the following Phase 5
+slice — see Next Best Actions and the Phase 5 section of `ROADMAP.md`.
 
 
 ## Last completed task
+
+**NEX-012 — Tamper-evident audit chain** (run `NEX-2026-11-25-12`, `3aade7c`).
+NEX-005 wrote a row for every gateway attempt and NEX-011 made those rows
+readable, but the rows were still mutable: anyone with database write access
+could flip a `denied` verdict to `succeeded` or delete a row, and nothing would
+notice. A record that cannot prove it is intact is not audit evidence.
+
+Each invocation now carries `chain_sequence`, `previous_hash`, `intent_hash` and
+`outcome_hash`, sealed over the previous link. `GET
+/api/v1/agents/{agent_id}/tool-invocations/verification` returns
+`{verified, checked, first_break}`.
+
+Three decisions carry the slice:
+
+- **A break is reported, not raised.** `verify_chain` is pure and returns a
+  `ChainVerdict` naming the sequence where history diverges. An exception would
+  tell a caller only that something is wrong, when what an auditor needs is
+  *where*.
+- **`checked` is part of the contract.** Without it, `verified: true` could mean
+  "walked nothing" — a verifier that reports success without examining rows is
+  worse than no verifier.
+- **The chain is listed unpaginated.** A window's first entry does not carry its
+  predecessor's hash, so a window cannot be verified. `list_chain` is deliberately
+  whole-trail.
+
+The gateway seals intent before the call and outcome after it, refusals included,
+because a blocked attempt is evidence too. `next_chain_link` is read inside the
+inserting transaction and the unique `(agent_id, chain_sequence)` constraint
+rejects a concurrent loser, so the chain cannot silently fork.
+
+Pinned by `tests/api/test_audit_chain_verification_api.py` (7 tests), which tampers
+through the database directly — that is the threat model; tampering through the API
+would prove nothing. **Status: VERIFIED** — CI on `3aade7c` returned 4/4 `completed/success`.
 
 **NEX-011 — Tool-invocation audit trail over HTTP** (run `NEX-2026-11-25-11`, `f50a78d`).
 The governed tool gateway writes a `ToolInvocation` row for every attempt it
