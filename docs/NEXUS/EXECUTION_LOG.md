@@ -2598,3 +2598,19 @@ weaker evidence basis is fine when it is labelled, and misleading when it is not
    adopting it as the next slice.
 2. Otherwise select the next Phase-5 slice from `ROADMAP.md`.
 3. Never merge PR #3.
+
+### Addendum (same run, 09:51Z) — CI on the promotion docs head
+
+`f8115fd` (the docs commit that promoted NEX-019) reached **4/4 `completed/success`** with
+every check run reporting `head_sha` `f8115fd`, polled 2026-11-25T09:50Z. So all three
+commits of this run pair are CI-green at their own SHA: `66e8cd6` (code), `9a90e3a` (docs),
+`f8115fd` (promotion docs).
+
+PR #3 body was reposted at `f8115fd` (09:49:41Z) with counters recounted from the PR object
+— 29,339 additions / 10 deletions / 108 files / 97 commits — and the "no CI observed yet"
+paragraph replaced with the observed result. Tracking issue #2 received the NEX-019 status
+comment (issuecomment-7158867562).
+
+`STATE.md`'s head-commit, draft-PR and CI rows were stale against this reality (head still
+read `66e8cd6`, counters still 29,107/95) and were corrected in the follow-up docs commit
+that carries this addendum.

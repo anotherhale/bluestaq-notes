@@ -10,11 +10,11 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `ad21e5b` — the clone started on `main` at `d6f92d0`; `git ls-remote` showed the authorized branch at `ad21e5b`, which was fetched and checked out before any gate was trusted. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
-| Head commit (run end) | `66e8cd6` — `fix(agent-runs): refuse a stale write instead of erasing run progress` (NEX-019), plus the docs commit that carries this line. Re-read `git log -1`; do not assume. |
+| Head commit (run end) | `f8115fd` — `docs(nexus): promote NEX-019 to VERIFIED on observed CI`, on top of `9a90e3a` (docs) and `66e8cd6` (`fix(agent-runs): refuse a stale write instead of erasing run progress`, NEX-019). Pushed and re-read with `git log -1`; do not assume. |
 | Last CI result | **4/4 `completed/success` at `66e8cd6`** (NEX-019's own commit — all four check runs report `head_sha` `66e8cd6`), first read 2026-11-25T09:46Z. Also now **4/4 green at `9a90e3a`**, the docs head that carries this file, polled 2026-11-25T09:48Z. Prior: `2b3beb7` 4/4 (NEX-018 by descendant-CI; `789d78a` has 0 runs of its own). Locally this run **on the feature branch at `66e8cd6`**: `ruff format --check` 198 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **725 passed / 4 skipped**. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body **refreshed 2026-11-25T09:46:26Z** at head `66e8cd6`: **108 files, 29,107 insertions, 10 deletions, 95 commits**, 729 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at that head. `mergeable_state` read `unstable` at refresh time — pending checks on the new head, not failure. |
-| CI status | **NEX-019 commit `66e8cd6`: not yet polled** — an absence, not a pass. Last observed: `2b3beb7` 4/4 `completed/success`. Prior: `fa387a9` 4/4; `ca15eb1` 4/4; `990557d` 4/4; `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
+| Draft PR | #3 (draft, unmerged — human review required). Body **refreshed 2026-11-25T09:49:41Z** at head `f8115fd`: **108 files, 29,339 insertions, 10 deletions, 97 commits**, 729 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at that head, not from the per-file sums. The body now states NEX-019 as VERIFIED on a run at its own commit. |
+| CI status | **`f8115fd` (this head): 4/4 `completed/success`, all `head_sha` == `f8115fd`, polled 2026-11-25T09:50Z.** `66e8cd6` (NEX-019 code): 4/4 green at that commit, 09:46Z. `9a90e3a`: 4/4 green, 09:48Z. Older observations: `2b3beb7` 4/4 `completed/success`. Prior: `fa387a9` 4/4; `ca15eb1` 4/4; `990557d` 4/4; `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-019 (run `NEX-2026-11-25-21`) — a stale write must not erase run progress
@@ -523,10 +523,10 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Observe CI on `66e8cd6` before promoting NEX-019.**
-   `gh api repos/anotherhale/bluestaq-notes/commits/66e8cd6/check-runs` — only a
-   green 4/4 reporting `head_sha` `66e8cd6` makes NEX-019 VERIFIED. Local gates
-   (725 passed / 4 skipped, ruff, mypy) are not evidence for promotion.
+1. **NEX-019 is promoted — do not re-promote it.** `66e8cd6` read 4/4
+   `completed/success` with `head_sha` `66e8cd6` at 09:46Z, and the PR, the
+   tracking issue and this file now say so. A later run should confirm rather
+   than re-derive.
 2. **Next dependency-ready slice (P1/P2, Phase 5).** The durable runtime now
    enforces its own write concurrency. Re-read the Phase 5 section of
    `ROADMAP.md` before choosing; do not invent a slice from a run summary. A
