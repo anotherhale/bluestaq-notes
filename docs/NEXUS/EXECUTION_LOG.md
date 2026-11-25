@@ -3003,7 +3003,7 @@ descendant-CI, because the code, the tests and this documentation landed in that
 | Timestamp | 2026-11-25T11:31Z → 2026-11-25T11:47Z |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit | `e549e94` (NEX-022 promotion, verified against `origin` before any edit) |
-| Ending commit | recorded below after the push |
+| Ending commit | `c367746` (slice) + this docs promotion commit |
 | Phase | 5 (durable runtime) / audit integrity |
 
 ## Observation and reconciliation
@@ -3068,5 +3068,14 @@ unrelated reason is not evidence, so it was corrected to build the real crash st
 
 ## Status
 
-NEX-023 is **TESTED**, not VERIFIED. No CI observation exists at the commit carrying it.
-Promotion requires an observed 4/4 `completed/success` whose `head_sha` is that commit.
+NEX-023 is **VERIFIED** at `c367746`. CI was polled on that exact commit and returned 4/4
+`completed/success` at 2026-11-25T11:50:20Z: two Backend (`ruff, mypy, pytest, migrations`)
+and two Frontend (`typecheck, lint, test, build`), for the push and pull-request events.
+`head_sha` on every check run equalled `c367746`, so this is a run at the slice's own SHA —
+not descendant-CI.
+
+One process note worth keeping: the first commit attempt used a heredoc for the message and
+the body was corrupted (R12), producing `ec3fafb`. It had not been pushed, so it was amended
+with a message written to a file by `file_editor` and committed as `c367746`. The tree was
+never pushed in the corrupted state, so no remote evidence is ambiguous. Write commit
+messages to a file rather than piping them through a heredoc.

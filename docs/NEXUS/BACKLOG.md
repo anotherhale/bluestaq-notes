@@ -1343,7 +1343,7 @@ change to the plan path (it was already correct). This is a read-path fix.
 | --- | --- |
 | Phase | 5 (durable runtime) / audit integrity |
 | Priority | P0 (the tamper-evident trail could permanently assert "unknown" about an effect that has since been ruled on) |
-| Status | **TESTED** — local gates green (19 passed in file, full suite 740 passed / 4 skipped (baseline 737; delta is exactly these 3 tests)), negative control verified. CI **not yet observed** at this slice's commit. |
+| Status | **VERIFIED** — 4/4 `completed/success` at `c367746`, polled 2026-11-25T11:50:20Z, `head_sha` matching the polled commit. Local gates at the slice: 19 passed in file, full suite 740 passed / 4 skipped (baseline 737; delta is exactly these 3 tests), negative control verified. |
 | Dependencies | NEX-011 (audit trail), NEX-012 (hash chain), NEX-018 (a missing seal counts as a break) |
 
 **Objective:** close the terminal-state gap between the run aggregate and the gateway's

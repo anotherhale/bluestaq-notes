@@ -1,12 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-25",
-  "timestamp": "2026-11-25T11:47:00Z",
+  "timestamp": "2026-11-25T11:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "PENDING_PUSH",
-  "commit_note": "NEX-023 code, tests and NEXUS docs land in one commit on top of e549e94, so a single CI run covers the whole tree. Replace PENDING_PUSH with the real SHA after the push.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-022 all VERIFIED. NEX-023 (a ruling must seal the audit link a crash left open) is TESTED: local gates green, negative control verified, CI NOT yet observed at its commit.",
-  "active_task": "NEX-023",
+  "commit": "c367746",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-023 all VERIFIED. NEX-023 (a ruling must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z.",
+  "active_task": "none selected - NEX-023 VERIFIED; next Phase-5 slice to be chosen from ROADMAP.md",
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -33,7 +32,7 @@
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
     "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
-    "NEX-023": "TESTED - local gates green (740 passed / 4 skipped), negative control verified; CI unobserved at its commit"
+    "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z"
   },
   "completed_tasks": [
     "NEX-001",
@@ -60,7 +59,8 @@
     "NEX-019",
     "NEX-020",
     "NEX-021",
-    "NEX-022"
+    "NEX-022",
+    "NEX-023"
   ],
   "validation": {
     "pytest_full": "740 passed, 4 skipped, exit 0 - run bare this session on the feature branch with the NEX-023 slice applied. Baseline was 737; the delta is exactly the 3 new NEX-023 tests.",
@@ -73,16 +73,16 @@
     "architecture": "layering test untouched; domain/ and application/ import no framework code in this change",
     "migration_chain": "No migration added. tool_invocations already carries status, outcome and the seal.",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NOT OBSERVED for NEX-023. Last observation remains 1156f6e (NEX-022): 4/4 completed/success, polled 2026-11-25T11:27:56Z.",
+    "ci_observed": "NEX-023: 4/4 completed/success at c367746 (head_sha matches the polled commit), polled 2026-11-25T11:50:20Z. Two Backend (ruff, mypy, pytest, migrations) and two Frontend (typecheck, lint, test, build) - push and pull_request events.",
     "ci_note": "NEX-021 is deliberately TESTED, not VERIFIED. Local gates are recorded above for reproducibility, not as proof (R9/R10). This run put code, tests and docs in one commit specifically so the next run can observe a single CI run covering the whole tree, instead of having to reason about descendant-CI.",
     "evidence_basis": {
-      "note": "NEX-022 remains VERIFIED at 1156f6e (4/4, polled 2026-11-25T11:27:56Z). NEX-023 has no CI observation at its own commit and must not be promoted without one.",
+      "note": "NEX-023 VERIFIED on its own commit c367746 - a run whose head_sha equals the polled SHA, not descendant-CI. NEX-022 remains VERIFIED at 1156f6e. NEX-001..NEX-023 all VERIFIED.",
       "nex_020_commit": "460a26a",
       "nex_021_commit": "e459f98",
       "criterion_coverage": "NEX-022: a token from a different delegation cannot advance a run; a run with no recorded binding cannot be advanced; a fresh token from the planning delegation still can.",
       "negative_control": "Removing the check turns exactly the 2 new tests red; the other 14 stay green.",
       "nex_022_commit": "1156f6e",
-      "nex_023_commit": "PENDING_PUSH"
+      "nex_023_commit": "c367746"
     },
     "gates_this_run": {
       "ruff_format_check": "pass - 201 files already formatted",
@@ -99,8 +99,8 @@
       "note": "A run at the slice's own commit: code, tests and docs landed in this one commit, so coverage is direct rather than descendant-CI."
     },
     "environment": ".venv did not exist in this clone; created with `uv venv .venv --python 3.12` and `uv pip install -e \".[dev]\"`. All gates ran from .venv/bin, matching CI's pip install.",
-    "verified_at_commit": "1156f6e",
-    "verified_by_run": "NEX-2026-11-25-24 (NEX-022)"
+    "verified_at_commit": "c367746",
+    "verified_by_run": "NEX-2026-11-25-25 (NEX-023)"
   },
   "uncommitted_work": "none (all changes committed and pushed this run; see commit field)",
   "pr_state": {
@@ -194,10 +194,10 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Promote NEX-023 to VERIFIED on an observed 4/4 completed/success whose head_sha is the commit carrying it; then take the next dependency-ready Phase-5 slice from ROADMAP.md. Do not re-open the CAS audit of infrastructure/db/ without evidence a monotonic aggregate became non-monotonic, and do not re-promote NEX-001..NEX-022.",
-  "next_action": "1. Poll the pushed head's check runs; promote NEX-023 to VERIFIED only on 4/4 completed/success with matching head_sha (a later docs commit cancels the earlier run, so poll the head that actually carries the code). 2. Refresh PR #3's body at the then-current head, recomputing counters from the PR object (additions, deletions, changed_files, commits) - never per-file sums (R21). 3. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-022 VERIFIED, most recently NEX-022 at 1156f6e. NEX-023 is TESTED and pushed but unverified; its commit is in the `commit` field. Working tree clean. PR #3 is draft and must never be auto-merged. The CAS audit of infrastructure/db/ is closed.",
-  "ci_status": "NEX-023: NOT OBSERVED at its commit. Last observed green: 1156f6e (NEX-022) 4/4 completed/success, polled 2026-11-25T11:27:56Z. Prior: e459f98 4/4 (10:46Z), 460a26a 4/4 (10:16Z), 23a36dc 4/4 (10:29Z), 66e8cd6 4/4, 2b3beb7 4/4, 9a90e3a 4/4, 990557d 4/4, b9b7207 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
+  "next_task": "Take the next dependency-ready Phase-5 slice from the ROADMAP.md Phase 5 section. Read it before choosing; do not invent a slice from a run summary.",
+  "next_action": "1. Re-read ROADMAP.md Phase 5 and pick the next dependency-ready slice (P1/P2). 2. Refresh PR #3's body at the then-current head, recomputing counters from the PR object (additions, deletions, changed_files, commits) plus `pytest --collect-only` - never per-file sums or a local two-dot diff (R21). 3. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform, head c367746. NEX-001..NEX-023 all VERIFIED, most recently NEX-023 at c367746 (4/4, polled 2026-11-25T11:50:20Z). Working tree clean. PR #3 is draft and must never be auto-merged. The CAS audit of infrastructure/db/ is closed. Next: choose the next Phase-5 slice from ROADMAP.md.",
+  "ci_status": "c367746 (NEX-023): 4/4 completed/success, polled 2026-11-25T11:50:20Z. Prior greens: 1156f6e 4/4 (11:27Z), e459f98 4/4 (10:46Z), 23a36dc 4/4 (10:29Z), 460a26a 4/4 (10:16Z), 66e8cd6, 2b3beb7, 9a90e3a, 990557d, b9b7207 all 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -223,18 +223,9 @@
     "NEX-019",
     "NEX-020",
     "NEX-021",
-    "NEX-022"
+    "NEX-022",
+    "NEX-023"
   ],
-  "in_progress_tasks": {
-    "NEX-023": {
-      "objective": "An owner's ruling on an interrupted step must seal the audit-chain invocation the crash left STARTED.",
-      "state": "IMPLEMENTED + TESTED locally. Not VERIFIED: no CI observation at the carrying commit.",
-      "files": [
-        "src/notes_service/application/use_cases/agent_runs.py",
-        "tests/agent/test_agent_runs.py"
-      ],
-      "next": "Poll CI at the pushed head; promote on an observed 4/4 completed/success with matching head_sha."
-    }
-  },
+  "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }
