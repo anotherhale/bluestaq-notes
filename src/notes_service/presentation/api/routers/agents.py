@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
@@ -39,6 +39,8 @@ from notes_service.presentation.schemas import (
     DelegationResponse,
     PageMeta,
     ResolvedAgentTokenResponse,
+    ToolInvocationAuditListResponse,
+    ToolInvocationAuditResponse,
 )
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -221,6 +223,35 @@ def list_approval_requests(
     requests = container.list_approval_requests().run(principal, agent_id=str(agent_id))
     items = [ApprovalRequestResponse.from_domain(request) for request in requests]
     return ApprovalRequestListResponse(items=items, meta=_page(items))
+
+
+@router.get(
+    "/{agent_id}/tool-invocations",
+    response_model=ToolInvocationAuditListResponse,
+    summary="Read the tool-invocation audit trail for one of the caller's agents",
+    dependencies=[RateLimitDep],
+)
+def list_tool_invocations(
+    agent_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> ToolInvocationAuditListResponse:
+    """Every attempt this agent made, refusals included.
+
+    The trail is the owner's evidence, so a non-owner gets 404, never 403. Paging
+    is explicit here rather than the unpaginated ``_page`` helper used by the
+    other listings: an audit trail grows without bound, so a fixed default window
+    keeps one request from returning an agent's entire history.
+    """
+    invocations = container.list_tool_invocations().run(
+        principal, agent_id=str(agent_id), limit=limit, offset=offset
+    )
+    items = [ToolInvocationAuditResponse.from_domain(item) for item in invocations]
+    return ToolInvocationAuditListResponse(
+        items=items, meta=PageMeta(total=len(items), limit=limit, offset=offset)
+    )
 
 
 @router.post(

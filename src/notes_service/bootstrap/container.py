@@ -43,6 +43,7 @@ from notes_service.application.use_cases.agents import (
     IssueAgentToken,
     ListAgents,
     ListApprovalRequests,
+    ListToolInvocations,
     OpenApprovalRequest,
     RegisterAgent,
     ResolveAgentToken,
@@ -211,6 +212,10 @@ class Container:
     open_approval_request: Callable[[], OpenApprovalRequest]
     decide_approval_request: Callable[[], DecideApprovalRequest]
     list_approval_requests: Callable[[], ListApprovalRequests]
+    # Reading the audit trail is the owning human's authority, matching approvals:
+    # the trail names which tools an agent reached for, which is private to its
+    # owner. Nothing here can write to the trail; only the gateway does that.
+    list_tool_invocations: Callable[[], ListToolInvocations]
     # The governed tool gateway. Every agent tool call goes through it, so it is
     # the one place capability checks, approval gating, and audit are applied.
     invoke_tool: Callable[[], InvokeTool]
@@ -458,6 +463,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         open_approval_request=make(OpenApprovalRequest),
         decide_approval_request=make(DecideApprovalRequest),
         list_approval_requests=make(ListApprovalRequests),
+        list_tool_invocations=make(ListToolInvocations),
         invoke_tool=make_tool_gateway,
         plan_agent_run=make_plan_agent_run,
         advance_agent_run=make_advance_agent_run,

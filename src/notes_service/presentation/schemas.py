@@ -20,7 +20,7 @@ from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import AgentRun, RunStatus, RunStep, StepStatus
-from notes_service.domain.agent.tools import InvocationStatus
+from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation
 from notes_service.domain.agent.value_objects import (
     AgentStatus,
     ApprovalStatus,
@@ -819,6 +819,54 @@ class ToolInvocationResponse(ResponseModel):
         )
 
 
+class ToolInvocationAuditResponse(ResponseModel):
+    """One row of the tool-invocation audit trail, as the owning human reads it.
+
+    ``arguments_digest`` is returned instead of the arguments themselves: the
+    trail must prove *that* a call happened with a given shape without becoming a
+    second copy of note content. ``outcome`` carries the gateway's reason for a
+    refusal, which is the part an auditor needs most.
+    """
+
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    token_id: uuid.UUID | None = None
+    tool: str
+    capability: Capability
+    status: InvocationStatus
+    resource_ref: str
+    idempotency_key: str
+    arguments_digest: str
+    approval_request_id: uuid.UUID | None = None
+    invoked_at: datetime
+    completed_at: datetime | None = None
+    outcome: str | None = None
+
+    @classmethod
+    def from_domain(cls, invocation: ToolInvocation) -> ToolInvocationAuditResponse:
+        return cls(
+            id=uuid.UUID(str(invocation.id)),
+            agent_id=uuid.UUID(str(invocation.agent_id)),
+            token_id=(
+                uuid.UUID(str(invocation.token_id)) if invocation.token_id is not None else None
+            ),
+            tool=invocation.tool_name,
+            capability=invocation.capability,
+            status=invocation.status,
+            resource_ref=invocation.resource_ref,
+            idempotency_key=invocation.idempotency_key,
+            arguments_digest=invocation.arguments_digest,
+            approval_request_id=(
+                uuid.UUID(str(invocation.approval_request_id))
+                if invocation.approval_request_id is not None
+                else None
+            ),
+            invoked_at=invocation.invoked_at,
+            completed_at=invocation.completed_at,
+            outcome=invocation.outcome,
+        )
+
+
 # -- durable runs ---------------------------------------------------------
 
 
@@ -965,6 +1013,11 @@ class RunAdvanceResponse(ResponseModel):
 
 class AgentRunListResponse(BaseModel):
     items: list[AgentRunResponse]
+    meta: PageMeta
+
+
+class ToolInvocationAuditListResponse(BaseModel):
+    items: list[ToolInvocationAuditResponse]
     meta: PageMeta
 
 

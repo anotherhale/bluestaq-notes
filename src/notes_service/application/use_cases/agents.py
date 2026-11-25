@@ -31,6 +31,7 @@ from notes_service.application.use_cases.base import UseCase
 from notes_service.domain.agent.delegation import DelegatedAuthorization, attenuate
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.token import AgentToken, hash_agent_token
+from notes_service.domain.agent.tools import ToolInvocation
 from notes_service.domain.agent.value_objects import (
     NON_DELEGABLE_CAPABILITIES,
     SENSITIVE_CAPABILITIES,
@@ -391,6 +392,32 @@ class ListApprovalRequests(UseCase):
             return uow.approvals.list_pending_for_agent(agent.id)
 
 
+class ListToolInvocations(UseCase):
+    """List the tool-invocation audit trail for one of the caller's agents.
+
+    The gateway writes a row for *every* attempt, including refusals, but until
+    this use case existed nothing outside the gateway itself could read one back.
+    An audit trail nobody can read is not an audit trail.
+
+    Scoped to the agent's owner, matching ``ListApprovalRequests``: the trail says
+    which tools an agent reached for and when, so it is the owning human's
+    evidence. A non-owner gets ``404``, never ``403``, so the endpoint cannot be
+    used to probe for the existence of another user's agent.
+    """
+
+    def run(
+        self,
+        principal: Principal,
+        *,
+        agent_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ToolInvocation]:
+        with self._uow_factory() as uow:
+            agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
+            return uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
+
+
 __all__ = [
     "DecideApprovalRequest",
     "GetAgent",
@@ -399,6 +426,7 @@ __all__ = [
     "IssuedToken",
     "ListAgents",
     "ListApprovalRequests",
+    "ListToolInvocations",
     "OpenApprovalRequest",
     "RegisterAgent",
     "ResolveAgentToken",
