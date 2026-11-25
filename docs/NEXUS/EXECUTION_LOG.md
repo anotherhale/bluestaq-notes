@@ -2885,3 +2885,35 @@ Poll CI on the pushed commit. Promote NEX-021 to VERIFIED only on 4/4 `completed
 at that `head_sha`; if a later push supersedes it, say so plainly rather than reporting the
 superseded head as green. Then select the next dependency-ready Phase-5 slice from
 `ROADMAP.md` — the CAS audit itself is now closed.
+
+## Run NEX-2026-11-25-23 (continued) — e459f98
+
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `d426b95` → **ending commit**: `e459f98`
+- **Task completed**: **NEX-021 — agent-identity compare-and-set**, promoted **TESTED → VERIFIED**.
+- **Evidence**: CI run at `e459f98` is **4/4 `completed/success`**, polled 2026-11-25T10:46Z, with every
+  check run reporting `head_sha` `e459f98`. This is a run at the slice's own commit, not
+  descendant-CI: the code, tests and NEXUS docs all landed in the single commit `e459f98`, so no
+  later push superseded it and the concurrency group did not cancel it.
+- **What the fix does**: `SqlAlchemyAgentRepository.save()` no longer overwrites `status`,
+  `capabilities`, `revoked_at` and `max_token_ttl_seconds` from a stale in-memory copy. It is a
+  single `UPDATE ... WHERE version = :expected`, mirroring `SqlAlchemyAgentRunRepository.save`,
+  and raises `VersionConflict` (→ 409) on mismatch. Before this, a save landing after a revoke
+  wrote `status=active` and `revoked_at=NULL` back over the revoked row, so the agent could issue
+  tokens again; a save taken before a `narrow_capabilities` restored the removed capabilities.
+  Neither caller was told.
+- **Tests**: 5 in `tests/agent/test_agent_identity_concurrency.py`; the negative control
+  (predicate removed) turns 4 of 5 red while the honest-write case stays green. Full suite
+  **735 passed / 4 skipped**. `ruff format --check` clean on 201 files (bare, repo-wide),
+  `ruff check` clean, `mypy` clean.
+- **Audit closure**: every repository under `infrastructure/db/` is now classified.
+  `Note`, `AgentRun` (NEX-019), `ApprovalRequest` (NEX-020) and `AgentIdentity` (NEX-021) use
+  compare-and-set. `DelegatedAuthorization`, `AgentToken` and `ToolInvocation` carry no version
+  and need none — each writes a strictly monotonic field (`revoked_at`, a terminal verdict), so
+  concurrent writers converge instead of erasing each other's authority. A version there would be
+  ceremony, not a guard.
+- **PR**: #3 body refreshed at `e459f98` — counters recomputed from the PR object (30,474
+  additions / 10 deletions / 111 files / 104 commits), defect list extended to seven, validation
+  table updated to 739 collected / 735 passed, and the obsolete "validation after rebasing"
+  section replaced with the current relationship to `main`. PR #3 remains **draft and unmerged**.
+- **Next action**: take the next dependency-ready Phase-5 slice from `ROADMAP.md`.

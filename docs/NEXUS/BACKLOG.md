@@ -1190,7 +1190,7 @@ need a version; `AgentIdentity` was the real remaining offender.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P0 (security: silent re-grant of withdrawn authority on the emergency-stop aggregate) |
-| Status | **TESTED** — 5 new tests pass, full suite 735 passed / 4 skipped, gates clean; CI not yet observed on this commit |
+| Status | **VERIFIED** — 4/4 `completed/success` at `e459f98` (polled 2026-11-25T10:46Z, every check run reporting that head_sha). 5 new tests pass, full suite 735 passed / 4 skipped, gates clean |
 | Dependencies | NEX-003 (agent identity), NEX-019 (the CAS pattern), NEX-020 (the second copy of it) |
 
 **Objective:** finish the CAS audit. Close the same lost-update hole NEX-019 and NEX-020
