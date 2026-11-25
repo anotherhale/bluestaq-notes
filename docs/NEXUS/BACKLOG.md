@@ -619,7 +619,7 @@ dependency.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P1 (security) |
-| Status | **VERIFIED** (run `NEX-2026-11-25-13`; product commit `a50a9a0`, CI run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) `completed/success` on head `e2bf7bc` — backend ruff/mypy/pytest/migrations + frontend typecheck/lint/test/build) |
+| Status | **TESTED** — corrected in run `NEX-2026-11-25-14` (commit `12584a1`). It was previously recorded VERIFIED on `a50a9a0` because CI run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) was `completed/success` on head `e2bf7bc`. **That promotion was wrong**: green CI proved the tests passed, not that the criterion was met, and the tests did not touch the write path that was broken. See "Correction" below. Awaiting CI on `12584a1`. |
 | Dependencies | NEX-005 (gateway), NEX-003 (approval request lifecycle) |
 
 **Objective:** an approval was an unlimited-use, never-expiring authorisation.
@@ -680,10 +680,37 @@ window becomes unusable instead of silently keeping indefinite authority.
 Columns stay nullable for backward compatibility mid-deploy; the aggregate
 always populates them.
 
-**Residual risk (R16):** `expires_at` is nullable, and `is_usable` treats NULL
-as "never expires". That is needed for rows written by an older application
-version during a deploy, but it means a NULL row is unbounded. A follow-up
-should tighten the column to NOT NULL once no old writer can exist.
+**Residual risk (R16, closed in run 14):** `expires_at` is nullable, and
+`is_usable` treats NULL as "never expires". That is needed for rows written by an
+older application version during a deploy, but it means a NULL row is unbounded.
+Run 14 made a missing bound fail closed instead, so the column may stay nullable
+without granting permanent authority.
+
+**Correction (run `NEX-2026-11-25-14`, commit `12584a1`).** This entry was
+promoted to VERIFIED, but the invariant it claims was **not enforced on the
+production path**:
+
+- `ApprovalRequestRepository.add()` built `ApprovalRequestRow` without
+  `expires_at` or `consumed_at`. Every approval the tool gateway opened was
+  written with `expires_at = NULL`.
+- The `consume()` predicate shown above accepted `expires_at IS NULL`, and
+  `is_usable` read NULL as "never expires". So the 72-hour bound was inert for
+  every gateway-created approval, and an approved delete could be replayed
+  indefinitely.
+- The expiry test passed because it exercised `save()` — which does write the
+  columns — never `add()`, the path the gateway uses. CI was green because the
+  tests were green, and the tests did not cover the broken path.
+
+Fixed in `12584a1`, three independent fail-closed changes: `add()` persists both
+columns; the aggregate treats a missing bound as lapsed; the conditional UPDATE
+requires `expires_at IS NOT NULL AND expires_at > :now`. New tests pin the
+gateway path (`InvokeTool` → `add()` → reload) and the NULL-bound case, and were
+confirmed to fail against the unfixed repository.
+
+This is risk class **R18**: a slice can pass its tests and its CI while the
+adapter that stores the invariant drops the field the check reads. Verified
+status for any field a security check consumes must be established through the
+write path production actually uses.
 
 **Complexity:** small. One migration, no new dependency.
 

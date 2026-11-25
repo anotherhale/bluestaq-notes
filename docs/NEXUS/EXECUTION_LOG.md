@@ -1705,3 +1705,81 @@ Select the next Phase 5 slice from `ROADMAP.md` — re-read that section rather
 than inferring from this summary. Refresh PR #3's body with recomputed counts
 (it predates NEX-013). Never merge PR #3.
 
+
+## Run NEX-2026-11-25-14 — NEX-013 correction: approval validity was inert
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-14` |
+| Timestamp | 2026-11-25T06:31Z start, 07:00Z end |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `4a5f916` |
+| Ending commit | `12584a1` (product) plus this docs commit |
+| Tasks completed | NEX-013 correction (TESTED) |
+| Tasks started | none |
+| Files changed | `domain/agent/entities.py`, `infrastructure/db/agent_repositories.py`, `tests/agent/test_tool_gateway.py`, `tests/agent/test_approval_persistence.py` (new) |
+| Migrations | none new |
+| Tests executed | `pytest` bare, repo-wide; `ruff check`; `ruff format --check`; `mypy` |
+| Test outcomes | 686 collected, 682 passed, 4 skipped; ruff clean (194 files); mypy clean (98 files) |
+| Commits | `12584a1` fix(agent): persist approval validity bound so it is never permanent |
+| Push status | pushed; remote head verified `12584a1` via `git ls-remote` |
+| CI status | not observed for `12584a1`; last observed green `e2bf7bc` |
+| PR updates | none this run — PR #3 body remains stale |
+| Checkpoint status | updated atomically (`CHECKPOINT.json`, valid JSON, indent 2) |
+
+### What was wrong
+
+NEX-013 was recorded VERIFIED. Its central invariant — an approval authorises
+one action within a 72-hour window — was not enforced on the path that matters.
+`ApprovalRequestRepository.add()` constructed `ApprovalRequestRow` without
+`expires_at` or `consumed_at`, so every approval the tool gateway opened
+persisted with a NULL bound. The `consume()` predicate accepted `expires_at IS
+NULL`, and `is_usable` read NULL as "never expires". One human approval of a
+delete therefore authorised that delete forever.
+
+The test that "proved" the bound used `save()`, which does write the columns.
+The gateway uses `add()`. CI was green on commit `e2bf7bc` because the tests were
+green, and the tests never touched the broken write path. Green CI was treated as
+proof of the criterion; it was proof only that the assertions passed.
+
+### What changed
+
+- `add()` persists `expires_at` and `consumed_at`.
+- The aggregate treats a missing bound as lapsed (`is_expired`), so a
+  pre-migration row is unusable rather than unbounded.
+- The conditional `consume()` UPDATE requires `expires_at IS NOT NULL AND
+  expires_at > :now`, so the spend path cannot launder a NULL-bound row.
+- `tests/agent/test_tool_gateway.py` opens the approval through `InvokeTool` and
+  reads it back, asserting `expires_at - requested_at == DEFAULT_APPROVAL_TTL`.
+- `tests/agent/test_approval_persistence.py` pins open → read-back and the
+  NULL-bound fail-closed cases.
+- All three new assertions were confirmed to fail with the source fix reverted.
+
+### Decisions
+
+- **NEX-013 demoted from VERIFIED to TESTED.** VERIFIED means the criterion is
+  met, not that a pipeline went green. The criterion was not met. It returns to
+  TESTED until CI is observed on `12584a1` *and* the new tests cover the path.
+- **Fail closed on a missing bound rather than backfilling again.** The migration
+  already backfills; treating NULL as unbounded is what created the hole. A NULL
+  now means unusable.
+- **R16 closed, R18 opened.** R16 ("NULL is fine, it never expires") was itself
+  the bug. R18 names the class: a slice can be VERIFIED while the adapter that
+  persists its invariant drops the field the check reads.
+
+### Risks identified
+
+- **R18** (new, high impact): pin security-relevant fields through the write path
+  production uses. `save()` and `add()` are not interchangeable evidence.
+- **R12 restated:** the heredoc hazard recurred — an append to this very file
+  hung instead of writing. It was interrupted before touching the file (line
+  count and tail verified unchanged), and the entry was appended from a file.
+  Never write prose through a heredoc in this environment.
+
+### Next action for the following run
+
+1. `gh api repos/anotherhale/bluestaq-notes/commits/12584a1/check-runs` — only a
+   green 4/4 promotes NEX-013 back to VERIFIED.
+2. Recompute PR #3 metrics (`git diff --shortstat main HEAD`, two-dot; the clone
+   is grafted) and refresh the body, which predates both NEX-013 and this fix.
+3. Select the next Phase 5 slice from `ROADMAP.md`. Never merge PR #3.

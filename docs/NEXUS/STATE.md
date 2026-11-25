@@ -7,22 +7,42 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity VERIFIED (`a50a9a0`, CI 2/2) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **PARTIALLY VERIFIED** — see the correction below |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `11a4cec` |
-| Head commit (run end) | `e2bf7bc` — docs commit; NEX-013 product commit is `a50a9a0` |
-| Last CI result | **Green on `e2bf7bc`** (contains NEX-013), 4/4: push run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) and pull_request run [45559732372](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559732372), both `completed/success`; jobs backend (ruff/mypy/pytest/migrations) + frontend (typecheck/lint/test/build) each `success`. Observed 2026-11-25T06:21Z. |
+| Base commit (run start) | `4a5f916` |
+| Head commit (run end) | `12584a1` — product commit; the docs commit carrying this file is its child |
+| Last CI result | Green on `e2bf7bc` (NEX-013, 4/4, observed 2026-11-25T06:21Z). **No CI observed yet for `12584a1`** — this run's gates are local only. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:51Z: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers |
+| Draft PR | #3 (draft, unmerged — human review required). Body is **stale**: it predates both NEX-013 and this correction. Recompute before refreshing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## Correction recorded this run (NEX-013 status was overstated)
+
+NEX-013 was recorded VERIFIED. Its core invariant was **not** enforced on the
+path that matters:
+
+- `ApprovalRequestRepository.add()` built `ApprovalRequestRow` without
+  `expires_at` or `consumed_at`. Every approval the tool gateway opened was
+  therefore persisted with `expires_at = NULL`.
+- `is_usable` read NULL as "never expires". So the 72-hour bound NEX-013
+  introduced was **inert in production**; an approved agent could replay a
+  delete indefinitely.
+- The NEX-013 expiry test stayed green because it exercised `save()` — which
+  does write the columns — and never `add()`, the path the gateway uses.
+
+This is the R18 class: a test that proves the aggregate's logic while the
+adapter that stores it drops the field. Fixed in `12584a1` (three independent
+fail-closed changes plus tests that pin the production path). NEX-013 is now
+**TESTED, not VERIFIED**, until CI is observed on `12584a1`.
+
 
 ## Active task
 
-None in flight. **NEX-013 is VERIFIED** — approvals are bounded in time and
-spent exactly once, with local gates and CI both observed green.
+None in flight. **NEX-013 is TESTED** — the bound is now actually persisted and
+fails closed, but CI has not been observed on `12584a1`.
 
-Next dependency-ready work: the next Phase 5 slice — see Next Best Actions and
-the Phase 5 section of `ROADMAP.md`.
+Next dependency-ready work: observe CI on `12584a1`, then the next Phase 5
+slice — see Next Best Actions and the Phase 5 section of `ROADMAP.md`.
 
 
 ## Last completed task
@@ -39,8 +59,21 @@ later delete of that note, forever.
 the security architecture's High-tier window) and `consumed_at`, and the gateway
 spends the approval through `uow.approvals.consume(...)` instead of matching it.
 Consumption is one conditional `UPDATE ... WHERE status='approved' AND
-consumed_at IS NULL AND (expires_at IS NULL OR expires_at > :now)` that returns
-`rowcount == 1`, so the database decides the race rather than a read-then-write.
+consumed_at IS NULL AND expires_at IS NOT NULL AND expires_at > :now` that
+returns `rowcount == 1`, so the database decides the race rather than a
+read-then-write. The `expires_at IS NOT NULL` arm is deliberate: a row whose
+bound was never recorded must not be spendable, so the predicate fails closed
+rather than treating a missing column as permanent authority.
+
+**Correction (`12584a1`).** The bound above was not actually enforced when this
+slice was first called VERIFIED. `ApprovalRequestRepository.add()` omitted
+`expires_at` and `consumed_at` when constructing the row, so every approval the
+gateway opened persisted with a NULL bound — and the original `consume`
+predicate accepted `expires_at IS NULL`. The aggregate was correct; the adapter
+dropped the field. Fixed in `12584a1`: `add()` persists both columns, the
+aggregate treats a missing bound as lapsed, and the conditional UPDATE refuses
+a NULL-bound row. Tests now pin the gateway path (`InvokeTool` → `add()` →
+reload), not just `save()`.
 
 The slice's most valuable finding was in its own migration. The backfill first
 shipped as `requested_at + DEFAULT_APPROVAL_TTL` on the raw driver value; a plain
@@ -397,18 +430,24 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **Next dependency-ready slice (P2, Phase 5).** The durable runtime is reachable
-   over HTTP, its audit trail is readable and tamper-evident, and approvals are
-   bounded and single-use. Re-read the Phase 5 section of `ROADMAP.md` before
-   choosing; do not invent a slice from the last run's summary alone.
-2. **Keep the PR #3 body measured, not remembered.** It has understated this
-   branch on every recent run. Recompute with `git diff --shortstat main...HEAD`
-   and `pytest --collect-only -o addopts=""` — the repo's `addopts = "-q"` hides
-   the count line, and a plain `pytest --collect-only -q | grep -c ::` returns 0.
-   It must also be refreshed for NEX-013 (new migration, new counts).
-3. **Consider tightening `expires_at` to NOT NULL (R16)** once no pre-NEX-013
-   writer can exist. Today NULL means "never expires", kept only for
-   rolling-deploy compatibility.
+1. **Observe CI on `12584a1` before promoting NEX-013 again.**
+   `gh api repos/anotherhale/bluestaq-notes/commits/12584a1/check-runs` — only a
+   green 4/4 makes NEX-013 VERIFIED. It was marked VERIFIED once while its bound
+   was inert; do not repeat that on local gates.
+2. **Next dependency-ready slice (P2, Phase 5).** The durable runtime is
+   reachable over HTTP, its audit trail is readable and tamper-evident, and
+   approvals are now actually bounded and single-use. Re-read the Phase 5 section
+   of `ROADMAP.md` before choosing; do not invent a slice from a run summary.
+3. **Keep the PR #3 body measured, not remembered.** It has understated this
+   branch on every recent run and now also predates the NEX-013 correction.
+   Recompute with `git diff --shortstat main HEAD` (two-dot: the clone is grafted,
+   `main...HEAD` has no merge base) and `pytest --collect-only -o addopts=""`.
+
+**Check the adapter, not just the aggregate (R18).** NEX-013 was VERIFIED while
+`ApprovalRequestRepository.add()` silently dropped the two columns the whole
+invariant depended on, because the expiry test used `save()`. When a slice adds
+a field that a security check reads, pin it through the write path production
+actually uses.
 
 **Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP, NEX-011
 and NEX-012 each reached TESTED on local runs and then VERIFIED only when CI went
