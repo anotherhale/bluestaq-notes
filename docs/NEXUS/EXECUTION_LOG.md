@@ -2751,3 +2751,34 @@ and the issue is the next run's job if the PR body alone is judged insufficient.
 3. Refresh PR #3's counters again at whatever head exists when that run starts; they go
    stale on every push.
 4. Never merge PR #3.
+
+### PR body refresh — completed (addendum, 2026-11-25T10:20:26Z)
+
+The refresh described above was still outstanding when the earlier checkpoint was written.
+It is now done, and the evidence is checkable:
+
+- `PATCH /repos/anotherhale/bluestaq-notes/pulls/3` returned `200`, and the API echoed a
+  body of **19,032 bytes** — the same size as the file sent, so nothing was truncated.
+- Counters came from the PR object at head `e09a819`: **110 files / 29,940 insertions /
+  10 deletions / 101 commits**. The body says 29,950 lines across 110 files, which is
+  insertions plus deletions, worded so the two figures cannot be read as one.
+- The body gained a sixth "defect found and fixed" entry for NEX-020, and the VERIFIED
+  count moved from eleven slices to twelve. The stale strings from the previous body
+  (`29,339`, `108 files`, `97 commits`, `729 tests`, `Eleven product`) were asserted
+  absent after the edit rather than assumed replaced.
+- The PR is still **open, draft and unmerged**. `mergeable_state` read `unstable`, which
+  means checks were pending, not that they failed; no CI result is claimed for the docs head.
+
+### Two tooling defects hit this run, and the pattern that works
+
+1. A `cd /tmp && python3 - <<'PY' ... PY` heredoc mangled the terminal, and the earlier
+   attempt at this same addendum did it again while appending to this log. Both times the
+   fix was the same: `git checkout --` the file, then write a `.py` script to disk and
+   execute it. Do not use heredocs in this environment for multi-line content.
+2. Rewriting `CHECKPOINT.json` with `json.dump(..., indent=2)` and the default
+   `ensure_ascii=True` escaped every em-dash to `\u2014`, and rebuilding the `validation`
+   block replaced the previous run's richer `evidence_basis` object. The diff showed it
+   (40 insertions / 32 deletions for a handful of field edits). Reverted, then re-applied
+   as **field-level edits only** with `ensure_ascii=False`: 18 changed lines, and the
+   `evidence_basis` object intact. Match the existing formatting before rewriting a file,
+   and check the diff size against the number of fields actually changed.

@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-22",
-  "timestamp": "2026-11-25T10:14:00Z",
+  "timestamp": "2026-11-25T10:22:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "460a26a",
+  "commit": "e09a819",
   "commit_note": "460a26a = NEX-020's code commit (fix(approvals): refuse a stale decision instead of re-granting authority), CI 4/4 at that SHA. c68f386 = the docs commit that first recorded NEX-020 as IMPLEMENTED + TESTED; the promotion docs commit carrying this file is c68f386's child — run `git log -1` to name it. A commit cannot contain its own SHA, so this field names the code head rather than pretending otherwise.",
   "project_phase": "Phase 2 complete; Phase 5 (durable runtime) — NEX-019 run write concurrency VERIFIED at 66e8cd6 (CI 4/4); NEX-020 approval-decision CAS VERIFIED at 460a26a (CI 4/4).",
   "active_task": null,
@@ -90,17 +90,17 @@
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "460a26a (docs child follows)",
-    "body_updated_at": "2026-11-25T09:49:41Z — NOT refreshed this run",
+    "head": "e09a819",
+    "body_updated_at": "2026-11-25T10:20:26Z",
     "counters": {
-      "additions": 29339,
+      "additions": 29940,
       "deletions": 10,
-      "files": 108,
-      "commits_ahead_of_main": 97,
-      "measured_at_commit": "f8115fd",
-      "source": "PR object at /repos/anotherhale/bluestaq-notes/pulls/3 — not the truncated per-file sums. STALE: does not include NEX-020's 5 files."
+      "files": 110,
+      "commits_ahead_of_main": 101,
+      "measured_at_commit": "e09a819",
+      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), not per-file sums. GitHub truncates diffs past ~20,000 lines: /pulls/3/files reports additions: 0 for every test file and /pulls/3/diff returns HTTP 406, so per-file sums and /compare both undercount badly (R21)."
     },
-    "note": "Body not refreshed this run. Next run must re-measure counters from the PR object at the then-current head before quoting any number (R21, R24).",
+    "note": "Body refreshed 2026-11-25T10:20:26Z (HTTP 200, 19,032 bytes accepted intact) at head e09a819. Next run must re-measure counters from the PR object at the then-current head before quoting any number (R21, R24).",
     "merge": "prohibited — must remain unmerged for human review"
   },
   "tracking_issue": {
