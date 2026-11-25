@@ -2345,6 +2345,14 @@ now **20**, with **zero** tasks remaining at TESTED.
 (re-measured this run; the prior note said `unstable`), counters
 28,409 / 10 / 106 / 89. Not merged. No merge attempted.
 
+**CI on the docs commit:** `4ff4f62` → **4/4 `completed/success`** (Backend ×2,
+Frontend ×2), every run reporting `head_sha` equal to `4ff4f62`, polled
+2026-11-25T09:05Z. This matters because a bare `ruff format --check` formats
+Python inside Markdown fences, and this commit touches four files in
+`docs/NEXUS/`. The local gate was run bare and passed; CI independently agrees.
+The commit carrying *this paragraph* is a later docs commit and will read
+`completed/cancelled` — superseded, not verified, and not a failure.
+
 **Next action:** read the Phase-5 section of `ROADMAP.md` and the open items in
 `BACKLOG.md`; pick the highest-value slice whose dependencies are all VERIFIED.
 Every Phase-2 and Phase-5 dependency barrier is now cleared, so selection is on

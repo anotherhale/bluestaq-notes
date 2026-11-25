@@ -3,8 +3,8 @@
   "run_id": "NEX-2026-11-25-19",
   "timestamp": "2026-11-25T08:50:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "fa387a9",
-  "commit_note": "fa387a9 is the branch head this checkpoint was reconciled against; the docs commit that carries this checkpoint file comes immediately after it, so read `commit` as \"head observed\", and `git log -1` for the exact docs commit.",
+  "commit": "4ff4f62",
+  "commit_note": "Docs commit 4ff4f62 pushed and verified against origin/feature/agentic-enterprise-platform (local and remote SHAs identical). The docs commit carrying this line is its child.",
   "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4) and NEX-017 VERIFIED at 990557d (CI 4/4, observed 2026-11-25T08:56Z). Three tasks remain TESTED-but-unverified: NEX-003, NEX-006 and their SHAs must be re-polled before promotion.",
   "active_task": null,
   "task_statuses": {
@@ -58,7 +58,7 @@
     "mutation_check": "The two new tests were observed FAILING before the fix (resolve returned 200 for a suspended delegator's token) and passing after.",
     "migration_chain": "no migration added by NEX-017; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": true,
+    "ci_observed": "4ff4f62 4/4 completed/success, head_sha confirmed on all four runs",
     "ci_note": "990557d: 4/4 completed/success, all four check runs reporting head_sha 990557de5d4daaa551d6613d41c0880dd34f8c60 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, each seen twice by the check-runs API). Verified by reading head_sha, not by assuming the commit association.",
     "verified_at_commit": "990557d",
     "verified_by_run": "NEX-2026-11-25-18",
@@ -71,9 +71,15 @@
       "descendant_ci": "fa387a9 and ca15eb1 each observed 4/4 completed/success (Backend ruff/mypy/pytest/migrations + Frontend typecheck/lint/test/build), every run reporting head_sha equal to the commit polled. Because both product commits are ancestors, that green run executed their code and their tests.",
       "local_rerun": "239 passed in 2.56s on 2026-11-25 (run NEX-2026-11-25-19) over tests/agent/test_agent_identity.py, tests/agent/test_delegation.py, tests/domain/test_tenant_access.py, tests/authentication/test_tenant_access_bearer.py, tests/authentication/test_login_use_cases.py, tests/api/test_agents_api.py.",
       "criterion_coverage": "Each NEX-003 acceptance criterion maps to a direct test against the real domain modules (no fake): principal registered with owner+capabilities (test_owner_is_taken_from_the_argument_not_the_body, test_capabilities_are_a_ceiling_not_a_grant); attenuation child-subset-of-parent incl. 3-hop chains (test_no_pair_of_subsets_ever_grows, test_authority_never_grows_across_three_hops); over-broad request denial (test_excess_capability_raises_rather_than_being_trimmed); revocation immediacy (test_a_revoked_token_fails_closed_even_before_expiry, test_a_revoked_delegation_fails_closed); self-approval denial (test_an_agent_cannot_approve_its_own_action, test_an_agent_cannot_revoke_its_own_approval). NEX-006: three identity paths converge on one seam (test_login_use_cases, test_tenant_access_bearer, ResolveSession) plus the approve-then-effect path for agent tokens in tests/api/test_agents_api.py."
+    },
+    "gates_this_run": {
+      "ruff_format_check": "pass - 196 files already formatted, run bare so docs fenced python was included",
+      "ruff_check": "pass - All checks passed",
+      "mypy": "pass - no issues in 98 source files",
+      "pytest_acceptance_set": "239 passed in 2.56s (NEX-003 / NEX-006 acceptance set)"
     }
   },
-  "uncommitted_work": "none; tree clean at fa387a9 plus this checkpoint update",
+  "uncommitted_work": "none - tree clean after commit 4ff4f62",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -155,7 +161,7 @@
   "next_task": "Select the next dependency-ready Phase-5 slice from ROADMAP.md. NEX-003 and NEX-006 are now VERIFIED, which unblocks agent-identity dependent work.",
   "next_action": "1. Read the current Phase-5 section of ROADMAP.md and the unchecked items in BACKLOG.md. 2. Pick the highest-value dependency-ready slice whose dependencies are all VERIFIED. 3. Implement one complete vertical slice with a real-path end-to-end test. Never merge PR #3.",
   "recovery_instructions": "Read STATE.md and BACKLOG.md. VERIFIED now includes NEX-003 and NEX-006. Those two rest on descendant CI at fa387a9/ca15eb1 plus a 239-test local rerun; see validation.evidence_basis before re-litigating them. PR #3 is open, draft and must stay unmerged. The PR body is current at fa387a9.",
-  "ci_status": "fa387a9: 4/4 completed/success (head_sha confirmed on all four runs, run NEX-2026-11-25-19). ca15eb1: 4/4 completed/success - corrected this run; the previous checkpoint wrongly said ca15eb1 was 'not claimed green', but it was in fact observed 4/4 success. 990557d: 4/4 completed/success. b9b7207: 4/4 completed/success. e5f1bb4 and 4c5a6ef: no check runs of their own; covered by descendants.",
+  "ci_status": "4ff4f62: 4/4 completed/success (Backend x2, Frontend x2), every run reporting head_sha 4ff4f62; observed 2026-11-25T09:05Z via commits/{sha}/check-runs. fa387a9: 4/4 completed/success (08:52Z). ca15eb1: 4/4 completed/success. 990557d: 4/4 completed/success. b9b7207: 4/4 completed/success. c18bac7: 4/4 completed/success - corrected this run, the backlog had said CI had not run on it. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006): no check runs of their own; their CI evidence is descendant-CI, both confirmed ancestors of 4ff4f62 with git merge-base --is-ancestor. A docs commit pushed after this observation reads completed/cancelled; that is neither a pass nor a failure.",
   "notes_on_pr_body": "Body refreshed at 2026-11-25T08:46:30Z; counters match the PR object at fa387a9 (106 files / 28,409 additions / 10 deletions / 89 commits / 720 tests collected / 10 migrations / 11 routers).",
   "validation_status": {
     "gates": "local at fa387a9: ruff format --check clean, ruff check clean; pytest 239 passed on the NEX-003/NEX-006 acceptance set.",
@@ -166,7 +172,7 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "fa387a9",
+    "head": "4ff4f62",
     "body_updated": "2026-11-25T08:46:30Z",
     "body_metrics_verified": true,
     "merge": "prohibited - must remain unmerged for human review",
