@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-37",
-  "timestamp": "2026-11-25T18:58Z",
+  "timestamp": "2026-11-25T19:10Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "5c0575b",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-037 all VERIFIED. NEX-036 audited the decisioning path's production caller; the fail-closed premise held, but RecommendApprovalDecision produced advice for requests already settled, fixed with a 409 guard. NEX-037 closes R34: the per-process withholding count is now an aggregate at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty by default and therefore denies everyone.",
@@ -31,7 +31,7 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z",
     "NEX-025": "VERIFIED - 4/4 completed/success at d481bd0, all head_sha equal to d481bd0, polled 2026-11-25T13:18Z",
@@ -174,8 +174,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -274,8 +274,8 @@
     }
   ],
   "next_task": "NEX-038",
-  "next_action": "NEX-038: NEX-037 is now VERIFIED end to end and fully delivered - CI 4/4 green at 5c0575b, PR #3 body PATCHed, issue #2 comment 7171861451 posted. Do not re-poll or re-post any of it. Next implementation slice: the first real DecisionProvider adapter. NEX-035's conformance suite exists to police it and already found four real defects in the identity seam, so a new adapter has something to fail against; make_decision_evaluator() is still a stub. Verify any premise against the code before acting - the last five next_action fields each needed correcting.",
-  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit for NEX-037 is 5c0575b on feature/agentic-enterprise-platform; docs commits 7ac893c and above follow it, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-037 is fully CI-verified (4/4 green at 5c0575b). NEX-037 is the first slice in this programme to add an allowlist-gated platform-operations route: read the R34 entry and the NEX-037 section of STATE.md before changing any access rule on /api/v1/ops.",
+  "next_action": "NEX-038 (unstarted): the first real DecisionProvider adapter. make_decision_evaluator() is still a stub; NEX-035's conformance suite exists to police the adapter and has already found four real defects in the identity seam. Verify the premise against the code before acting. NEX-037 needs no further work: 5c0575b is CI-green 4/4, PR #3 body contains NEX-037, issue #2 comment 7171861451 is posted - do not re-poll or re-post. Secondary: decide whether branch nexus037-duplicate-local (33620bf, 502 lines, a superseded token-bearer design of the same endpoint) contributes its three doc sections (docs/API.md, docs/SECURITY.md, .env.example) to the existing allowlist-based route, or is deleted as superseded. Do not delete it without that decision.",
+  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. FIRST run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - a local origin/* ref is not evidence about the remote, and a stale one caused the re-entry of run NEX-2026-11-25-37 to re-implement an already-verified slice. Implementation commit for NEX-037 is 5c0575b on feature/agentic-enterprise-platform; docs commits 7ac893c and above follow it, so the true head is the ls-remote answer, never this field. NEX-037 is fully CI-verified (4/4 green at 5c0575b) and fully delivered. NEX-037 is the first slice in this programme to add an allowlist-gated platform-operations route: read the R34 entry and the NEX-037 section of STATE.md before changing any access rule on /api/v1/ops. A superseded duplicate of NEX-037 is preserved on branch nexus037-duplicate-local (33620bf) - read the second-invocation entry in EXECUTION_LOG.md before deleting or merging it.",
   "ci_status": {
     "product_slice_sha": "5c0575b",
     "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 5c0575b, every check run reporting head_sha 5c0575b5df0b2aa30e1d4a28f622ac327871f902 (Backend id 139441878322, Frontend id 139441878023, plus the duplicate pair 139441830759 Backend / 139441831292 Frontend, one pair per push and pull_request event), polled 2026-11-25T18:57Z.",

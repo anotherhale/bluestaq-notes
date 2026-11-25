@@ -4745,3 +4745,78 @@ largest dependency-ready unlock — NEX-035's conformance suite now exists to po
 - **R36 opened** — the ops allowlist is static, unauditable, and has no expiry.
 - **R24 recurred once more**, caught by reconciliation: a prior task's test count was recorded
   without a measured baseline. Caught and annotated rather than propagated.
+
+---
+
+## Run `NEX-2026-11-25-37` (second invocation) — the work was already done, and a stale ref said it wasn't
+
+**Run ID** NEX-2026-11-25-37 (re-entry) · **Branch** `feature/agentic-enterprise-platform`
+**Start** `8f05a5b` (local, stale) · **End** `f4388fc` (unchanged) · **Outcome** no source change;
+reconciliation only.
+
+### What happened
+
+This invocation was handed a briefing that said NEX-037 was in progress with an uncommitted
+implementation and nothing pushed. I believed it, built the slice, and committed it — then the
+push was rejected as non-fast-forward. The remote was at `f4388fc`; my local
+`origin/feature/agentic-enterprise-platform` ref was stuck at `8f05a5b`.
+
+The remote already contained the whole task:
+
+| Commit | Content |
+| --- | --- |
+| `5c0575b` | The NEX-037 implementation — `GetWithholdingReport`, `GET /api/v1/ops/withholding-report`, `OPS_OPERATOR_USER_IDS` gate |
+| `7ac893c` | Promotion: R34 closed, R36 opened, NEX-038 planned |
+| `ff10f21` | CI green recorded |
+| `dedd886` | Delivery cleared — PR #3 body and issue #2 comment |
+| `f4388fc` | Note that the true head comes from `ls-remote`, not a checkpoint field |
+
+So a completed, CI-verified, delivered slice was invisible to me because of one stale ref, and I
+spent most of the window re-implementing it.
+
+### The duplicate, and where it went
+
+My version was a different design, not a worse copy of the same one: a bearer
+`OPERATIONS_API_TOKEN` with 404/401/200 failure modes, plus `docs/API.md`, `docs/SECURITY.md`
+and `.env.example` entries. The remote's design — an operator allowlist returning **404** to
+non-operators rather than 403 — is the better one and is already verified. Its reasoning is in
+the router docstring and it is right: 403 would confirm the endpoint exists to an ordinary user
+probing the surface.
+
+The duplicate commit is preserved as branch `nexus037-duplicate-local` (`33620bf`), not deleted,
+because it holds 502 lines of finished, passing work and three documentation sections the
+remote slice does not have. Whether any of it is worth porting is a decision for a run with
+time to judge it; discarding it here would have been a silent loss.
+
+### The lesson, stated so it does not recur
+
+**A local `origin/*` ref is not evidence about the remote.** This is the second recorded
+occurrence, and it cost nearly a full run. The order must be: `git ls-remote origin
+refs/heads/<branch>` **first**, compare to `git rev-parse HEAD`, and only then decide whether
+there is work to do. A briefing — including one written by a previous NEXUS run — is a claim
+about the past, and this one was wrong about the present. `git fetch` is not enough either: it
+exited 0 here without moving the tracking ref.
+
+### Verification performed on the real tree
+
+- `pytest tests/api/test_ops_withholding_api.py tests/application/test_withholding_report.py`
+  → **7 passed**. The remote slice's own tests are green in this environment.
+- `git status --porcelain` → empty. Tree clean at `f4388fc`.
+- PR #3: `open`, `draft: true`, `merged: false`, head `f4388fc`, body **contains** NEX-037.
+- Issue #2: 20 comments, newest `7171861451` is the NEX-037 report.
+
+No source change was needed or made, so this run pushes nothing. **No CI claim is made here** —
+`f4388fc` is a docs-only commit and `5c0575b`'s green run is already recorded above by the prior
+invocation.
+
+### Next action
+
+**NEX-038, unchanged and unstarted:** the first real `DecisionProvider` adapter.
+`make_decision_evaluator()` is still a stub; NEX-035's conformance suite exists to police the
+adapter and has already caught four real defects in the identity seam. Verify the premise
+against the code before acting.
+
+Second, when there is time: decide whether `nexus037-duplicate-local` contributes the three
+missing documentation sections (`docs/API.md`, `docs/SECURITY.md`, `.env.example`) to the
+existing allowlist-based endpoint, or is deleted as superseded. Deleting it without that
+decision loses work; porting it blindly would document an endpoint shape that does not exist.

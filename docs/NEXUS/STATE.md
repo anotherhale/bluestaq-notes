@@ -1152,3 +1152,30 @@ suite is not evidence; R9/R10 exist because that conflation happened before.
    environment variable with no expiry and no record of who read the totals. Fold it into the
    scoped-capability work rather than patching it ad hoc.
 
+## Next best actions (second invocation of run `NEX-2026-11-25-37`, superseding item 1 above)
+
+Item 1 of the list above is now **stale and must not be acted on**. It said PR #3 and issue #2
+were owed a NEX-037 report. They are not: a later run in the same run-ID cleared both, verified
+here against the live API — PR #3 body contains NEX-037, and issue #2's newest comment is
+`7171861451`, the NEX-037 report. Do not re-post either.
+
+1. **Start NEX-038: the first real `DecisionProvider` adapter.** Unchanged, unstarted, and the
+   largest dependency-ready unlock. `make_decision_evaluator()` is still a stub. NEX-035's
+   conformance suite exists to police the adapter and has already found four real defects in
+   the identity seam, so a new adapter has something to fail against. Verify the premise in the
+   code before acting — several recent `next_action` fields needed correcting.
+2. **Resolve the duplicate before it rots.** Branch `nexus037-duplicate-local` (`33620bf`) holds
+   a superseded, different-design implementation of the same withholding endpoint — bearer
+   `OPERATIONS_API_TOKEN` instead of the shipped operator allowlist — plus three documentation
+   sections the shipped slice lacks (`docs/API.md`, `docs/SECURITY.md`, `.env.example`). Decide:
+   port the documentation onto the allowlist design, or delete the branch as superseded. The
+   shipped design is the better one; the documentation gap is real. Do not merge it as-is — it
+   would document an endpoint shape that does not exist.
+3. **Before any of that: read the remote, not a local ref.** `git ls-remote origin
+   refs/heads/feature/agentic-enterprise-platform` is the only trustworthy answer to "what is
+   the branch head". A stale local `origin/*` ref caused the second invocation of this run to
+   re-implement an already-verified slice and burn most of its window. This is the second
+   recorded occurrence of that failure.
+
+R36 remains open as described in item 4 above; it is unaffected by this run.
+
