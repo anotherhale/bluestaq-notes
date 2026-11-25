@@ -11,7 +11,7 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `ad21e5b` — the clone started on `main` at `d6f92d0`; `git ls-remote` showed the authorized branch at `ad21e5b`, which was fetched and checked out before any gate was trusted. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
 | Head commit (run end) | the commit carrying this line — `feat(agent): reject a terminal verdict with no outcome seal` (NEX-018), plus its docs commit. Re-read `git log -1`; do not assume. |
-| Last CI result | **No CI result has been read for the NEX-018 commit.** Green on `4ff4f62`, 4/4 `completed/success`, every run reporting `head_sha` `4ff4f62`, polled 2026-11-25T09:05Z — that is the previous run's evidence and does not cover this run's code change. Locally this run **on the feature branch**: `ruff format --check` 197 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` 722 passed / 4 skipped. |
+| Last CI result | **4/4 `completed/success` at `2b3beb7`**, polled 2026-11-25T09:28Z (Backend ×2, Frontend ×2). NEX-018's own commit `789d78a` has 0 check runs — the docs commit superseded it and the concurrency group cancelled that run; `789d78a` is an ancestor of the green `2b3beb7`, so this is descendant-CI. Previous evidence: Green on `4ff4f62`, 4/4 `completed/success`, every run reporting `head_sha` `4ff4f62`, polled 2026-11-25T09:05Z — that is the previous run's evidence and does not cover this run's code change. Locally this run **on the feature branch**: `ruff format --check` 197 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` 722 passed / 4 skipped. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Head `ad21e5b` locally at run start; the NEX-018 commits are newer and not yet reflected in the body. Body last **refreshed 2026-11-25T08:46:30Z** at that head: **106 files, 28,409 insertions, 10 deletions, 89 commits**, 720 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at `fa387a9`. |
 | CI status | **NEX-018 commit: not yet polled.** `fa387a9`: 4/4 `completed/success`; `ca15eb1`: 4/4 `completed/success`; `990557d`: 4/4; `b9b7207`: 4/4. `e5f1bb4` (NEX-003) and `4c5a6ef` (NEX-006) have **no check runs of their own** — they are ancestors of the green heads above. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
@@ -33,10 +33,12 @@ Fix: a non-`started` entry carrying no seal is now a break. Only `started` may
 honestly lack one, because its outcome is not known yet. `_STARTED_STATUS` is a
 literal, not an import, to avoid a cycle with `domain.agent.tools`.
 
-Status: **IMPLEMENTED + TESTED locally. Not VERIFIED** — no CI result has been
-read for the commit. Six domain tests in `tests/agent/test_audit_chain.py`,
-including the honest unfinished-`started` case, so the fix cannot be "pass" by
-refusing everything.
+Status: **VERIFIED** on descendant-CI: `2b3beb7` is 4/4 `completed/success` and
+contains the fix commit `789d78a` as an ancestor. `789d78a` itself has no check
+runs — the following docs commit cancelled its run in the concurrency group, so
+the evidence is labelled descendant-CI rather than "green at this SHA". Six domain
+tests in `tests/agent/test_audit_chain.py`, including the honest unfinished-
+`started` case, so the fix cannot "pass" by refusing everything.
 
 ## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable
 

@@ -1010,7 +1010,7 @@ person's agent retained live authority over the delegator's resources.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P1 (security: audit integrity) |
-| Status | **IMPLEMENTED + TESTED locally** — awaiting commit, push and CI observation |
+| Status | **VERIFIED** — descendant-CI at `2b3beb7` (4/4 `completed/success`), polled 2026-11-25T09:28Z |
 | Dependencies | NEX-012 (audit chain), NEX-005 (gateway write path) |
 
 **Objective:** close the cheapest forgery against the audit chain. NEX-012 sealed
@@ -1044,9 +1044,15 @@ the test exercised a weaker attack than the one the control must survive.
 
 **Gates (local, on the feature branch):** `ruff format --check` clean (197
 files), `ruff check` clean, `mypy` clean (98 sources), full `pytest` 722 passed /
-4 skipped. CI not yet observed — do not promote past TESTED until 4/4
-`completed/success` is seen on this commit.
+4 skipped.
 
-**Next action:** observe CI on the commit that carries this fix; promote to
-VERIFIED only on 4/4 `completed/success`.
+**CI (descendant-CI, stated as such):** the fix commit `789d78a` has **0 check
+runs of its own** — the docs commit `2b3beb7` was pushed immediately after it and
+the CI concurrency group cancelled the superseded run. `2b3beb7` is **4/4
+`completed/success`** (Backend ×2, Frontend ×2), polled 2026-11-25T09:28Z. Because
+`789d78a` is an ancestor of `2b3beb7`, that green run built a tree containing the
+fix and ran the new tests. This is not a "green at this exact SHA" claim for
+`789d78a`; it is descendant-CI, and it is labelled that way deliberately.
+
+**Next action:** done — VERIFIED on descendant-CI at `2b3beb7`.
 

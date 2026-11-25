@@ -3,8 +3,8 @@
   "run_id": "NEX-2026-11-25-20",
   "timestamp": "2026-11-25T09:22:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "PENDING - the commit carrying this checkpoint",
-  "commit_note": "The run started with the clone on main at d6f92d0. git ls-remote showed the authorized branch at ad21e5b; it was fetched and checked out and the working edits carried across cleanly. All gates were re-run on the feature branch after the checkout, because a green run on main says nothing about the branch that will be pushed.",
+  "commit": "2b3beb7",
+  "commit_note": "2b3beb7 pushed and verified against origin/feature/agentic-enterprise-platform (local and remote SHAs identical). Its parent 789d78a carries the NEX-018 code fix.",
   "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 VERIFIED at b9b7207 (CI 4/4) and NEX-017 VERIFIED at 990557d (CI 4/4). NEX-018 IMPLEMENTED + TESTED locally, awaiting CI observation.",
   "active_task": null,
   "task_statuses": {
@@ -28,7 +28,7 @@
     "NEX-015": "VERIFIED",
     "NEX-016": "VERIFIED",
     "NEX-017": "VERIFIED",
-    "NEX-018": "TESTED"
+    "NEX-018": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-001",
@@ -50,7 +50,8 @@
     "NEX-016",
     "NEX-017",
     "NEX-003",
-    "NEX-006"
+    "NEX-006",
+    "NEX-018"
   ],
   "validation": {
     "pytest_full": "722 passed, 4 skipped, exit 0 - run bare on the feature branch this session (726 collected).",
@@ -62,14 +63,15 @@
     "architecture": "layering test untouched by this slice; audit_chain.py stays pure and framework-free",
     "migration_chain": "no migration added by NEX-018; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NONE for this run's commit",
-    "ci_note": "No CI result has been read for the commit carrying NEX-018. The most recent observed green is 4ff4f62, 4/4 completed/success, head_sha confirmed on all four runs at 2026-11-25T09:05Z - that run predates this code change and does not cover it.",
+    "ci_observed": "2b3beb7: 4/4 completed/success, polled 2026-11-25T09:28Z",
+    "ci_note": "NEX-018 rests on DESCENDANT-CI, not on check runs at its own commit. 789d78a has total_count 0 (the docs commit 2b3beb7 superseded it and the CI concurrency group cancelled that run). 2b3beb7 is 4/4 completed/success with all four check runs reporting head_sha 2b3beb7, polled 2026-11-25T09:28Z. git merge-base --is-ancestor confirms 789d78a is an ancestor of 2b3beb7, so the green run built a tree containing the fix and executed its tests. Stated this way rather than as 'CI green on 789d78a', which would be false.",
     "verified_at_commit": "990557d (NEX-017, previous run)",
     "verified_by_run": "NEX-2026-11-25-18",
     "evidence_basis": {
-      "note": "NEX-018 is NOT verified. It is IMPLEMENTED + TESTED. Verifying requires 4/4 completed/success observed with head_sha equal to the commit that carries it.",
-      "nex_018_commit": "the commit carrying this checkpoint - re-read git log -1",
-      "criterion_coverage": "Each rule is pinned by a test against the real ToolInvocation aggregate: a genuine chain verifies; an honest unfinished 'started' entry still verifies (so the fix cannot pass by refusing everything); the exact forgery - flip status, null outcome_hash and completed_at - fails; the same forgery behind a valid link fails at the right sequence; the pre-existing completed_at-only guard still fires; a stale seal after a status edit still fails."
+      "note": "NEX-018 is VERIFIED on descendant-CI. See validation.ci_note for the exact basis and why a plain 'green at this SHA' claim would be wrong.",
+      "nex_018_commit": "789d78a",
+      "criterion_coverage": "Each rule is pinned by a test against the real ToolInvocation aggregate: a genuine chain verifies; an honest unfinished 'started' entry still verifies (so the fix cannot pass by refusing everything); the exact forgery - flip status, null outcome_hash and completed_at - fails; the same forgery behind a valid link fails at the right sequence; the pre-existing completed_at-only guard still fires; a stale seal after a status edit still fails.",
+      "descendant_ci": "2b3beb7 4/4 completed/success; 789d78a confirmed ancestor via git merge-base --is-ancestor"
     },
     "gates_this_run": {
       "ruff_format_check": "pass - 197 files already formatted, run bare",
@@ -163,15 +165,15 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Poll CI for the commit carrying NEX-018 and promote it to VERIFIED only on 4/4 completed/success reporting that head_sha. Then select the next dependency-ready Phase-5 slice from ROADMAP.md.",
-  "next_action": "1. GET /repos/anotherhale/bluestaq-notes/commits/{sha}/check-runs and confirm head_sha matches the NEX-018 commit. 2. Promote NEX-018 to VERIFIED in BACKLOG.md, STATE.md and this checkpoint only on 4/4 completed/success. 3. Pick the next Phase-5 slice. Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-018 is the newest task: IMPLEMENTED + TESTED, not VERIFIED. Its fix is in domain/agent/audit_chain.py with tests in tests/agent/test_audit_chain.py. Before promoting it, poll commits/{sha}/check-runs for the commit carrying it and require 4/4 completed/success with a matching head_sha. PR #3 is open, draft and must stay unmerged. Do not use heredocs in this environment (R12).",
-  "ci_status": "NEX-018 commit: NOT POLLED. Last observed green: 4ff4f62 4/4 completed/success (head_sha confirmed) at 2026-11-25T09:05Z; fa387a9 4/4; ca15eb1 4/4; 990557d 4/4; b9b7207 4/4; c18bac7 4/4. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006) have no check runs of their own; their evidence is descendant-CI. A docs commit pushed after another reads completed/cancelled, which is neither a pass nor a failure.",
+  "next_task": "Select the next dependency-ready Phase-5 slice from ROADMAP.md. All Phase-2 and Phase-5 dependency barriers are cleared.",
+  "next_action": "1. Refresh PR #3's body at the current head: its counters were last measured at fa387a9 and are now stale by several commits, and the body should cite the verified SHA. 2. Pick the next Phase-5 slice. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-018 is VERIFIED on descendant-CI at 2b3beb7; the code fix is in domain/agent/audit_chain.py with 6 tests in tests/agent/test_audit_chain.py. PR #3 is open, draft and must stay unmerged. Its body is stale by a few commits and needs refreshing. Do not use heredocs in this environment (R12) - they corrupt their own command text.",
+  "ci_status": "2b3beb7: 4/4 completed/success (Backend x2, Frontend x2), every run reporting head_sha 2b3beb7, polled 2026-11-25T09:28Z. 789d78a (NEX-018 code): 0 check runs of its own - superseded by the docs commit; descendant-CI applies. Earlier: 4ff4f62 4/4; fa387a9 4/4; ca15eb1 4/4; 990557d 4/4; b9b7207 4/4; c18bac7 4/4. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006) likewise have no runs of their own and rest on descendant-CI. A docs commit followed by another push reads completed/cancelled, which is neither a pass nor a failure.",
   "notes_on_pr_body": "Body refreshed at 2026-11-25T08:46:30Z; counters match the PR object at fa387a9 (106 files / 28,409 additions / 10 deletions / 89 commits / 720 tests collected / 10 migrations / 11 routers).",
   "validation_status": {
     "gates": "local on the feature branch: ruff format --check clean (197 files), ruff check clean, mypy clean (98 sources), pytest 722 passed / 4 skipped.",
-    "ci": "not observed for the NEX-018 commit",
-    "note": "IMPLEMENTED + TESTED is not VERIFIED. Do not promote without a polled 4/4."
+    "ci": "2b3beb7: 4/4 completed/success, polled 2026-11-25T09:28Z",
+    "note": "NEX-018 VERIFIED on descendant-CI at 2b3beb7; basis recorded in validation.ci_note."
   },
   "pr_status": {
     "number": 3,
@@ -204,10 +206,9 @@
     "NEX-016",
     "NEX-017",
     "NEX-003",
-    "NEX-006"
+    "NEX-006",
+    "NEX-018"
   ],
-  "in_progress_tasks": {
-    "NEX-018": "TESTED"
-  },
+  "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }
