@@ -286,6 +286,22 @@ class AgentRun:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     last_error: str | None = None
+    # The version this aggregate was last read from or written to storage at.
+    # ``version`` alone cannot serve that role: several mutations can happen
+    # between two saves, so ``version - 1`` is not the stored version. Persistence
+    # needs the exact stored value to express a compare-and-set.
+    persisted_version: int = field(default=1, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.persisted_version = self.version
+
+    def mark_persisted(self) -> None:
+        """Record that ``version`` is now what storage holds.
+
+        Called by the repository after a successful write, so the next write's
+        compare-and-set targets the row it actually left behind.
+        """
+        self.persisted_version = self.version
 
     @classmethod
     def plan(

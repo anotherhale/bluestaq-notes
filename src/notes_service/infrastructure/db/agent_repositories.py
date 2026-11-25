@@ -45,6 +45,7 @@ from notes_service.domain.agent.value_objects import (
     RuntimeIdentity,
     TokenAudience,
 )
+from notes_service.domain.errors import VersionConflict
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import (
     AgentRow,
@@ -562,10 +563,10 @@ class SqlAlchemyToolInvocationRepository:
 class SqlAlchemyAgentRunRepository:
     """SQLAlchemy adapter for durable agent runs.
 
-    A run and its steps are written as one aggregate. ``save`` rewrites the step
-    rows rather than diffing them, which keeps a single code path for "the
-    in-memory aggregate is the truth" and avoids the case where a step's status
-    moved in memory but its row did not.
+    A run and its steps are written as one aggregate. ``save`` updates the step
+    rows in place and inserts any that are new, and it refuses a write whose
+    expected version no longer matches the row, so the in-memory aggregate is the
+    truth only for the version it was loaded at.
     """
 
     def __init__(self, session: Session) -> None:
@@ -575,18 +576,47 @@ class SqlAlchemyAgentRunRepository:
         self._session.add(_run_row(run))
         for step in run.ordered_steps:
             self._session.add(_step_row(run.id, step))
+        run.mark_persisted()
 
     def save(self, run: AgentRun) -> None:
+        """Persist the aggregate, refusing to overwrite a newer stored version.
+
+        The compare-and-set is one ``UPDATE ... WHERE version = :expected``, as in
+        :class:`~notes_service.infrastructure.db.repositories.SqlAlchemyNoteRepository`.
+        Without it two writers that loaded the same run both succeed, and the
+        loser's commit erases the winner's step progress — which for a run can
+        turn a settled step back into ``pending`` and make a later resume
+        re-execute an already-applied effect. The loser must instead reload.
+        """
         row = self._session.get(AgentRunRow, _as_uuid(run.id))
         if row is None:
             self.add(run)
+            run.mark_persisted()
             return
-        row.status = run.status.value
-        row.version = run.version
-        row.last_error = run.last_error
-        row.updated_at = run.updated_at
-        row.started_at = run.started_at
-        row.finished_at = run.finished_at
+        expected_version = run.persisted_version
+        result = self._session.execute(
+            update(AgentRunRow)
+            .where(
+                AgentRunRow.id == _as_uuid(run.id),
+                AgentRunRow.version == expected_version,
+            )
+            .values(
+                status=run.status.value,
+                version=run.version,
+                last_error=run.last_error,
+                updated_at=run.updated_at,
+                started_at=run.started_at,
+                finished_at=run.finished_at,
+            )
+        )
+        if cast(CursorResult[Any], result).rowcount != 1:
+            current = self._session.execute(
+                select(AgentRunRow.version).where(AgentRunRow.id == _as_uuid(run.id))
+            ).scalar_one_or_none()
+            raise VersionConflict(
+                expected=int(expected_version),
+                actual=int(current) if current is not None else int(expected_version),
+            )
         existing = {
             step_row.id: step_row
             for step_row in self._session.execute(
@@ -604,6 +634,7 @@ class SqlAlchemyAgentRunRepository:
             step_row.outcome = step.outcome
             step_row.started_at = step.started_at
             step_row.completed_at = step.completed_at
+        run.mark_persisted()
 
     def get(self, run_id: AgentRunId) -> AgentRun | None:
         row = self._session.get(AgentRunRow, _as_uuid(run_id))
