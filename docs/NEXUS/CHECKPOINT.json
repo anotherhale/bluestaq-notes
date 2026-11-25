@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-12",
-  "timestamp": "2026-11-25T05:53:30Z",
+  "run_id": "NEX-2026-11-25-13",
+  "timestamp": "2026-11-25T07:00:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "b50565f1b09bd1e967fa72192a857e2f6eb7eace",
-  "commit_note": "3aade7c contains NEX-012 (tamper-evident audit chain). Its gates are verified locally only; CI has not been observed for it. The docs commit carrying this file is its child.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 audit trail VERIFIED (f50a78d); NEX-012 audit chain VERIFIED (3aade7c, CI 4/4 completed/success).",
+  "commit": "a50a9a0",
+  "commit_note": "a50a9a0 is the NEX-013 product commit; the quality gates recorded here were verified on its exact content. The docs commit carrying this file is its child and cannot name itself. CI has not been observed for a50a9a0, so NEX-013 stays TESTED until it is.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime: NEX-009 slice 1 VERIFIED (0e74d4f); NEX-009-HTTP VERIFIED (e817d04); NEX-011 audit trail VERIFIED (f50a78d); NEX-012 audit chain VERIFIED (3aade7c, CI 4/4); NEX-013 approval validity TESTED (local gates only, CI unobserved).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -22,7 +22,8 @@
     "NEX-009": "VERIFIED",
     "NEX-009-HTTP": "TESTED",
     "NEX-011": "VERIFIED",
-    "NEX-012": "VERIFIED"
+    "NEX-012": "VERIFIED",
+    "NEX-013": "TESTED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -39,23 +40,24 @@
     "NEX-009",
     "NEX-009-HTTP",
     "NEX-011",
-    "NEX-012"
+    "NEX-012",
+    "NEX-013"
   ],
   "validation": {
-    "pytest_full": "681 collected, 677 passed, 4 skipped (local, run bare)",
-    "ruff_format": "clean (bare, repo-wide incl. docs Markdown)",
+    "pytest_full": "684 collected, 680 passed, 4 skipped (local, run bare)",
+    "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 193 files",
     "ruff_check": "clean",
     "mypy": "clean (98 source files)",
-    "migration_chain": "new head b2e5c81f4a07 (chain_tool_invocation_audit), down_revision 8a4c2e1f9b73",
+    "migration_chain": "new head d4c8e2a71f05 (bound_approval_validity_and_single_use), down_revision b2e5c81f4a07; upgrade -> downgrade -1 -> upgrade verified, and the backfill verified against a NON-EMPTY table",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": true,
-    "ci_note": "NEX-012 verified: commit 3aade7c returned 4/4 completed/success (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, both on push and pull_request), observed 2026-11-25T05:49Z. Fourth slice to reach VERIFIED on observed CI.",
+    "ci_observed": false,
+    "ci_note": "Last observed green CI is 3aade7c (NEX-012): 4/4 completed/success, observed 2026-11-25T05:49Z. CI has NOT been observed for the NEX-013 commit, so NEX-013 is TESTED only.",
     "verified_at_commit": "3aade7c",
     "verified_by_run": "NEX-2026-11-25-12",
-    "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote on these."
+    "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote NEX-013 on these."
   },
-  "uncommitted_work": "none; docs commit follows",
-  "pr_state": "PR #3 open, draft, unmerged (human review required). Body refreshed 2026-11-25T05:51Z with recomputed figures: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers / 6,538 test lines, and the CI claim moved from f50a78d to 3aade7c (4/4 completed/success). Recompute these on every run; this body has understated the branch repeatedly.",
+  "uncommitted_work": "none; the product commit precedes the docs commit",
+  "pr_state": "PR #3 open, draft, unmerged (human review required). Body last refreshed 2026-11-25T05:51Z and now STALE: it predates NEX-013, so its migration count (6) and file/insertion figures no longer match the branch. Recompute git diff --shortstat main...HEAD and pytest --collect-only -o addopts='' before the next refresh. This body has understated the branch on every recent run.",
   "tracking_issue": {
     "number": 2,
     "state": "open",
@@ -72,11 +74,13 @@
     "R13 (low): PlannedStep.capability is derived from the tool catalog, so a plan cannot understate its authority. Any future plan construction path must go through PlannedStep or it reintroduces the gap; the derived field is what enforces it, not the use case.",
     "R14 (new, low): the tool-invocation trail stores only arguments_digest, so an auditor can prove a call happened but cannot reconstruct its payload. That is deliberate (the trail must not become a second copy of note content), but a future investigation may want an explicit, separately-authorized payload-retrieval path rather than widening this one.",
     "R15 (new, low): the audit chain seals each invocation over its predecessor, but the chain head is not anchored outside the database. An attacker who can rewrite the whole table can produce a self-consistent chain. Anchoring the head hash externally is the next hardening step, not a regression.",
-    "R15 (low, open): the audit chain head is not anchored outside the database, so an attacker able to rewrite the whole table could forge a self-consistent chain. External anchoring of the head hash is the next hardening step for NEX-012."
+    "R15 (low, open): the audit chain head is not anchored outside the database, so an attacker able to rewrite the whole table could forge a self-consistent chain. External anchoring of the head hash is the next hardening step for NEX-012.",
+    "R16 (new, low): an approval's expires_at is nullable and is_usable treats NULL as 'never expires'. Needed only for rows written by an older app version during a rolling deploy; the backfill populates every pre-existing row. Tighten to NOT NULL once no old writer can exist.",
+    "R17 (new, low, process): a data-backfill migration tested only against an empty database is untested and will stay green while it crashes on the first real row. NEX-013 shipped exactly that - 'requested_at + timedelta' raised TypeError on SQLite's string value, aborting the upgrade and leaving expires_at NULL (i.e. unbounded). Any migration that reads existing rows needs a test that seeds a row at the previous revision; see tests/persistence/test_migrations.py::TestApprovalValidityBackfill."
   ],
-  "next_task": "CI was in_progress on b50565f (docs-only) at run end; confirm it, then select the next dependency-ready slice: NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token exchange) both read TESTED and need CI observation before promotion.",
-  "next_action": "1) Recompute PR #3 body metrics (git diff --shortstat main...HEAD = 101 files / 25,316 insertions; pytest --collect-only -o addopts='' = 681) and update the body; it still carries the pre-NEX-012 figures. 2) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are all VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). No task is in flight. Next: refresh PR #3's body, then pick the next Phase-5 slice from ROADMAP.md. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
+  "next_task": "Observe CI on the NEX-013 commit and promote it to VERIFIED if green (or fix what CI reports). Then refresh PR #3's body, which predates NEX-013, and select the next Phase 5 slice from ROADMAP.md.",
+  "next_action": "1) gh api repos/anotherhale/bluestaq-notes/commits/<nex013-sha>/check-runs - confirm 4/4 completed/success before promoting NEX-013. 2) Recompute PR #3 metrics (git diff --shortstat main...HEAD; pytest --collect-only -o addopts='') and update the body. 3) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-009 slice 1, NEX-009-HTTP, NEX-011 and NEX-012 are VERIFIED with observed green CI (0e74d4f, e817d04, f50a78d, 3aade7c). NEX-013 (approval validity + single-use) is TESTED on local gates only and awaits CI observation. No task is in flight. Push to the feature branch only, never force. Run quality gates bare exactly as CI does - ruff formats Python inside Markdown, so a docs fence can fail the backend job. Never write commit messages, prose or scripts through a heredoc in this environment; it corrupts them and the command silently does not run (R12). Any migration that reads existing rows needs a non-empty-table test (R17). If the tree is dirty, inspect before discarding; never reset --hard or clean -fd.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -88,8 +92,8 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T05:12Z",
-    "note": "Last observed green commit is e817d04: 4/4 completed/success (backend + frontend, push and pull_request). On f50a78d (NEX-011) the two frontend check runs completed/success and the two backend check runs were still in_progress at run end - unobserved."
+    "observed": "2026-11-25T05:49Z",
+    "note": "Last observed green commit is 3aade7c: 4/4 completed/success (backend + frontend, push and pull_request). No CI observed yet for the NEX-013 commit."
   },
-  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main...HEAD, plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them: this run briefly wrote 'six migrations / six routers' when the diff shows five of each, because NEX-011 added a route to the existing agents.py router and no migration."
+  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures."
 }

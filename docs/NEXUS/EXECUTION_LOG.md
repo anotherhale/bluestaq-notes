@@ -1548,3 +1548,89 @@ self-consistent chain. External anchoring is the next hardening step for NEX-012
 `BACKLOG.md` — NEX-006 (tenant access enforcement) and NEX-003 (agent identity/token
 exchange) both still read **TESTED**, so each needs CI observation before promotion.
 Observe CI on the current head first; the branch is at `122eb13`.
+
+---
+
+## Run NEX-2026-11-25-13 — NEX-013: approvals bounded in time and spent once
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-13` |
+| Timestamp | 2026-11-25T06:20Z–07:00Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `11a4cec9a36e10821120e113c59500e0eb348b50` |
+| Ending commit | the NEX-013 product commit and the docs commit that follows it |
+| Project phase | 5 (durable runtime) |
+
+**Reconciliation at start.** The working tree was dirty with the NEX-013 slice
+already written but uncommitted: approvals carried `expires_at`/`consumed_at`
+across domain, ports, use cases, models, schemas and repository, plus an
+untracked migration `d4c8e2a71f05` and two new gateway tests. Nothing was
+discarded; the slice was verified and finished rather than restarted. The single
+alembic head was `d4c8e2a71f05`, matching the untracked migration.
+
+**Drift corrected.** `STATE.md` still described NEX-012 as **TESTED** and cited
+run `-11`'s quality-gate table, while `BACKLOG.md` and `CHECKPOINT.json` both
+recorded NEX-012 **VERIFIED** on observed CI (`3aade7c`, 4/4). `STATE.md` was
+one run stale and is now reconciled to the backlog and the checkpoint, which
+agree with each other and with GitHub.
+
+**Tasks completed.** NEX-013 — bound approval validity and make approvals
+single-use. Implemented across the domain aggregate, the port, the gateway use
+case, the SQLAlchemy adapter, the schema, and a migration.
+
+**Defect found in the slice's own migration (the run's main finding).** The
+backfill computed `requested_at + DEFAULT_APPROVAL_TTL` on the value returned by
+a plain `sa.text()` SELECT. That path bypasses the `UTCDateTime` type decorator,
+so SQLite hands back the stored *string* and the addition raises `TypeError`.
+The upgrade aborted on the first pre-existing row, leaving `expires_at` NULL —
+which `is_usable` reads as "never expires", so the migration that exists to bound
+approvals would have left them unbounded. Every test stayed green because the
+whole migration suite upgrades an **empty** database.
+
+Verified by hand first: seeded a legacy `approved` row at `b2e5c81f4a07`,
+upgraded, and observed `TypeError: can only concatenate str (not
+"datetime.timedelta") to str` with `expires_at` still NULL. Fixed with an
+explicit `_as_datetime()` coercion; re-ran and observed `expires_at =
+2026-01-04 00:00:00` for a `requested_at` of `2026-01-01` (72h, correct) and
+`consumed_at` NULL (correct — an unspent approval must not be marked used).
+
+**Tests executed.**
+
+- `tests/persistence/test_migrations.py` — 5 passed, including the new
+  `TestApprovalValidityBackfill::test_backfill_sets_expiry_from_requested_at`.
+- Negative control: reverting the fix to the raw-value form made the new test
+  fail with the real `TypeError`; restoring the fix made it pass. The test
+  genuinely covers the bug rather than merely existing.
+- Full suite, bare: **684 collected, 680 passed, 4 skipped**, 0 failures (up
+  from 681/677/4 — exactly the 3 added tests).
+- `ruff format --check` bare: 193 files already formatted. `ruff check`: all
+  checks passed. `mypy`: no issues in 98 source files.
+- Migration round-trip: `upgrade head` → `downgrade -1` → `upgrade head`, with
+  both columns present, absent after downgrade, and present again.
+
+**Files changed.** `domain/agent/entities.py`,
+`application/ports/agents.py`, `application/use_cases/tools.py`,
+`infrastructure/db/agent_repositories.py`, `infrastructure/db/models.py`,
+`presentation/schemas.py`, `tests/agent/test_tool_gateway.py`,
+`tests/persistence/test_migrations.py`, new migration
+`migrations/versions/d4c8e2a71f05_bound_approval_validity_and_single_use.py`,
+plus `docs/NEXUS/{BACKLOG,STATE,EXECUTION_LOG,CHECKPOINT}.md/json`.
+
+**Security findings.** Closes an approval-replay hole: an approval now authorises
+exactly one action and lapses after 72 hours. Consumption is atomic (conditional
+UPDATE + `rowcount`), so two concurrent attempts cannot both spend one approval.
+The backfill is fail-closed — approvals older than the window become unusable
+rather than retaining indefinite authority. Two residual risks recorded: **R16**
+(`expires_at` nullable, and NULL means unbounded, needed only for rolling-deploy
+compatibility) and **R17** (process: a backfill migration tested only against an
+empty database is untested).
+
+**Status.** NEX-013 is **TESTED**, not VERIFIED. Local gates are green but CI has
+not been observed for this commit; promoting it on local evidence is exactly the
+conflation R10 warns about.
+
+**Next action for the following run.** Observe CI on the NEX-013 commit and
+promote it to VERIFIED if green, or fix what it reports. Then refresh PR #3's
+body — it predates NEX-013 and must pick up the new migration and counts — and
+select the next Phase 5 slice from `ROADMAP.md`. Never merge PR #3.

@@ -7,26 +7,56 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain **TESTED** (`3aade7c`) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **TESTED** (local only) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `434769f` |
-| Head commit (run end) | docs commit following `3aade7c`; product head `3aade7c` |
-| Last CI result | **4/4 green on `3aade7c`** (NEX-012): backend + frontend, push and pull_request, all `completed/success`, observed 2026-11-25T05:49Z |
+| Base commit (run start) | `11a4cec` |
+| Head commit (run end) | docs commit following this slice; product head is the NEX-013 commit |
+| Last CI result | **4/4 green on `3aade7c`** (NEX-012): backend + frontend, push and pull_request, all `completed/success`, observed 2026-11-25T05:49Z. **NEX-013's commit has no observed CI yet.** |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Body refreshed 2026-11-25T05:51Z: 25,511 insertions / 101 files / 681 collected / 6 migrations / 5 new routers |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-012 is VERIFIED** — every tool invocation is now sealed over
-its predecessor, an owner can verify the chain over HTTP, and CI on `3aade7c`
-returned **4/4 `completed/success`** (backend + frontend, push and pull_request).
+None in flight. **NEX-013 is TESTED** (local gates only) — approvals are now
+bounded in time and spent exactly once. It needs observed CI before it can be
+promoted to VERIFIED.
 
-Next dependency-ready work: refresh PR #3's body, then choose the following Phase 5
-slice — see Next Best Actions and the Phase 5 section of `ROADMAP.md`.
+Next dependency-ready work: observe CI on the NEX-013 commit, then continue the
+Phase 5 slice sequence — see Next Best Actions and the Phase 5 section of
+`ROADMAP.md`.
 
 
 ## Last completed task
+
+**NEX-013 — Bound approval validity and make approvals single-use** (run
+`NEX-2026-11-25-13`, local gates only — **TESTED**, CI not observed).
+
+An approval was an unlimited-use, never-expiring authorisation. The gateway
+matched an `approved` row on `(agent, capability, resource)` and neither spent
+it nor checked its age, so one human decision to delete a note authorised every
+later delete of that note, forever.
+
+`ApprovalRequest` now carries `expires_at` (default `DEFAULT_APPROVAL_TTL` = 72h,
+the security architecture's High-tier window) and `consumed_at`, and the gateway
+spends the approval through `uow.approvals.consume(...)` instead of matching it.
+Consumption is one conditional `UPDATE ... WHERE status='approved' AND
+consumed_at IS NULL AND (expires_at IS NULL OR expires_at > :now)` that returns
+`rowcount == 1`, so the database decides the race rather than a read-then-write.
+
+The slice's most valuable finding was in its own migration. The backfill first
+shipped as `requested_at + DEFAULT_APPROVAL_TTL` on the raw driver value; a plain
+`sa.text()` SELECT bypasses the `UTCDateTime` type decorator, so SQLite returned
+the stored *string* and the addition raised `TypeError`, aborting the upgrade on
+any non-empty table and leaving `expires_at` NULL — i.e. **unbounded**, the exact
+vulnerability the migration exists to close. The rest of the migration suite
+upgrades an empty database, so all 681 tests stayed green. Fixed with an explicit
+`_as_datetime()` coercion and pinned by
+`tests/persistence/test_migrations.py::TestApprovalValidityBackfill`, which seeds
+a legacy row at the previous revision; that test was confirmed to fail against
+the pre-fix code. R17 records the general lesson.
+
+## Previous task
 
 **NEX-012 — Tamper-evident audit chain** (run `NEX-2026-11-25-12`, `3aade7c`).
 NEX-005 wrote a row for every gateway attempt and NEX-011 made those rows
@@ -276,20 +306,18 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-25-11`, bare as CI runs them) |
+| Gate | Result (run `NEX-2026-11-25-13`, bare as CI runs them) |
 | --- | --- |
-| `ruff format --check` | clean — **189 files** (repo-wide, includes `docs/` Markdown fences) |
+| `ruff format --check` | clean — **193 files** (repo-wide, includes `docs/` Markdown fences) |
 | `ruff check` | clean |
-| `mypy` | clean (97 source files) |
-| `pytest` (full) | **674 collected, 0 failures, 4 skipped** = 670 passed (up from 662 + 8 API) |
-| Migration chain | unchanged this run — no new migration (read path over an existing table) |
-| Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed (CI ran them green anyway) |
+| `mypy` | clean (98 source files) |
+| `pytest` (full) | **684 collected, 0 failures, 4 skipped** = 680 passed (up from 677 + 3) |
+| Migration chain | new head `d4c8e2a71f05`; verified upgrade → downgrade → upgrade round-trip and the backfill on a **non-empty** table |
+| Frontend `typecheck`/`lint`/`test`/`build` | not run this slice — no frontend files changed |
 
-> **CI is the evidence.** The last commit with observed green CI is `e817d04`
-> (4/4 check runs). This run's commit `f50a78d` is **TESTED only** — the frontend
-> job was 2/2 `completed/success` but both backend runs were still `in_progress`
-> when the run ended. Local gates are recorded above for reproducibility, not as
-> proof (R10).
+> **CI is the evidence.** The last commit with observed green CI is `3aade7c`
+> (4/4 check runs). NEX-013's commit is **TESTED only** — CI has not been observed
+> for it. Local gates are recorded above for reproducibility, not as proof (R10).
 
 ## Blockers
 
@@ -353,24 +381,37 @@ None currently. The following are known open items, not blockers:
   hardening gap — `PlannedStep.capability` was caller-supplied, so a plan could
   name a privileged tool while declaring a weaker capability; it is now derived
   from the tool catalog and is not an init field.
+- **R16 (new, low):** an approval's `expires_at` column is nullable, and
+  `ApprovalRequest.is_usable` treats NULL as "never expires". That is deliberate
+  for rows written by an older application version during a rolling deploy, but
+  it means such a row is unbounded. Tighten the column to NOT NULL once no old
+  writer can exist. The backfill does populate it for every pre-existing row, so
+  NULL now only arises mid-deploy.
+- **R17 (new, low, process):** a data-backfill migration that is only ever run
+  against an *empty* database is untested, and its tests will stay green while it
+  crashes on the first real row. NEX-013 shipped exactly that: `requested_at +
+  timedelta` raised `TypeError` on SQLite's string value, aborting the upgrade and
+  leaving `expires_at` NULL — i.e. the migration that exists to bound approvals
+  left them unbounded. Any migration that reads existing rows needs a test that
+  seeds a row at the previous revision. `TestApprovalValidityBackfill` is the
+  pattern to copy.
 
 ## Next best actions
 
-1. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
-   over HTTP and its audit trail is now readable, so the remaining Phase-5 work is
-   what *consumes* those two surfaces. Re-read the Phase 5 section of `ROADMAP.md`
-   before choosing; do not invent a slice from the last run's summary alone.
-2. **Keep the PR #3 body measured, not remembered.** It was refreshed this run
-   (24,283 / 98 / 674 at `f50a78d`) after understating the branch for several runs
-   running. Recompute with `git diff --shortstat main...HEAD` and
-   `pytest --collect-only -o addopts=""` — the repo's `addopts = "-q"` hides the
-   count line, and a plain `pytest --collect-only -q | grep -c ::` returns 0.
-3. **Re-check the tool-invocation trail's caller_permission shape.** NEX-011
-   returns the trail owner-scoped with 404 for non-owners; confirm the response
-   contract matches `docs/FRONTEND_INTEGRATION.md` before any UI consumes it.
+1. **Observe CI on the NEX-013 commit, then promote it to VERIFIED** (or fix what
+   CI finds). It is TESTED only right now; local gates are not evidence (R10).
+2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is reachable
+   over HTTP, its audit trail is readable and tamper-evident, and approvals are
+   now bounded and single-use. Re-read the Phase 5 section of `ROADMAP.md` before
+   choosing; do not invent a slice from the last run's summary alone.
+3. **Keep the PR #3 body measured, not remembered.** It has understated this
+   branch on every recent run. Recompute with `git diff --shortstat main...HEAD`
+   and `pytest --collect-only -o addopts=""` — the repo's `addopts = "-q"` hides
+   the count line, and a plain `pytest --collect-only -q | grep -c ::` returns 0.
+   It must also be refreshed for NEX-013 (new migration, new counts).
 
-**Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP and
-NEX-011 each reached TESTED on local runs and then VERIFIED only when CI went
-green on the commit (`0e74d4f`, `e817d04`, `f50a78d`). A local green suite is not
-evidence; R9/R10 exist because that conflation happened before.
+**Promote nothing on local gates alone.** NEX-009 slice 1, NEX-009-HTTP, NEX-011
+and NEX-012 each reached TESTED on local runs and then VERIFIED only when CI went
+green on the commit (`0e74d4f`, `e817d04`, `f50a78d`, `3aade7c`). A local green
+suite is not evidence; R9/R10 exist because that conflation happened before.
 

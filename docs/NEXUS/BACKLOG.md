@@ -613,6 +613,82 @@ dependency.
 
 ---
 
+## NEX-013 — Bound approval validity and make approvals single-use
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P1 (security) |
+| Status | **TESTED** (run `NEX-2026-11-25-13`; local gates green; CI not yet observed) |
+| Dependencies | NEX-005 (gateway), NEX-003 (approval request lifecycle) |
+
+**Objective:** an approval was an unlimited-use, never-expiring authorisation.
+The gateway matched an `approved` row on `(agent, capability, resource)` and
+neither spent it nor checked its age, so one human decision to delete a note
+authorised **every later delete of that note, forever**. The security
+architecture caps approval validity (High tier: 72 hours) and requires that a
+lapsed approval block execution. Both properties were unimplemented, so a
+replayed approval was indistinguishable from a fresh one.
+
+**Acceptance criteria:** an approval authorises exactly one action and is spent
+by it; a second attempt against the same resource finds no usable approval and
+does not execute; an approval past its validity window does not authorise
+execution (fail closed); an expired request cannot be *decided* into an
+`approved` row that the gateway must then refuse; consumption is atomic, so two
+concurrent attempts cannot both spend one approval; legacy rows get a bounded
+window on migration.
+
+**Delivered:**
+
+- `domain/agent/entities.py` — `ApprovalRequest` gains `expires_at` /
+  `consumed_at`, an `is_usable(now=)` predicate, and `consume(now=)`.
+  `open()` takes a `ttl` (default `DEFAULT_APPROVAL_TTL` = 72h) and stamps
+  `expires_at = requested_at + ttl`. `_assert_decidable` refuses to decide an
+  expired request, so the recorded status never claims lapsed authority.
+- `application/use_cases/tools.py` — the gateway calls
+  `uow.approvals.consume(...)` before executing instead of matching an
+  `approved` row, and re-checks expiry at execution time.
+- `infrastructure/db/agent_repositories.py` — `consume()` is a single
+  conditional `UPDATE ... WHERE status='approved' AND consumed_at IS NULL AND
+  (expires_at IS NULL OR expires_at > :now)` returning `rowcount == 1`. The
+  database decides the race, not a read-then-write in Python.
+- migration `d4c8e2a71f05` adds both columns and backfills `expires_at` from
+  `requested_at + DEFAULT_APPROVAL_TTL` for existing rows.
+
+**Tests:** `tests/agent/test_tool_gateway.py` — an approval is spent by the
+action it authorises (second attempt refused, note survives, `consumed_at`
+stamped); an expired approval does not authorise execution (note survives).
+`tests/persistence/test_migrations.py::TestApprovalValidityBackfill` seeds a
+legacy `approved` row at the previous revision and asserts the upgrade sets
+`expires_at` to `requested_at + 72h` and leaves `consumed_at` NULL.
+
+**Defect found and fixed during this slice:** the backfill first shipped as
+`requested_at + DEFAULT_APPROVAL_TTL` on the raw driver value. A plain
+`sa.text()` SELECT bypasses the `UTCDateTime` type decorator, so SQLite returns
+the stored *string* and the addition raised `TypeError`, aborting the upgrade
+mid-flight on any non-empty table — leaving `expires_at` NULL and therefore
+*unbounded*, the exact vulnerability the migration exists to close. The rest of
+the migration suite upgrades an empty database, so every test stayed green.
+Fixed by coercing through `_as_datetime()`, and pinned by the non-empty-table
+test above. Both new gateway tests and the backfill test were confirmed to fail
+against the pre-fix code.
+
+**Security:** closes an approval-replay hole (P1). Consumption is enforced by a
+conditional UPDATE, so it is correct under concurrency rather than merely
+usually correct. The backfill is fail-closed: any approval older than the
+window becomes unusable instead of silently keeping indefinite authority.
+Columns stay nullable for backward compatibility mid-deploy; the aggregate
+always populates them.
+
+**Residual risk (R16):** `expires_at` is nullable, and `is_usable` treats NULL
+as "never expires". That is needed for rows written by an older application
+version during a deploy, but it means a NULL row is unbounded. A follow-up
+should tighten the column to NOT NULL once no old writer can exist.
+
+**Complexity:** small. One migration, no new dependency.
+
+---
+
 ## NEX-008 — Add continuous integration
 
 | Field | Value |
