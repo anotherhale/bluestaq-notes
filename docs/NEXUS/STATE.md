@@ -7,16 +7,16 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction, see below) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `4a5f916` |
-| Head commit (run end) | `48477da` — final docs commit (PR body refresh recorded); product commit is `12584a1` |
-| Last CI result | **Green on `12584a1`** (the correction), 4/4 `completed/success`, all `head_sha 12584a1`, observed 2026-11-25T06:50Z. Jobs: Backend (ruff, mypy, pytest, migrations) + Frontend (typecheck, lint, test, build), push and pull_request. |
+| Base commit (run start) | `6a5cc64` |
+| Head commit (run end) | product commit `414a222` (pushed); the docs commit carrying this file is its child |
+| Last CI result | **Green on `414a222`** (the NEX-015 slice), 4/4 `completed/success`, all `head_sha 414a222`, observed 2026-11-25T07:42Z: push [45570071880](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570071880) and pull_request [45570060946](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570060946), Backend + Frontend. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head tracks `48477da`. Body **refreshed this run**: metrics recomputed on `48477da` (26,506 additions / 10 deletions / 103 files / 64 commits ahead, 1 behind), test count 690 collected, and the NEX-013 overstatement replaced with the correction. |
+| Draft PR | #3 (draft, unmerged — human review required). Head tracks `414a222`. Body **refreshed this run** with metrics recomputed on `414a222`: 27,487 insertions / 943 deletions / 109 files, 715 tests collected. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
-## Correction recorded this run (NEX-013 status was overstated)
+## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)
 
 NEX-013 was recorded VERIFIED on green CI. Its core invariant was **not**
 enforced on the path that matters:
@@ -37,57 +37,27 @@ fail-closed changes plus tests that pin the production path), and CI on
 criterion holds, and now so do the tests that check it.
 
 
-
 ## Active task
 
-None in flight. **NEX-013 is VERIFIED** — the bound is persisted, fails closed,
-and CI on `12584a1` is observed 4/4 green.
-
-Next dependency-ready work: the next Phase 5 slice — see Next Best Actions and
-the Phase 5 section of `ROADMAP.md`.
-
+| Field | Value |
+| --- | --- |
+| Task | none - NEX-015 closed; next slice not yet selected |
+| Status | idle, budget remaining |
+| Next action | Select the next dependency-ready Phase-5 slice from ROADMAP.md |
 
 ## Last completed task
 
-**NEX-013 — Bound approval validity and make approvals single-use** (run
-`NEX-2026-11-25-13`, local gates only — **TESTED**, CI not observed).
-
-An approval was an unlimited-use, never-expiring authorisation. The gateway
-matched an `approved` row on `(agent, capability, resource)` and neither spent
-it nor checked its age, so one human decision to delete a note authorised every
-later delete of that note, forever.
-
-`ApprovalRequest` now carries `expires_at` (default `DEFAULT_APPROVAL_TTL` = 72h,
-the security architecture's High-tier window) and `consumed_at`, and the gateway
-spends the approval through `uow.approvals.consume(...)` instead of matching it.
-Consumption is one conditional `UPDATE ... WHERE status='approved' AND
-consumed_at IS NULL AND expires_at IS NOT NULL AND expires_at > :now` that
-returns `rowcount == 1`, so the database decides the race rather than a
-read-then-write. The `expires_at IS NOT NULL` arm is deliberate: a row whose
-bound was never recorded must not be spendable, so the predicate fails closed
-rather than treating a missing column as permanent authority.
-
-**Correction (`12584a1`).** The bound above was not actually enforced when this
-slice was first called VERIFIED. `ApprovalRequestRepository.add()` omitted
-`expires_at` and `consumed_at` when constructing the row, so every approval the
-gateway opened persisted with a NULL bound — and the original `consume`
-predicate accepted `expires_at IS NULL`. The aggregate was correct; the adapter
-dropped the field. Fixed in `12584a1`: `add()` persists both columns, the
-aggregate treats a missing bound as lapsed, and the conditional UPDATE refuses
-a NULL-bound row. Tests now pin the gateway path (`InvokeTool` → `add()` →
-reload), not just `save()`.
-
-The slice's most valuable finding was in its own migration. The backfill first
-shipped as `requested_at + DEFAULT_APPROVAL_TTL` on the raw driver value; a plain
-`sa.text()` SELECT bypasses the `UTCDateTime` type decorator, so SQLite returned
-the stored *string* and the addition raised `TypeError`, aborting the upgrade on
-any non-empty table and leaving `expires_at` NULL — i.e. **unbounded**, the exact
-vulnerability the migration exists to close. The rest of the migration suite
-upgrades an empty database, so all 681 tests stayed green. Fixed with an explicit
-`_as_datetime()` coercion and pinned by
-`tests/persistence/test_migrations.py::TestApprovalValidityBackfill`, which seeds
-a legacy row at the previous revision; that test was confirmed to fail against
-the pre-fix code. R17 records the general lesson.
+**NEX-015 (VERIFIED, `414a222`, CI 4/4)** - a decision erased the approval record from the
+only read path. `GET /agents/{id}/approvals` returned pending requests only, so
+once a human approved or denied a sensitive action the request vanished from the
+API: the approver could not confirm what they had authorised, and an auditor had no
+API view of the grant at all. Reproduced before fixing (after a decision, the
+listing returned `[]`), then fixed by adding a `?status=` filter that defaults to
+`pending` (unchanged behaviour) and a `GET /agents/approvals/{id}` read route. Both
+are owner-only and return 404 to a non-owner, so an approval id cannot probe for
+another user's agent. Eight new tests pin approved/denied/revoked visibility, the
+unchanged default, read-by-id, and the 404/422 paths; reverting the use case to
+`list_pending_for_agent` fails three of them.
 
 ## Previous task
 

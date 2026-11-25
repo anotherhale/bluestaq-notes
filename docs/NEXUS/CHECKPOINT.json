@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-15",
-  "timestamp": "2026-11-25T07:07:00Z",
+  "timestamp": "2026-11-25T07:47:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "b27b6b5",
-  "commit_note": "b27b6b5 is the NEX-014 slice (revocable approvals). Local gates were run bare on it and are green. CI has NOT been observed on b27b6b5. The docs commit carrying this file is its child and cannot name itself.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-014 (revocable approvals) VERIFIED at b27b6b5 on 4/4 CI.",
+  "commit": "414a222",
+  "commit_note": "414a222 is the NEX-015 slice (decided-approval visibility). Local gates were run bare on it and are green, plus a mutation check on the new tests. CI has NOT been observed on 414a222. The docs commit carrying this file is its child and cannot name itself.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-014 (revocable approvals) VERIFIED at b27b6b5 on 4/4 CI. NEX-015 (decided-approval visibility) VERIFIED at 414a222 on 4/4 CI.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -24,7 +24,8 @@
     "NEX-011": "VERIFIED",
     "NEX-012": "VERIFIED",
     "NEX-013": "VERIFIED",
-    "NEX-014": "VERIFIED"
+    "NEX-014": "VERIFIED",
+    "NEX-015": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -43,38 +44,37 @@
     "NEX-011",
     "NEX-012",
     "NEX-013",
-    "NEX-014"
+    "NEX-014",
+    "NEX-015"
   ],
   "validation": {
-    "pytest_full": "not run in full this session; --collect-only reports 707. CI's backend job (ruff, mypy, pytest, migrations) passed on b27b6b5.",
+    "pytest_full": "711 passed, 4 skipped, run bare this session (707 collected before NEX-015; +8 new tests, net 715 collected at HEAD).",
     "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 195 files, run this session",
-    "ruff_check": "not re-run this session; CI backend job passed on b27b6b5",
-    "mypy": "not re-run this session; CI backend job passed on b27b6b5",
-    "migration_chain": "new head e5a3b9c04f21 (revocable_approvals), down_revision d4c8e2a71f05. Upgrade to head, downgrade over a REAL revoked row, and re-upgrade all verified.",
+    "ruff_check": "All checks passed, run this session",
+    "mypy": "Success: no issues found in 98 source files, run this session",
+    "migration_chain": "no migration added by NEX-015; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
     "ci_observed": true,
-    "ci_note": "CI observed on b27b6b5: 4/4 completed/success (Backend, Frontend, push and pull_request), every head_sha b27b6b5. That is the evidence that promotes NEX-014 from TESTED to VERIFIED.",
-    "verified_at_commit": "b27b6b5",
+    "ci_note": "CI green on 414a222: 4/4 completed/success, all head_sha 414a222, observed 2026-11-25T07:42Z. Push run 45570071880, pull_request run 45570060946 (Backend + Frontend each). This is what promotes NEX-015 from TESTED to VERIFIED.",
+    "verified_at_commit": "414a222",
     "verified_by_run": "NEX-2026-11-25-15",
-    "local_gates_are_not_ci_evidence": "R10: recorded for reproducibility only; do not promote NEX-014 on these.",
-    "regression_guard": "tests/persistence/test_migrations.py::TestRevocationDowngradeFoldsRevokedRows both FAIL when the downgrade's revoked->denied fold is removed (verified by mutation this run) and pass with it."
+    "local_gates_are_not_ci_evidence": "R10: local gates and the mutation check are recorded for reproducibility only; they do not promote NEX-015.",
+    "regression_guard": "tests/api/test_agents_api.py::TestDecidedApprovalsRemainReadable - reverting ListApprovalRequests to call list_pending_for_agent for every status makes the three ?status= tests FAIL (3 failed, 5 passed, verified by mutation this run); restoring it passes all eight."
   },
-  "uncommitted_work": "none",
+  "uncommitted_work": "none at product-commit time; the docs updates are committed separately",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "a8be00d",
-    "body_refreshed": "NOT refreshed this run - body still describes fe2188a",
+    "head": "414a222",
+    "body_refreshed": "refreshed this run with metrics recomputed on 414a222",
     "metrics_at_head": {
-      "additions": 26506,
-      "deletions": 10,
-      "changed_files": 103,
-      "commits_ahead": 64,
-      "commits_behind": 1,
-      "tests_collected": 690
+      "additions": 27487,
+      "deletions": 943,
+      "changed_files": 109,
+      "tests_collected": 715
     },
-    "note": "PR #3 head moved to b27b6b5. The body was NOT recomputed this run, so its metrics understate the branch by one slice. Remains draft and unmerged; automated merging is prohibited."
+    "note": "PR #3 head moved to 414a222. Metrics measured with `git diff --shortstat main HEAD` (two-dot; the clone is grafted so three-dot fails) and `pytest --collect-only`. Remains draft and unmerged; automated merging is prohibited."
   },
   "tracking_issue": {
     "number": 2,
@@ -83,6 +83,12 @@
   },
   "blockers": [],
   "risks": [
+    {
+      "id": "R20",
+      "severity": "medium",
+      "summary": "A governance record can be unreachable through the API without any error, while the data is intact in storage.",
+      "detail": "NEX-015: approvals were persisted correctly and list_for_agent existed on the port, but the use case only ever called list_pending_for_agent, so every decided approval was invisible to its owner. No test failed and no exception was raised, because nothing asserted that a decision remained readable. The class is general: for each state a record can enter, check that some read path returns it. Closed for approvals by 414a222."
+    },
     {
       "id": "R18",
       "severity": "high",
@@ -93,18 +99,18 @@
       "id": "R19",
       "severity": "medium",
       "summary": "A migration downgrade can be untested because the suite upgrades an empty database.",
-      "detail": "e5a3b9c04f21's downgrade folds 'revoked' rows to 'denied' before narrowing the status CHECK. On an empty table that UPDATE touches nothing, so a wrong ordering would pass. Now pinned by TestRevocationDowngradeFoldsRevokedRows, which seeds a real revoked row; removing the fold makes both tests fail."
+      "detail": "e5a3b9c04f21's downgrade folds 'revoked' rows to 'denied' before narrowing the status CHECK. On an empty table that UPDATE touches nothing, so a wrong ordering would pass. Now pinned by TestRevocationDowngradeFoldsRevokedRows."
     },
     {
       "id": "R12",
       "severity": "medium",
       "summary": "Heredocs corrupt or hang in this environment.",
-      "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run."
+      "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run: a `cat > /tmp/x.py <<'PY'` block corrupted its own command text and had to be abandoned."
     }
   ],
-  "next_task": "Recompute/refresh PR #3 body at a8be00d, then select the next dependency-ready Phase 5 slice.",
-  "next_action": "1) Recompute PR #3 metrics on head a8be00d (git diff --shortstat main HEAD + pytest --collect-only -o addopts='') and refresh the body - it still describes fe2188a and understates the branch by one slice. 2) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-014 is VERIFIED at b27b6b5 (CI 4/4). Do not re-verify or re-implement it. PR #3 body is stale - refresh it on the current head before anything else. Never merge PR #3. Write any script to /tmp via file_editor; never use a heredoc.",
+  "next_task": "Select the next dependency-ready Phase-5 slice from ROADMAP.md.",
+  "next_action": "1) Pick the next Phase-5 slice from ROADMAP.md (NEX-016 onward is unallocated). 2) Refresh PR #3 metrics on the new head before describing it. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-014 is VERIFIED at b27b6b5 (CI 4/4) and NEX-015 is VERIFIED at 414a222 (CI 4/4). Neither needs re-implementation. Next is a fresh Phase-5 slice. Carry R20 forward: for every state a record can enter, assert some read path returns it. Never merge PR #3. Write any script to /tmp via file_editor; never use a heredoc.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -116,13 +122,13 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T05:49Z",
-    "note": "Green on b27b6b5: 4/4 completed/success, all head_sha b27b6b5."
+    "observed": "2026-11-25T07:42Z",
+    "note": "Green on 414a222: 4/4 completed/success, all head_sha 414a222 (push 45570071880, pull_request 45570060946)."
   },
-  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures.",
+  "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: `git diff --shortstat main HEAD` (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus `pytest --collect-only -o addopts=''` (the repo's addopts=-q hides the count line). MEASURED at 414a222 this run: 109 files, 27487 insertions, 943 deletions, 715 tests collected. Recompute after committing rather than copying these figures.",
   "validation_status": {
-    "gates": "local this session: ruff format --check clean (195 files), pytest --collect-only 707. Full suite, ruff check and mypy were covered by CI on b27b6b5, not re-run locally.",
-    "ci": "b27b6b5: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha b27b6b5, observed 2026-11-25T07:09Z.",
-    "note": "b27b6b5 is the verified product slice. The docs commit a8be00d is its child; its checks were still pending when this run ended, so nothing is claimed for it."
+    "gates": "local this session on 414a222: ruff format clean (195 files), ruff check passed, mypy clean (98 files), pytest 711 passed / 4 skipped.",
+    "ci": "414a222: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha 414a222, observed 2026-11-25T07:42Z. This promotes NEX-015 to VERIFIED.",
+    "note": "414a222 is the NEX-015 product slice. The docs commit carrying this file is its child."
   }
 }

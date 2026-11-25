@@ -1898,3 +1898,68 @@ it had to be restored from git. Use this script pattern instead.
 2. Recompute PR #3 metrics on the new head and refresh the body (it was **not**
    refreshed this run and now understates the branch by one slice).
 3. Select the next Phase-5 slice from `ROADMAP.md`. Never merge PR #3.
+
+## Run NEX-2026-11-25-15 (continued) - NEX-015 decided-approval visibility
+
+- **Run ID:** NEX-2026-11-25-15
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `6a5cc64`
+- **Ending commit:** `414a222` (product slice, pushed)
+- **Tasks completed:** NEX-015 - decided approvals readable by their owner
+- **Files changed:** `application/use_cases/agents.py`,
+  `presentation/api/routers/agents.py`, `bootstrap/container.py`,
+  `tests/api/test_agents_api.py` (+203 / -6)
+
+### What was wrong, and how it was established
+
+The checkpoint asked for a PR-body refresh and a new Phase-5 slice. Before
+selecting a slice, one behaviour was probed directly: open an approval, decide it,
+list again. The decided request was gone from the listing. The repository already
+had `list_for_agent`; the use case only ever called `list_pending_for_agent`, so
+the history existed in storage and was unreachable through the API. No exception,
+no warning - the record just stopped being visible to the person who needed to
+review it.
+
+### Decision
+
+Fixed as one small slice rather than recorded as a known limitation, because an
+approval system whose decisions cannot be reviewed does not satisfy the audit
+requirement it exists for. Scope was held to read paths only: no schema change, no
+migration, no change to how decisions are made or enforced.
+
+### Validation
+
+- `.venv/bin/ruff format .` - 195 files unchanged
+- `.venv/bin/ruff check .` - all checks passed
+- `.venv/bin/mypy` - success, 98 source files
+- `.venv/bin/python -m pytest -q -o addopts=""` - **711 passed, 4 skipped**
+  (707 collected before this slice; +8 new tests)
+- Mutation check: reverting the use case to `list_pending_for_agent` for every
+  status makes the three `?status=` tests fail (3 failed, 5 passed); restoring it
+  passes all eight. The tests pin the fix rather than decorating it.
+
+### Status - VERIFIED
+
+Local gates were green, and that was recorded as TESTED only. CI then reported
+**4/4 `completed/success` on `414a222`**, on both the push run
+[45570071880](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570071880) and
+the pull_request run
+[45570060946](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570060946),
+all `head_sha 414a222`, observed 2026-11-25T07:42Z. CI executed the eight new tests
+on that commit, so NEX-015 is **VERIFIED** on CI's result rather than on the local
+run. Keeping it at TESTED until CI spoke is the R10 discipline: a green local run is
+not a green pipeline.
+
+### R12 confirmed again
+
+A `cat > /tmp/x.py <<'PY'` heredoc corrupted its own command text in this run and
+had to be abandoned. The working tree stayed clean because the write never
+executed. Use `file_editor` to write the script, then run it - never a heredoc.
+
+### Next action
+
+1. `gh api repos/anotherhale/bluestaq-notes/commits/414a222/check-runs` - green
+   CI promotes NEX-015 to VERIFIED.
+2. Recompute PR #3 metrics on the new head and refresh the body; it still
+   describes an older commit and understates the branch.
+3. Select the next dependency-ready Phase-5 slice. Never merge PR #3.

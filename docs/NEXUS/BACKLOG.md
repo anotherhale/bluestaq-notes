@@ -858,3 +858,54 @@ pull_request (`45541862595`) events. Because `0fcc078` descends from the commit
 that added the tests, CI executed this file's 21 tests — the evidence is CI's
 result, not the local run. NEX-002 was promoted on the same evidence.
 
+## NEX-015 - Keep decided approvals readable by their owner
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P1 (governance / auditability) |
+| Status | **VERIFIED** - CI reported 4/4 check runs `completed/success` on `414a222`, on both the push ([45570071880](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570071880)) and pull_request ([45570060946](https://github.com/anotherhale/bluestaq-notes/actions/runs/45570060946)) events, all `head_sha 414a222`, observed 2026-11-25T07:42Z. CI ran the eight `TestDecidedApprovalsRemainReadable` tests on that commit, so this rests on CI's result, not on the local run. |
+| Dependencies | NEX-003 (approval lifecycle), NEX-013 (approval validity), NEX-014 (revocation) |
+
+**Objective:** a decision erased the record from the only read path. `GET
+/api/v1/agents/{id}/approvals` returned *pending* requests only, so the instant a
+human approved or denied a sensitive action the request disappeared from the API.
+The approver could not confirm what they had authorised, and an auditor had no API
+view of the grant at all - the tool-invocation audit trail held the only copy. This
+is a governance defect rather than a crash: nothing failed loudly, the record
+simply became unreachable through the interface meant to review it.
+
+**Evidence (reproduced before the fix, not inferred):** opened an approval as
+Alice, decided it (`approved`), then re-listed. The pending list held the id, the
+decision returned `approved`, and the after-decision list was `[]`.
+
+**Root cause:** the use case called `list_pending_for_agent` unconditionally, while
+the repository port already exposed `list_for_agent`. The capability existed; no
+route reached it.
+
+**Delivered:**
+
+- `application/use_cases/agents.py` - `ListApprovalRequests` gains an optional
+  `status`, defaulting to `pending` so existing behaviour and callers are
+  unchanged; any other value selects from the agent's full history. New
+  `GetApprovalRequest` reads one request by id, checking agent ownership and
+  raising `ResourceNotFound` otherwise.
+- `presentation/api/routers/agents.py` - `?status=` enum-typed query parameter on
+  the listing (a bad value is 422, not silently ignored) and a new
+  `GET /agents/approvals/{approval_id}` route.
+- `bootstrap/container.py` - wires `get_approval_request`.
+
+**Security:** both read paths are owner-only and return **404** to a non-owner,
+matching the existing listing, so an approval id cannot be used to probe for
+another user's agent. No weaker authorisation path was introduced; the ownership
+check is the same `load_owned_agent` / `agent.owner_user_id` test used by the
+decision and revocation routes.
+
+**Tests:** `tests/api/test_agents_api.py::TestDecidedApprovalsRemainReadable` - 8
+tests: approved/denied/revoked each listed by status with the deciding user and
+reason; the default listing still the pending queue; read-by-id returns the decided
+record; a non-owner read is 404; an unknown id is 404; an unknown status is 422.
+Mutation-verified: reverting the use case to `list_pending_for_agent` for every
+status fails the three `?status=` tests, and restoring it passes all eight.
+
+**Next action:** none - complete. Reuse the pattern: for every state a record can enter, assert that some read path returns it (see R20).
