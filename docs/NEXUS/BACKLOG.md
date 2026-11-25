@@ -317,7 +317,7 @@ checkpoint; completed steps are not re-executed; run state is queryable.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 |
-| Status | PUSHED (CI run not yet observed) |
+| Status | VERIFIED (green CI on `6f30020`) |
 | Dependencies | none |
 
 **Objective:** give the repository a CI gate. Before this task the repository
@@ -343,5 +343,34 @@ read the repository and nothing more; it must not hold write scope it never
 uses. `pull_request` uses the default (fork-safe) event, so no secrets are
 exposed to untrusted PRs.
 
-**Complexity:** small. Reduces risk R3 to a residual — a green GitHub run is
-still required to close it fully.
+**Complexity:** small.
+
+**Verified — and the first run earned its keep.** CI ran on `b223e02` and the
+backend job failed in the pytest step:
+
+```
+FileNotFoundError: [Errno 2] No such file or directory: '.venv/bin/alembic'
+```
+
+`tests/persistence/test_migrations.py` shelled out to the literal path
+`.venv/bin/alembic`. That resolves on a developer machine, where the virtualenv
+sits at `.venv/` by convention, and nowhere else. The three migration tests —
+the ones written specifically to catch a broken migration chain — had therefore
+never run outside a local checkout. The gate found a hole in itself on its first
+execution, which is the clearest possible argument for having it.
+
+Fixed in `6f30020` by invoking `[sys.executable, "-m", "alembic", *args]`, which
+holds locally, in CI, and in a container alike.
+
+**Evidence (this is the closure of risk R3):**
+
+| Run | Commit | Result |
+| --- | --- | --- |
+| `45531086512` (push) | `b223e02` | backend FAILED — portability defect found |
+| `45531483962` (push) | `6f30020` | **success** — both jobs |
+| `45531492783` (pull_request) | `6f30020` | **success** — both jobs |
+
+`gh api .../commits/6f30020/check-runs` reports all four check runs
+`completed/success`. The repository now has an automated regression gate on every
+push and pull request, and it has demonstrably caught a real defect.
+

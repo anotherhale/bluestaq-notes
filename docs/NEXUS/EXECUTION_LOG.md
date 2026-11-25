@@ -575,3 +575,87 @@ Verify CI on GitHub: `gh run list --branch feature/agentic-enterprise-platform`
 and `gh pr checks 3`. If green, record CI as passing, close R3's residual, and
 proceed to NEX-005-HTTP. If red, read the job log and fix the workflow.
 
+
+---
+
+## Run NEX-2026-11-25-04 — 2026-11-25T19:01Z–19:25Z
+
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `b223e02` · **Ending commit:** `6f30020` (then this docs commit)
+**Phase:** 2 — Agent identity & delegation
+
+### Tasks
+
+| Task | Status change |
+| --- | --- |
+| NEX-008 — Add continuous integration | PUSHED → **VERIFIED** |
+
+### What happened
+
+The previous run pushed the CI workflow but stopped before observing it. This run
+watched the run, and the first CI execution in the repository's history **failed**:
+
+```
+FileNotFoundError: [Errno 2] No such file or directory: '.venv/bin/alembic'
+```
+
+`tests/persistence/test_migrations.py` invoked the literal path
+`.venv/bin/alembic`. That path exists on a developer machine, where the virtualenv
+sits at `.venv/` by convention, and nowhere else — CI installs into the runner's
+own interpreter. So the three migration tests, the ones written specifically to
+catch a broken migration chain, had never actually run outside a local checkout.
+
+This is the argument for CI stated as evidence rather than principle: the gate
+found a hole in itself on its first execution.
+
+**Fix (`6f30020`):** invoke `[sys.executable, "-m", "alembic", *args]`, which
+holds locally, in CI, and in a container alike.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `pytest tests/persistence/test_migrations.py` | 4 passed |
+| `pytest` (full) | 603 passed, 4 skipped — unchanged |
+| `ruff format --check` / `ruff check` | clean (179 files) |
+| `mypy` | clean (93 source files) |
+
+**CI, observed on GitHub:**
+
+| Run | Event | Commit | Result |
+| --- | --- | --- | --- |
+| `45531086512` | push | `b223e02` | backend FAILED (the defect above) |
+| `45531483962` | push | `6f30020` | **success** |
+| `45531492783` | pull_request | `6f30020` | **success** |
+
+`gh api repos/anotherhale/bluestaq-notes/commits/6f30020/check-runs` reports
+`total_count: 4`, all `completed/success`.
+
+### Decisions
+
+- The failure was diagnosed as a **repository defect, not a workflow gap**. The
+  temptation was to make CI install into `.venv/` so the hardcoded path resolved;
+  that would have preserved the portability bug and taught the workflow to
+  accommodate a broken test. The test was fixed instead.
+- R3 is closed on observed evidence, not on the presence of the workflow file.
+
+### Risks
+
+- **R3 closed** (CI green on push and pull_request).
+- **R8 added (low):** the local suite can hide environment-dependent assumptions.
+  Test helpers should use `sys.executable` or explicit paths, never a bare
+  `.venv/...`.
+
+### Git
+
+- `6f30020` `fix(tests): invoke alembic through the running interpreter` — 1 file, +2/−1.
+- Pushed `b223e02..6f30020` after re-fetching; fast-forward, no force.
+- Remote verified via `git ls-remote` and `gh api` before and after.
+
+### Next action
+
+**NEX-005-HTTP** — expose the tool gateway through the API layer: a router, an
+auth dependency resolving the agent token for `TokenAudience.TOOL_GATEWAY`, and an
+API contract test for a denied invocation. Closes R5, the last gateway gap. CI is
+now live, so a red run on that work is a signal rather than a surprise.
+
