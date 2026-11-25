@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-35",
-  "timestamp": "2026-11-25T17:52Z",
+  "run_id": "NEX-2026-11-25-36",
+  "timestamp": "2026-11-25T18:19Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e386e02",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-034 all VERIFIED. NEX-033 made advisory context withholding a measured rate rather than a per-response detail, and repaired two observability defects (a six-key log allowlist that silently dropped every other extra field; redact() with zero callers). NEX-034 closes the hole that repair opened: once redact() was on the formatting path it advertised protection, so its eleven-string exact-match matcher became a shape-based one that segments keys across separators and camelCase and decides on words. Two real leaks are closed - client_secret/private_key/x-api-key/accessToken/session_cookie/Authorization passed through raw, and a sequence under a sensitive key was emitted whole.",
+  "commit": "12f6fa9",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-035 all VERIFIED. NEX-033 made advisory context withholding a measured rate rather than a per-response detail, and repaired two observability defects. NEX-034 closed the hole that repair opened by making the redactor decide on credential shape rather than eleven exact strings. NEX-035 closes R30: the adapter conformance suite exists, and building it found the provider identity seam was policed on the answer and trusted on the name - MAX_PROVIDER_NAME_LENGTH was declared and never read, a raising name property escaped as RuntimeError, a non-str name was recorded verbatim, and a contract-violating rationale was misreported as PROVIDER_ERROR. All four are fixed.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -43,7 +43,8 @@
     "NEX-031": "VERIFIED - CI 4/4 completed/success at 240a446, every head_sha equal to 240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25 (see ci_status). Local gates: ruff format/check clean, mypy 105 files clean, pytest 850 passed / 4 skipped. Negative control verified: reverting from_candidates fails the max-title test with 'a context field value may be at most 50 characters'.",
     "NEX-032": "VERIFIED - local gates green: ruff format/check clean, mypy 105 files clean, pytest 860 passed / 4 skipped (baseline 850, +10 net). Product commit fe5eadc. CI pending at time of writing; poll fe5eadc before treating as CI-verified.",
     "NEX-033": "VERIFIED - CI 4/4 at bf84a7c: Backend completed/success + Frontend completed/success, plus the duplicate pull_request pair completed/cancelled by the CI concurrency group (neither pass nor fail, never evidence). Polled 2026-11-25T17:33Z. Local gates: ruff format clean, ruff check clean, mypy 107 files clean, pytest 873 passed / 4 skipped. CORRECTION: an earlier revision of this file recorded NEX-033 as '877 passed'. The true NEX-033 baseline at bf84a7c is 873; 877 was the count after NEX-034's 4 tests were added and was recorded against the wrong slice. An R24-class stale note, corrected here.",
-    "NEX-034": "VERIFIED - CI 4/4 completed/success at e386e02, every check run head_sha=e386e02 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, one pair per push and pull_request event), polled 2026-11-25T17:41Z. Local gates: ruff format clean (164 files), ruff check clean, mypy 107 source files clean, pytest 873 -> 877 passed / 4 skipped (baseline measured by stashing, not assumed). Negative control run on disk: restoring the exact-match matcher turns 3 of the 4 new tests red; the over-redaction test passes on both versions correctly, because it guards a property the old matcher had."
+    "NEX-034": "VERIFIED - CI 4/4 completed/success at e386e02, every check run head_sha=e386e02 (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, one pair per push and pull_request event), polled 2026-11-25T17:41Z. Local gates: ruff format clean (164 files), ruff check clean, mypy 107 source files clean, pytest 873 -> 877 passed / 4 skipped (baseline measured by stashing, not assumed). Negative control run on disk: restoring the exact-match matcher turns 3 of the 4 new tests red; the over-redaction test passes on both versions correctly, because it guards a property the old matcher had.",
+    "NEX-035": "VERIFIED - CI 4/4 completed/success at 12f6fa9, every check run head_sha=12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec (two Backend ruff/mypy/pytest/migrations and two Frontend typecheck/lint/test/build, one pair per push and pull_request event), polled 2026-11-25T18:14Z. Local gates: ruff format clean, ruff check clean, mypy 107 source files clean, pytest 881 -> 911 passed / 4 skipped. The 881 baseline was MEASURED this run by running the suite with the new file ignored, not inferred from arithmetic; the delta is exactly the 30 new conformance tests. Negative control: the hostile-fake meta-tests assert the conformance suite REJECTS each of five deliberate violations, so the suite has been shown to fail."
   },
   "completed_tasks": [
     "NEX-001",
@@ -82,15 +83,16 @@
     "NEX-031",
     "NEX-032",
     "NEX-033",
-    "NEX-034"
+    "NEX-034",
+    "NEX-035"
   ],
   "validation": {
-    "pytest_full": "877 passed, 4 skipped, 0 failed, 0 errors, exit 0. Baseline at HEAD before this slice was 873, measured by stashing the change (+4 net new tests).",
-    "ruff_format": "clean - 164 files already formatted",
+    "pytest_full": "911 passed, 4 skipped, 0 failed, 0 errors. Baseline 881 measured this run by re-running with --ignore=tests/agent/test_decision_provider_conformance.py and reading the junit XML; 881 + 30 = 911 exactly. The 4 skips are the postgres-only tests, unchanged.",
+    "ruff_format": "clean (3 files reformatted during the slice, then clean)",
     "ruff_check": "All checks passed",
     "mypy": "Success: no issues found in 107 source files",
-    "negative_control_nex034": "EXECUTED AND OBSERVED this run, not inherited. `git show eb1a2c8:src/notes_service/bootstrap/logging_config.py` restored over the current file, then `pytest tests/bootstrap/test_logging_config.py` -> 3 failed, 7 passed. The three failures are exactly test_redact_matches_credential_spellings_it_was_never_told_about, test_redact_matches_a_plural_credential_key and test_redact_drops_a_sequence_under_a_sensitive_key_entirely. The over-redaction test passes on both versions, correctly - it guards a property the old matcher already had, so it is NOT claimed as a negative control. Restored with `git checkout --`; `git hash-object` returned ace7a5b086b2d4b2e1ac28c7db88f143206976eb, matching the pre-experiment value, and the tree was clean. Re-run this the same way if the matcher changes; do not copy the sentence forward.",
-    "functional_guard_proof": "Redaction stays surgical: a test pins idempotency_key, content_type, duration_ms and request_id as surviving. A substring matcher would swallow them and blind the withholding counter NEX-033 added, which is the purpose of the log line."
+    "negative_control_nex035": "The conformance suite carries its own negative control: HostileProvider breaks one rule at a time (order-dependent candidate list, a choice outside the candidate set, an over-long rationale, an out-of-range confidence) and a meta-test asserts assert_provider_conformance raises for each. A suite never shown to fail is not evidence of conformance, so this is the property the slice exists to establish.",
+    "defects_found_by_probing_not_assumed": "Five probes were run against the seam BEFORE any fix. Observed, not hypothesised: (1) provider_name accepted 580 characters while MAX_PROVIDER_NAME_LENGTH is 80 - the constant was dead; (2) an over-long rationale raised ValidationError through decide and surfaced as PROVIDER_ERROR; (3) a name property that raises propagated RuntimeError out of run(); (4) a bytes name was recorded as b'bytes-not-str'; (5) name was read once per run, which is correct, pinned so a refactor cannot make one evaluation disagree with itself."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -98,16 +100,16 @@
     "state": "open",
     "draft": true,
     "counters": {
-      "additions": 37356,
+      "additions": 38283,
       "deletions": 28,
-      "changed_files": 133,
-      "commits": 161
+      "changed_files": 134,
+      "commits": 166
     },
-    "counters_measured_at": "2026-11-25T17:41Z, from the PR object (not from any doc). Pre-docs-commit; re-measure before quoting.",
+    "counters_measured_at": "2026-11-25T18:18Z from the PR object AND cross-checked against `git diff --shortstat origin/main...HEAD` (134 files changed, 38283 insertions, 28 deletions) - the two agreed exactly. Measured after the NEX-035 product commit.",
     "body_updated": "PATCH 2026-11-25T16:49Z, body 43,921 chars, read back byte-equal. Adds the NEX-032 section, closes R31 and R32 in Known risks, refreshes the Phase 5 row and the Next steps item.",
-    "note": "Counters are pre-docs-commit values. Re-measure from the PR object before quoting.",
-    "head_read_from": "Read the PR head from GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) or `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never from this file: every commit that records a head becomes a new head, so the field is stale by construction. Last observed 2026-11-25T17:41Z at e386e02.",
-    "last_observed": "2026-11-25T17:41Z"
+    "note": "Counters measured post-product-commit, pre-docs-commit. Re-measure before quoting; the docs commit that records them changes them.",
+    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) reported 12f6fa9, and `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` reported 12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec. They agreed. Never read the head from this file.",
+    "last_observed": "2026-11-25T18:18Z"
   },
   "tracking_issue": {
     "number": 2,
@@ -128,9 +130,9 @@
     {
       "id": "R30",
       "severity": "low",
-      "summary": "A bounded contract exercised only against a stub has not been exercised against a real provider.",
-      "detail": "NEX-027 caps a decision's rationale at 400 characters, its confidence/score at [0.0, 1.0], and its choice set at the candidates the caller supplied. The stub adapter always answers at 0.1 confidence with a short rationale, so none of those bounds has met a real vendor payload. The first real adapter is the first genuine test; if it needs a wider rationale or more candidates, that is a contract change requiring review, not a tweak to a constant.",
-      "status": "open"
+      "summary": "The decision contract's bounds had only ever met a stub; a conformance suite now exercises each against a hostile payload, and building it found four real defects.",
+      "detail": "NEX-027 caps a decision's rationale at 400 characters, its confidence/score at [0.0, 1.0], and its choice set at the caller's candidates. The stub adapter always answers cheaply, so no bound had met a payload that tested it. NEX-035 ships tests/agent/test_decision_provider_conformance.py: assert_provider_conformance is the contract a real vendor adapter is run through, with meta-tests proving the suite rejects a hostile fake one violation at a time. Building it exposed a blind spot the bounds never covered - the provider's own NAME. EvaluateDecision guarded everything a provider answered and nothing about what it called itself, though a name is third-party input that lands in audit records, log fields and API responses. Fixed: validate_provider_name enforces the declared 80-char bound plus an identifier shape (a newline in a name is a log-injection vector); _safe_provider_name reads the name once, before anything else can fail, and degrades to 'unidentified' on a raise or a non-identifier, so third-party code cannot break a caller that has a deterministic fallback; and a ValidationError raised through decide is classified MALFORMED_OUTPUT rather than PROVIDER_ERROR, so an operator is not sent to check connectivity when the payload is the problem. Residual: the suite proves a CONFORMING adapter behaves. It cannot prove a vendor's model produces good judgments - that is an evaluation question, not a contract one.",
+      "status": "closed (NEX-035, 4/4 completed/success at 12f6fa9, polled 2026-11-25T18:14Z)"
     },
     {
       "id": "R29",
@@ -235,9 +237,9 @@
       "status": "open - accepted residual, documented"
     }
   ],
-  "next_task": "NEX-035",
-  "next_action": "Address R30 - the one live risk with no mitigation. Every bound in the decision contract (a rationale capped at 400 chars, confidence/score clamped to [0.0, 1.0], the choice set restricted to caller-supplied candidates) has only ever met the stub adapter, which always answers at 0.1 confidence with a short rationale. Build a conformance test suite that a real vendor adapter must pass, exercising each bound with an adversarial payload, so the first real adapter is not the first genuine test. Do not invent a vendor dependency: the suite is the deliverable, exercised against a deliberately hostile in-repo fake.",
-  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit is e386e02 on feature/agentic-enterprise-platform; the docs promotion follows in a separate commit, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-034 is CI-verified (4/4 at e386e02) - no poll needed. Start NEX-035 (R30 adapter conformance suite).",
+  "next_task": "NEX-036",
+  "next_action": "Audit the decisioning path's CALLERS for a swallowed abstention. The module's contract is that an abstention is advice and enforcement stays deterministic, but a caller that ignores DecisionEvaluation and proceeds would silently turn 'the provider could not judge' into 'allowed'. VERIFY THE PREMISE FIRST: grep -rn 'EvaluateDecision' src/notes_service to enumerate actual callers before assuming any exist; the previous two slices' next_action fields were both stale, so check the code, not the note. For each real caller, pin with a test what it does when the outcome is ABSTAIN with reason DISABLED, PROVIDER_ERROR and MALFORMED_OUTPUT. This is the fail-closed question and the one part of M2.6 no test covers yet.",
+  "recovery_instructions": "Read this file and docs/NEXUS/STATE.md. Implementation commit is 12f6fa9 on feature/agentic-enterprise-platform; the docs promotion follows in a separate commit, so the true head is `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never this field. NEX-035 is CI-verified (4/4 at 12f6fa9, polled 2026-11-25T18:14Z) - no poll needed. Start NEX-036 (caller fail-closed audit), but verify callers exist before scoping it.",
   "ci_status": {
     "nex030_slice_0727628": "OBSERVED 4/4 completed/success at 0727628, all check runs head_sha=0727628, completed 2026-11-25T15:45:47-58Z (ids 139325893086, 139325893633, 139325908505, 139325908590). Polled 2026-11-25T15:46Z.",
     "nex029_slice_f71745e": "Never pollable green: all four check runs read completed/cancelled because docs commit e3b8517 superseded it. Verified instead by descendant-CI at e3b8517 (4/4 success, head_sha=e3b8517), which is a docs-only child of f71745e and whose tree contains all three NEX-029 product files.",
@@ -246,7 +248,8 @@
     "nex031_slice_240a446": "OBSERVED 4/4 completed/success at 240a446, every check run head_sha=240a4465fb2c7db3e94ddbc6fa4fa2f09490ab25 (ids 139340978511, 139340978877, 139341004059, 139341004430), completed 2026-11-25T16:20:51-16:21:32Z, polled 2026-11-25T16:22Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event.",
     "nex032_slice_fe5eadc": "OBSERVED 4/4 completed/success at fe5eadc, every check run head_sha=fe5eadca918b26412cea4374ac5a02b162cb086b, started 2026-11-25T16:43:38-43Z, completed 2026-11-25T16:44:33-16:45:13Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build) runs, one pair per push and pull_request event. Polled 2026-11-25T16:47Z.",
     "nex033_slice_bf84a7c": "OBSERVED Backend completed/success + Frontend completed/success at bf84a7c, plus the duplicate pull_request pair completed/cancelled by the CI concurrency group. Polled 2026-11-25T17:33Z.",
-    "nex034_slice_e386e02": "OBSERVED 4/4 completed/success at e386e02, every check run head_sha=e386e02 (13935724602-series). Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build), one pair per push and pull_request event. Polled 2026-11-25T17:41Z."
+    "nex034_slice_e386e02": "OBSERVED 4/4 completed/success at e386e02, every check run head_sha=e386e02 (13935724602-series). Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build), one pair per push and pull_request event. Polled 2026-11-25T17:41Z. RE-POLLED 2026-11-25T18:15Z in run NEX-2026-11-25-36: still 4/4 completed/success, confirming the docs commit above it did NOT disturb it.",
+    "nex035_slice_12f6fa9": "OBSERVED 4/4 completed/success at 12f6fa9, every check run head_sha=12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec, started 2026-11-25T18:13:11-18Z, polled 2026-11-25T18:14Z. Two Backend (ruff/mypy/pytest/migrations) and two Frontend (typecheck/lint/test/build), one pair per push and pull_request event."
   },
   "verified_tasks": [
     "NEX-001",
@@ -285,27 +288,27 @@
     "NEX-031",
     "NEX-032",
     "NEX-033",
-    "NEX-034"
+    "NEX-034",
+    "NEX-035"
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
   "commit_scope": "commit names the last commit carrying real implementation (e386e02, NEX-034). The docs promotion above it is separate. The true branch head must be read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API - never from a checkpoint field, which is always one commit stale because writing it creates a commit.",
   "head_at_checkpoint": "read from git ls-remote / GitHub API, not from this file",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local: ruff format/check clean, mypy 107 files clean, pytest 877 passed / 4 skipped. CI: 4/4 completed/success at e386e02 (NEX-034), polled 2026-11-25T17:41Z.",
+  "validation_status": "Local: ruff format/check clean, mypy 107 files clean, pytest 911 passed / 4 skipped (baseline 881 measured, not assumed). CI: 4/4 completed/success at 12f6fa9 (NEX-035), polled 2026-11-25T18:14Z.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
     "NEX-032": "Withholding is observable with a reason per field. Product commit fe5eadc, CI 4/4 at that SHA.",
     "NEX-033": "Withholding becomes a rate via the WithholdingRecorder port; JsonFormatter allowlist removed; redact() wired onto the formatting path. Product commit bf84a7c, CI 4/4 at that SHA (polled 2026-11-25T17:33Z).",
-    "NEX-034": "The log redactor recognises a credential by shape rather than an exact key spelling, and replaces a sequence under a sensitive key whole. Product commit e386e02, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T17:41Z)."
+    "NEX-034": "The log redactor recognises a credential by shape rather than an exact key spelling, and replaces a sequence under a sensitive key whole. Product commit e386e02, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T17:41Z).",
+    "NEX-035": "The adapter conformance suite R30 asked for, plus four fixes at the provider identity seam that building it exposed. Product commit 12f6fa9, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T18:14Z). 555 insertions across 3 files."
   },
-  "branch_head_observed_at": "2026-11-25T17:52Z",
+  "branch_head_observed_at": "2026-11-25T18:18Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
-    "e386e02": "NEX-034 product fix - credential recognition by shape (the implementation commit)",
-    "879b494": "docs - NEX-033/NEX-034 verified in checkpoint, STATE, BACKLOG; PR #3 and issue #2 refreshed",
-    "746fd88": "docs - run NEX-2026-11-25-35 execution log entry, with the negative control executed"
+    "12f6fa9": "NEX-035 product fix - provider identity seam enforcement + conformance suite (implementation)"
   },
   "delivery_state": {
     "pr_3_body": "PATCHed, verified byte-identical to /tmp/pr3_expected.md at 50720 chars. NEX-033 and NEX-034 sections appended (neither was present before); the counter line replaced with measured figures 37593 additions / 28 deletions / 133 files / 162 commits, read from the PR object at 17:41Z.",
@@ -314,22 +317,21 @@
     "ci_docs_heads": "879b494 and 746fd88 are NOT polled and NOT claimed. A superseded docs head reads completed/cancelled, which is neither pass nor fail."
   },
   "run_summary": {
-    "run_id": "NEX-2026-11-25-35",
-    "started_commit": "e386e02",
-    "ending_commit": "746fd88",
-    "slices_completed": 0,
+    "run_id": "NEX-2026-11-25-36",
+    "started_commit": "8551099",
+    "ending_commit": "12f6fa9",
+    "slices_completed": 1,
     "slices_promoted": [
-      "NEX-033",
-      "NEX-034"
+      "NEX-035"
     ],
-    "why_no_new_slice": "Approximately 10 minutes remained at the integration boundary. The operating rules forbid starting a new slice with under 10 minutes left; continuing would have left an uncommitted tree the next run must discard. The remaining time went to executing the NEX-034 negative control, which had been published in three places without being re-run.",
-    "next_action_unchanged": true
+    "note": "One complete slice: implemented, tested, committed, pushed, and CI-verified before the integration boundary. R30 is closed."
   },
   "head_observation": {
     "note": "This is a POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is already stale by one commit. Never read the current head from this file - run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, or read the GitHub /branches API. A local origin/* tracking ref is NOT evidence: it can be stale even after a successful push.",
-    "last_observed_sha": "49d246c",
-    "last_observed_at": "2026-11-25T17:55Z",
+    "last_observed_sha": "12f6fa9",
+    "last_observed_at": "2026-11-25T18:18Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
   },
-  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more."
+  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
+  "run_id_collision": "NEX-2026-11-25-35 was ALREADY used by at least four earlier entries in docs/NEXUS/EXECUTION_LOG.md (grep -c 'NEX-2026-11-25-35' returned 7). This run therefore uses NEX-2026-11-25-36. Run ids have been reused for at least 4 consecutive runs (-28..-35 all show 3-7 occurrences), so the id is NOT a unique key and must not be used to address a run. Address runs by commit SHA. The collision is recorded rather than silently renumbered so the log stays honest about what it already contains."
 }

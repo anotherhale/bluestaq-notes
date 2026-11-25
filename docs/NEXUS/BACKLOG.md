@@ -1599,10 +1599,10 @@ raw content leaves the process — only a hash.
 
 **Migration:** none. **New dependencies:** none.
 
-**R30 (new, low):** the stub is the only adapter, so the 400-character rationale bound and the
-50-candidate cap have only been exercised against a provider that answers cheaply. A real
-vendor response is the first genuine test of those bounds; widening either is a contract
-change, not a tweak.
+**R30 (closed by NEX-035):** the stub was the only adapter, so the 400-character rationale
+bound and the 50-candidate cap had only been exercised against a provider that answers
+cheaply. NEX-035 shipped the conformance suite and, in building it, found the provider
+*identity* was never policed at all — see the NEX-035 entry at the end of this file.
 
 **Next action:** context assembly — the other half of M2.6. It decides *what* the context hash
 is computed over and what may enter a request.
@@ -1972,3 +1972,69 @@ predecessor is direction: the matcher now fails on *vocabulary*, not on
 *spelling*, so a new vendor's `client_secret` is caught without anyone editing a
 set. Widening vocabulary is cheap and additive; the structural hole — one
 spelling per entry — is closed.
+
+---
+
+## NEX-035 — The adapter was policed on its answer and trusted on its name (closes R30)
+
+**Phase:** 5 (durable runtime) / M2.6 decisioning. **Priority:** P1.
+**Status:** VERIFIED — 4/4 `completed/success` at `12f6fa9`, polled 2026-11-25T18:14Z.
+
+### Objective
+
+Close R30: every bound in the decision contract had only ever met the stub adapter, which
+always answers at 0.1 confidence with a short rationale. Build the conformance suite a real
+vendor adapter must pass, so the first real adapter is not the first genuine test.
+
+### The defect the suite found
+
+`EvaluateDecision` guarded everything a provider *answered* — the 400-character rationale
+bound, the `[0.0, 1.0]` confidence range, the caller-supplied candidate choice set — and
+guarded nothing about what a provider *called itself*. A `DecisionProvider` implements both
+`decide` and a `name` property. Only `decide` was treated as third-party code, although the
+name reaches audit records, structured log fields, and API responses.
+
+Five probes were run **before any fix**, so each finding is an observation:
+
+| Probe | Observed |
+| --- | --- |
+| Over-long name | `provider_name` accepted 580 chars; `MAX_PROVIDER_NAME_LENGTH` is 80 and was never read |
+| Over-long rationale | `ValidationError` from inside `decide` surfaced as `PROVIDER_ERROR` |
+| Raising `name` property | `RuntimeError` propagated out of `run()` |
+| Non-`str` name | recorded verbatim as `b'bytes-not-str'` |
+| Name read count | once per run — correct, now pinned |
+
+### The fix
+
+- `domain/agent/decisioning.py` — `validate_provider_name` enforces the bound it always
+  declared, plus an identifier shape (`^[a-z0-9][a-z0-9._-]*$`). It raises rather than
+  coercing: a truncated name would record a *different* provider than the one that answered.
+- `application/use_cases/decisioning.py` — `_safe_provider_name` reads the name once, before
+  anything else can fail, and degrades to `UNIDENTIFIED_PROVIDER`. Reading it lazily inside
+  `_evaluation` would also have read it on the disabled path, where the provider was never
+  called. A `ValidationError` through `decide` is now `MALFORMED_OUTPUT`, not
+  `PROVIDER_ERROR`.
+
+### Acceptance criteria
+
+- [x] A conformance helper exists that a real vendor adapter is run through.
+- [x] Every contract bound is exercised with a payload that violates it.
+- [x] The suite is proven to *reject* violations, not merely to accept the stub.
+- [x] A provider name is bounded and identifier-shaped, or recorded as `unidentified`.
+- [x] Third-party code cannot raise out of `run()`.
+
+### Tests
+
+`tests/agent/test_decision_provider_conformance.py` — 30 tests. Meta-tests drive a
+`HostileProvider` that breaks one rule at a time and assert the suite raises for each, so the
+conformance check has been shown to fail. Full suite 881 → **911 passed / 4 skipped**; the
+881 baseline was measured by re-running with the new file ignored, not inferred.
+
+### Migration / dependencies
+
+None. No schema change, no new dependency.
+
+### Residual
+
+The suite proves a *conforming* adapter behaves. It cannot prove a vendor's model produces
+good judgments — that is an evaluation question, not a contract one.

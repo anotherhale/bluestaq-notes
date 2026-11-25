@@ -4397,3 +4397,138 @@ one of those bounds has only ever met the stub adapter, which always answers at 
 confidence with a short rationale — so the first real adapter would otherwise be the
 first genuine test of them. No vendor dependency: the suite is the deliverable,
 exercised against a deliberately hostile in-repo fake.
+
+## Run NEX-2026-11-25-36
+
+**Run ID:** NEX-2026-11-25-36
+**Timestamp:** 2026-11-25T18:01Z - 18:25Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `8551099` (local == remote on entry)
+**Ending commit:** `12f6fa9` (product implementation; the docs promotion follows above it)
+
+### Run ID collision — recorded, not silently renumbered
+
+`NEX-2026-11-25-35` was already used by four earlier entries in this file
+(`grep -o 'NEX-2026-11-25-[0-9]*' | sort | uniq -c` shows 7 occurrences of `-35`). Run
+ids have been reused for at least four consecutive runs: `-28` through `-35` each appear
+between 3 and 7 times. **The run id is not a unique key and must not be addressed as
+one.** Runs are addressed by commit SHA. This run uses `-36` because it is the next
+unused number, and the collision is recorded here so a later reader does not conclude
+that seven different runs really were run `-35`.
+
+### Tasks completed
+
+**NEX-035 — the adapter was policed on its answer and trusted on its name. VERIFIED.**
+
+R30 asked for a conformance suite so the first real vendor adapter would not be the
+first genuine test of the decision contract. The suite was written, and writing it
+found that the contract had a blind spot: `EvaluateDecision` guarded everything a
+provider *answered* — rationale length, confidence range, choice set — and guarded
+nothing about what a provider *called itself*. An adapter implements both `decide` and
+the `name` property; only the first was treated as third-party code.
+
+### Defects were probed, not assumed
+
+Five probes ran against the seam **before any fix**, so each defect below is an
+observation rather than a hypothesis:
+
+1. `provider_name` accepted **580 characters** while `MAX_PROVIDER_NAME_LENGTH` is 80.
+   The constant was declared and never read — dead code that looked like enforcement,
+   which is the most misleading kind of missing control.
+2. An over-long `rationale` raised `ValidationError` inside `decide` and surfaced as
+   `PROVIDER_ERROR`, sending an operator to check connectivity when the payload was the
+   problem.
+3. A `name` property that raised propagated a `RuntimeError` out of `run()`, breaking
+   the module's own rule that a provider failure is an abstention.
+4. A non-`str` name was carried into the record verbatim — `provider_name` came back as
+   `b'bytes-not-str'`.
+5. `name` was read once per run (correct); the probe pinned it so a refactor cannot make
+   one evaluation disagree with itself.
+
+### Files changed
+
+- `src/notes_service/domain/agent/decisioning.py` (+35) — `validate_provider_name`
+  enforces the 80-char bound it always declared plus an identifier shape
+  (`^[a-z0-9][a-z0-9._-]*$`). A provider name reaches audit records, structured log
+  fields and API responses, so a newline in it is a log-injection vector, not a cosmetic
+  wart. It raises rather than coercing: a truncated name would record a *different*
+  provider than the one that answered.
+- `src/notes_service/application/use_cases/decisioning.py` (+81/−4) —
+  `_safe_provider_name` reads the name once, before anything else can fail, and degrades
+  to `UNIDENTIFIED_PROVIDER` on a raise or non-identifier value; reading it lazily inside
+  `_evaluation` would also have read it on the disabled path, where the provider was
+  never called and its name may not resolve. `ValidationError` raised through `decide` is
+  now classified `MALFORMED_OUTPUT`, caught ahead of the broad `except Exception` that
+  would otherwise have reported a contract violation as a vendor outage.
+- `tests/agent/test_decision_provider_conformance.py` (new, 30 tests) — the R30
+  deliverable. `assert_provider_conformance` is the contract a real vendor adapter is run
+  through; the meta-tests run a deliberately hostile fake that breaks one rule at a time
+  and assert the suite **rejects** it. A conformance suite never shown to fail is not
+  evidence of conformance.
+
+Total: 3 files, 555 insertions, 4 deletions.
+
+### Tests executed
+
+- `pytest tests/agent/test_decision_provider_conformance.py` — 30 passed.
+- Full suite — **911 passed / 4 skipped / 0 failed**. The 881 baseline was **measured**
+  this run by re-running with `--ignore=tests/agent/test_decision_provider_conformance.py`
+  and reading the junit XML: 881 + 30 = 911 exactly. It was not inferred from arithmetic,
+  because the previous run had already recorded one test count against the wrong slice.
+- `ruff format` — clean after reformatting 3 files. `ruff check` — 2 errors found and
+  fixed (1 autofix, 1 manual). `mypy` — clean over 107 source files.
+
+### CI status
+
+**`12f6fa9` (NEX-035): 4/4 `completed/success`**, every check run reporting `head_sha`
+`12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec` — two Backend (ruff/mypy/pytest/migrations)
+and two Frontend (typecheck/lint/test/build), one pair per `push` and `pull_request`
+event. Polled 2026-11-25T18:14Z.
+
+`e386e02` (NEX-034) was **re-polled** at 18:15Z and is still 4/4 `completed/success`,
+which confirms the docs commit above it did not disturb it. This closes an open item
+from the previous run rather than carrying it forward.
+
+### Push status
+
+Pushed to `origin/feature/agentic-enterprise-platform`. Verified with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` →
+`12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec`, equal to local HEAD. The local `origin/*`
+tracking ref was **not** used as evidence — it can be stale even after a successful push.
+
+### Security findings
+
+- The provider identity seam was an **unpoliced third-party input** on a path that
+  produces audit records. It is now bounded and shape-checked, and a failure degrades to
+  a recorded `unidentified` rather than propagating or being recorded as an arbitrary
+  string.
+- Classification of a contract violation changed from `PROVIDER_ERROR` to
+  `MALFORMED_OUTPUT`. This is a correctness fix for operators, not a security fix: the
+  outcome was an abstention either way, which is fail-closed.
+
+### Decisions
+
+- One slice only, and it was finished. CI was polled and green **before** any docs commit
+  was pushed, so the evidence names the exact product SHA rather than a docs head that
+  would read `completed/cancelled`.
+- Did not invent a vendor dependency to satisfy R30. The suite is the deliverable and it
+  is exercised against a hostile in-repo fake, which is stronger for the contract's
+  purpose than a real vendor would be.
+
+### Reconciliation findings
+
+- **Run ids are not unique** (above). Four consecutive runs reused ids; `-35` appeared
+  seven times. Recorded in `CHECKPOINT.json.run_id_collision`.
+- The checkpoint's `project_phase` still described the tree as ending at NEX-034 and its
+  `next_action` still named NEX-035, which this run executed. Both are now current.
+
+### Next action
+
+**NEX-036 — audit the decisioning path's callers for a swallowed abstention.** The
+module's contract is that an abstention is advice and enforcement stays deterministic,
+but a caller that ignores `DecisionEvaluation` and proceeds would silently turn "the
+provider could not judge" into "allowed". **Verify the premise first** —
+`grep -rn 'EvaluateDecision' src/notes_service` — because the last two runs' `next_action`
+fields were both stale. Then pin, for each real caller, what it does on `ABSTAIN` with
+reason `DISABLED`, `PROVIDER_ERROR` and `MALFORMED_OUTPUT`. This is the fail-closed
+question and the one part of M2.6 no test covers yet.

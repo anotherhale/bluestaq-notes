@@ -7,15 +7,66 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-034 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-035 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `eb1a2c8` — the NEX-033 docs promotion over product commit `bf84a7c`. |
-| Head commit (run end) | `e386e02` is NEX-034's product commit (see `git log -1` for the docs promotion above it). |
-| Last CI result | **`bf84a7c` (NEX-033): VERIFIED** — Backend `completed/success` + Frontend `completed/success`; the duplicate `pull_request` pair `completed/cancelled` by the concurrency group. Polled 2026-11-25T17:33Z. **`e386e02` (NEX-034): in progress** at time of writing — poll before quoting. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Base commit (run start) | `8551099` — the NEX-034 docs promotion over product commit `e386e02`. |
+| Head commit (run end) | `12f6fa9` — NEX-035's product commit (docs promotion follows above it). |
+| Last CI result | **`12f6fa9` (NEX-035): VERIFIED** — 4/4 `completed/success`, every check run reporting `head_sha` `12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec` (both the push and the pull_request run), polled 2026-11-25T18:14Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
 | Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. |
 | Draft PR | #3 (draft, unmerged — human review required). **Current as of `fe5eadc`**: body PATCHed 2026-11-25T16:49Z (43,921 chars, read back byte-equal) with the NEX-032 section, R31/R32 closed, and the Phase 5 row refreshed. Counters 36,587 additions / 10 deletions / 127 files / 156 commits, measured from the PR object at 16:46Z — **pre-docs-commit**, so re-measure before quoting. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-035 (run `NEX-2026-11-25-36`) — the adapter was policed on its answer and trusted on its name
+
+R30 asked for a conformance suite so the first real vendor adapter would not be the first
+genuine test of the decision contract. The suite is written, and writing it found that the
+contract had a blind spot: `EvaluateDecision` guarded everything a provider *answered* — the
+rationale length, the confidence range, the choice set — and guarded nothing about what a
+provider *called itself*. An adapter implements both `decide` and the `name` property; only
+the first was treated as third-party code.
+
+Five probes against the seam, run before any fix, established the defects rather than
+assuming them:
+
+- `provider_name` accepted 580 characters although `MAX_PROVIDER_NAME_LENGTH` is 80. The
+  constant was declared and never read — dead code that looked like enforcement, which is the
+  most misleading kind of missing control.
+- An over-long `rationale` raised `ValidationError` inside `decide` and surfaced as
+  `PROVIDER_ERROR`. Operationally that sends an operator to check connectivity when the
+  payload is what violated the contract.
+- A `name` property that raised propagated a `RuntimeError` out of `run`, breaking the module's
+  own rule 2 ("a provider failure is an abstention").
+- A non-`str` name was carried into the record unchanged — `provider_name` came back as
+  `b'bytes-not-str'`.
+- `name` was read once per run, which is the correct count; the probe pinned it so a future
+  refactor cannot quietly make the name disagree with itself across a single evaluation.
+
+The fixes are small and sit at the seam, not in the domain contract:
+
+- `validate_provider_name` in `domain/agent/decisioning.py` checks the bound it always
+  declared, plus the shape the value must have. A provider name lands in audit records,
+  structured log fields, and API responses, so it must be a lowercase identifier — a newline
+  in it is a log-injection vector, not a cosmetic wart. It raises rather than coercing: a
+  silently truncated name would record a *different* provider than the one that answered.
+- `_safe_provider_name` in the use case reads the name **once**, before anything else can
+  fail, and degrades to `UNIDENTIFIED_PROVIDER` on a raise or a non-identifier value. Reading
+  it lazily inside `_evaluation` would also have read it on the disabled path, where the
+  provider was never called and its name may not resolve.
+- `ValidationError` raised through `decide` is now classified `MALFORMED_OUTPUT`, caught
+  ahead of the broad `except Exception` that would otherwise have reported it as a vendor
+  outage.
+
+The suite itself (`tests/agent/test_decision_provider_conformance.py`, 30 tests) is the R30
+deliverable: `assert_provider_conformance` is the contract a real vendor adapter is run
+through, and the meta-tests run a deliberately hostile fake that breaks one rule at a time and
+assert the suite *rejects* it. A conformance suite that has never been shown to fail is not
+evidence of conformance.
+
+Status: **VERIFIED** — CI at `12f6fa9` is 4/4 `completed/success`, every check run reporting
+`head_sha` `12f6fa9dc29fd67d4d4c2dc884535e7041aaf2ec`, polled 2026-11-25T18:14Z. Local gates:
+`ruff format` clean, `ruff check` clean, `mypy` clean over 107 source files, full `pytest`
+**911 passed / 4 skipped** (baseline 881; the delta is the 30 new tests).
 
 ## NEX-028 (run `NEX-2026-11-25-31`) — a hash of a secret is still a fact about the secret
 
@@ -121,10 +172,19 @@ the probe was deleted and the file re-verified clean. **CI at `fb8d5bd` is 4/4
 `completed/success`, every `head_sha` equal to `fb8d5bd`, polled 2026-11-25T14:18Z** — so
 NEX-027 is VERIFIED on a run at its own SHA, not on descendant-CI.
 
-**R30 (new, low).** The stub is the only adapter, so the port's shape has been exercised
-against one implementation that always answers cheaply. A real provider will be the first to
-test whether the 400-character rationale bound and the 50-candidate cap fit a genuine vendor
-response; if either is too tight, widening it is a contract change, not a tweak.
+**R30 (closed 2026-11-25, run `NEX-2026-11-25-36`).** The stub is the only adapter, so the
+port's shape had been exercised against one implementation that always answers cheaply — the
+400-character rationale bound, the `[0.0, 1.0]` ranges and the candidate choice-set had never
+met a payload that tested them. NEX-035 shipped the conformance suite R30 asked for
+(`tests/agent/test_decision_provider_conformance.py`), whose `assert_provider_conformance` a
+real vendor adapter is run through, with meta-tests that assert the suite rejects a hostile
+fake one violation at a time. Building it found the seam was policed on the *answer* and
+trusted on the *name*: `MAX_PROVIDER_NAME_LENGTH` was declared and never read, a raising
+`name` property escaped as a `RuntimeError`, a non-`str` name was recorded verbatim, and a
+contract-violating rationale was misreported as `PROVIDER_ERROR`. All four are fixed. Closed
+on VERIFIED evidence: 4/4 `completed/success` at `12f6fa9`, polled 2026-11-25T18:14Z.
+Residual: the suite proves a *conforming* adapter behaves; it cannot prove a vendor's model
+produces good judgments. That is an evaluation question, not a contract one.
 
 ## NEX-026 (run `NEX-2026-11-25-29`) — an approval must be judged against the clock that stamped it
 
@@ -926,14 +986,28 @@ None currently. The following are known open items, not blockers:
    `e386e02`; CI poll pending. The matcher now decides on credential *shape* (separator and
    camelCase segmentation, plurals, non-sensitive compounds) instead of eleven exact
    strings, and a sequence under a sensitive key is replaced whole instead of leaking.
-9. **Poll CI at `e386e02` and promote NEX-034 if green.** A docs commit that follows it will
-   read `completed/cancelled` once superseded — that is the concurrency group, never evidence.
-10. **Then R30, the one live risk with no mitigation.** Every bound in the decision contract
-    (400-char rationale, `[0.0, 1.0]` confidence, the candidate choice set) has only ever
-    met the stub adapter, which always answers at 0.1 confidence with a short rationale. The
-    first real vendor adapter is the first genuine test of those bounds. R29's stated
+9. ~~**Poll CI at `e386e02` and promote NEX-034 if green.**~~ **Satisfied** — 4/4
+   `completed/success`, every `head_sha` equal to `e386e02`, polled 2026-11-25T18:15Z. NEX-034
+   is CI-verified. A docs commit that follows a product commit reads `completed/cancelled` once
+   superseded — that is the concurrency group, never evidence.
+10. ~~**Then R30, the one live risk with no mitigation.**~~ **Satisfied by NEX-035** — the
+    conformance suite exists and R30 is closed. Every bound in the decision contract
+    (400-char rationale, `[0.0, 1.0]` confidence, the candidate choice set) now has a test
+    that exercises it against a hostile payload, not only against the stub. R29's stated
     `str.__new__` residual on `ContextHash` is a deliberate, documented trade-off, not a gap
     to close.
+11. ~~**NEX-035: the provider identity seam.**~~ **Satisfied** — IMPLEMENTED, TESTED,
+    COMMITTED, PUSHED and **CI VERIFIED**: 4/4 `completed/success` at `12f6fa9`, every
+    `head_sha` equal to `12f6fa9`, polled 2026-11-25T18:14Z.
+12. **Next: audit the decisioning path's *callers* for a swallowed abstention.** The module's
+    contract is that an abstention is advice and enforcement stays deterministic — but a
+    caller that ignores `DecisionEvaluation` and proceeds on `None` would silently turn
+    "the provider could not judge" into "allowed". Enumerate every production caller of
+    `EvaluateDecision.run`, and for each, pin with a test what it does when the outcome is
+    `ABSTAIN` with reason `DISABLED`, `PROVIDER_ERROR` and `MALFORMED_OUTPUT`. This is the
+    fail-closed question, and it is the one part of M2.6 no test covers yet. Verify the
+    premise first: `grep -rn "EvaluateDecision\|\.run(" src/notes_service/application`
+    before assuming callers exist.
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate
