@@ -100,6 +100,33 @@ def test_advisory_route_404s_for_a_non_owner(client: TestClient) -> None:
     assert response.status_code == 404, response.text
 
 
+def test_advisory_route_409s_once_the_request_is_decided(client: TestClient) -> None:
+    """A settled request has no advisory, and the refusal is not a silent 200.
+
+    The approval is decided through the real route, so this covers the HTTP
+    consequence of the status guard rather than the use case in isolation: a
+    client must learn that its question is closed, not receive a score it would
+    read as the opinion behind the decision.
+    """
+    agent_id = _agent(client, "svc-advisory-settled")
+    approval_id = _pending(client, agent_id, "note:00000000-0000-0000-0000-000000000001")
+
+    decided = client.post(
+        f"/api/v1/agents/approvals/{approval_id}/decision",
+        headers=auth_headers(ALICE),
+        json={"approve": True},
+    )
+    assert decided.status_code == 200, decided.text
+
+    response = client.get(
+        f"/api/v1/agents/approvals/{approval_id}/advisory", headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 409, response.text
+    error = response.json()["error"]
+    assert error["code"] == "conflict"
+    assert "pending" in error["message"]
+
+
 def test_advisory_route_requires_authentication(client: TestClient) -> None:
     agent_id = _agent(client, "svc-advisory-anon")
     approval_id = _pending(client, agent_id, "note:00000000-0000-0000-0000-000000000001")

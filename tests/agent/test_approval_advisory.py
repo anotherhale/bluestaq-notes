@@ -22,14 +22,17 @@ These tests pin the three properties that make the wiring safe:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
-from notes_service.application.errors import ResourceNotFound
+from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.use_cases.agents import (
+    DecideApprovalRequest,
     OpenApprovalRequest,
     RegisterAgent,
+    RevokeApprovalRequest,
 )
 from notes_service.application.use_cases.approval_advisory import (
     ApprovalAdvisory,
@@ -214,6 +217,94 @@ def test_advisory_for_another_users_approval_is_404(h: Harness) -> None:
 def test_missing_approval_is_404(h: Harness) -> None:
     with pytest.raises(ResourceNotFound):
         h.recommend.run(principal_for(ALICE), approval_id="00000000-0000-0000-0000-0000000000ff")
+
+
+# --------------------------------------------------------------------------
+# 1b. A settled question has no advisory.
+# --------------------------------------------------------------------------
+
+
+def _decide(h: Harness, principal: Principal, approval_id: str, *, approve: bool):
+    return DecideApprovalRequest(
+        uow_factory=lambda: SqlAlchemyUnitOfWork(h.session_factory),
+        authorization=DefaultAuthorizationProvider(),
+        clock=SystemClock(),
+    ).run(principal, approval_id=approval_id, approve=approve)
+
+
+def test_approved_request_has_no_advisory(h: Harness) -> None:
+    """The decision is made; a fresh score would read as the opinion behind it."""
+    principal = principal_for(ALICE)
+    request = h.pending_approval(principal, "note:00000000-0000-0000-0000-000000000001")
+    _decide(h, principal, str(request.id), approve=True)
+
+    with pytest.raises(Conflict) as excinfo:
+        h.recommend.run(principal, approval_id=str(request.id))
+
+    assert "pending" in str(excinfo.value)
+    # The refusal must not spend a count: nobody was advised.
+    assert h.recorder.snapshot().advisories_total == 0
+
+
+def test_denied_request_has_no_advisory(h: Harness) -> None:
+    principal = principal_for(ALICE)
+    request = h.pending_approval(principal, "note:00000000-0000-0000-0000-000000000001")
+    _decide(h, principal, str(request.id), approve=False)
+
+    with pytest.raises(Conflict):
+        h.recommend.run(principal, approval_id=str(request.id))
+
+
+def test_revoked_request_has_no_advisory(h: Harness) -> None:
+    """A revoked grant is withdrawn authority, not an open question."""
+    principal = principal_for(ALICE)
+    request = h.pending_approval(principal, "note:00000000-0000-0000-0000-000000000001")
+    _decide(h, principal, str(request.id), approve=True)
+    RevokeApprovalRequest(
+        uow_factory=lambda: SqlAlchemyUnitOfWork(h.session_factory),
+        authorization=DefaultAuthorizationProvider(),
+        clock=SystemClock(),
+    ).run(principal, approval_id=str(request.id))
+
+    with pytest.raises(Conflict):
+        h.recommend.run(principal, approval_id=str(request.id))
+
+
+def test_expired_request_has_no_advisory(h: Harness) -> None:
+    """Expiry is judged with the use case's clock, not the wall clock.
+
+    The request is opened on the real clock and is genuinely pending in the
+    database; only the advising clock has moved past its validity bound. A caller
+    that read ``is_expired`` (wall clock) instead of ``expired_at(now=...)`` would
+    hand out advice here.
+    """
+    principal = principal_for(ALICE)
+    request = h.pending_approval(principal, "note:00000000-0000-0000-0000-000000000001")
+
+    late = RecommendApprovalDecision(
+        uow_factory=lambda: SqlAlchemyUnitOfWork(h.session_factory),
+        authorization=DefaultAuthorizationProvider(),
+        clock=FrozenClock(request.expires_at + timedelta(seconds=1)),
+        evaluate_decision=EvaluateDecision(
+            provider=StubDecisionProvider(), enabled=True, min_confidence=0.05
+        ),
+        withholding_recorder=InMemoryWithholdingRecorder(),
+    )
+
+    with pytest.raises(Conflict) as excinfo:
+        late.run(principal, approval_id=str(request.id))
+
+    assert "expired" in str(excinfo.value)
+
+
+def test_pending_request_is_still_advised_after_the_guard(h: Harness) -> None:
+    """The guard rejects settled requests only; the live case still works."""
+    principal = principal_for(ALICE)
+    request = h.pending_approval(principal, "note:00000000-0000-0000-0000-000000000001")
+
+    advisory = h.recommend.run(principal, approval_id=str(request.id))
+
+    assert advisory.is_advisory_available is True
 
 
 # --------------------------------------------------------------------------

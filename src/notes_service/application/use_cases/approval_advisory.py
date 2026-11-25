@@ -28,6 +28,13 @@ code is shaped the way it is:
   erroring, or the confidence below the threshold, the result abstains and the
   human decides alone. That is the fail-closed outcome: the platform does not
   substitute a guess for a decision it is not allowed to make.
+* **Only a live question has an answer.** An advisory is advice about a decision
+  still to be made, so a request that is already approved, denied, revoked,
+  expired or spent is refused rather than answered. Returning a score for a
+  settled request invites a reviewer to read it as a second opinion on a choice
+  that was already made — and invites a *later* reader to mistake it for one that
+  helped make the choice. It also spends provider time and a withholding count on
+  a question nobody can act on.
 
 The provider is asked a *score* question, never a yes/no. A binary "approve"
 verdict would be an affordance a caller could read as consent; a number in
@@ -40,7 +47,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from notes_service.application.errors import ResourceNotFound
+from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.withholding import WithholdingRecorder
@@ -101,7 +108,9 @@ class RecommendApprovalDecision(UseCase):
     """Ask the configured provider for a second opinion on a pending approval.
 
     Ownership is checked exactly as on every other approval path: a non-owner
-    gets 404, so an approval id cannot probe for another user's agent.
+    gets 404, so an approval id cannot probe for another user's agent. A request
+    that is no longer pending, or has expired, gets 409: advice about a decision
+    already made is not advice.
     """
 
     def __init__(
@@ -125,6 +134,23 @@ class RecommendApprovalDecision(UseCase):
             # Same 404-not-403 rule as Get/Decide/Revoke: the agent's existence
             # is private, so an approval id must not reveal another user's agent.
             load_owned_agent(uow, principal=principal, agent_id=str(request.agent_id))
+
+            # Advice is about a decision still to be made. Answering for a settled
+            # request would attach a fresh score to a choice already taken, which
+            # a reader can mistake for the opinion that produced it. The status is
+            # checked here rather than in the aggregate because nothing is being
+            # mutated: this is a precondition on the question, not on a transition.
+            # Expiry is judged with this use case's clock, the same one that
+            # stamped the bound, never the wall clock (see R29).
+            if not request.is_pending:
+                raise Conflict(
+                    f"an advisory is only available for a pending approval; "
+                    f"this one is {request.status.value}"
+                )
+            if request.expired_at(now=self._clock.now()):
+                raise Conflict(
+                    "an advisory is only available for a live approval; this one has expired"
+                )
 
             envelope = self._build_envelope(uow, principal=principal, request=request)
             # Nothing is written: reading an advisory must not change the record

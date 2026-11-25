@@ -350,7 +350,9 @@ def recommend_approval_decision(
     This is the only production route into the judgment path. The answer is an
     advisory score plus the confidence and context digest behind it; the request
     stays ``PENDING`` and the human still has to decide. A non-owner gets 404 for
-    the same reason as the rest of the approvals endpoints.
+    the same reason as the rest of the approvals endpoints; a request that is
+    already decided, revoked or expired gets 409, because there is no longer a
+    decision for the advice to inform.
     """
     advisory = container.recommend_approval_decision().run(principal, approval_id=str(approval_id))
     return ApprovalAdvisoryResponse.from_domain(advisory)
