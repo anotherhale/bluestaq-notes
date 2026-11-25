@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **IMPLEMENTED + TESTED** (`460a26a`, CI not yet observed) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `b630ff3` — the clone started on `main` at `d6f92d0`; the authorized branch was fetched and checked out before any gate was trusted, then verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `b630ff3`). |
 | Head commit (run end) | `460a26a` — `fix(approvals): refuse a stale decision instead of re-granting authority` (NEX-020), on top of `b630ff3`. Pushed and re-read with `git rev-parse`; the docs commit that carries this file sits on top and is not named here because a commit cannot contain its own SHA. |
-| Last CI result | **Not yet observed on `460a26a`.** Polled at run end; see CI status row. Locally this run **on the feature branch at `460a26a`**: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **730 passed / 4 skipped**, `alembic upgrade head → downgrade -1 → upgrade head` clean. Prior heads, previously observed: `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4. |
+| Last CI result | **`460a26a`: 4/4 `completed/success`**, every check run reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z). Backend (ruff, mypy, pytest, migrations) ×2, Frontend (typecheck, lint, test, build) ×2. Local gates at `460a26a` agree: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **730 passed / 4 skipped**, `alembic upgrade head → downgrade -1 → upgrade head` clean. Other observed heads: `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Body last refreshed 2026-11-25T09:49:41Z at head `f8115fd` with counters measured from the PR object (108 files / 29,339 insertions / 10 deletions / 97 commits). **Stale as of this run** — `460a26a` adds 5 files. Re-measure from `/repos/anotherhale/bluestaq-notes/pulls/3` before quoting; never from per-file sums (R21). |
-| CI status | **`460a26a` (this run's code head): not yet observed.** Older observations, all `completed/success` with matching `head_sha`: `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z), `2b3beb7` 4/4 (09:28Z), `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| CI status | **`460a26a` (this run's code head): 4/4 `completed/success`**, every check run reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z). Older observations, all `completed/success` with matching `head_sha`: `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z), `2b3beb7` 4/4 (09:28Z), `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
@@ -36,11 +36,13 @@ and clears `consumed_at`, so the CAS alone would not have closed the double-spen
 (HTTP 409), and `consume()` increments the version in the same statement that sets
 `consumed_at`.
 
-Status: **IMPLEMENTED + TESTED, not VERIFIED.** Local gates green at `460a26a`: `ruff
-format` clean, `ruff check` clean, `mypy` clean over 98 sources, full `pytest` **730
-passed / 4 skipped** (was 725; the delta is exactly the 5 new tests), and the migration
-round-trips (`upgrade → downgrade -1 → upgrade`). CI on `460a26a` was **not observed**
-during this run — that is an absence, not a pass.
+Status: **VERIFIED.** CI observed **4/4 `completed/success` at `460a26a`**, every check run
+reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z) — Backend (ruff, mypy, pytest,
+migrations) ×2, Frontend (typecheck, lint, test, build) ×2. Promoted on that observation,
+not on descendant-CI. Local gates at `460a26a` agree: `ruff format` clean, `ruff check`
+clean, `mypy` clean over 98 sources, full `pytest` **730 passed / 4 skipped** (was 725; the
+delta is exactly the 5 new tests), and the migration round-trips
+(`upgrade → downgrade -1 → upgrade`).
 
 Negative control: deleting the `version == expected` predicate turns 3 of the 5 tests red,
 so they fail for the lost update and not for some unrelated reason.

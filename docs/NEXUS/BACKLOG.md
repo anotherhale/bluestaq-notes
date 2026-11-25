@@ -1116,7 +1116,7 @@ skipped** (previous head was 722; the delta is exactly the 3 new tests).
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P0 (security: silent re-grant of withdrawn/spent authority) |
-| Status | **IMPLEMENTED + TESTED** — local gates green; CI not yet observed |
+| Status | **VERIFIED** — CI 4/4 `completed/success` observed at `460a26a`, every check run reporting `head_sha` `460a26a` (polled 2026-11-25T10:16:40Z) |
 | Dependencies | NEX-013 (approval validity), NEX-014 (revocation), NEX-016 (approval-gated steps), NEX-019 (the CAS pattern this copies) |
 
 **Objective:** close the same lost-update hole NEX-019 closed for runs, on the aggregate
@@ -1171,7 +1171,11 @@ turns 3 of the 5 tests red, so they detect the lost update rather than passing v
 `mypy` clean (98 sources), full `pytest` **730 passed / 4 skipped** (was 725; the delta is
 exactly the 5 new tests), `alembic upgrade head → downgrade -1 → upgrade head` clean.
 
-**CI:** not yet observed on this slice's commit. Stated as an absence, not a pass.
+**CI:** observed **4/4 `completed/success` at `460a26a`**, every check run reporting
+`head_sha` `460a26a` — Backend (ruff, mypy, pytest, migrations) ×2 and Frontend
+(typecheck, lint, test, build) ×2. Polled 2026-11-25T10:16:40Z. Promoted to VERIFIED on
+that observation, not on descendant-CI and not on the local gates.
 
-**Next action:** poll CI for the code commit and promote to VERIFIED only on 4/4
-`completed/success` reporting that `head_sha`.
+**Next action:** continue the CAS audit (NEX-021) — enumerate the remaining repositories
+whose `save()` rewrites a whole row without a compare-and-set; delegations, tokens and tool
+invocations are the first candidates.

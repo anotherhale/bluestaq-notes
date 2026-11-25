@@ -4,8 +4,8 @@
   "timestamp": "2026-11-25T10:14:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "460a26a",
-  "commit_note": "460a26a = NEX-020's code commit (fix(approvals): refuse a stale decision instead of re-granting authority), on top of b630ff3. The docs commit carrying this checkpoint is 460a26a's child; run `git log -1` to name it. A commit cannot contain its own SHA, so this field names the code head rather than pretending otherwise.",
-  "project_phase": "Phase 2 complete; Phase 5 (durable runtime) — NEX-019 run write concurrency VERIFIED at 66e8cd6 (CI 4/4); NEX-020 approval-decision CAS IMPLEMENTED + TESTED at 460a26a, CI not yet observed.",
+  "commit_note": "460a26a = NEX-020's code commit (fix(approvals): refuse a stale decision instead of re-granting authority), CI 4/4 at that SHA. c68f386 = the docs commit that first recorded NEX-020 as IMPLEMENTED + TESTED; the promotion docs commit carrying this file is c68f386's child — run `git log -1` to name it. A commit cannot contain its own SHA, so this field names the code head rather than pretending otherwise.",
+  "project_phase": "Phase 2 complete; Phase 5 (durable runtime) — NEX-019 run write concurrency VERIFIED at 66e8cd6 (CI 4/4); NEX-020 approval-decision CAS VERIFIED at 460a26a (CI 4/4).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -30,7 +30,7 @@
     "NEX-006": "VERIFIED",
     "NEX-018": "VERIFIED (descendant-CI at 2b3beb7, 4/4 completed/success)",
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
-    "NEX-020": "IMPLEMENTED + TESTED (460a26a; CI not yet observed)"
+    "NEX-020": "VERIFIED (CI 4/4 at 460a26a)"
   },
   "completed_tasks": [
     "NEX-001",
@@ -54,7 +54,8 @@
     "NEX-003",
     "NEX-006",
     "NEX-018",
-    "NEX-019"
+    "NEX-019",
+    "NEX-020"
   ],
   "validation": {
     "pytest_full": "730 passed, 4 skipped, exit 0 — run bare on the feature branch at 460a26a this session. Previous head was 725 passed; the delta is exactly the 5 new NEX-020 tests.",
@@ -67,13 +68,15 @@
     "architecture": "layering test untouched; entities.py stays framework-free",
     "migration_chain": "head is now f19a2c6d8b04 (approval_request_version), down_revision e5a3b9c04f21, 11 migration files. Round-tripped: upgrade head -> downgrade -1 -> upgrade head, clean.",
     "frontend_gates": "not run locally — no frontend files changed",
-    "ci_observed": "NOT observed on 460a26a. Last observed green heads: f8115fd 4/4 (09:50Z), 66e8cd6 4/4 (09:46Z), 9a90e3a 4/4 (09:48Z), 2b3beb7 4/4 (09:28Z).",
-    "ci_note": "NEX-020 is NOT VERIFIED. Nothing in this run observed a check run at 460a26a. The next run must poll it and promote only on 4/4 completed/success reporting head_sha 460a26a — a docs child of 460a26a may read completed/cancelled, which is not a pass.",
-    "verified_at_commit": null,
-    "verified_by_run": null,
+    "ci_observed": "460a26a (NEX-020 code): 4/4 completed/success, all four check runs reporting head_sha 460a26a, polled 2026-11-25T10:16:40Z. Runs: Backend (ruff, mypy, pytest, migrations) x2, Frontend (typecheck, lint, test, build) x2. Earlier this session: f8115fd 4/4 (09:50Z), 66e8cd6 4/4 (09:46Z), 9a90e3a 4/4 (09:48Z), 2b3beb7 4/4 (09:28Z).",
+    "ci_note": "NEX-020 is promoted on a run observed at its own commit, not on descendant-CI: every green check run at 460a26a reports head_sha 460a26a. The docs commit c68f386 sits on top of 460a26a; if it is superseded by a later push its own run may read completed/cancelled, which neither confirms nor denies anything about 460a26a.",
+    "verified_at_commit": "460a26a (NEX-020)",
+    "verified_by_run": "NEX-2026-11-25-22",
     "evidence_basis": {
-      "note": "No task was promoted this run. NEX-019 remains the last VERIFIED slice.",
-      "nex_019_commit": "66e8cd6"
+      "note": "NEX-020 VERIFIED: 4/4 completed/success observed at 460a26a with head_sha matching. Local gates agree but are not the basis for promotion.",
+      "nex_020_commit": "460a26a",
+      "criterion_coverage": "A stale approve cannot resurrect a revoked approval; a stale write cannot clear a spent approval; a stale consume cannot double-spend; a sequential decision from the fresh version still commits; every authority transition bumps the version.",
+      "negative_control": "Removing the `version == expected` predicate turns 3 of the 5 tests red, so the tests detect the lost update rather than passing vacuously."
     },
     "gates_this_run": {
       "ruff_format_check": "pass",
@@ -164,9 +167,9 @@
     }
   ],
   "next_task": "NEX-021: continue the CAS audit. NEX-019 fixed the run aggregate and NEX-020 the approval aggregate. Enumerate every remaining repository under infrastructure/db/ whose save() rewrites a whole row, and confirm for each whether it (a) carries a version column, (b) records persisted_version, and (c) issues a compare-and-set. Candidates to check first: agent delegations, agent tokens, tool invocations. Pick the highest-authority aggregate that is still an unconditional overwrite; if none remains, take the next Phase-5 slice from ROADMAP.md.",
-  "next_action": "1. Poll check runs for 460a26a and promote NEX-020 to VERIFIED only on 4/4 completed/success reporting head_sha 460a26a. 2. Refresh PR #3's body at the then-current head — counters are stale by NEX-020's 5 files. 3. Run the CAS audit described in next_task. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform at 460a26a plus one docs commit, tree clean, nothing unpushed. NEX-019 is VERIFIED on CI at 66e8cd6 — do not re-promote it. NEX-020 is IMPLEMENTED + TESTED at 460a26a but NOT verified: poll its CI before claiming anything. Twelve slices verified. PR #3 is draft and must never be auto-merged. Start by confirming whether another aggregate still rewrites a whole row without a compare-and-set.",
-  "ci_status": "460a26a (NEX-020 code, this run's head): NOT OBSERVED. Last observed: f8115fd 4/4 completed/success with matching head_sha (09:50Z); 66e8cd6 4/4 (09:46Z); 9a90e3a 4/4 (09:48Z); 2b3beb7 4/4 (09:28Z); fa387a9, ca15eb1, 990557d, b9b7207 all 4/4. e5f1bb4 (NEX-003), 4c5a6ef (NEX-006) and 789d78a (NEX-018) have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled — neither a pass nor a failure.",
+  "next_action": "1. Refresh PR #3's body at the then-current head — its counters were measured at f8115fd and are stale by NEX-020's 5 files plus this docs commit; re-measure from the PR object. 2. Run the CAS audit described in next_task. 3. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform at c68f386 plus one docs commit, tree clean, nothing unpushed. NEX-019 is VERIFIED at 66e8cd6 and NEX-020 at 460a26a (both on runs observed at their own commits) — do not re-promote either. Thirteen slices verified. PR #3 is draft and must never be auto-merged. Start by confirming whether another aggregate still rewrites a whole row without a compare-and-set.",
+  "ci_status": "460a26a (NEX-020 code): 4/4 completed/success, every run reporting head_sha 460a26a, polled 2026-11-25T10:16:40Z. Also observed this session: f8115fd 4/4 (09:50Z), 66e8cd6 4/4 (09:46Z), 9a90e3a 4/4 (09:48Z), 2b3beb7 4/4 (09:28Z); earlier fa387a9, ca15eb1, 990557d, b9b7207 all 4/4. e5f1bb4 (NEX-003), 4c5a6ef (NEX-006) and 789d78a (NEX-018) have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled — neither a pass nor a failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -189,10 +192,9 @@
     "NEX-003",
     "NEX-006",
     "NEX-018",
-    "NEX-019"
+    "NEX-019",
+    "NEX-020"
   ],
-  "in_progress_tasks": {
-    "NEX-020": "IMPLEMENTED + TESTED at 460a26a, pushed. Local gates green (730 passed / 4 skipped, ruff format+check clean, mypy clean over 98 sources, migration round-trip clean). Promotion to VERIFIED is blocked only on observing 4/4 completed/success at 460a26a."
-  },
+  "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }

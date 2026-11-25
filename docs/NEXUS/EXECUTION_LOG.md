@@ -2699,21 +2699,55 @@ environment. Use `file_editor` for every multi-line write.
 
 ### CI
 
-**Not observed on `460a26a`.** That is an absence, not a pass. Last observed green heads
-remain `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z). NEX-020 is
-**not** promoted; it sits at IMPLEMENTED + TESTED.
+**Not observed on `460a26a` at the time this entry was first written.** That is an absence,
+not a pass. Last observed green heads remain `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z),
+`9a90e3a` 4/4 (09:48Z). NEX-020 is **not** promoted; it sits at IMPLEMENTED + TESTED.
+
+### Addendum (same run, 10:16Z) — CI observed, NEX-020 promoted
+
+The poll at 2026-11-25T10:16:40Z returned **4/4 `completed/success` for `460a26a`**, with
+every check run reporting `head_sha` `460a26a`:
+
+| Check | Conclusion | head_sha |
+| --- | --- | --- |
+| Backend (ruff, mypy, pytest, migrations) | success | `460a26a` |
+| Backend (ruff, mypy, pytest, migrations) | success | `460a26a` |
+| Frontend (typecheck, lint, test, build) | success | `460a26a` |
+| Frontend (typecheck, lint, test, build) | success | `460a26a` |
+
+Because the run was observed **at NEX-020's own commit**, with `head_sha` matching, this is
+a direct observation and not descendant-CI. NEX-020 is therefore **VERIFIED**, and it is the
+first slice this session to be promoted on a run at its own SHA rather than an ancestor's.
+
+The docs commit `c68f386` (which recorded NEX-020 as IMPLEMENTED + TESTED) sits on top of
+`460a26a`. Its own CI run may end `completed/cancelled` if a later push supersedes it; that
+outcome neither confirms nor denies anything about `460a26a`, which already has its own
+green run. This is exactly the trap recorded in `STATE.md`: a cancelled docs head is not a
+failure, and a green code head is not invalidated by one.
+
+Promoted in `BACKLOG.md` (status row + CI paragraph), `STATE.md` (position table, last-CI
+row, CI-status row, NEX-020 section) and `CHECKPOINT.json` (`completed_tasks` =
+`verified_tasks` = 23 ids, `in_progress_tasks` empty, `validation.ci_observed` naming the
+poll timestamp, `evidence_basis` recording that promotion rests on CI and not on local
+gates).
 
 ### PR and tracking issue
 
-PR #3 was **not** updated this run — its body counters were measured at `f8115fd` and are
-now stale by NEX-020's 5 files. Tracking issue #2 was not updated. Both are the next run's
-first jobs, ahead of new code.
+PR #3's body was refreshed at the end of this run with counters re-measured from the PR
+object (`GET /repos/anotherhale/bluestaq-notes/pulls/3`) rather than from per-file sums,
+because GitHub silently truncates large diffs past ~20,000 diff lines and the per-file
+`additions` values come back as 0 (R21). NEX-020's green CI at `460a26a` is now stated in
+the body with the SHA it was observed on.
+
+Tracking issue #2 was **not** updated this run; the PR body carries the same information
+and the issue is the next run's job if the PR body alone is judged insufficient.
 
 ### Next action
 
-1. Poll check runs for `460a26a`; promote NEX-020 only on 4/4 `completed/success` reporting
-   `head_sha` `460a26a`.
-2. Refresh PR #3's body at the then-current head, re-measuring counters from the PR object.
-3. Run the CAS audit in `CHECKPOINT.json`'s `next_task` (delegations, tokens, tool
-   invocations).
+1. NEX-020 is VERIFIED — do not re-poll or re-promote it.
+2. Run the CAS audit (NEX-021) from `CHECKPOINT.json`'s `next_task`: enumerate remaining
+   repositories whose `save()` rewrites a whole row without a compare-and-set (delegations,
+   tokens, tool invocations are the first candidates).
+3. Refresh PR #3's counters again at whatever head exists when that run starts; they go
+   stale on every push.
 4. Never merge PR #3.
