@@ -53,6 +53,7 @@ from notes_service.application.use_cases.agents import (
     RevokeDelegation,
     VerifyToolInvocationChain,
 )
+from notes_service.application.use_cases.approval_advisory import RecommendApprovalDecision
 from notes_service.application.use_cases.authentication import (
     BeginLogin,
     CompleteLogin,
@@ -245,6 +246,11 @@ class Container:
     # Nothing it returns can grant authority.
     evaluate_decision: Callable[[], EvaluateDecision]
 
+    # The first production caller of the judgment path. A human asks for a second
+    # opinion about one pending approval; the answer is advisory and cannot
+    # decide the request.
+    recommend_approval_decision: Callable[[], RecommendApprovalDecision]
+
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
     """Construct the full dependency graph from validated settings.
@@ -354,6 +360,14 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             provider=StubDecisionProvider(),
             enabled=settings.decisioning_enabled,
             min_confidence=settings.decisioning_min_confidence,
+        )
+
+    def make_recommend_approval_decision() -> RecommendApprovalDecision:
+        return RecommendApprovalDecision(
+            uow_factory=uow_factory,
+            authorization=authorization_provider,
+            clock=clock,
+            evaluate_decision=make_decision_evaluator(),
         )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
@@ -501,4 +515,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         resolve_interrupted_step=make(ResolveInterruptedStep),
         abort_agent_run=make(AbortAgentRun),
         evaluate_decision=make_decision_evaluator,
+        recommend_approval_decision=make_recommend_approval_decision,
     )

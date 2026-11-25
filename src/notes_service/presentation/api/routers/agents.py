@@ -32,6 +32,7 @@ from notes_service.presentation.schemas import (
     AgentTokenIssueRequest,
     AgentTokenResolveRequest,
     AgentTokenResponse,
+    ApprovalAdvisoryResponse,
     ApprovalDecisionRequest,
     ApprovalRequestListResponse,
     ApprovalRequestOpenRequest,
@@ -331,6 +332,28 @@ def decide_approval_request(
         reason=payload.reason,
     )
     return ApprovalRequestResponse.from_domain(request)
+
+
+@router.get(
+    "/approvals/{approval_id}/advisory",
+    response_model=ApprovalAdvisoryResponse,
+    summary="Ask for a provider's second opinion on a pending approval (human only)",
+    dependencies=[RateLimitDep],
+)
+def recommend_approval_decision(
+    approval_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> ApprovalAdvisoryResponse:
+    """Return advice about a pending approval. Never decides it.
+
+    This is the only production route into the judgment path. The answer is an
+    advisory score plus the confidence and context digest behind it; the request
+    stays ``PENDING`` and the human still has to decide. A non-owner gets 404 for
+    the same reason as the rest of the approvals endpoints.
+    """
+    advisory = container.recommend_approval_decision().run(principal, approval_id=str(approval_id))
+    return ApprovalAdvisoryResponse.from_domain(advisory)
 
 
 @router.post(

@@ -15,9 +15,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
+from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.audit_chain import ChainVerdict
+from notes_service.domain.agent.decisioning import AbstentionReason
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import AgentRun, RunStatus, RunStep, StepStatus
@@ -783,6 +785,39 @@ class ApprovalRequestResponse(ResponseModel):
 class ApprovalRequestListResponse(BaseModel):
     items: list[ApprovalRequestResponse]
     meta: PageMeta
+
+
+class ApprovalAdvisoryResponse(ResponseModel):
+    """A provider's second opinion about one approval request.
+
+    Not an approval. ``score`` is an advisory number where higher means "looks
+    more routine"; ``None`` means no opinion was formed, and ``abstention_reason``
+    then says why. A reviewer still decides the request themselves.
+    """
+
+    approval_id: uuid.UUID
+    score: float | None = None
+    confidence: float
+    abstention_reason: AbstentionReason | None = None
+    provider_name: str
+    context_hash: str
+    excluded_context_fields: tuple[str, ...] = ()
+    latency_ms: float
+    advisory_available: bool
+
+    @classmethod
+    def from_domain(cls, advisory: ApprovalAdvisory) -> ApprovalAdvisoryResponse:
+        return cls(
+            approval_id=uuid.UUID(advisory.approval_id),
+            score=advisory.score,
+            confidence=advisory.confidence,
+            abstention_reason=advisory.abstention_reason,
+            provider_name=advisory.provider_name,
+            context_hash=advisory.context_hash,
+            excluded_context_fields=advisory.excluded_context_fields,
+            latency_ms=advisory.latency_ms,
+            advisory_available=advisory.is_advisory_available,
+        )
 
 
 # -- tool gateway ---------------------------------------------------------
