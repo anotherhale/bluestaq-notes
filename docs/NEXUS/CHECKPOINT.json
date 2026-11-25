@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-27",
-  "timestamp": "2026-11-25T12:54:00Z",
+  "timestamp": "2026-11-25T12:59:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "88926ecd84806836ce5f8ea275c894f6a962faa0",
+  "commit": "5290be728c5f8b08011143cfdc40e27ce5a5f31d",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
   "active_task": "none - NEX-001..NEX-024 all VERIFIED; PR #3 body refreshed at e511fc9",
   "task_statuses": {
@@ -199,7 +199,7 @@
   ],
   "next_task": "1) Re-read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice (NEX-001..NEX-024 are VERIFIED; R27 is closed on both settle paths). 2) Optionally confirm whether revoking a delegation or agent invalidates previously granted approvals - the one open question left from this run.",
   "next_action": "Read ROADMAP.md Phase 5, pick the next slice from BACKLOG.md, and implement it as one vertical slice.",
-  "recovery_instructions": "Verify git rev-parse HEAD equals 88926ec and the tree is clean. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at 88926ec. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
+  "recovery_instructions": "This checkpoint was written by the commit that follows 5290be7, so HEAD will normally be exactly one commit ahead of the `commit` field: the state-only commit that carried this file. Confirm with `git log --oneline -2`; if HEAD is more than one commit ahead, read those commits before trusting this file. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at 88926ec (31,612 additions / 10 deletions / 111 files / 118 commits, 25,010 bytes, byte-verified). No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
   "ci_status": "88926ec (docs-only head): all 4 check runs in_progress when polled 2026-11-25T12:52Z - NOT claimed green. Most recent completed green is e511fc9 (4/4 completed/success, read 12:41Z). Product commits were green at their own SHAs: eaaae23 (NEX-024, 4/4 12:16Z), c367746 (NEX-023, 4/4 11:50Z), 1156f6e (NEX-022, 4/4 11:27Z).",
   "verified_tasks": [
     "NEX-001",
