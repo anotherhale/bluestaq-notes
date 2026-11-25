@@ -46,10 +46,10 @@
     "NEX-014"
   ],
   "validation": {
-    "pytest_full": "690 collected, 686 passed, 4 skipped (local, run bare, on b27b6b5)",
-    "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 195 files",
-    "ruff_check": "clean",
-    "mypy": "clean (98 source files)",
+    "pytest_full": "not run in full this session; --collect-only reports 707. CI's backend job (ruff, mypy, pytest, migrations) passed on b27b6b5.",
+    "ruff_format": "clean (bare, repo-wide incl. docs Markdown) - 195 files, run this session",
+    "ruff_check": "not re-run this session; CI backend job passed on b27b6b5",
+    "mypy": "not re-run this session; CI backend job passed on b27b6b5",
     "migration_chain": "new head e5a3b9c04f21 (revocable_approvals), down_revision d4c8e2a71f05. Upgrade to head, downgrade over a REAL revoked row, and re-upgrade all verified.",
     "frontend_gates": "not run locally - no frontend files changed",
     "ci_observed": true,
@@ -121,7 +121,7 @@
   },
   "notes_on_pr_body": "The PR body has understated this branch on every recent run. Measure it fresh each time: git diff --shortstat main HEAD (two-dot - the clone is SHALLOW/grafted, so 'main...HEAD' fails with 'no merge base'), plus pytest --collect-only -o addopts='' (the repo's addopts=-q hides the count line, and 'pytest --collect-only -q | grep -c ::' returns 0). Verify counts before writing them; an earlier run wrote 'six migrations / six routers' when the diff showed five of each. MEASURED at 11a4cec (before the NEX-013 commit): 106 files, 25609 insertions, 943 deletions, 6 added migrations, 5 added routers. NEX-013 adds one migration (d4c8e2a71f05 -> 7 total) and NO router, and the docs commits add files, so recompute after committing rather than copying these figures.",
   "validation_status": {
-    "gates": "local on b27b6b5: 690 collected / 686 passed / 4 skipped; ruff format --check + ruff check clean (195 files); mypy clean (98 files)",
+    "gates": "local this session: ruff format --check clean (195 files), pytest --collect-only 707. Full suite, ruff check and mypy were covered by CI on b27b6b5, not re-run locally.",
     "ci": "b27b6b5: 4/4 completed/success (Backend + Frontend, push and pull_request), all head_sha b27b6b5, observed 2026-11-25T07:09Z.",
     "note": "b27b6b5 is the verified product slice. The docs commit a8be00d is its child; its checks were still pending when this run ended, so nothing is claimed for it."
   }

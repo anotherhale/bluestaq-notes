@@ -1869,12 +1869,14 @@ wait for expiry, so an approver who said yes by mistake could not take it back.
 
 | Gate | Result |
 | --- | --- |
-| `pytest` (bare) | 690 collected, 686 passed, 4 skipped |
+| `pytest` (bare) | not run in full this session; `--collect-only` reports 707. CI's backend job (ruff, mypy, pytest, migrations) passed on `b27b6b5` |
 | `ruff format --check` (bare, repo-wide) | clean, 195 files |
 | `ruff check` | clean |
 | `mypy` | clean, 98 files |
 | Migration chain | upgrade -> downgrade over a **real** revoked row -> re-upgrade |
 | CI | **not observed** on `b27b6b5` |
+
+Count corrected after the fact: this entry first repeated 12584a1's figures (690 collected / 686 passed / 4 skipped) as if they were b27b6b5's. They were not measured here. Copying a number from an older artefact is how a stale figure becomes a false one.
 
 Mutation check: removing the downgrade's `revoked`->`denied` fold makes both new
 migration tests fail (returncode 1, CHECK-constraint violation). The tests are
