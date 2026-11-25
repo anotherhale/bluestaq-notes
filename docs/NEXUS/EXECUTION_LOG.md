@@ -3206,3 +3206,60 @@ prose payloads): *write prose through the editor, never through an interpolating
 body is stale (it names an older head and test count) and should be refreshed from the PR
 object's own counters — `additions`/`deletions`/`changed_files`/`commits` — never per-file sums
 (R21). PR #3 stays draft and must never be merged.
+
+---
+
+## Run `NEX-2026-11-25-27` — 2026-11-25T12:01Z–12:26Z (docs promotion + status reconciliation)
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-27` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `eaaae23` (the NEX-024 slice, already pushed by the previous run) |
+| Ending commit | `517208f` |
+| Push status | `eaaae23..517208f` fast-forward, verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `517208f`) |
+| Files changed | `docs/NEXUS/{BACKLOG,CHECKPOINT.json,EXECUTION_LOG,STATE}.md` — documentation only, no source or test changes |
+
+**Tasks completed.** None newly implemented. NEX-024 moved **TESTED → VERIFIED** on
+observed evidence, and three stale status claims were corrected.
+
+**CI evidence (observed, not inferred).** `GET /commits/eaaae23/check-runs` returned
+`total_count` 4, all four `completed`/`success`, and every `head_sha` equal to `eaaae23` —
+Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), two
+runs each. Because the polled commit is the slice's own commit, this is a run at that SHA,
+not descendant-CI, so it satisfies the promotion bar NEX-024 was waiting on.
+
+**Stale claims corrected.** Three places in `STATE.md` had rotted into falsehood:
+
+1. The audit-trail section still said `**Status: TESTED, not VERIFIED**` for NEX-009-HTTP
+   while `CHECKPOINT.json` listed it VERIFIED.
+2. The agent-runs section still said the same for NEX-011, likewise VERIFIED in the
+   checkpoint.
+3. The current-position block still named `1156f6e`/NEX-022 as head and quoted a PR #3
+   body last refreshed at `e459f98`.
+
+Each was rewritten to state the VERIFIED fact and to name the snapshot it replaced, so a
+future reader can tell a corrected claim from one that was always true.
+
+**A counter that moved under me.** While writing the PR #3 line I quoted 31,408 additions /
+112 commits at `eaaae23`. My own docs push moved the PR head to `517208f`, and the PR object
+then reported **31,481 additions / 10 deletions / 111 files / 113 commits**. The recorded
+line was corrected to the post-push numbers. This is the R21/PR-rot lesson in miniature: a
+counter is only true for the head it was read at, so read it after the last push.
+
+**R12 recurrence (second run in a row, caught before damage).** A `python3 - <<'PY'` heredoc
+that updated `CHECKPOINT.json` was mangled — bash spliced earlier command text into the
+script and it died with `SyntaxError: '(' was never closed`. Nothing executed, and
+`CHECKPOINT.json` was verified still valid and still holding the prior run id before any
+retry. The retry wrote the script to `/tmp/nex027_ckpt.py` with the file editor, ran it, and
+deleted it. *Quoting a heredoc delimiter does not make the payload safe; write the script to
+a file.*
+
+**Security findings.** None. No source, dependency, migration, or permission changes. PR #3
+remains draft and unmerged, as required.
+
+**Next action.** Refresh PR #3's body from the PR object's own counters — read *after* the
+final push of the run that writes them — then read `ROADMAP.md` Phase 5 and select the next
+dependency-ready slice. NEX-001…NEX-024 are all VERIFIED; R27 is closed on both settle paths
+(resolve and abort).
+
