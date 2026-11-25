@@ -39,9 +39,15 @@ from notes_service.domain.agent.runs import (
     AgentRun,
     AgentRunId,
     PlannedStep,
+    StepStatus,
     step_idempotency_key,
 )
-from notes_service.domain.agent.tools import InvocationStatus, resolve_tool, validate_arguments
+from notes_service.domain.agent.tools import (
+    InvocationStatus,
+    ToolInvocation,
+    resolve_tool,
+    validate_arguments,
+)
 from notes_service.domain.agent.value_objects import AgentId, TokenAudience
 from notes_service.domain.errors import DomainError, InvariantViolation
 from notes_service.domain.identity.principal import Principal
@@ -354,18 +360,44 @@ class ResolveInterruptedStep(_RunUseCase):
 
 
 class AbortAgentRun(_RunUseCase):
-    """Stop a run permanently. The owner's decision, recorded with its reason."""
+    """Stop a run permanently. The owner's decision, recorded with its reason.
+
+    Aborting is a way of *settling* a run, so it carries the same obligation as
+    :class:`ResolveInterruptedStep`: no record describing the run may be left
+    mid-flight. A run whose step was interrupted has a gateway invocation still
+    ``started``, and leaving it open beside an ``aborted`` run would keep the
+    tamper-evident trail asserting the outcome is unknown — the same defect NEX-023
+    closed for the resolve path. The link is settled as *not confirmed*, because
+    the owner stopped the run without ruling on the effect, and both records are
+    written in one transaction so they cannot disagree.
+    """
 
     def run(self, principal: Principal, *, run_id: str, reason: str | None = None) -> AgentRun:
         with self._uow_factory() as uow:
             run, _agent = self._load_owned_run(uow, principal=principal, run_id=run_id)
+            mid_flight = [
+                step.sequence
+                for step in run.ordered_steps
+                if step.status in {StepStatus.STARTED, StepStatus.INTERRUPTED}
+            ]
             try:
                 run.abort(reason=reason)
             except InvariantViolation as exc:
                 raise InvalidInput(str(exc)) from exc
             uow.agent_runs.save(run)
+            for sequence in mid_flight:
+                self._seal_abandoned_step(uow, run=run, sequence=sequence)
             uow.commit()
         return run
+
+    def _seal_abandoned_step(self, uow: UnitOfWork, *, run: AgentRun, sequence: int) -> None:
+        invocation: ToolInvocation | None = uow.tool_invocations.find_by_idempotency_key(
+            AgentId.parse(run.agent_id), step_idempotency_key(run.id, sequence)
+        )
+        if invocation is None or invocation.status is not InvocationStatus.STARTED:
+            return
+        invocation.fail(outcome="run aborted before this step's effect was confirmed")
+        uow.tool_invocations.save(invocation)
 
 
 class GetAgentRun(_RunUseCase):

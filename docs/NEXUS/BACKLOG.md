@@ -1406,3 +1406,73 @@ guess on the operator's behalf.
 
 **Next action:** poll CI at the pushed head; promote to VERIFIED only on an observed
 4/4 `completed/success` whose `head_sha` is that commit.
+
+---
+
+## NEX-024 — Aborting a run must seal the audit record too
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) / audit integrity |
+| Priority | P0 (R27 recurrence: the trail keeps asserting "unknown" about a run that is definitively over) |
+| Status | **TESTED** — local gates green, CI not yet observed at this head. Full suite 742 passed / 4 skipped (baseline 740; delta is exactly these 2 tests); `ruff format`/`ruff check`/`mypy` clean; negative control verified. Promotion to VERIFIED requires an observed 4/4 `completed/success` whose `head_sha` is this commit. |
+| Dependencies | NEX-011 (audit trail), NEX-012 (hash chain), NEX-018 (a missing seal counts as a break), NEX-023 (same defect on the resolve path) |
+
+**Objective:** close R27 on the last settle path that still leaked an open audit link.
+
+NEX-023 sealed the invocation a crash left open when an owner **rules** on an interrupted
+step. It did not cover the owner's other way of settling a run: **aborting** it. So the
+defect survived on exactly one path — the one taken when the owner decides not to adjudicate
+at all.
+
+The state it produces is the same one NEX-023 described, and it is worse in one respect:
+
+- **A terminal run with a `started` link is a contradiction.** `aborted` says the run is
+  over; `started` says an effect may still be in flight. Nothing downstream can tell which
+  record to believe.
+- **`started` is indistinguishable from a live call.** The crash-orphaned link and a call
+  still executing look identical forever, which is the distinction the chain exists to
+  preserve.
+- **The step itself was also left mid-flight.** `AgentRun.abort` flipped the run's status
+  and nothing else, so a `started` step sat inside an `aborted` run. The aggregate was
+  internally inconsistent before the audit chain was even considered.
+
+**Implementation**, two halves that must agree:
+
+- **Domain** (`domain/agent/runs.py`): `AgentRun.abort` now settles every non-terminal,
+  non-`pending` step before it flips the run's status — `started` → `failed`,
+  `interrupted` → resolved as *effect not confirmed*. A new `RunStep.abandon` owns that
+  rule. `pending` steps are left alone: they never began, so there is nothing to settle and
+  marking them failed would invent a history. A step that already settled is untouched.
+- **Application** (`application/use_cases/agent_runs.py`): `AbortAgentRun` records the
+  mid-flight sequences *before* calling `run.abort` (afterwards they are no longer
+  mid-flight), then seals each matching invocation by the gateway's own deterministic key
+  (`step_idempotency_key(run.id, sequence)`) in the same transaction as the run save. It
+  closes the link only while it is still `started`, and records `fail(...)` rather than
+  `succeed(...)`: aborting is not a ruling that the effect landed, so claiming success would
+  fabricate evidence. Absent or already-terminal links are left untouched, for the same
+  reasons as NEX-023.
+
+The seal goes through the existing `fail` transition, so `outcome_hash` is recomputed from
+content and `verify_chain` still verifies.
+
+**Tests** (`tests/agent/test_agent_runs.py`, +2):
+- `test_abort_seals_the_audit_link_the_crash_left_open` — builds the real crash state
+  (`_crash_mid_step`), recovers it the way a resume would so the step is `interrupted`,
+  aborts, then asserts the step is `failed` with an abort outcome, the link is `failed` with
+  `completed_at` and `outcome_hash`, **no** link remains `started`, and `verify_chain`
+  verifies.
+- `test_abort_leaves_a_settled_step_and_its_link_untouched` — a run whose first step and its
+  invocation already succeeded keeps both byte-for-byte when the run around them is aborted.
+
+**Negative control:** removing only the seal loop from `AbortAgentRun` turns exactly
+`test_abort_seals_the_audit_link_the_crash_left_open` red (`assert STARTED is FAILED`) and
+leaves the other 20 in the file green; restored and re-verified.
+
+**R27 status:** closed on both settle paths that exist today — resolve (NEX-023) and abort
+(this slice). A *third* settle path added later would reopen it; the invariant to carry
+forward is "any operation that makes a run terminal must settle its mid-flight steps and
+seal their invocations in the same transaction."
+
+**Next action:** poll CI at the pushed head; promote to VERIFIED only on an observed
+4/4 `completed/success` whose `head_sha` is that commit.

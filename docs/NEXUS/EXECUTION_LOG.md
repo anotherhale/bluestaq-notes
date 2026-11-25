@@ -3079,3 +3079,73 @@ the body was corrupted (R12), producing `ec3fafb`. It had not been pushed, so it
 with a message written to a file by `file_editor` and committed as `c367746`. The tree was
 never pushed in the corrupted state, so no remote evidence is ambiguous. Write commit
 messages to a file rather than piping them through a heredoc.
+
+## Run NEX-2026-11-25-26 — 2026-11-25T12:01Z
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `2b8be83` |
+| Ending commit | (this run's commit — code, tests and docs in one commit) |
+| Task | NEX-024 — aborting a run must seal the audit link the crash left open |
+| Status | **TESTED** — local gates green; CI not yet observed at this head |
+
+**Slice.** NEX-023 closed R27 on the *resolve* path — an owner ruling on an interrupted step
+now seals the gateway invocation the crash left open. It did not close the owner's other way
+of settling a run: **abort**. So the defect survived on exactly one path, and produced two
+disagreeing records at once:
+
+- `AgentRun.abort` flipped the run to `aborted` and touched nothing else, leaving a `started`
+  step inside a terminal run.
+- `AbortAgentRun` never sealed the invocation, so the audit chain kept reporting `started`
+  for a run that was definitively over — indistinguishable, forever, from a call still in
+  flight.
+
+**Fix, both halves.** `AgentRun.abort` now settles every non-terminal, non-`pending` step
+before flipping the run's status, via a new `RunStep.abandon` (`started` → `failed`,
+`interrupted` → *effect not confirmed*). `pending` steps are untouched: they never began, and
+marking them failed would invent a history. `AbortAgentRun` records the mid-flight sequences
+*before* aborting (afterwards they are no longer mid-flight), then seals each matching
+invocation by the gateway's own deterministic key in the same transaction as the run save.
+
+The seal writes `fail(...)`, never `succeed(...)`: aborting is not a ruling that the effect
+landed, and recording success would fabricate audit evidence. Absent or already-terminal
+links are left untouched, for the same reasons as NEX-023 — the gateway's own evidence
+outranks a reconstruction.
+
+**Tests** (`tests/agent/test_agent_runs.py`, +2):
+`test_abort_seals_the_audit_link_the_crash_left_open` builds the real crash state via
+`_crash_mid_step`, recovers it the way a resume would, aborts, then asserts the step is
+`failed` with an abort outcome, the link is `failed` with `completed_at` and `outcome_hash`,
+**no** link remains `started`, and `verify_chain` verifies.
+`test_abort_leaves_a_settled_step_and_its_link_untouched` proves a succeeded step and its
+succeeded link keep their status, outcome and hash when the run around them is aborted.
+
+**Validation** — run bare from `.venv/bin` (the venv did not exist in this clone; created
+with `uv venv .venv --python 3.12` + `uv pip install -e ".[dev]"`, matching CI's install):
+
+- `ruff format` — 201 files already formatted
+- `ruff check` — All checks passed
+- `mypy` — no issues in 98 source files
+- `pytest` — **742 passed, 4 skipped** (baseline 740; delta is exactly the 2 new tests)
+- `tests/agent/test_agent_runs.py` — 21 passed (19 existing + 2 new)
+- **negative control** — removing only the seal loop from `AbortAgentRun` turns exactly
+  `test_abort_seals_the_audit_link_the_crash_left_open` red (`assert STARTED is FAILED`) and
+  leaves the other 20 in the file green. Change restored and re-verified.
+
+No migration: `tool_invocations` already carries `status`, `outcome` and the seal. No
+frontend change. Layering untouched — `domain/` and `application/` still import no framework
+code.
+
+**R27 status.** Closed on both settle paths that exist today: resolve (NEX-023) and abort
+(this slice). The invariant to carry forward, and the reason this recurred once already: *any
+operation that makes a run terminal must settle its mid-flight steps and seal their
+invocations in the same transaction.* A third settle path added later reopens R27.
+
+**CI.** Not observed at this head. NEX-024 stays **TESTED** until a 4/4
+`completed/success` is seen whose `head_sha` is this run's commit. Do not promote on local
+gates (R9/R10).
+
+**Next action.** Poll CI at the pushed head; promote NEX-024 to VERIFIED only on an observed
+4/4 `completed/success` at that `head_sha`. Then re-read `ROADMAP.md` Phase 5 and pick the
+next dependency-ready slice. PR #3 remains draft and must never be merged.

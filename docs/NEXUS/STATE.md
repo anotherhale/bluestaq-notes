@@ -240,36 +240,33 @@ Recorded so a later audit does not re-open it without cause.
 
 | Field | Value |
 | --- | --- |
-| Task | NEX-023 — an owner's ruling on an interrupted step must seal the audit link the crash left open |
-| Status | **VERIFIED** — 4/4 `completed/success` at `c367746`, polled 2026-11-25T11:50:20Z. `head_sha` matched the polled commit, so this is a run at the slice's own SHA, not descendant-CI. |
-| Next action | Choose the next dependency-ready Phase-5 slice from `ROADMAP.md`. |
+| Task | NEX-024 — aborting a run must seal the audit link the crash left open |
+| Status | **TESTED** — local gates green at `2b8be83`+this slice; CI not yet observed at this head. Not VERIFIED until a 4/4 `completed/success` is observed whose `head_sha` is the slice commit. |
+| Next action | Poll CI at the pushed head; promote to VERIFIED only on an observed 4/4 `completed/success` whose `head_sha` is that commit. |
 
-## NEX-023 (run `NEX-2026-11-25-25`) — a ruled-on effect must not leave the trail asserting "unknown"
+## NEX-024 (run `NEX-2026-11-25-26`) — aborting is settling, so it must seal too
 
-`InvokeTool` commits its `ToolInvocation` as `started` before entering the handler — the
-right ordering, because a crash must leave a trace rather than none. But
-`ResolveInterruptedStep` settled the run and never closed that row, so after an owner
-ruled whether the effect landed the audit chain still said `started` forever.
+NEX-023 sealed the invocation a crash left open when an owner **rules** on an interrupted
+step. It missed the owner's other way of settling a run — **aborting** it — so R27 survived
+on exactly one path: the one taken when the owner declines to adjudicate.
 
-That is worse than a cosmetic wart in three ways. The trail is permanently wrong about a
-fact a human has since established. `started` is exactly what a *live* call looks like, so
-a crash-orphaned link and an in-flight one become indistinguishable forever. And the
-step's deterministic key stayed at `started`, so `_find_prior` raised `Conflict` on every
-retry — the ruling meant to unblock the run did not unblock the gateway.
+Two records disagreed. `AgentRun.abort` flipped the run to `aborted` and touched nothing
+else, leaving a `started` step inside a terminal run, and `AbortAgentRun` never closed the
+gateway invocation, so the audit chain kept saying `started` — indistinguishable from a call
+still in flight, forever.
 
-The use case now seals the link in the same transaction that settles the run: `succeed`
-when the effect landed, `fail` when it did not, and nothing at all when the link is absent
-or already terminal. Sealing through the existing transitions recomputes `outcome_hash`, so
-`verify_chain` still verifies. A settled link is never rewritten — the gateway's own
-evidence outranks an operator's reconstruction.
+Both halves now settle. The aggregate settles every non-terminal, non-`pending` step before
+it flips the run's status (`started` → `failed`, `interrupted` → *effect not confirmed*);
+`pending` steps are untouched because they never began. The use case records the mid-flight
+sequences before aborting, then seals each matching invocation by the gateway's own key in
+the same transaction as the run save. It writes `fail(...)`, not `succeed(...)`: aborting is
+not a ruling that the effect landed, and claiming success would fabricate evidence. Absent
+or already-terminal links are left alone, as in NEX-023.
 
-Status: **VERIFIED** at `c367746` — 4/4 `completed/success` (two Backend `ruff, mypy,
-pytest, migrations` and two Frontend `typecheck, lint, test, build`, for the push and
-pull-request events), polled 2026-11-25T11:50:20Z. Local gates at the slice: `ruff format`
-clean (201 files), `ruff check` clean, `mypy` clean over 98 sources, full `pytest` **740
-passed / 4 skipped** (baseline 737, delta exactly these 3 tests), `tests/agent/test_agent_runs.py`
-19 passed. Negative control: reverting only the use-case change turns exactly the two sealing
-tests red.
+Status: **TESTED**. `ruff format` clean, `ruff check` clean, `mypy` clean, full `pytest`
+**742 passed / 4 skipped** (baseline 740, delta exactly these 2 tests),
+`tests/agent/test_agent_runs.py` 21 passed. Negative control: removing only the seal loop
+turns exactly `test_abort_seals_the_audit_link_the_crash_left_open` red.
 
 ## Last completed task
 

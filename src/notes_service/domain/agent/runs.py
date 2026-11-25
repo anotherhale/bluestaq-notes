@@ -245,6 +245,20 @@ class RunStep:
         self.status = StepStatus.PENDING
         self.started_at = None
 
+    def abandon(self, *, outcome: str | None = None, now: datetime | None = None) -> None:
+        """Settle a step left mid-flight because its run was abandoned.
+
+        ``STARTED`` and ``INTERRUPTED`` are the two states in which a step's
+        effect is unknown. Aborting the run does not make it known, so the step is
+        recorded as not having produced a confirmed effect — the outcome text says
+        exactly that — rather than being left mid-flight beside a terminal run. A
+        step that already settled is untouched.
+        """
+        if self.status is StepStatus.STARTED:
+            self._settle(StepStatus.FAILED, outcome=outcome, now=now)
+        elif self.status is StepStatus.INTERRUPTED:
+            self.resolve_interrupted(effect_landed=False, outcome=outcome, now=now)
+
     def resolve_interrupted(
         self,
         *,
@@ -486,6 +500,13 @@ class AgentRun:
     def abort(self, *, reason: str | None = None, now: datetime | None = None) -> None:
         if self.status.is_terminal:
             raise InvariantViolation(f"run {self.id} is already {self.status.value}")
+        # Aborting is a decision, so no step may be left mid-flight beside a
+        # terminal run: a step still ``started``/``interrupted`` would keep
+        # claiming its effect is unknown forever, and ``started`` is exactly what
+        # a live call looks like. Each such step is settled as unconfirmed.
+        for step in self.ordered_steps:
+            if not step.is_terminal and step.status is not StepStatus.PENDING:
+                step.abandon(outcome="run aborted before this step's effect was confirmed", now=now)
         self.status = RunStatus.ABORTED
         self.finished_at = now or _utcnow()
         if reason:

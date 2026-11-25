@@ -435,6 +435,73 @@ def test_abort_is_terminal_and_cannot_be_resumed(h: Harness) -> None:
         h.abort.run(h.principal, run_id=str(run.id))
 
 
+def test_abort_seals_the_audit_link_the_crash_left_open(h: Harness) -> None:
+    """Aborting settles the run, so it must settle the run's open audit link too.
+
+    A crash leaves the gateway invocation ``started``. Aborting is the owner's
+    *other* way to settle a run — the one NEX-023 did not cover — and if it left
+    that link open the tamper-evident trail would keep asserting the outcome is
+    unknown about a run that is definitively over, indistinguishable from a call
+    still in flight. The link is recorded as failed, not succeeded: the owner
+    stopped the run without ruling that the effect landed.
+    """
+    agent, secret = h.secret_for()
+    run = h.plan.run(secret=secret, steps=[create_step("one")])
+    invocation = _crash_mid_step(h, agent, run)
+
+    # Recover the crash the way a real resume would, leaving the step interrupted.
+    h.advance.run(secret=secret, run_id=str(run.id))
+    aborted = h.abort.run(h.principal, run_id=str(run.id), reason="operator stopped it")
+
+    assert aborted.status is RunStatus.ABORTED
+    assert aborted.ordered_steps[0].status is StepStatus.FAILED
+    assert "aborted" in (aborted.ordered_steps[0].outcome or "")
+
+    with h.uow() as uow:
+        sealed = uow.tool_invocations.get(invocation.id)
+        chain = uow.tool_invocations.list_chain(AgentId.parse(agent.id))
+    assert sealed is not None
+    assert sealed.status is InvocationStatus.FAILED
+    assert sealed.completed_at is not None
+    assert sealed.outcome_hash is not None
+    assert all(link.status is not InvocationStatus.STARTED for link in chain)
+    assert verify_chain(chain).verified is True
+
+
+def test_abort_leaves_a_settled_step_and_its_link_untouched(h: Harness) -> None:
+    """A completed step is not rewritten by an abort of the run around it."""
+    agent, secret = h.secret_for()
+    run = h.plan.run(secret=secret, steps=[create_step("first"), create_step("second")])
+    run.resume()
+    run.begin_step(run.ordered_steps[0].id)
+    run.complete_step(run.ordered_steps[0].id, outcome="ok")
+    with h.uow() as uow:
+        uow.agent_runs.save(run)
+        sequence, previous = uow.tool_invocations.next_chain_link(AgentId.parse(agent.id))
+        settled = ToolInvocation.begin(
+            agent_id=AgentId.parse(agent.id),
+            token_id=None,
+            tool=resolve_tool("create_note"),
+            idempotency_key=step_idempotency_key(run.id, 1),
+            arguments=run.ordered_steps[0].arguments,
+            resource_ref=run.ordered_steps[0].resource_ref,
+            previous_hash=previous,
+            chain_sequence=sequence,
+        )
+        settled.succeed(outcome="ok")
+        uow.tool_invocations.add(settled)
+        uow.commit()
+
+    aborted = h.abort.run(h.principal, run_id=str(run.id), reason="stop")
+
+    assert aborted.ordered_steps[0].status is StepStatus.SUCCEEDED
+    with h.uow() as uow:
+        after = uow.tool_invocations.get(settled.id)
+    assert after is not None
+    assert after.status is InvocationStatus.SUCCEEDED
+    assert after.outcome == "ok"
+
+
 def test_resumable_list_excludes_settled_runs(h: Harness) -> None:
     agent, secret = h.secret_for()
     done = h.plan.run(secret=secret, steps=[create_step("done")])
