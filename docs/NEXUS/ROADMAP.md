@@ -36,14 +36,17 @@ login produces a session whose subject resolves to an organization membership.
 
 **Objective:** agent principals that are first-class, governed actors.
 
+Status below is a phase-level summary; `BACKLOG.md` and `CHECKPOINT.json` are authoritative
+for per-slice detail and for what is *verified* versus merely implemented.
+
 | Milestone | Status | Depends on |
 | --- | --- | --- |
-| M2.1 Agent identity & registration | NOT STARTED | M1.5 |
-| M2.2 Token exchange with delegation attenuation | NOT STARTED | M2.1 |
-| M2.3 Delegated authority / consent records | NOT STARTED | M2.2 |
-| M2.4 Revocation | NOT STARTED | M2.2 |
-| M2.5 Tool gateway (validated, audited tool invocation) | NOT STARTED | M2.2 |
-| M2.6 Agentic runtime (durable runs, checkpointing) | NOT STARTED | M2.5 |
+| M2.1 Agent identity & registration | VERIFIED (NEX-003) | M1.5 |
+| M2.2 Token exchange with delegation attenuation | VERIFIED (NEX-003, NEX-005-HTTP) | M2.1 |
+| M2.3 Delegated authority / consent records | VERIFIED (NEX-006, NEX-007) | M2.2 |
+| M2.4 Revocation | VERIFIED (NEX-014, NEX-017) | M2.2 |
+| M2.5 Tool gateway (validated, audited tool invocation) | VERIFIED (NEX-005, NEX-005-followup, NEX-011, NEX-012, NEX-018) | M2.2 |
+| M2.6 Agentic runtime (durable runs, checkpointing) | IN PROGRESS — durable runs, approval validity, decided-approval visibility, approval gating and run write concurrency verified (NEX-009, NEX-009-HTTP, NEX-013, NEX-015, NEX-016, NEX-019); approval-decision CAS (NEX-020) implemented and tested, CI not yet observed | M2.5 |
 
 **Acceptance criteria (phase):** an agent can act only within a token whose
 authority is a subset of its delegator's, every tool call is validated and

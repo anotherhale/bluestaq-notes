@@ -2614,3 +2614,106 @@ comment (issuecomment-7158867562).
 `STATE.md`'s head-commit, draft-PR and CI rows were stale against this reality (head still
 read `66e8cd6`, counters still 29,107/95) and were corrected in the follow-up docs commit
 that carries this addendum.
+
+---
+
+## Run `NEX-2026-11-25-22` — NEX-020: a stale approval decision must not resurrect spent authority
+
+- **Started:** 2026-11-25T10:01Z (`date -u +%s` = 1795600886). Deadline 1795602386 (25 min).
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `b630ff3` (clone arrived on `main` at `d6f92d0`; the authorized
+  branch was fetched and checked out before any gate was trusted, then verified with
+  `git rev-parse HEAD origin/feature/agentic-enterprise-platform` — both `b630ff3`).
+- **Ending commit (code):** `460a26a`. **Push status:** pushed, `b630ff3..460a26a`,
+  remote re-read and equal.
+- **Phase:** 5 (durable runtime).
+
+### Task
+
+NEX-020. The checkpoint's `next_task` asked whether another aggregate still lacked the
+compare-and-set NEX-019 added to runs. The answer was `ApprovalRequest`, and losing the
+update there hands back *authority*, so it was treated as P0.
+
+`ApprovalRequestRow` had no `version`, and `save` rewrote the whole row from whatever the
+caller had loaded. A `DecideApprovalRequest` holding a pre-revocation copy wrote `approved`
+back over a `revoked` row. A stale copy of a spent approval cleared `consumed_at`, making a
+single-use approval spendable again. Neither raised.
+
+### Changes
+
+- `domain/agent/entities.py` — `ApprovalRequest` gains `version` and `persisted_version`
+  (seeded in `__post_init__`, updated by `mark_persisted()`), plus `_bump()` on `approve`,
+  `deny`, `revoke` **and `consume`**. The `consume` bump is load-bearing: without it a stale
+  save still matches the stored version and clears `consumed_at`, so the CAS alone would not
+  have closed the double-spend.
+- `infrastructure/db/models.py` — `ApprovalRequestRow.version` (`Integer`, `nullable=False`,
+  `default=1`), matching the existing agent-table convention.
+- `infrastructure/db/agent_repositories.py` — `_approval_to_domain` maps `version`; `add()`
+  persists `version` and `revoke_reason` and calls `mark_persisted()`; `save()` is one
+  `UPDATE ... WHERE id AND version = :expected` raising `VersionConflict` (already HTTP 409);
+  `consume()` increments `version` in the same statement that sets `consumed_at`.
+- `migrations/versions/f19a2c6d8b04_approval_request_version.py` — new head, down_revision
+  `e5a3b9c04f21`, `server_default="1"` so no backfill is needed.
+- `tests/agent/test_approval_concurrency.py` — 5 tests through production's write path.
+
+### Tests executed
+
+| Gate | Result |
+| --- | --- |
+| `tests/agent/test_approval_concurrency.py` | 5 passed |
+| Negative control (CAS predicate removed) | 3 of 5 red — the tests do detect the lost update |
+| `tests/architecture/test_layering.py` | 5 passed |
+| full `pytest` | **730 passed, 4 skipped** (was 725; delta is exactly the 5 new tests) |
+| `ruff format` / `ruff check` / `mypy` | clean / clean / clean (98 sources) |
+| `alembic upgrade head → downgrade -1 → upgrade head` | clean round-trip |
+
+All gates run **bare** on the feature branch, per R17.
+
+### Decisions
+
+- Treated the slice as P0, not P1: the failure mode is silent re-grant of authority a human
+  withdrew, not merely a lost edit.
+- Bumped `version` inside `consume()` rather than relying on `save()` alone. Without it the
+  stored version does not move when an approval is spent, so a stale save still matches.
+- Left `approve`/`deny` semantics untouched — only the version bookkeeping is new.
+
+### Incidents
+
+**R12 confirmed twice in one run.** A `cat >> … <<'MDEOF'` append to `BACKLOG.md` corrupted
+its own command text and hung; a second heredoc for the commit message did the same. Both
+were abandoned. Nothing was lost — `BACKLOG.md` was still unmodified and the working tree
+was intact — and the work was redone with `file_editor` and a message file at
+`/tmp/nex020_code_msg.txt`. R12 is not a stale note; it reproduces reliably in this
+environment. Use `file_editor` for every multi-line write.
+
+### State
+
+- `BACKLOG.md` — NEX-020 entry added (status IMPLEMENTED + TESTED).
+- `STATE.md` — position table reconciled to `460a26a`; NEX-020 section added.
+- `CHECKPOINT.json` — `run_id` `NEX-2026-11-25-22`, `commit` `460a26a`, NEX-020 in
+  `in_progress_tasks` (**not** in `completed_tasks`/`verified_tasks`), stale duplicate
+  fields (`validation_status`, `pr_status`, `notes_on_pr_body`) dropped. Written atomically
+  (tmp → `json.load` → `os.replace`) with assertions that NEX-020 is absent from the
+  verified list.
+- `EXECUTION_LOG.md` — this entry.
+
+### CI
+
+**Not observed on `460a26a`.** That is an absence, not a pass. Last observed green heads
+remain `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z). NEX-020 is
+**not** promoted; it sits at IMPLEMENTED + TESTED.
+
+### PR and tracking issue
+
+PR #3 was **not** updated this run — its body counters were measured at `f8115fd` and are
+now stale by NEX-020's 5 files. Tracking issue #2 was not updated. Both are the next run's
+first jobs, ahead of new code.
+
+### Next action
+
+1. Poll check runs for `460a26a`; promote NEX-020 only on 4/4 `completed/success` reporting
+   `head_sha` `460a26a`.
+2. Refresh PR #3's body at the then-current head, re-measuring counters from the PR object.
+3. Run the CAS audit in `CHECKPOINT.json`'s `next_task` (delegations, tokens, tool
+   invocations).
+4. Never merge PR #3.

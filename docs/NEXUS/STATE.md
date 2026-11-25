@@ -7,15 +7,43 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **IMPLEMENTED + TESTED** (`460a26a`, CI not yet observed) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `ad21e5b` — the clone started on `main` at `d6f92d0`; `git ls-remote` showed the authorized branch at `ad21e5b`, which was fetched and checked out before any gate was trusted. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
-| Head commit (run end) | `f8115fd` — `docs(nexus): promote NEX-019 to VERIFIED on observed CI`, on top of `9a90e3a` (docs) and `66e8cd6` (`fix(agent-runs): refuse a stale write instead of erasing run progress`, NEX-019). Pushed and re-read with `git log -1`; do not assume. |
-| Last CI result | **4/4 `completed/success` at `66e8cd6`** (NEX-019's own commit — all four check runs report `head_sha` `66e8cd6`), first read 2026-11-25T09:46Z. Also now **4/4 green at `9a90e3a`**, the docs head that carries this file, polled 2026-11-25T09:48Z. Prior: `2b3beb7` 4/4 (NEX-018 by descendant-CI; `789d78a` has 0 runs of its own). Locally this run **on the feature branch at `66e8cd6`**: `ruff format --check` 198 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **725 passed / 4 skipped**. |
+| Base commit (run start) | `b630ff3` — the clone started on `main` at `d6f92d0`; the authorized branch was fetched and checked out before any gate was trusted, then verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `b630ff3`). |
+| Head commit (run end) | `460a26a` — `fix(approvals): refuse a stale decision instead of re-granting authority` (NEX-020), on top of `b630ff3`. Pushed and re-read with `git rev-parse`; the docs commit that carries this file sits on top and is not named here because a commit cannot contain its own SHA. |
+| Last CI result | **Not yet observed on `460a26a`.** Polled at run end; see CI status row. Locally this run **on the feature branch at `460a26a`**: `ruff format` clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **730 passed / 4 skipped**, `alembic upgrade head → downgrade -1 → upgrade head` clean. Prior heads, previously observed: `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body **refreshed 2026-11-25T09:49:41Z** at head `f8115fd`: **108 files, 29,339 insertions, 10 deletions, 97 commits**, 729 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at that head, not from the per-file sums. The body now states NEX-019 as VERIFIED on a run at its own commit. |
-| CI status | **`f8115fd` (this head): 4/4 `completed/success`, all `head_sha` == `f8115fd`, polled 2026-11-25T09:50Z.** `66e8cd6` (NEX-019 code): 4/4 green at that commit, 09:46Z. `9a90e3a`: 4/4 green, 09:48Z. Older observations: `2b3beb7` 4/4 `completed/success`. Prior: `fa387a9` 4/4; `ca15eb1` 4/4; `990557d` 4/4; `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
+| Draft PR | #3 (draft, unmerged — human review required). Body last refreshed 2026-11-25T09:49:41Z at head `f8115fd` with counters measured from the PR object (108 files / 29,339 insertions / 10 deletions / 97 commits). **Stale as of this run** — `460a26a` adds 5 files. Re-measure from `/repos/anotherhale/bluestaq-notes/pulls/3` before quoting; never from per-file sums (R21). |
+| CI status | **`460a26a` (this run's code head): not yet observed.** Older observations, all `completed/success` with matching `head_sha`: `f8115fd` 4/4 (09:50Z), `66e8cd6` 4/4 (09:46Z), `9a90e3a` 4/4 (09:48Z), `2b3beb7` 4/4 (09:28Z), `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
+
+`ApprovalRequestRow` had no `version`, and `save` rewrote the whole row from whatever the
+caller had loaded. Two writers that loaded the same request both committed and the second
+won — so a `DecideApprovalRequest` holding a pre-revocation copy wrote `approved` back
+over a `revoked` row, and a stale copy of a spent approval cleared `consumed_at`, making a
+single-use approval spendable again. Neither raised.
+
+This is NEX-019's lost-update class on the aggregate where losing the update hands back
+*authority* rather than progress, which is why it was treated as P0.
+
+The aggregate now records `persisted_version` and bumps `version` on every
+authority-changing transition — `approve`, `deny`, `revoke` **and `consume`**. The
+`consume` bump is load-bearing: without it a stale save still matches the stored version
+and clears `consumed_at`, so the CAS alone would not have closed the double-spend.
+`save` is one `UPDATE ... WHERE id AND version = :expected` raising `VersionConflict`
+(HTTP 409), and `consume()` increments the version in the same statement that sets
+`consumed_at`.
+
+Status: **IMPLEMENTED + TESTED, not VERIFIED.** Local gates green at `460a26a`: `ruff
+format` clean, `ruff check` clean, `mypy` clean over 98 sources, full `pytest` **730
+passed / 4 skipped** (was 725; the delta is exactly the 5 new tests), and the migration
+round-trips (`upgrade → downgrade -1 → upgrade`). CI on `460a26a` was **not observed**
+during this run — that is an absence, not a pass.
+
+Negative control: deleting the `version == expected` predicate turns 3 of the 5 tests red,
+so they fail for the lost update and not for some unrelated reason.
 
 ## NEX-019 (run `NEX-2026-11-25-21`) — a stale write must not erase run progress
 

@@ -1109,3 +1109,69 @@ skipped** (previous head was 722; the delta is exactly the 3 new tests).
 
 **Next action:** poll CI for `66e8cd6` and promote to VERIFIED only on 4/4
 `completed/success` reporting that `head_sha`.
+
+## NEX-020 — A stale approval decision must not resurrect spent authority
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P0 (security: silent re-grant of withdrawn/spent authority) |
+| Status | **IMPLEMENTED + TESTED** — local gates green; CI not yet observed |
+| Dependencies | NEX-013 (approval validity), NEX-014 (revocation), NEX-016 (approval-gated steps), NEX-019 (the CAS pattern this copies) |
+
+**Objective:** close the same lost-update hole NEX-019 closed for runs, on the aggregate
+where losing the update hands back *authority* rather than progress.
+
+`ApprovalRequestRow` carried no `version`, and `SqlAlchemyApprovalRequestRepository.save`
+rewrote every decision-bearing column from whatever the caller had loaded. Two writers
+that loaded the same request both committed, and the second wrote its stale copy over the
+first. Concretely:
+
+- A `DecideApprovalRequest` holding a pre-revocation copy writes `status=approved` back
+  over a row a human had **revoked**, silently restoring withdrawn authority.
+- A stale copy of an approval that was already **consumed** clears `consumed_at`, so a
+  single-use approval becomes spendable a second time — the double-spend that NEX-013's
+  single-use rule exists to prevent.
+
+Nothing raised. For a note this would be a lost edit; here it is a silent re-grant of
+authority a human explicitly withdrew, which is why the slice is P0 rather than P1.
+
+**Root cause:** `save` was an unconditional full-row overwrite. The row had no version
+column, so the adapter had nothing to compare against, and `ApprovalRequest` kept no
+record of which version it had been loaded at. `version - 1` cannot supply that, because
+a caller may mutate several times between two saves.
+
+**Delivered:**
+
+- `domain/agent/entities.py` — `ApprovalRequest` gains `version` (default 1) and
+  `persisted_version` (seeded in `__post_init__`, updated by `mark_persisted()`), plus a
+  private `_bump()` called by **every** authority-changing transition: `approve`, `deny`,
+  `revoke` and `consume`. The `consume` bump is load-bearing: without it a stale save
+  still matches the stored version and clears `consumed_at`.
+- `infrastructure/db/models.py` — `ApprovalRequestRow.version`, matching the existing
+  agent-table convention (`Integer`, `nullable=False`, `default=1`).
+- `infrastructure/db/agent_repositories.py` — `_approval_to_domain` maps `version`;
+  `add()` persists `version` and `revoke_reason` and calls `mark_persisted()`; `save()`
+  is one `UPDATE ... WHERE id = :id AND version = :expected` raising `VersionConflict`
+  on a rowcount of 0 (already HTTP 409 via `presentation/errors.py`); `consume()` sets
+  `version = version + 1` in the same statement that sets `consumed_at`.
+- `migrations/versions/f19a2c6d8b04_approval_request_version.py` — adds `version` with
+  `server_default="1"` so existing rows are valid without a backfill. Round-tripped
+  locally (upgrade → downgrade → upgrade).
+- `tests/agent/test_approval_concurrency.py` — 5 tests through production's `save` path:
+  a stale approve cannot resurrect a revoked approval; a stale write cannot clear a spent
+  approval; a stale consume cannot double-spend; a **sequential** decision from the fresh
+  version still commits (so an always-raising guard cannot pass); every transition bumps
+  the version.
+
+**Negative control:** removing the `version == expected` predicate from the `UPDATE`
+turns 3 of the 5 tests red, so they detect the lost update rather than passing vacuously.
+
+**Gates (local, bare, on the feature branch):** `ruff format` clean, `ruff check` clean,
+`mypy` clean (98 sources), full `pytest` **730 passed / 4 skipped** (was 725; the delta is
+exactly the 5 new tests), `alembic upgrade head → downgrade -1 → upgrade head` clean.
+
+**CI:** not yet observed on this slice's commit. Stated as an absence, not a pass.
+
+**Next action:** poll CI for the code commit and promote to VERIFIED only on 4/4
+`completed/success` reporting that `head_sha`.
