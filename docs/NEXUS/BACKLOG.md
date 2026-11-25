@@ -421,7 +421,7 @@ first is not repeated.
 **Remaining:** none at the use-case level. The HTTP surface is delivered by
 **NEX-009-HTTP** (below), mirroring how NEX-005 preceded NEX-005-HTTP.
 
-**Complexity:** large (slice 1 VERIFIED; slice 2 = HTTP surface, TESTED).
+**Complexity:** large (both slices VERIFIED).
 
 ---
 
@@ -431,7 +431,7 @@ first is not repeated.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | **TESTED** (run `NEX-2026-11-25-10`; CI not yet observed on the commit) |
+| Status | **VERIFIED** (run `NEX-2026-11-25-10`; CI 4/4 `completed/success` on `e817d04`) |
 | Dependencies | NEX-009 |
 
 **Objective:** make the durable-run use cases reachable through the API layer, so
@@ -466,8 +466,11 @@ case was removed. Pinned by
 `tests/agent/test_agent_runs.py::test_a_planned_step_takes_its_capability_from_the_tool_catalog`
 and `::test_a_planned_step_naming_an_unknown_tool_is_rejected`.
 
-**Status note:** TESTED, not VERIFIED — CI has not yet run on the commit. Local
-gates are recorded for reproducibility, not as CI evidence (R10).
+**Status note:** VERIFIED. CI ran on `e817d04` and reported 4/4 check runs
+`completed/success` (`Frontend (typecheck, lint, test, build)` and
+`Backend (ruff, mypy, pytest, migrations)`, once for the push event and once for
+the pull_request event). The backend gate runs the full suite bare, so this is CI
+evidence, not a local gate run (R10).
 
 **Security:** the run row is what an operator reads when deciding whether an
 interrupted step's effect landed, so a plan that could understate its own

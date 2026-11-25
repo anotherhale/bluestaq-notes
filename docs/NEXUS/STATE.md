@@ -277,29 +277,24 @@ None currently. The following are known open items, not blockers:
   had no HTTP surface, so durability was real and unreachable — no client could
   plan or advance a run. `presentation/api/routers/agent_runs.py` now mounts
   `/api/v1/agent-runs` (plan, advance, get, list, resolve, abort), pinned by
-  `tests/api/test_agent_runs_api.py` (9 tests). Closed at **TESTED**, not VERIFIED:
-  the commit's CI has not been observed. Writing the edge also found a real
+  `tests/api/test_agent_runs_api.py` (9 tests). **VERIFIED**: CI reported 4/4
+  check runs `completed/success` on `e817d04`. Writing the edge also found a real
   hardening gap — `PlannedStep.capability` was caller-supplied, so a plan could
   name a privileged tool while declaring a weaker capability; it is now derived
   from the tool catalog and is not an init field.
 
 ## Next best actions
 
-1. **Observe CI on the NEX-009-HTTP commit, then promote to VERIFIED if green.**
-   The work is committed and pushed but TESTED only. Check
-   `gh api repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs` and confirm
-   all four check runs (backend + frontend, push and pull_request) are
-   `completed/success` before changing any status to VERIFIED.
-2. **Refresh the PR #3 body again.** It records 22,819 insertions / 95 files / 655
-   tests; NEX-009-HTTP adds a router, schemas, container wiring, and 11 tests.
-   The body has understated this branch repeatedly — always recompute with
-   `git diff --shortstat main...HEAD` plus a fresh collect, never copy the last
-   number forward.
-3. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is now
-   reachable, so the remaining Phase-5 work is what consumes it. Re-read the
-   Phase 5 section of `ROADMAP.md` before choosing; do not invent a slice from
+1. **Refresh the PR #3 body.** Measured on `e817d04`: 23,782 insertions / 97
+   files / 666 tests / 5 migrations. The body still claims 21,310 / 91 / 639 and
+   names `0fcc078` as CI-verified. It has understated this branch on every run —
+   always recompute with `git diff --shortstat main...HEAD` plus a fresh collect,
+   never copy the last number forward.
+2. **Next dependency-ready slice (P2, Phase 5):** the durable runtime is now
+   reachable over HTTP, so the remaining Phase-5 work is what consumes it. Re-read
+   the Phase 5 section of `ROADMAP.md` before choosing; do not invent a slice from
    the last run's summary alone.
-4. **Promote nothing on local gates alone.** NEX-009 slice 1 reached VERIFIED only
-   when *both* CI events went green on `0e74d4f`. A local green suite is not
-   evidence; R9/R10 exist because that conflation happened before.
+3. **Promote nothing on local gates alone.** NEX-009 slice 1 and NEX-009-HTTP both
+   reached VERIFIED only when CI went green on the commit. A local green suite is
+   not evidence; R9/R10 exist because that conflation happened before.
 
