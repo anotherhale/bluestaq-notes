@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-27",
-  "timestamp": "2026-11-25T12:48:00Z",
+  "timestamp": "2026-11-25T12:54:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e511fc9e6c6400d17867531c3c70b9789349b6ad",
+  "commit": "88926ecd84806836ce5f8ea275c894f6a962faa0",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
   "active_task": "none - NEX-001..NEX-024 all VERIFIED; PR #3 body refreshed at e511fc9",
   "task_statuses": {
@@ -107,14 +107,14 @@
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "e511fc9",
-    "body_updated_at": "2026-11-25T12:44:37Z",
+    "head": "88926ec",
+    "body_updated_at": "2026-11-25T12:53:30Z",
     "counters": {
-      "additions": 31545,
+      "additions": 31612,
       "deletions": 10,
       "files": 111,
-      "commits_ahead_of_main": 117,
-      "measured_at_commit": "e511fc9",
+      "commits_ahead_of_main": 118,
+      "measured_at_commit": "88926ec",
       "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21)"
     },
     "note": "PR #3 is open, draft and unmerged, head eaaae23. Its body is stale and must be refreshed from the PR object's counters before quoting - never per-file sums (R21).",
@@ -199,8 +199,8 @@
   ],
   "next_task": "1) Re-read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice (NEX-001..NEX-024 are VERIFIED; R27 is closed on both settle paths). 2) Optionally confirm whether revoking a delegation or agent invalidates previously granted approvals - the one open question left from this run.",
   "next_action": "Read ROADMAP.md Phase 5, pick the next slice from BACKLOG.md, and implement it as one vertical slice.",
-  "recovery_instructions": "Verify git rev-parse HEAD equals e511fc9 and the tree is clean. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at e511fc9. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
-  "ci_status": "e511fc9 (docs-only head): 4/4 completed/success, every check run reporting head_sha e511fc9, read 2026-11-25T12:41Z. Product commits beneath it were each green at their own SHA: eaaae23 (NEX-024, 4/4 at 12:16Z), c367746 (NEX-023, 4/4 at 11:50Z), 1156f6e (NEX-022, 4/4 at 11:27Z).",
+  "recovery_instructions": "Verify git rev-parse HEAD equals 88926ec and the tree is clean. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at 88926ec. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
+  "ci_status": "88926ec (docs-only head): all 4 check runs in_progress when polled 2026-11-25T12:52Z - NOT claimed green. Most recent completed green is e511fc9 (4/4 completed/success, read 12:41Z). Product commits were green at their own SHAs: eaaae23 (NEX-024, 4/4 12:16Z), c367746 (NEX-023, 4/4 11:50Z), 1156f6e (NEX-022, 4/4 11:27Z).",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
