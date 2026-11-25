@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-35",
-  "timestamp": "2026-11-25T17:42Z",
+  "timestamp": "2026-11-25T17:52Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "e386e02",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-034 all VERIFIED. NEX-033 made advisory context withholding a measured rate rather than a per-response detail, and repaired two observability defects (a six-key log allowlist that silently dropped every other extra field; redact() with zero callers). NEX-034 closes the hole that repair opened: once redact() was on the formatting path it advertised protection, so its eleven-string exact-match matcher became a shape-based one that segments keys across separators and camelCase and decides on words. Two real leaks are closed - client_secret/private_key/x-api-key/accessToken/session_cookie/Authorization passed through raw, and a sequence under a sensitive key was emitted whole.",
@@ -89,7 +89,7 @@
     "ruff_format": "clean - 164 files already formatted",
     "ruff_check": "All checks passed",
     "mypy": "Success: no issues found in 107 source files",
-    "negative_control_nex034": "Restoring the eleven-string exact-match matcher turns 3 of the 4 new tests red (six unlisted credential spellings; plural key; sequence under a sensitive key). The over-redaction test passes on both versions, correctly - it guards a property the old matcher already had, so it is not claimed as a negative control.",
+    "negative_control_nex034": "EXECUTED AND OBSERVED this run, not inherited. `git show eb1a2c8:src/notes_service/bootstrap/logging_config.py` restored over the current file, then `pytest tests/bootstrap/test_logging_config.py` -> 3 failed, 7 passed. The three failures are exactly test_redact_matches_credential_spellings_it_was_never_told_about, test_redact_matches_a_plural_credential_key and test_redact_drops_a_sequence_under_a_sensitive_key_entirely. The over-redaction test passes on both versions, correctly - it guards a property the old matcher already had, so it is NOT claimed as a negative control. Restored with `git checkout --`; `git hash-object` returned ace7a5b086b2d4b2e1ac28c7db88f143206976eb, matching the pre-experiment value, and the tree was clean. Re-run this the same way if the matcher changes; do not copy the sentence forward.",
     "functional_guard_proof": "Redaction stays surgical: a test pins idempotency_key, content_type, duration_ms and request_id as surviving. A substring matcher would swallow them and blind the withholding counter NEX-033 added, which is the purpose of the log line."
   },
   "uncommitted_work": false,
@@ -299,5 +299,31 @@
     "NEX-032": "Withholding is observable with a reason per field. Product commit fe5eadc, CI 4/4 at that SHA.",
     "NEX-033": "Withholding becomes a rate via the WithholdingRecorder port; JsonFormatter allowlist removed; redact() wired onto the formatting path. Product commit bf84a7c, CI 4/4 at that SHA (polled 2026-11-25T17:33Z).",
     "NEX-034": "The log redactor recognises a credential by shape rather than an exact key spelling, and replaces a sequence under a sensitive key whole. Product commit e386e02, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T17:41Z)."
+  },
+  "branch_head_observed": "746fd88",
+  "branch_head_observed_at": "2026-11-25T17:52Z",
+  "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+  "commits_this_run": {
+    "e386e02": "NEX-034 product fix - credential recognition by shape (the implementation commit)",
+    "879b494": "docs - NEX-033/NEX-034 verified in checkpoint, STATE, BACKLOG; PR #3 and issue #2 refreshed",
+    "746fd88": "docs - run NEX-2026-11-25-35 execution log entry, with the negative control executed"
+  },
+  "delivery_state": {
+    "pr_3_body": "PATCHed, verified byte-identical to /tmp/pr3_expected.md at 50720 chars. NEX-033 and NEX-034 sections appended (neither was present before); the counter line replaced with measured figures 37593 additions / 28 deletions / 133 files / 162 commits, read from the PR object at 17:41Z.",
+    "issue_2_comment": "POSTed, id 7169950780, verified byte-identical at 4894 chars. Posted as lists, not a table - a markdown table in an issue comment body returns HTTP 500 on this repo.",
+    "ci_nex034": "4/4 completed/success at e386e02, every head_sha = e386e02, polled 17:41Z.",
+    "ci_docs_heads": "879b494 and 746fd88 are NOT polled and NOT claimed. A superseded docs head reads completed/cancelled, which is neither pass nor fail."
+  },
+  "run_summary": {
+    "run_id": "NEX-2026-11-25-35",
+    "started_commit": "e386e02",
+    "ending_commit": "746fd88",
+    "slices_completed": 0,
+    "slices_promoted": [
+      "NEX-033",
+      "NEX-034"
+    ],
+    "why_no_new_slice": "Approximately 10 minutes remained at the integration boundary. The operating rules forbid starting a new slice with under 10 minutes left; continuing would have left an uncommitted tree the next run must discard. The remaining time went to executing the NEX-034 negative control, which had been published in three places without being re-run.",
+    "next_action_unchanged": true
   }
 }
