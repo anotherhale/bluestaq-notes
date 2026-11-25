@@ -516,6 +516,32 @@ class SqlAlchemyApprovalRequestRepository:
         )
         return cast(CursorResult[Any], result).rowcount == 1
 
+    def revoke_granted_for_agent(self, agent_id: AgentId, *, now: datetime, reason: str) -> int:
+        result = self._session.execute(
+            update(ApprovalRequestRow)
+            .where(
+                ApprovalRequestRow.agent_id == _as_uuid(agent_id),
+                ApprovalRequestRow.status == ApprovalStatus.APPROVED.value,
+                # A spent approval is history: the act it authorised already
+                # happened, and marking it revoked would claim an authorisation
+                # was withdrawn before it was used.
+                ApprovalRequestRow.consumed_at.is_(None),
+                # Do not overwrite an earlier revocation's stamp or reason; the
+                # first withdrawal is the one an auditor needs.
+                ApprovalRequestRow.revoked_at.is_(None),
+            )
+            .values(
+                status=ApprovalStatus.REVOKED.value,
+                revoked_at=now,
+                # No human performed this withdrawal, so ``revoked_by_user_id``
+                # stays NULL — that is the honest record. The reason carries the
+                # cause instead of inventing an approver.
+                revoke_reason=reason,
+                version=ApprovalRequestRow.version + 1,
+            )
+        )
+        return cast(CursorResult[Any], result).rowcount
+
 
 class SqlAlchemyToolInvocationRepository:
     """SQLAlchemy adapter for the tool-invocation audit trail."""

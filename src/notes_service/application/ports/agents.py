@@ -116,6 +116,20 @@ class ApprovalRequestRepository(Protocol):
         stamp therefore happen in one conditional UPDATE, and the caller treats
         a ``False`` result as "no usable approval".
         """
+
+    def revoke_granted_for_agent(self, agent_id: AgentId, *, now: datetime, reason: str) -> int:
+        """Withdraw every granted-but-unspent approval for an agent.
+
+        Called when the authority that justified those approvals is withdrawn —
+        a delegation revoked, or the agent itself. An approval is live authority
+        until it is spent, and it records no delegation of its own, so it cannot
+        be attributed to a surviving delegation once any of the agent's
+        authority is taken away. Fail closed: the human must approve again.
+
+        Only ``approved`` rows that have not been consumed are touched. A spent
+        approval already authorised its act and is history, not authority; a
+        pending one was never a grant and is denied or left to expire instead.
+        """
         ...
 
 

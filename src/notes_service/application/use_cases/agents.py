@@ -314,6 +314,17 @@ class RevokeDelegation(UseCase):
             delegation.revoke(now=now)
             uow.delegations.save(delegation)
             uow.agent_tokens.revoke_all_for_delegation(delegation.id, now=now)
+            # A granted approval is live authority, and it names no delegation
+            # of its own. Once this consent is withdrawn, any approval the agent
+            # still holds cannot be attributed to a delegation the delegator
+            # still stands behind — so it is withdrawn too. Leaving it would let
+            # a fresh delegation revive an authorisation granted under the old
+            # one, which the delegator never re-granted.
+            uow.approvals.revoke_granted_for_agent(
+                delegation.agent_id,
+                now=now,
+                reason=f"delegation {delegation.id} revoked",
+            )
             uow.commit()
 
 
@@ -333,6 +344,14 @@ class RevokeAgent(UseCase):
             uow.agents.save(agent)
             uow.delegations.revoke_all_for_agent(agent.id, now=now)
             uow.agent_tokens.revoke_all_for_agent(agent.id, now=now)
+            # Approvals outlive the agent otherwise: they are keyed by agent and
+            # carry no delegation, so a reactivated agent would inherit grants
+            # made before the emergency stop. Withdraw them with the rest.
+            uow.approvals.revoke_granted_for_agent(
+                agent.id,
+                now=now,
+                reason="agent revoked",
+            )
             uow.commit()
             return agent
 
