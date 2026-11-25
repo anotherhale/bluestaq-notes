@@ -619,7 +619,7 @@ dependency.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P1 (security) |
-| Status | **TESTED** — corrected in run `NEX-2026-11-25-14` (commit `12584a1`). It was previously recorded VERIFIED on `a50a9a0` because CI run [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) was `completed/success` on head `e2bf7bc`. **That promotion was wrong**: green CI proved the tests passed, not that the criterion was met, and the tests did not touch the write path that was broken. See "Correction" below. Awaiting CI on `12584a1`. |
+| Status | **VERIFIED** — criterion met on `12584a1`, CI observed. It was previously recorded VERIFIED on `a50a9a0` (CI [45559723156](https://github.com/anotherhale/bluestaq-notes/actions/runs/45559723156) green on `e2bf7bc`) and that promotion was **wrong**: green CI proved the assertions passed, not that the invariant held, because the tests never touched the broken write path. Run `NEX-2026-11-25-14` fixed the path in `12584a1` and added tests that pin it; CI on `12584a1` is 4/4 `completed/success` (2 push + 2 pull_request check runs, all `head_sha 12584a1`). See "Correction" below. |
 | Dependencies | NEX-005 (gateway), NEX-003 (approval request lifecycle) |
 
 **Objective:** an approval was an unlimited-use, never-expiring authorisation.

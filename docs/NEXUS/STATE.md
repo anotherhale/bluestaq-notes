@@ -7,42 +7,44 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **PARTIALLY VERIFIED** — see the correction below |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction, see below) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `4a5f916` |
-| Head commit (run end) | `12584a1` — product commit; the docs commit carrying this file is its child |
-| Last CI result | Green on `e2bf7bc` (NEX-013, 4/4, observed 2026-11-25T06:21Z). **No CI observed yet for `12584a1`** — this run's gates are local only. |
+| Head commit (run end) | `411d6ee` — docs commit; product commit is `12584a1` |
+| Last CI result | **Green on `12584a1`** (the correction), 4/4 `completed/success`, all `head_sha 12584a1`, observed 2026-11-25T06:50Z. Jobs: Backend (ruff, mypy, pytest, migrations) + Frontend (typecheck, lint, test, build), push and pull_request. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Body is **stale**: it predates both NEX-013 and this correction. Recompute before refreshing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Correction recorded this run (NEX-013 status was overstated)
 
-NEX-013 was recorded VERIFIED. Its core invariant was **not** enforced on the
-path that matters:
+NEX-013 was recorded VERIFIED on green CI. Its core invariant was **not**
+enforced on the path that matters:
 
 - `ApprovalRequestRepository.add()` built `ApprovalRequestRow` without
   `expires_at` or `consumed_at`. Every approval the tool gateway opened was
   therefore persisted with `expires_at = NULL`.
-- `is_usable` read NULL as "never expires". So the 72-hour bound NEX-013
-  introduced was **inert in production**; an approved agent could replay a
-  delete indefinitely.
+- `is_usable` read NULL as "never expires", and the `consume()` predicate
+  accepted `expires_at IS NULL`. So the 72-hour bound NEX-013 introduced was
+  **inert in production**; an approved agent could replay a delete indefinitely.
 - The NEX-013 expiry test stayed green because it exercised `save()` — which
   does write the columns — and never `add()`, the path the gateway uses.
 
 This is the R18 class: a test that proves the aggregate's logic while the
 adapter that stores it drops the field. Fixed in `12584a1` (three independent
-fail-closed changes plus tests that pin the production path). NEX-013 is now
-**TESTED, not VERIFIED**, until CI is observed on `12584a1`.
+fail-closed changes plus tests that pin the production path), and CI on
+`12584a1` is observed 4/4 green. NEX-013 is **VERIFIED** on that evidence — the
+criterion holds, and now so do the tests that check it.
+
 
 
 ## Active task
 
-None in flight. **NEX-013 is TESTED** — the bound is now actually persisted and
-fails closed, but CI has not been observed on `12584a1`.
+None in flight. **NEX-013 is VERIFIED** — the bound is persisted, fails closed,
+and CI on `12584a1` is observed 4/4 green.
 
-Next dependency-ready work: observe CI on `12584a1`, then the next Phase 5
-slice — see Next Best Actions and the Phase 5 section of `ROADMAP.md`.
+Next dependency-ready work: the next Phase 5 slice — see Next Best Actions and
+the Phase 5 section of `ROADMAP.md`.
 
 
 ## Last completed task
