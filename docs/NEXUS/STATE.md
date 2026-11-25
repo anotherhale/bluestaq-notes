@@ -10,10 +10,10 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction, see below) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `4a5f916` |
-| Head commit (run end) | `411d6ee` — docs commit; product commit is `12584a1` |
+| Head commit (run end) | `48477da` — final docs commit (PR body refresh recorded); product commit is `12584a1` |
 | Last CI result | **Green on `12584a1`** (the correction), 4/4 `completed/success`, all `head_sha 12584a1`, observed 2026-11-25T06:50Z. Jobs: Backend (ruff, mypy, pytest, migrations) + Frontend (typecheck, lint, test, build), push and pull_request. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body is **stale**: it predates both NEX-013 and this correction. Recompute before refreshing. |
+| Draft PR | #3 (draft, unmerged — human review required). Head tracks `48477da`. Body **refreshed this run**: metrics recomputed on `48477da` (26,506 additions / 10 deletions / 103 files / 64 commits ahead, 1 behind), test count 690 collected, and the NEX-013 overstatement replaced with the correction. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Correction recorded this run (NEX-013 status was overstated)

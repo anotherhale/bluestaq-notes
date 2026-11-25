@@ -58,7 +58,22 @@
     "regression_guard": "tests/agent/test_tool_gateway.py::...::test_an_approval_opened_by_the_gateway_is_time_bounded and tests/agent/test_approval_persistence.py both FAIL when the repository fix is reverted, and pass with it."
   },
   "uncommitted_work": "none",
-  "pr_state": "PR #3 open, draft, unmerged (human review required). Body is STALE: it predates both NEX-013 and this correction, so its file/insertion/migration counts are wrong. Recompute git diff --shortstat main HEAD (two-dot; the clone is grafted) plus pytest --collect-only -o addopts='' before refreshing.",
+  "pr_state": {
+    "number": 3,
+    "state": "open",
+    "draft": true,
+    "head": "48477da",
+    "body_refreshed": "2026-11-25T06:58Z",
+    "metrics_at_head": {
+      "additions": 26506,
+      "deletions": 10,
+      "changed_files": 103,
+      "commits_ahead": 64,
+      "commits_behind": 1,
+      "tests_collected": 690
+    },
+    "note": "Body recomputed on 48477da and the NEX-013 overstatement replaced with the correction. Remains draft and unmerged; automated merging is prohibited."
+  },
   "tracking_issue": {
     "number": 2,
     "state": "open",
@@ -79,7 +94,7 @@
       "detail": "NEX-013 was VERIFIED on green CI while ApprovalRequestRepository.add() omitted expires_at, so the bound was inert for every gateway-created approval. The test used save(), which does write the columns. Pin security-relevant fields through the write path production uses. Closed for NEX-013 by 12584a1."
     }
   ],
-  "next_task": "Select the next dependency-ready Phase 5 slice from ROADMAP.md; also refresh PR #3's body with recomputed metrics (it predates NEX-013 and the correction).",
+  "next_task": "Select the next dependency-ready Phase 5 slice from ROADMAP.md. PR #3 body is now current at 48477da.",
   "next_action": "1) gh api repos/anotherhale/bluestaq-notes/commits/12584a1/check-runs - only a green 4/4 promotes NEX-013 to VERIFIED. 2) Recompute PR #3 metrics and update the body. 3) Select the next Phase-5 slice from ROADMAP.md. Never merge PR #3.",
   "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-013 is VERIFIED at 12584a1 (CI 4/4). Do not re-verify it. Choose the next Phase 5 slice from ROADMAP.md. Never merge PR #3. Write any script to /tmp via file_editor; never use a heredoc.",
   "ci_status": {
