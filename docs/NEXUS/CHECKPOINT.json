@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-37",
-  "timestamp": "2026-11-25T19:36Z",
+  "timestamp": "2026-11-25T19:47Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "8e670a6",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-039 all VERIFIED. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. NEX-039 ships the first real DecisionProvider adapter: until now StubDecisionProvider was the only implementation, so the platform could run the decisioning path but never obtain a real judgment. The adapter is bounded and fails closed: https-only endpoint and a bounded provider name are checked at construction, the request carries only kind plus sorted candidates (no context hash, no excluded field names, no correlation id), and every malformed vendor answer becomes an abstention rather than an exception. Vendor error bodies are discarded, never parsed, so they cannot echo the request or the credential into the audit trail.",
@@ -104,18 +104,23 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "counters": null,
-    "counters_measured_at": "NOT MEASURED this run. Re-measure from the PR object before quoting any counter; 8e670a6 moved the head and therefore the counters.",
-    "body_updated": "Prior run PATCHed 2026-11-25T19:04Z (NEX-037 + NEX-038 sections), read back byte-equal. NEX-039 section not yet appended.",
-    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) and `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` agreed at c37037f. Never read the head from this file.",
-    "last_observed": "2026-11-25T19:32Z"
+    "counters": {
+      "additions": 40639,
+      "deletions": 28,
+      "changed_files": 141,
+      "commits": 185
+    },
+    "counters_measured_at": "2026-11-25T19:46Z, read from the PR object at head cd235d8. Re-measure before quoting; any later commit changes them.",
+    "body_updated": "PATCHed 2026-11-25T19:45Z: NEX-039 section appended, 59,330 -> 62,844 chars, read back byte-equal and asserted on four substrings (NEX-039, HttpDecisionProvider, R37, the 8e670a6 CI line). PR #3 remains DRAFT and UNMERGED - human review required.",
+    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) = cd235d8; git ls-remote agreed before the PR body was patched. Never read the head from this file.",
+    "last_observed": "2026-11-25T19:46Z"
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment_id": 7171956166,
-    "last_comment_len": 3199,
-    "last_comment_scope": "NEX-038 (delivery-debt close-out). NEX-039 not yet posted."
+    "last_comment_id": 7172513048,
+    "last_comment_len": 2614,
+    "last_comment_scope": "NEX-039 VERIFIED with CI evidence at 8e670a6, R37 opened, NEX-040 named. Lists only, no markdown table (a table in an issue comment body returns HTTP 500 here). Posted and read back byte-equal."
   },
   "blockers": [],
   "risks": [
@@ -289,7 +294,7 @@
     "product_slice_sha": "8e670a6",
     "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 8e670a6, every check run reporting head_sha 8e670a6 (Backend id 139458452375, Frontend id 139458453235, plus the duplicate pair 139458414907 Backend / 139458414358 Frontend, one pair per push and pull_request event), polled 2026-11-25T19:32Z. An earlier poll at 19:19Z saw Frontend green and Backend still in_progress; it is kept because it is why the green claim carries a timestamp.",
     "prior_slice": "5c0575b (NEX-037): VERIFIED GREEN 4/4 completed/success, polled 2026-11-25T18:57Z (Backend 139441878322, Frontend 139441878023, plus duplicates 139441830759 / 139441831292). 90eea0c (NEX-036): VERIFIED GREEN, polled 18:45Z.",
-    "docs_heads": "Any docs-only commit following 5c0575b carries no source change, so a red or cancelled run on it says nothing about the code. 5c0575b is an ancestor of any such head.",
+    "docs_heads": "cd235d8 (this promotion) carries no source change, so a red or cancelled run on it says nothing about the code. 8e670a6 is an ancestor and its 4/4 green is the evidence for the implementation. A docs head superseded in the concurrency group reads completed/cancelled, which is neither pass nor fail.",
     "rule": "Poll the PRODUCT commit before pushing its docs commit. A docs head superseded by the concurrency group reads completed/cancelled, which is neither pass nor fail and must never be counted as either.",
     "evidence_basis": "8e670a6: direct green poll at that exact SHA, all four check runs reporting head_sha 8e670a6. 5c0575b and 90eea0c: direct green polls at those SHAs. Any docs commit above 8e670a6: descendant-CI - green at an ancestor whose tree contains it. A docs head superseded in the concurrency group reads completed/cancelled, which is neither pass nor fail and is never counted as either.",
     "poll_history": "18:52Z all queued/in_progress; 18:54Z all in_progress; 18:57Z 4/4 completed/success. The two earlier polls are kept because they are why the claim carries a timestamp at all.",
@@ -364,9 +369,9 @@
     "8e670a6": "NEX-039 product slice - first real DecisionProvider HTTP adapter, config and container wiring, 64 tests (implementation)"
   },
   "delivery_state": {
-    "pr_3_body": "OWED at checkpoint time - NEX-039 section not yet appended. Earlier sections (NEX-037, NEX-038) were PATCHed 2026-11-25T19:04Z and read back byte-equal. PR #3 remains DRAFT and UNMERGED - human review required.",
-    "issue_2_comment": "OWED at checkpoint time - NEX-039 comment not yet posted. Prior comments 7171861451 (NEX-037) and 7171956166 (NEX-038) are posted. Lists only - a markdown table in an issue comment body returns HTTP 500 on this repository.",
-    "owed": "PR #3 body section for NEX-039 and issue #2 comment for NEX-039. Recorded as owed rather than claimed, because a checkpoint written before delivery must not assert delivery."
+    "pr_3_body": "PATCHed 2026-11-25T19:45Z with a NEX-039 section; read back byte-equal at 62,844 chars (was 59,330). PR #3 remains DRAFT and UNMERGED - human review required.",
+    "issue_2_comment": "POSTed 2026-11-25T19:45Z, id 7172513048, 2,614 chars, read back byte-equal. Lists only - no markdown table.",
+    "owed": "Nothing outstanding for NEX-039. Both items were cleared inside this run after the checkpoint that recorded them as owed."
   },
   "run_summary": {
     "run_id": "NEX-2026-11-25-37",
@@ -380,8 +385,8 @@
   },
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
-    "last_observed_sha": "8e670a6",
-    "last_observed_at": "2026-11-25T19:32Z",
+    "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
+    "last_observed_at": "2026-11-25T19:46Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform (agreed with git rev-parse HEAD before the docs promotion)"
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
