@@ -1177,7 +1177,7 @@ as pending rather than inferred as green. The run then waited and confirmed:
 commits after it are docs-only. The checkpoint's `commit` field now names
 `d2abf48` as the verified tip.
 
-## Run `NEX-2026-11-25-09` — 2026-11-25T04:01Z → 04:2xZ
+## Run `NEX-2026-11-25-09` — 2026-11-25T04:01Z → 04:36Z
 
 **Task:** NEX-009 slice 1 — durable agentic runtime.
 **Branch:** `feature/agentic-enterprise-platform`.
@@ -1216,10 +1216,11 @@ from an at-least-once retry loop, and it is what
 - `ruff format --check`, `ruff check`, `mypy` (96 files): clean, run bare.
 - Migration chain: `upgrade head` → `downgrade base` clean, including the new
   revision whose `down_revision` is `5d0b71f8ac34`.
-- **CI: push event 2/2 `completed/success` on `0e74d4f`** (backend + frontend),
-  read from `gh api .../commits/0e74d4f/check-runs`. The `pull_request` event's
-  backend job was still running at report time, so only the push result is
-  claimed.
+- **CI: 4/4 `completed/success` on `0e74d4f`** — backend and frontend, on both
+  the push and the pull_request events, read from
+  `gh api .../commits/0e74d4f/check-runs`. This entry first recorded only the
+  push result; the pull_request job finished green before the run closed, so the
+  claim was raised on evidence rather than left at the weaker one.
 
 ### Process notes worth keeping
 
@@ -1227,6 +1228,11 @@ from an at-least-once retry loop, and it is what
   and the commit silently did not run — the exact failure already recorded in
   memory. Recovered by writing the message with `file_editor` and committing with
   `-F /tmp/nex009_msg.txt` alone. Never write prose through a heredoc here.
+- It happened **again in this same run**: a `python3 - <<'PY'` block meant to
+  edit STATE.md was mangled into duplicated fragments. The guard that worked was
+  checking `git status` before assuming damage — the corrupted script never
+  executed, so the file was intact. Write scripts to a file and run the file
+  (R12).
 - A `pytest --collect-only` invocation piped to `tail` swallowed the count line;
   the 655 figure quoted in STATE/PR notes comes from the full run, not that
   command.
@@ -1235,6 +1241,8 @@ from an at-least-once retry loop, and it is what
 
 ### Status
 
-NEX-009 slice 1: **TESTED**, committed (`0e74d4f`), **PUSHED** (verified with
-`git ls-remote`, not a cached ref), CI-green on the push event. **Not VERIFIED**
-on both events yet. **No HTTP surface** for runs exists — that is slice 2.
+NEX-009 slice 1: **VERIFIED** — committed (`0e74d4f`), **PUSHED** (verified with
+`git ls-remote`, not a cached ref), and **all four CI check runs green** on both
+the push and pull_request events. **No HTTP surface** for runs exists — that is
+slice 2 (`NEX-009-HTTP`), and NEX-009 must not be described as fully delivered
+until it lands.

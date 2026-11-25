@@ -395,7 +395,7 @@ tools.
 | --- | --- |
 | Phase | 2 |
 | Priority | P2 |
-| Status | TESTED (slice 1 — durable runs; CI pending on `0e74d4f`) |
+| Status | **VERIFIED** (slice 1 — durable runs; CI 4/4 green on `0e74d4f`) |
 | Dependencies | NEX-005 |
 
 **Objective:** durable runs that checkpoint progress and resume after
@@ -418,13 +418,11 @@ The third is covered in the sense that matters — a run whose step was found
 `started` does resume, and the test proves the second step then runs while the
 first is not repeated.
 
-**Remaining for VERIFIED:** CI must run the suite on `0e74d4f`. Local gates are
-not CI evidence (R10). Also still open: there is **no HTTP surface** for runs
-yet — the use cases are not wired into `presentation/`, so a client cannot plan
-or advance a run. That is the natural slice 2, mirroring how NEX-005 preceded
-NEX-005-HTTP.
+**Remaining:** there is **no HTTP surface** for runs yet — the use cases are not
+wired into `presentation/`, so a client cannot plan or advance a run. That is
+tracked as **NEX-009-HTTP**, mirroring how NEX-005 preceded NEX-005-HTTP.
 
-**Complexity:** large (slice 1 complete; slice 2 = HTTP surface).
+**Complexity:** large (slice 1 complete and VERIFIED; slice 2 = HTTP surface).
 
 ---
 

@@ -7,22 +7,22 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime) **slice 1 landed**: NEX-009 durable runs, CI green on `0e74d4f` (push event) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime) **slice 1 VERIFIED**: NEX-009 durable runs, CI green on `0e74d4f` (both events) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `759f92a` |
 | Head commit (run end) | `0e74d4f` — durable agent runs, pushed and CI-verified |
-| Last CI result | push event **2/2 green** on `0e74d4f`; pull_request event backend still running at report time |
+| Last CI result | **4/4 green** on `0e74d4f` — push and pull_request events both `completed/success` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-None in flight. **NEX-009 slice 1** is **TESTED → CI-green on the push event**:
-durable agent runs are committed, pushed, and the backend + frontend jobs both
-report `completed/success` on `0e74d4f`. The `pull_request` event's backend job
-was still running when this run reported, so the checkpoint records the push
-evidence explicitly rather than claiming both.
+None in flight. **NEX-009 slice 1 is VERIFIED.** Durable agent runs are committed
+at `0e74d4f`, pushed, and **all four check runs** — backend and frontend, on both
+the push and pull_request events — report `completed/success`. CI ran the full
+suite on the commit that added the tests, which is the standard this repository
+has held since NEX-010. It is not a local green run.
 
 Slice 2 is **not started**: the run use cases are not yet exposed over HTTP.
 
@@ -185,14 +185,16 @@ The organization slice is implemented across all layers:
 | `ruff format --check` | clean — **186 files** (repo-wide, includes `docs/` Markdown fences) |
 | `ruff check` | clean |
 | `mypy` | clean (96 source files) |
-| `pytest` (full) | **651 passed, 4 skipped** locally; **CI green on `0e74d4f` (push event, 2/2)** |
+| `pytest` (full) | **651 passed, 4 skipped** locally; **CI 4/4 green on `0e74d4f`** |
 | Migration chain | `alembic upgrade head` → `downgrade base` clean, including new `8a4c2e1f9b73_agent_runs` |
 | Frontend `typecheck`/`lint`/`test`/`build` | green on `0e74d4f` (no frontend files changed) |
 
-> **CI is the evidence.** On `0e74d4f` the push event reports backend and frontend
-> both `completed/success`. The `pull_request` event's backend job was still
-> running when this run wrote its report, so only the push result is claimed here.
-> Local gates are recorded above for reproducibility, not as proof (R10).
+> **CI is the evidence.** On `0e74d4f` all four check runs — backend and frontend,
+> on both the push and pull_request events — report `completed/success`. This run
+> first observed only the push result and recorded that honestly; the
+> pull_request job finished green before the run closed, and this file was
+> corrected on that evidence rather than left at the weaker claim. Local gates
+> are recorded above for reproducibility, not as proof (R10).
 
 ## Blockers
 
@@ -262,9 +264,9 @@ None currently. The following are known open items, not blockers:
    has understated this branch three times now — always recompute with
    `git diff --shortstat main...HEAD` plus a fresh collect, never copy the last
    number forward.
-3. **Promote nothing on local gates alone.** NEX-009 slice 1 is CI-green on the
-   *push* event only. If the `pull_request` run also goes green, that is a second
-   independent confirmation and worth recording — but do not upgrade the status
-   from TESTED to VERIFIED on the strength of a local suite, which is exactly the
-   R9/R10 mistake.
+3. **Promote nothing on local gates alone.** NEX-009 slice 1 reached VERIFIED only
+   when *both* CI events went green on `0e74d4f`. This run had already written
+   "push event only" and then corrected it on the pull_request result — the right
+   order, and worth repeating. A local green suite is not evidence; R9/R10 exist
+   because that conflation happened before.
 
