@@ -300,7 +300,6 @@
     "NEX-033": "Withholding becomes a rate via the WithholdingRecorder port; JsonFormatter allowlist removed; redact() wired onto the formatting path. Product commit bf84a7c, CI 4/4 at that SHA (polled 2026-11-25T17:33Z).",
     "NEX-034": "The log redactor recognises a credential by shape rather than an exact key spelling, and replaces a sequence under a sensitive key whole. Product commit e386e02, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T17:41Z)."
   },
-  "branch_head_observed": "746fd88",
   "branch_head_observed_at": "2026-11-25T17:52Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": {
@@ -325,5 +324,12 @@
     ],
     "why_no_new_slice": "Approximately 10 minutes remained at the integration boundary. The operating rules forbid starting a new slice with under 10 minutes left; continuing would have left an uncommitted tree the next run must discard. The remaining time went to executing the NEX-034 negative control, which had been published in three places without being re-run.",
     "next_action_unchanged": true
-  }
+  },
+  "head_observation": {
+    "note": "This is a POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is already stale by one commit. Never read the current head from this file - run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, or read the GitHub /branches API. A local origin/* tracking ref is NOT evidence: it can be stale even after a successful push.",
+    "last_observed_sha": "49d246c",
+    "last_observed_at": "2026-11-25T17:55Z",
+    "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
+  },
+  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more."
 }
