@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **TESTED** (`990557d`, CI not yet observed) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED (NEX-003 promoted this run). Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `adf0ae2` |
-| Head commit (run end) | `990557d` (NEX-017 product slice; pushed). The docs commit carrying this file is its child. |
-| Last CI result | **Green on `b9b7207`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. That is the NEX-016 product commit. **`990557d` has not been observed yet.** |
+| Base commit (run start) | `fa387a9` — all edits in this run are docs committed on top of it. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
+| Head commit (run end) | `fa387a9` (docs: PR body refresh; pushed). The docs commit carrying this file is its child. |
+| Last CI result | **Green on `fa387a9`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), every run reporting `head_sha` `fa387a9`, polled 2026-11-25T08:52Z. |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `990557d`. Body last **refreshed 2026-11-25T08:23Z** at `eab423c`: **106 files, 28,079 insertions, 10 deletions, 79 commits**, 718 tests collected. Not re-measured this run. |
-| CI status | **`b9b7207`: 4/4 `completed/success`** — the only head with green CI; NEX-016 is VERIFIED on it. **`990557d`: not yet observed.** Every docs head after `b9b7207` reads `completed/cancelled` — superseded by the next push, which is not the same as passing. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `fa387a9`. Body last **refreshed 2026-11-25T08:46:30Z** at that head: **106 files, 28,409 insertions, 10 deletions, 89 commits**, 720 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at `fa387a9`. |
+| CI status | **`fa387a9`: 4/4 `completed/success`**; `ca15eb1`: 4/4 `completed/success`; `990557d`: 4/4; `b9b7207`: 4/4. `e5f1bb4` (NEX-003) and `4c5a6ef` (NEX-006) have **no check runs of their own** — they are ancestors of the green heads above. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-016 (run `NEX-2026-11-25-16`) — the approval gate was structurally unusable
@@ -77,13 +77,17 @@ ruff format + check clean, mypy clean, architecture 5 passed). See risk **R23**.
 
 **Next best actions**
 
-1. **PR #3 body was refreshed this run** at head `ca15eb1` — 28,385 additions /
-   10 deletions / 106 files / 88 commits, 720 tests, 10 migrations, 11 routers —
-   and now names `b9b7207` and `990557d` as the CI-verified product commits while
-   stating that `ca15eb1` itself is docs-only and unclaimed. Keep it current: it
-   had been stale for several runs and carried numbers wrong in two directions.
-2. **Re-poll CI on the NEX-003 and NEX-006 SHAs.** Both are TESTED, not verified.
-   Promote only on an observed 4/4 at the named SHA.
+1. **PR #3 body is current at `fa387a9`** — 28,409 additions / 10 deletions /
+   106 files / 89 commits, 720 tests, 10 migrations, 11 routers, all measured
+   from the PR object at that head (refreshed 2026-11-25T08:46:30Z). It names
+   `b9b7207`, `990557d`, `ca15eb1` and `fa387a9` as CI-verified commits. Keep it
+   current: it had been stale for several runs and carried numbers wrong in two
+   directions.
+2. **NEX-003 and NEX-006 were promoted to VERIFIED this run** on a
+   *descendant-CI* basis — see `CHECKPOINT.json` → `validation.evidence_basis`.
+   Neither product commit (`e5f1bb4`, `4c5a6ef`) has check runs of its own; both
+   are ancestors of `fa387a9`, where CI was observed 4/4 `completed/success`, and
+   the acceptance set was re-run locally (239 passed).
 3. **Select the next dependency-ready Phase-5 slice from `ROADMAP.md`.**
 
 ## Correction recorded in run NEX-2026-11-25-14 (NEX-013 status was overstated)

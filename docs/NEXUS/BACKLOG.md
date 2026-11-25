@@ -122,7 +122,7 @@ and all four check runs passed on both the push and pull_request events.
 | --- | --- |
 | Phase | 1 |
 | Priority | P1 |
-| Status | **TESTED** (local gates green) |
+| Status | **VERIFIED** (descendant CI 4/4 at `fa387a9`/`ca15eb1` + 239-test local rerun, run `NEX-2026-11-25-19`) |
 | Dependencies | NEX-002 |
 
 **Objective:** close the offboarding gap. Authentication proves identity; it must
@@ -214,7 +214,7 @@ clean. CI green on `e1cb0c5` (all four check runs completed/success). Detail in
 | --- | --- |
 | Phase | 2 |
 | Priority | P1 |
-| Status | **TESTED** (local gates green); pending commit in this run |
+| Status | **VERIFIED** (product commit `e5f1bb4`; descendant CI 4/4 at `fa387a9`/`ca15eb1` + 239-test local rerun, run `NEX-2026-11-25-19`) |
 | Dependencies | NEX-002 |
 
 **Objective:** make agents first-class actors whose authority is derived by
@@ -375,7 +375,9 @@ audit stay in one place. Rate limiting keys on a digest of the presented token,
 not the client address, so one agent cannot exhaust another's budget and the raw
 secret never becomes a limiter key.
 
-**Status note:** TESTED, not VERIFIED — CI has not yet run on `c18bac7`.
+**Status note:** VERIFIED — corrected in run `NEX-2026-11-25-19`. The earlier "CI has not
+yet run on `c18bac7`" note was stale: `c18bac7` was observed 4/4 `completed/success`
+(Backend + Frontend, each reporting `head_sha` `c18bac7`) when re-polled this run.
 
 **Security:** the caller identity must come from the token, never the body.
 Token audience separation is load-bearing — a Notes API token must not invoke

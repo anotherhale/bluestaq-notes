@@ -2269,4 +2269,86 @@ Post-patch checks confirmed zero residual occurrences of `27,659`, `718
 collected`, `715 tests`, `Eight product` and `038db7e`. The PR remains **open,
 draft and unmerged**.
 
+---
+
+## Run NEX-2026-11-25-19 — promote NEX-003 and NEX-006, correct three stale CI claims
+
+- **Starting commit:** `fa387a9` (verified with `git log -1`; equals `origin/feature/agentic-enterprise-platform`)
+- **Ending commit:** the docs commit carrying this entry (child of `fa387a9`)
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Project phase:** Phase 2 complete; Phase 5 (durable runtime) in progress
+
+**What this run decided.** NEX-003 and NEX-006 had sat at TESTED across several
+runs waiting for CI that was never going to arrive *on their own SHAs*. Both
+product commits were pushed and immediately superseded by docs commits, so
+GitHub's concurrency group cancelled their runs. Polling them again would have
+returned zero forever. The correct question was not "is there a green run at
+`e5f1bb4`" but "has CI ever executed this code, and did it pass".
+
+**Evidence used, stated precisely.** `git merge-base --is-ancestor` confirms
+`e5f1bb4` (NEX-003) and `4c5a6ef` (NEX-006) are ancestors of `fa387a9`. CI on
+`fa387a9` and on `ca15eb1` was observed 4/4 `completed/success`, each run
+reporting a `head_sha` equal to the commit polled — so that green run compiled,
+type-checked, linted and tested code that includes both slices. This is recorded
+in `CHECKPOINT.json` as `validation.evidence_basis` under an explicit
+*descendant-CI* label, not folded into a plain "CI green at this SHA" claim,
+because the distinction is exactly what a future run needs to re-audit.
+
+Local re-run on 2026-11-25: **239 passed** in 2.56s over
+`tests/agent/test_agent_identity.py`, `tests/agent/test_delegation.py`,
+`tests/domain/test_tenant_access.py`,
+`tests/authentication/test_tenant_access_bearer.py`,
+`tests/authentication/test_login_use_cases.py`, `tests/api/test_agents_api.py`.
+
+Two verification traps worth recording:
+
+1. **`pyproject.toml` sets `addopts = "-q"`, so `pytest -q` is double-quiet and
+   prints no summary line at all.** The first run showed 239 dots, exit 0 and no
+   "N passed" — a grep for `passed` returned nothing. Anyone reading only that
+   output could conclude the run told them nothing. Use `-o addopts=""` (as this
+   run then did) to get the count.
+2. **The tenant-access test file is not where the task list said.** The inherited
+   note named `tests/agent/test_tenant_access.py`, which does not exist; the real
+   paths are `tests/domain/test_tenant_access.py` and
+   `tests/authentication/test_tenant_access_bearer.py`. Checked with `find`
+   rather than trusting the note.
+
+**Three stale claims corrected.** Each was asserted by the coordinator's own docs
+and each was false:
+
+| File | Claim | Reality (observed this run) |
+| --- | --- | --- |
+| `STATE.md` | `ca15eb1` is "docs-only and unclaimed" | 4/4 `completed/success` at `ca15eb1` |
+| `STATE.md` | PR body counters 28,385 / 88 commits | 28,409 / 89 at `fa387a9` |
+| `BACKLOG.md` | "CI has not yet run on `c18bac7`" | 4/4 `completed/success` at `c18bac7` |
+
+The `c18bac7` one is the same failure mode as NEX-003/NEX-006: a note written at
+the moment a commit was pushed, never revisited, which then reads as current
+indefinitely. Polling cost ~2 seconds.
+
+**Files changed:** `docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`,
+`docs/NEXUS/BACKLOG.md`, `docs/NEXUS/EXECUTION_LOG.md`. Documentation only — no
+product code, no migration, no new tests.
+
+**Test outcomes:** 239 passed locally on the NEX-003/NEX-006 acceptance set.
+Re-polled CI: `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4,
+`c18bac7` 4/4.
+
+**Security findings:** none new. NEX-006 and NEX-017 both close offboarding
+holes; both are now VERIFIED. No security invariant was weakened.
+
+**Status changes:** NEX-003 TESTED → VERIFIED; NEX-006 TESTED → VERIFIED;
+NEX-005-HTTP status note corrected to VERIFIED on `c18bac7`. Verified count is
+now **20**, with **zero** tasks remaining at TESTED.
+
+**PR status:** #3 open, draft, head `fa387a9`, `mergeable_state: clean`
+(re-measured this run; the prior note said `unstable`), counters
+28,409 / 10 / 106 / 89. Not merged. No merge attempted.
+
+**Next action:** read the Phase-5 section of `ROADMAP.md` and the open items in
+`BACKLOG.md`; pick the highest-value slice whose dependencies are all VERIFIED.
+Every Phase-2 and Phase-5 dependency barrier is now cleared, so selection is on
+value rather than unblocking.
+
+
 
