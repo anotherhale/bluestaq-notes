@@ -7,18 +7,19 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 — Agent identity & delegation (tool gateway landed) |
+| Project phase | Phase 2 — Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending) |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `e5f1bb4` |
+| Base commit (run start) | `8b128d2` |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required) |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## Active task
 
-**NEX-005 — Tool gateway.** Status: **TESTED** (all local gates green,
-migration applied to a fresh SQLite database), committed as `bf70f40` and
-pushed. HTTP/router exposure was deliberately deferred. See `EXECUTION_LOG.md`.
+**NEX-005-HTTP — Expose the tool gateway over HTTP.** Status: **TODO**. NEX-005
+itself is **VERIFIED** at `a3ef9d7` (`74d3d98` fixed the two defects); the
+gateway has no router, so no API contract test covers it. This is the last
+gateway gap and closes R5. See `EXECUTION_LOG.md`.
 
 
 ## Last completed task
@@ -76,17 +77,17 @@ The organization slice is implemented across all layers:
 
 ## Quality gates (latest local run)
 
-| Gate | Result (run `NEX-2026-11-24-01`) |
+| Gate | Result (run `NEX-2026-11-25-02`, at `a3ef9d7`) |
 | --- | --- |
-| `pytest` (full) | **585 passed, 4 skipped** |
+| `pytest` (full) | **603 passed, 4 skipped** |
 | `pytest tests/architecture` | passed (layering invariant intact) |
-| `ruff format --check` | clean (175 files) |
+| `ruff format --check` | clean (179 files) |
 | `ruff check` | clean |
-| `mypy` | clean (92 source files) |
-| Frontend `typecheck`/`lint`/`test`/`build` | not run this run — no frontend files touched |
+| `mypy` | clean (93 source files) |
+| Frontend `typecheck`/`lint`/`test`/`build` | not run — no frontend files touched |
 
-> Local gates are **not** CI evidence. CI for this commit set has not been
-> observed (see R3).
+> Local gates are **not** CI evidence. This repository has **no CI at all**
+> (see R3 and NEX-008); every result above was produced locally.
 
 ## Blockers
 

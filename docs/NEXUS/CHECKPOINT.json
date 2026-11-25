@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-01",
-  "timestamp": "2026-11-25T01:38:35Z",
+  "run_id": "NEX-2026-11-25-02",
+  "timestamp": "2026-11-25T01:57:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "74d3d98",
-  "commit_note": "fix(tool-gateway) commit; verified pushed via git ls-remote",
-  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway landed)",
+  "commit": "8b128d2",
+  "commit_note": "reconciliation run; independently re-verified a3ef9d7 (603 passed/4 skipped, ruff+mypy clean) rather than trusting the prior VERIFIED claim",
+  "project_phase": "Phase 2 - Agent identity & delegation (tool gateway VERIFIED; HTTP surface pending)",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -15,7 +15,9 @@
     "NEX-005": "VERIFIED",
     "NEX-005-followup": "VERIFIED",
     "NEX-004": "VERIFIED",
-    "NEX-007": "TODO"
+    "NEX-007": "TODO",
+    "NEX-005-HTTP": "TODO",
+    "NEX-008": "TODO"
   },
   "completed_tasks": [
     "NEX-006",
@@ -32,9 +34,11 @@
     "ruff_check": "clean",
     "mypy": "clean (93 source files)",
     "migration_sqlite": "alembic upgrade head applied to fresh SQLite db; tool_invocations table created with status CHECK, sha256 digest CHECK, UNIQUE(agent_id, idempotency_key)",
-    "ci_observed": false
+    "ci_observed": false,
+    "verified_at_commit": "a3ef9d7",
+    "verified_by_run": "NEX-2026-11-25-02 (independent re-run of the full suite, not a self-report)"
   },
-  "uncommitted_work": "none; this run's NEXUS state-file update is committed separately",
+  "uncommitted_work": "none after this run commits the state-file reconciliation",
   "pr_state": {
     "pr": 3,
     "state": "draft",

@@ -205,7 +205,7 @@ capabilities. Pinned by two regression tests:
 | --- | --- |
 | Phase | n/a (delivery hygiene) |
 | Priority | P4 |
-| Status | TODO |
+| Status | VERIFIED |
 | Dependencies | none |
 
 **Objective:** make GitHub reflect verified reality.
@@ -214,6 +214,11 @@ capabilities. Pinned by two regression tests:
 planned, lists validation evidence, and carries an accurate checklist; issue #2
 shows current phase and next priorities. PR remains a draft until validation is
 complete and human review is requested.
+
+**Evidence (2026-11-25):** PR #3 description rewritten with a phase status
+table, the two-defect write-up, a validation table, and the open risks; progress
+comment 7149894984 posted to issue #2. PR #3 stays a **draft** and unmerged —
+automated merging is prohibited.
 
 ---
 
