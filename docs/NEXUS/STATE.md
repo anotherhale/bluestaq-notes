@@ -104,8 +104,14 @@ None currently. The following are known open items, not blockers:
   human decision, not the coordinator's.
 - **R2 (low):** The frontend has no admin console yet; the expansion spec's
   frontend testing requirements cannot be satisfied until that work lands.
-- **R3 (low):** CI on the feature branch has not been observed for this commit
-  set at the time of writing; local gates are green but that is not CI evidence.
+- **R3 (high):** The repository has **no CI configuration at all** — no
+  `.github/workflows` on any branch, and zero check runs on any commit. Verified
+  2026-11-25 via `gh run list` (empty), `.github` contents (404), and
+  `check-runs` on HEAD (`total_count: 0`). The gates described in `AGENTS.md`
+  (pytest, ruff, mypy, `npm test`) run only when a human or agent runs them by
+  hand. Nothing blocks a regression from reaching `main` after a human merges
+  PR #3. This is the single largest process risk in the project and it is a
+  small fix: one workflow file running the existing gates.
 - **R4 (low):** `hypothesis` is not a project dependency, so the attenuation
   invariant is proved by exhaustive enumeration rather than property-based
   sampling. This is stronger for the current delegable universe but would not
@@ -124,11 +130,17 @@ None currently. The following are known open items, not blockers:
 
 ## Next best actions
 
-1. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
+1. **NEX-008 — Add CI (closes R3)**: one `.github/workflows/ci.yml` running the
+   gates already documented in `AGENTS.md` — `ruff format --check`, `ruff check`,
+   `mypy`, `pytest`, and the frontend `typecheck`/`lint`/`test`/`build` — on
+   push and pull request. There is currently no CI at all, so this is the
+   highest-value small change available: it converts every existing local gate
+   into a durable regression barrier. (P1.)
+2. **NEX-005-HTTP — Expose the tool gateway through the API layer**: a router,
    an auth dependency that resolves the agent token for `TokenAudience.TOOL_GATEWAY`,
    and an API contract test for a denied invocation. (P2; closes R5, the last
    gateway gap.)
-2. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
+3. **NEX-007 — Tenant-scoped capability checks**: extend the tenant seam to
    answer *which* tenants the caller may act in (`organization_ids` is already
    computed but unused by callers), so tenant-scoped use cases stop re-deriving
    membership themselves. (P1, builds on NEX-006.)

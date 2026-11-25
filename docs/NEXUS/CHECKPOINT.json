@@ -49,12 +49,19 @@
   },
   "blockers": [],
   "risks": [
-    "R3: CI not observed for this commit set; local gates only",
+    "R3 (raised to high): the repository has NO CI configuration at all - no .github/workflows on any branch, zero check runs on any commit. Local gates (pytest/ruff/mypy) are the only validation. Nothing prevents a regression from reaching main once a human merges PR #3.",
     "R4: attenuation proved by exhaustive enumeration, not property testing; revisit if the capability universe grows substantially",
     "R5: NEX-005 has no HTTP/router exposure yet - the gateway is reachable only from application code. No API contract test covers it.",
     "R7: gateway denial replay and revocation mapping were only just pinned by tests; keep tests/agent/test_tool_gateway.py in place or both defects can return silently."
   ],
   "next_task": "NEX-005-HTTP",
   "next_action": "NEX-005-HTTP: add a presentation router that invokes the tool gateway, an auth dependency resolving an agent token for TokenAudience.TOOL_GATEWAY (rejecting Notes-API tokens), and an API contract test covering a denied invocation plus a successful one. Closes risk R5.",
-  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it."
+  "recovery_instructions": "Read docs/NEXUS/STATE.md, then docs/NEXUS/EXECUTION_LOG.md (newest run last). Verify with 'git status -sb' and 'git log --oneline -5'. Confirm the branch is feature/agentic-enterprise-platform; never merge to main. If uncommitted work exists, inspect 'git diff' before acting and do not discard it.",
+  "ci_status": {
+    "configured": false,
+    "workflows_present": 0,
+    "check_runs_on_head": 0,
+    "observed": "2026-11-25T01:45Z",
+    "note": "verified via gh run list (empty), .github 404, check-runs total_count 0"
+  }
 }

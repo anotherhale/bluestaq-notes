@@ -380,3 +380,34 @@ work, so the defect tracks content, not merely length.
 NEX-005-HTTP — expose the tool gateway over HTTP with agent-token audience
 separation and a contract test. Closes R5.
 
+### R3 was wrong, and the correction matters
+
+R3 had been carried for several runs as "CI not observed for this commit set;
+local gates only". It reads like a transient observation gap. It is not.
+
+- `gh run list` for the branch: **empty**
+- `gh run list` for the whole repository: **empty**
+- `GET /repos/.../contents/.github` on `main`: **404**
+- `GET /repos/.../commits/e389782/check-runs`: `total_count: 0`
+- `git ls-tree -r HEAD | grep github`: only a frontend *test file* named
+  `workflow.test.ts`
+
+There is no CI. Not "unobserved" — absent. Every green gate in every prior run
+report was a human-or-agent-run local command, and the branch has been
+accumulating ~19k insertions of security-sensitive code (OIDC, tenant
+isolation, delegation, tool authorization) with no automated regression gate
+whatsoever.
+
+The distinction matters for the next run: R3 cannot be closed by *waiting* for
+a CI result. It can only be closed by *adding* CI. Promoted from `low` to
+`high` in `STATE.md` and `CHECKPOINT.json`, and made the recommended next
+action alongside NEX-005-HTTP.
+
+### Run close
+
+~6 minutes remained at discovery, which is below the 10-minute floor for
+starting a slice. No new implementation was begun. The finding, the corrected
+risk, and the delivery-state updates were committed and pushed instead — which
+is the correct use of the tail of a run.
+
+
