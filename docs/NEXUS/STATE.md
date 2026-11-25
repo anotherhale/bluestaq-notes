@@ -9,12 +9,12 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **VERIFIED** (`e459f98`, CI 4/4); NEX-022 run↔delegation binding **VERIFIED** (`1156f6e`, CI 4/4); NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4); NEX-024 abort-orphaned audit link **VERIFIED** (`eaaae23`, CI 4/4) — R27 now closed on both settle paths. The compare-and-set audit of `infrastructure/db/` is **closed**. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `eaaae23` — this run began with the NEX-024 slice already committed and pushed; its job was CI observation, promotion, and reconciliation of stale status claims. |
-| Head commit (run end) | `517208f` — docs-only promotion of NEX-024 to VERIFIED, on top of the slice commit `eaaae23`. Pushed and confirmed with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `517208f`). NEX-024's code commit `eaaae23` carries its own observed 4/4 `completed/success`; this docs head is not itself a code slice and may read `completed/cancelled` if superseded. |
+| Base commit (run start) | `e511fc9` — the docs-only checkpoint head left by run NEX-2026-11-25-27's earlier phase. This run's job was the named delivery task: refresh PR #3's body from the PR object's own counters and correct its stale facts. |
+| Head commit (run end) | `e511fc9` — docs-only head; this run changed no source or tests, only `docs/NEXUS/` state files and the GitHub PR body. Pushed and confirmed with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `517208f`). NEX-024's code commit `eaaae23` carries its own observed 4/4 `completed/success`; this docs head is not itself a code slice and may read `completed/cancelled` if superseded. |
 | Last CI result | **`eaaae23` (NEX-024): 4/4 `completed/success`, every check run reporting `head_sha` `eaaae23`, polled 2026-11-25T12:16Z.** A run at the slice's own commit, not descendant-CI. Local gates on the same tree: `ruff format` clean (201 files), `ruff check` clean, `mypy` 98 files clean, full `pytest` **742 passed / 4 skipped**, negative control verified (1 new test red with the seal loop removed). |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Head `517208f`. The body has **not** been refreshed since `e459f98`, where it read 30,474 additions / 10 deletions / 111 files / 104 commits. The PR object at `517208f` reports **31,481 additions / 10 deletions / 111 files / 113 commits** — quote those, and only from the PR object, never per-file sums (R21). Refreshing the body is the next run's first delivery task. |
-| CI status | **`eaaae23` (NEX-024): 4/4 `completed/success`, every run reporting `head_sha` `eaaae23`, polled 12:16Z.** Prior: **`c367746` (NEX-023): 4/4 `completed/success`** at 11:50Z. Earlier observations, all `completed/success` with matching `head_sha`: `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `e511fc9`, body refreshed 2026-11-25T12:44:37Z and verified byte-identical after the PATCH. It now reads 31,545 additions / 10 deletions / 111 files / 117 commits, 757 tests, eleven migrations, eleven routers, and names NEX-023 (`c367746`) and NEX-024 (`eaaae23`) among the CI-verified commits. |
+| CI status | **`e511fc9` (docs-only head): 4/4 `completed/success`, every check run reporting `head_sha` `e511fc9`, read 2026-11-25T12:41Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build). Because the polled commit is the head this body was written at, this covers the whole tree. Prior: **`eaaae23` (NEX-024): 4/4 `completed/success`, every run reporting `head_sha` `eaaae23`, polled 12:16Z.** Prior: **`c367746` (NEX-023): 4/4 `completed/success`** at 11:50Z. Earlier observations, all `completed/success` with matching `head_sha`: `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
@@ -154,12 +154,12 @@ ruff format + check clean, mypy clean, architecture 5 passed). See risk **R23**.
 
 **Next best actions**
 
-1. **PR #3 body is current at `fa387a9`** — 28,409 additions / 10 deletions /
-   106 files / 89 commits, 720 tests, 10 migrations, 11 routers, all measured
-   from the PR object at that head (refreshed 2026-11-25T08:46:30Z). It names
-   `b9b7207`, `990557d`, `ca15eb1` and `fa387a9` as CI-verified commits. Keep it
-   current: it had been stale for several runs and carried numbers wrong in two
-   directions.
+1. **PR #3 body is current at `e511fc9`** — 31,545 additions / 10 deletions / 111
+   files / 117 commits, 757 tests, eleven migrations, eleven routers, all measured
+   from the PR object at that head and verified byte-identical after the PATCH
+   (refreshed 2026-11-25T12:44:37Z). It names `c367746` (NEX-023) and `eaaae23`
+   (NEX-024) alongside the earlier verified commits. Re-measure from the PR object
+   after any future push: a docs commit moves the head and the counters with it.
 2. **NEX-003 and NEX-006 were promoted to VERIFIED this run** on a
    *descendant-CI* basis — see `CHECKPOINT.json` → `validation.evidence_basis`.
    Neither product commit (`e5f1bb4`, `4c5a6ef`) has check runs of its own; both
@@ -671,12 +671,12 @@ None currently. The following are known open items, not blockers:
    is the trigger to revisit — not the absence of a `version` column on its own.
 3. **Next dependency-ready slice (P1/P2, Phase 5).** Re-read the Phase 5 section of
    `ROADMAP.md` before choosing; do not invent a slice from a run summary.
-4. **Refresh the PR #3 body at the current head.** Its counters were measured at an earlier
-   commit and now predate NEX-023 (`c367746`) and NEX-024 (`eaaae23`). At `517208f` the PR
-   object reports 31,481 additions / 10 deletions / 111 files / 113 commits — re-read it
-   after your own final push, because a docs commit moves the head and the counters with it.
-   Pair that with a `pytest --collect-only` count; do not quote a local two-dot diff, which
-   counts the grafted root commit (R21).
+4. **Confirm whether revoking a delegation or agent invalidates approvals already
+   granted under it.** `RevokeDelegation` revokes the delegation and every token
+   derived from it, immediately and ownership-checked, but this run did not establish
+   whether a *granted* `ApprovalRequest` survives that revocation. If it does, an
+   approval could outlive the authority that justified it. Read the approval and
+   revocation paths together before deciding; do not assume either answer.
 
 **A terminal state in one record is not a terminal state in the other (R27).** NEX-023 is
 the same shape as R26 (a column written and never read) but inverted: the run aggregate

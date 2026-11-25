@@ -3263,3 +3263,69 @@ final push of the run that writes them — then read `ROADMAP.md` Phase 5 and se
 dependency-ready slice. NEX-001…NEX-024 are all VERIFIED; R27 is closed on both settle paths
 (resolve and abort).
 
+
+## Run `NEX-2026-11-25-27` (continued) — 2026-11-25T12:44Z
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-27` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `e511fc9` |
+| Ending commit | `e511fc9` (docs state files amended in a follow-up commit) |
+| Files changed | `docs/NEXUS/{CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}` — documentation only |
+
+**Task completed: PR #3 body refreshed from the PR object's own counters.**
+
+The body had been stale for several runs and named head `e549e94`. Every counter in it
+was recomputed from `GET /repos/anotherhale/bluestaq-notes/pulls/3` at `e511fc9`, never
+from per-file sums or a local two-dot diff (both under-report on this grafted clone —
+R21). The corrections, all in the understating direction except none:
+
+| Fact | Was | Now |
+| --- | --- | --- |
+| Additions | 30,749 | **31,545** |
+| Commits ahead of `main` | 107 | **117** |
+| Tests collected | 741 (737 passed / 4 skipped) | **757 (753 passed / 4 skipped)** |
+| Alembic migrations | ten | **eleven** |
+| `ruff format` file count | 201 | **203** |
+| `mypy` source files | 98 | **99** |
+| Measured head | `e549e94` | **`e511fc9`** |
+
+The migrations section listed four migrations while eleven exist under
+`migrations/versions/`; all eleven are now listed by revision id. NEX-023 (`c367746`) and
+NEX-024 (`eaaae23`) were entirely absent from the body despite both being VERIFIED, so
+they were added in three places: a new defect entry (#9) describing the audit chain that
+could permanently assert "unknown" about an already-settled effect, the CI paragraph, and
+the verified-commit list. The Phase-5 roadmap row now says the audit trail is one "that no
+crash or abort can leave permanently open", which is what NEX-023/024 actually bought.
+
+**Verification of the write, not just of the request.** The PATCH returned HTTP 200, which
+proves nothing about prose. The body was then re-fetched and compared byte-for-byte against
+the local file: equal at 24,698 bytes, with ten specific substrings asserted present
+(`31,545 additions`, `757 collected`, `f19a2c6d8b04`, `NEX-023 \`c367746\``, …). This is
+the R12 discipline applied to a GitHub resource rather than a local file.
+
+**R12 avoided again.** All three prose payloads this run (the PR body edits, the checkpoint
+rewrite, the log entry) were written with the file editor to `/tmp/*.py` and executed,
+never via a heredoc. A first attempt at the checkpoint script was itself created with a
+syntax error (`import tempfile = None`) and was deleted and rewritten rather than patched
+in place — the file-editor route made that cheap and visible.
+
+**Stale state corrected.** `STATE.md` still described the run's base and head as
+`eaaae23`/`517208f` and its next-best-action 1 as "PR #3 body is current at `fa387a9`"
+(28,409 additions / 89 commits). The position table, the draft-PR row, the CI status row
+and next-best-actions 1 and 4 were rewritten to the observed facts. Action 4 was replaced
+with the one genuinely open question this run surfaced: whether revoking a delegation or
+agent invalidates approvals already granted under it.
+
+**CI evidence (observed).** `e511fc9` is 4/4 `completed/success`, every check run
+reporting `head_sha` `e511fc9`, read 2026-11-25T12:41Z. Product commits beneath it were
+green at their own SHAs: `eaaae23` (NEX-024, 4/4 at 12:16Z), `c367746` (NEX-023, 4/4 at
+11:50Z), `1156f6e` (NEX-022, 4/4 at 11:27Z).
+
+**Security findings.** None. No source, dependency, migration, permission, or workflow
+change. PR #3 remains draft and unmerged, as required.
+
+**Next action.** Read `docs/NEXUS/ROADMAP.md` Phase 5 and select the next
+dependency-ready slice. NEX-001…NEX-024 are all VERIFIED and R27 is closed on both settle
+paths (resolve and abort), so the durable-runtime audit work is complete.

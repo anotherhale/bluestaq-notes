@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-27",
-  "timestamp": "2026-11-25T12:22:00Z",
+  "timestamp": "2026-11-25T12:48:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "5d7d182",
+  "commit": "e511fc9e6c6400d17867531c3c70b9789349b6ad",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
-  "active_task": "none - NEX-024 VERIFIED at eaaae23; next Phase-5 slice to be selected",
+  "active_task": "none - NEX-001..NEX-024 all VERIFIED; PR #3 body refreshed at e511fc9",
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -31,7 +31,7 @@
     "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)",
     "NEX-020": "VERIFIED (CI 4/4 at 460a26a)",
     "NEX-021": "VERIFIED",
-    "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
+    "NEX-022": "VERIFIED \u2014 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
     "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z"
   },
@@ -107,18 +107,19 @@
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "eaaae23",
-    "body_updated_at": "2026-11-25T10:20:26Z",
+    "head": "e511fc9",
+    "body_updated_at": "2026-11-25T12:44:37Z",
     "counters": {
-      "additions": 31408,
+      "additions": 31545,
       "deletions": 10,
       "files": 111,
-      "commits_ahead_of_main": 112,
-      "measured_at_commit": "eaaae23",
-      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), re-measured at eaaae23. The body text still names an older head; the body has NOT been refreshed this run."
+      "commits_ahead_of_main": 117,
+      "measured_at_commit": "e511fc9",
+      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object; per-file sums and /compare are truncated - R21)"
     },
     "note": "PR #3 is open, draft and unmerged, head eaaae23. Its body is stale and must be refreshed from the PR object's counters before quoting - never per-file sums (R21).",
-    "merge": "prohibited — must remain unmerged for human review"
+    "merge": "prohibited \u2014 must remain unmerged for human review",
+    "body_refresh": "Refreshed this run from the PR object at e511fc9. Corrected 30,749 -> 31,545 additions, 107 -> 117 commits, 741 -> 757 tests, ten -> eleven migrations; added NEX-023 (c367746) and NEX-024 (eaaae23) to the defect list, the CI paragraph and the verified-commit list. Verified byte-identical after PATCH."
   },
   "tracking_issue": {
     "number": 2,
@@ -137,8 +138,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing."
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing."
     },
     {
       "id": "R23",
@@ -196,10 +197,10 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "1) Refresh PR #3's body from the PR object's own counters (31,408 additions / 10 deletions / 111 files / 112 commits at eaaae23) - never per-file sums (R21). 2) Re-read ROADMAP.md Phase 5 and pick the next dependency-ready slice.",
-  "next_action": "Refresh PR #3 body from PR-object counters; then read ROADMAP.md Phase 5 and select the next dependency-ready slice. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-024 all VERIFIED. NEX-024 at eaaae23 with an observed 4/4 completed/success (polled 2026-11-25T12:16Z, every head_sha equal to the polled commit). This docs-only commit may read completed/cancelled if superseded - neither pass nor failure. PR #3 is draft, head eaaae23, body stale since e459f98; never auto-merge.",
-  "ci_status": "eaaae23 (NEX-024): 4/4 completed/success, polled 2026-11-25T12:16Z, all head_sha equal to the polled commit (Backend x2: ruff/mypy/pytest/migrations; Frontend x2: typecheck/lint/test/build). Prior greens: c367746 4/4 (11:50Z), 1156f6e 4/4 (11:27Z), e459f98 4/4 (10:46Z), 23a36dc 4/4 (10:29Z), 460a26a 4/4 (10:16Z), 66e8cd6, 2b3beb7, 9a90e3a, 990557d, b9b7207 all 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
+  "next_task": "1) Re-read docs/NEXUS/ROADMAP.md Phase 5 and select the next dependency-ready slice (NEX-001..NEX-024 are VERIFIED; R27 is closed on both settle paths). 2) Optionally confirm whether revoking a delegation or agent invalidates previously granted approvals - the one open question left from this run.",
+  "next_action": "Read ROADMAP.md Phase 5, pick the next slice from BACKLOG.md, and implement it as one vertical slice.",
+  "recovery_instructions": "Verify git rev-parse HEAD equals e511fc9 and the tree is clean. NEX-001..NEX-024 are VERIFIED. PR #3 is draft, unmerged, body current at e511fc9. No uncommitted work. Next: choose the next Phase-5 slice from ROADMAP.md.",
+  "ci_status": "e511fc9 (docs-only head): 4/4 completed/success, every check run reporting head_sha e511fc9, read 2026-11-25T12:41Z. Product commits beneath it were each green at their own SHA: eaaae23 (NEX-024, 4/4 at 12:16Z), c367746 (NEX-023, 4/4 at 11:50Z), 1156f6e (NEX-022, 4/4 at 11:27Z).",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
