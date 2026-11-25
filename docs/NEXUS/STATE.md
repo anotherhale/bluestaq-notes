@@ -154,12 +154,12 @@ ruff format + check clean, mypy clean, architecture 5 passed). See risk **R23**.
 
 **Next best actions**
 
-1. **PR #3 body is current at `e511fc9`** — 31,545 additions / 10 deletions / 111
-   files / 117 commits, 757 tests, eleven migrations, eleven routers, all measured
+1. **PR #3 body is current at `88926ec`** — 31,612 additions / 10 deletions / 111
+   files / 118 commits, 757 tests, eleven migrations, eleven routers, all measured
    from the PR object at that head and verified byte-identical after the PATCH
-   (refreshed 2026-11-25T12:44:37Z). It names `c367746` (NEX-023) and `eaaae23`
-   (NEX-024) alongside the earlier verified commits. Re-measure from the PR object
-   after any future push: a docs commit moves the head and the counters with it.
+   (25,010 bytes, refreshed 2026-11-25T12:53:30Z). It names `c367746` (NEX-023) and
+   `eaaae23` (NEX-024) alongside the earlier verified commits. Re-measure from the PR
+   object after any future push: a docs commit moves the head and the counters with it.
 2. **NEX-003 and NEX-006 were promoted to VERIFIED this run** on a
    *descendant-CI* basis — see `CHECKPOINT.json` → `validation.evidence_basis`.
    Neither product commit (`e5f1bb4`, `4c5a6ef`) has check runs of its own; both
