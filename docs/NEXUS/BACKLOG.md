@@ -2150,3 +2150,44 @@ residual** (the log redactor's vocabulary is finite — additive, low risk) or t
 adapter is the larger unlock: it turns decisioning from a stub into a capability, and the
 suite means the adapter's first real test is not its first genuine test. Verify the premise
 against the code before starting — the last five `next_action` fields each needed correcting.
+
+## NEX-039 — The adapter existed only as a stub
+
+**Phase:** 5. **Priority:** P1 (the largest dependency-ready unlock in decisioning).
+**Status:** VERIFIED — product commit `8e670a6`, CI 4/4 `completed/success` at that exact
+SHA (polled 2026-11-25T19:32Z). **Dependencies:** NEX-035 (conformance suite).
+
+### Objective
+
+Ship the first real `DecisionProvider` so decisioning stops being a capability the platform
+can exercise but never use.
+
+### Scope
+
+- `HttpDecisionProvider` (`infrastructure/decisioning/http_provider.py`), HTTPS only.
+- Provider selection in the container; `Settings` validation of the same rules.
+- 51 adapter tests + 13 config/wiring tests, including the NEX-035 conformance harness.
+
+### Acceptance criteria
+
+- [x] Request body carries only `kind` and sorted `candidates` — no context hash, no excluded
+      field names, no correlation id.
+- [x] Every malformed vendor answer becomes a contract-legal abstention, never an exception.
+- [x] Non-https endpoint or unbounded provider name raises at construction.
+- [x] Vendor error bodies are discarded, never parsed into the audit trail.
+- [x] Passes `assert_provider_conformance` (`tests/agent/test_http_decision_provider.py:404`).
+- [x] Negative control proves the order-independence invariant is genuinely tested.
+
+### Recorded limits (R37)
+
+The 64 KiB response bound is enforced after httpx has read the body, so it bounds parsing and
+not memory. A rationale is truncated rather than treated as fatal. Both are in the module
+docstring so a future reader is not misled by the constant.
+
+### Next
+
+**NEX-040:** verify whether any production route actually reaches a configured live vendor.
+The adapter exists and the container selects one, but "nothing configures one by default" is
+a claim to check in the code before building on it — the last several `next_action` fields
+each needed correcting.
+

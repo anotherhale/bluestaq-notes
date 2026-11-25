@@ -4820,3 +4820,100 @@ Second, when there is time: decide whether `nexus037-duplicate-local` contribute
 missing documentation sections (`docs/API.md`, `docs/SECURITY.md`, `.env.example`) to the
 existing allowlist-based endpoint, or is deleted as superseded. Deleting it without that
 decision loses work; porting it blindly would document an endpoint shape that does not exist.
+
+---
+
+## Run `NEX-2026-11-25-37` — third invocation — NEX-039
+
+**Timestamp:** 2026-11-25T19:16Z–19:40Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `b628567` (after fast-forward from a shallow local `f4388fc`)
+**Ending commit:** read from `git ls-remote`; last implementation commit `8e670a6`
+**Tasks completed:** NEX-039
+**Tasks verified:** NEX-039 (CI 4/4 at its own product commit)
+**Tasks in progress:** none
+**Tasks blocked:** none
+
+### What this run found on entry
+
+Two things, both of which would have caused damage if assumed away.
+
+The working tree was **dirty with a complete, green slice** left by the previous invocation:
+five files, 811 insertions, all gates passing. The checkpoint did not describe it, because the
+previous invocation ran out of window mid-slice. The correct move was to finish it, not to
+re-implement it.
+
+The local clone was **shallow and 4 commits behind the remote** (`b628567`). Reconciling
+required a fast-forward with uncommitted work in the tree. `git ls-remote` was the only
+trustworthy source for the remote head — the local `origin/*` ref is a cache, and this
+programme has now been burned by it twice.
+
+The slice also still carried its **negative-control mutation**: `http_provider.py:135` read
+`list(request.candidates)` instead of `sorted(...)`. That mutation had already done its job —
+it proved three tests go red, the conformance suite among them. Leaving it in would have
+shipped the exact bug the tests exist to catch. It was restored from a backup and verified
+byte-identical (`diff` clean) before commit.
+
+### What shipped
+
+`HttpDecisionProvider` — the first real `DecisionProvider`. Every prior decisioning slice was
+exercised through `StubDecisionProvider`, which is deterministic, offline, and abstains under
+any threshold above its fixed confidence. The platform could run the decisioning path but
+never obtain a judgment.
+
+The adapter's value is in four refusals, each argued in the module docstring:
+
+1. **A vendor cannot abstain, only be unsure.** No `abstained` outcome on the wire; the
+   caller's threshold decides. `DISABLED` and `PROVIDER_ERROR` are our operational states.
+2. **The request carries no context, only a question** — `kind` plus sorted `candidates`.
+   Not the context hash, not excluded field names, not the correlation id.
+3. **Sorting makes order-independence structural** rather than a hoped-for vendor trait.
+4. **A bad answer is an abstention, never an exception.** Vendor error bodies are discarded,
+   not parsed, so they cannot echo the request or credential into the audit trail.
+
+Construction fails closed: `https://` endpoint and a bounded provider name, both checked in
+`__init__` so a misconfiguration is a boot defect rather than a process that looks healthy
+while degrading every advisory. `Settings` applies the same rules so the two cannot drift.
+
+### Validation
+
+- ruff format --check: 172 files already formatted
+- ruff check: all passed
+- mypy: no issues in 110 source files
+- pytest: **984 passed, 4 skipped** (16.21s), +64 new tests
+- Negative control: `sorted` → `list` at `http_provider.py:135` turned exactly 3 tests red
+  (`test_a_choice_request_carries_only_kind_and_sorted_candidates`,
+  `test_candidate_order_does_not_change_the_request_bytes`, and the NEX-035 conformance test),
+  then reverted byte-identically.
+- CI: **4/4 `completed/success` at `8e670a6`**, every run reporting `head_sha` `8e670a6`,
+  polled 19:32Z. The 19:19Z poll saw Backend `in_progress` and is recorded because it is why
+  the green claim carries a timestamp.
+
+### Decisions
+
+- **Promoted the slice to VERIFIED on direct CI evidence**, not on local tests. The product
+  commit was pushed and polled green *before* the docs promotion, so the promotion cannot
+  invalidate the evidence it cites.
+- **Opened R37** (low): the response size bound is enforced after httpx reads the body, so it
+  bounds parsing, not memory. Recorded rather than silently accepted; the threat model is a
+  buggy *configured* vendor, not an attacker choosing the URL.
+- **Recorded delivery as owed, not delivered.** The checkpoint was written before the PR body
+  and issue comment were updated, so it says "OWED" rather than claiming completion.
+
+### Defect in this run's own tooling
+
+Writing the STATE.md section with `cat >> ... <<'MDEOF'` corrupted the file: the payload
+looped, splicing repeated fragments into 36 extra lines. This is the **ninth** occurrence of
+this failure mode in this programme, and quoting the delimiter did not prevent it. Repaired by
+truncating to the last known-good line (1181), verifying the table edits survived and that the
+corruption marker count was 0, then writing the section through the file-editor tool instead.
+The lesson is already in memory; it was not applied, and that is the honest record.
+
+### Next action
+
+**NEX-040:** verify whether any production route actually reaches a configured live vendor —
+the adapter exists, the container selects a provider, but a claim that nothing configures one
+by default must be checked in the code before it is built on.
+
+Secondary and unchanged: the `nexus037-duplicate-local` decision.
+

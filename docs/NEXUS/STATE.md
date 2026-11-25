@@ -7,13 +7,13 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-037 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `5d2792b` — the NEX-036 docs promotion; the run fast-forwarded to `8f05a5b` after reconciling against the remote. |
-| Head commit (run end) | `7ac893c` — the NEX-037 docs promotion, over product commit `5c0575b`. |
-| Last CI result | **`5c0575b` (NEX-037): VERIFIED GREEN** — 4/4 `completed/success`, every check run reporting `head_sha` `5c0575b5df0b2aa30e1d4a28f622ac327871f902` (Backend 139441878322, Frontend 139441878023, plus the duplicate pair 139441830759 / 139441831292), polled 2026-11-25T18:57Z. Earlier polls at 18:52Z and 18:54Z saw the same runs `queued`/`in_progress`; they are kept because they are why the claim carries a timestamp. **`90eea0c` (NEX-036): VERIFIED** — Backend `completed/success` (id 139429822539) and Frontend `completed/success` (id 139429823232), polled 2026-11-25T18:45Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
-| Tracking issue | #2 (open) — **current as of `fe5eadc`**: comment 7168592223 carries NEX-032 with its CI evidence. NEX-036 is carried by comment 7171412980. NEX-037 not yet posted. |
-| Draft PR | #3 (draft, unmerged — human review required). **Current as of `c37037f`**: body PATCHed 2026-11-25T18:47Z (56,759 chars, read back byte-equal) with the NEX-036 section. NEX-037 not yet in the body. |
+| Base commit (run start) | `b628567` — the NEX-038 docs promotion; the run fast-forwarded from a shallow local `f4388fc` with all uncommitted work preserved. |
+| Head commit (run end) | See `commit` in `CHECKPOINT.json` — that field names the last commit carrying **implementation** (`8e670a6`, NEX-039). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
+| Last CI result | **`8e670a6` (NEX-039): 4/4 `completed/success`** — Backend 139458452375 / Frontend 139458453235 plus the duplicate pair 139458414907 / 139458414358, every run reporting `head_sha` `8e670a6`, polled 2026-11-25T19:32Z (the 19:19Z poll saw Backend still `in_progress` and is kept as the reason the claim carries a timestamp). **`5c0575b` (NEX-037): VERIFIED GREEN** — 4/4 `completed/success` (Backend 139441878322, Frontend 139441878023, plus duplicates 139441830759 / 139441831292), polled 18:57Z. **`90eea0c` (NEX-036): VERIFIED** — polled 18:45Z. See `ci_status` in `CHECKPOINT.json` for the per-slice authority. |
+| Tracking issue | #2 (open) — **current as of `8e670a6`**: NEX-037 is carried by comment 7171861451, NEX-038 by 7171956166. NEX-039 not yet posted. |
+| Draft PR | #3 (draft, unmerged — human review required). **Current as of `8e670a6`**: body PATCHed 2026-11-25T19:04Z with the NEX-037 and NEX-038 sections, read back byte-equal. NEX-039 not yet in the body. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -1178,4 +1178,63 @@ here against the live API — PR #3 body contains NEX-037, and issue #2's newest
    recorded occurrence of that failure.
 
 R36 remains open as described in item 4 above; it is unaffected by this run.
+
+## NEX-039 (run `NEX-2026-11-25-37`, third invocation) — the adapter existed only as a stub
+
+Every decisioning slice from NEX-028 onward has been real: a context envelope, an
+unforgeable context hash, per-field withholding with reasons, a rate, a redactor, a
+conformance suite, a production caller. All of it was exercised through
+`StubDecisionProvider`, which is deterministic, offline, and abstains under any threshold
+above its fixed confidence. So the platform could *run* the decisioning path but could never
+obtain a real judgment. NEX-039 adds the adapter that changes that.
+
+The interesting part is not the HTTP call. It is the four things the adapter refuses to do.
+
+- **The vendor cannot abstain; it can only be unsure.** The wire contract has no
+  `abstained` outcome. A provider returns a confidence and the *caller's* threshold in
+  `EvaluateDecision` decides whether that is good enough. Abstention policy therefore stays
+  in the application where it is auditable. `DISABLED` and `PROVIDER_ERROR` are our
+  operational states describing our relationship to the vendor; a vendor that could claim
+  them would be reporting on infrastructure it does not own.
+
+- **The request carries no context, only a question**: `kind` plus sorted `candidates`.
+  Not the context hash, not the excluded field names, not the correlation id. The adapter
+  never receives note text by the port's design, but the *names* of sensitive categories are
+  themselves a disclosure, and the correlation id is ours. A vendor that later needs to
+  correlate its logs should get a freshly minted opaque per-request id, not this one.
+
+- **Sorting is what makes order-independence structural.** The conformance suite requires
+  that reordering a candidate set not change the answer. Relying on vendor
+  order-insensitivity would make that a property of the vendor; sorting before the call makes
+  it a property of this adapter, because the same set produces a byte-identical body.
+
+- **A bad answer is an abstention, never an exception.** Transport error, non-200,
+  oversized or non-JSON body, an unoffered choice, a non-finite or out-of-range confidence —
+  each maps to a contract-legal abstention. Vendor error bodies are *discarded rather than
+  parsed*, because they can echo the request or the credential into our audit trail.
+
+Construction fails closed. The endpoint must be `https://` and the name must be a bounded
+identifier, both checked in `__init__` rather than per request: a misconfiguration should be
+a boot defect, not a process that looks healthy while every advisory degrades to
+`unidentified`. `Settings` applies the same rules so the two cannot drift.
+
+Provider selection lives in the container, so there is one answer to "which provider is this
+process using". Setting `DECISIONING_HTTP_ENDPOINT` opts a deployment into a real vendor; it
+does **not** enable judgment, because `decisioning_enabled` still gates every call.
+
+Two limits are recorded in the module docstring rather than papered over: the response size
+bound is checked *after* httpx has read the body, so it bounds what is parsed and not what is
+held in memory (a streaming read is later hardening); and a rationale is truncated rather
+than fatal, because discarding a legal answer over a verbose explanation would let vendor
+verbosity deny a decision.
+
+**Validation.** 51 adapter tests plus 13 config/wiring tests, and the NEX-035 conformance
+harness invoked at `tests/agent/test_http_decision_provider.py:404`. Full gates: ruff clean
+(172 files), mypy clean (110 source files), **984 passed / 4 skipped**. Negative control:
+replacing `sorted()` with `list()` at `http_provider.py:135` turns exactly three tests red —
+`test_a_choice_request_carries_only_kind_and_sorted_candidates`,
+`test_candidate_order_does_not_change_the_request_bytes`, and the conformance test — which
+proves the invariant is genuinely tested and not incidentally satisfied. The mutation was
+reverted byte-identically before commit. CI: 4/4 `completed/success` at `8e670a6`, polled
+2026-11-25T19:32Z.
 
