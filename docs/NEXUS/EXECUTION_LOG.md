@@ -4290,3 +4290,110 @@ None. No new dependency; the matcher is stdlib only.
 Poll CI for `e386e02` and promote NEX-034 if green. Then the backlog's genuine
 remaining item: R30 (a bounded contract exercised only against a stub) and R29's
 stated `str.__new__` residual on `ContextHash`.
+
+## Run NEX-2026-11-25-35
+
+**Run ID:** NEX-2026-11-25-35
+**Timestamp:** 2026-11-25T17:31Z - 17:49Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `e386e02` (local == remote on entry)
+**Ending commit:** `879b494` (docs promotion; product implementation remains `e386e02`)
+
+### Tasks completed
+
+- **NEX-033 promoted to VERIFIED** on CI observed at `bf84a7c`: Backend
+  `completed/success` + Frontend `completed/success`; the duplicate `pull_request`
+  pair reads `completed/cancelled` (concurrency group, superseded run — neither pass
+  nor fail, never evidence). Polled 2026-11-25T17:33Z.
+- **NEX-034 promoted to VERIFIED** on CI observed at `e386e02`: 4/4
+  `completed/success`, every check run `head_sha` = `e386e02`. Polled 17:41Z.
+- Checkpoint written atomically (temp file -> JSON validated -> `shutil.move`), then
+  normalised so `completed_tasks` / `verified_tasks` / `in_progress_tasks` are derived
+  from `task_statuses` instead of hand-maintained. The three now cannot disagree;
+  narrative detail moved to `completed_task_notes`.
+- Docs committed and pushed: `879b494`. `ls-remote` confirms remote == local.
+- PR #3 body refreshed: NEX-033 and NEX-034 sections appended (neither was present),
+  and the stale counter line replaced with the measured figures
+  (**37,593 additions / 28 deletions / 133 files / 162 commits**, read 17:41Z from the
+  PR object). Verified **byte-identical** to the local file, 50,720 chars.
+- Tracking issue #2 comment posted (id `7169950780`), verified **byte-identical**,
+  4,894 chars. Posted as lists, not a table: a markdown table in an issue comment body
+  returns HTTP 500 on this repo.
+
+### Independent verification of a published claim
+
+The negative-control claim for NEX-034 was published in three places this run
+(checkpoint, PR body, issue comment) without being re-run. Rather than leave it as
+inherited prose, it was executed:
+
+- `git show eb1a2c8:src/notes_service/bootstrap/logging_config.py` restored over the
+  current file; `pytest tests/bootstrap/test_logging_config.py` gave
+  **3 failed, 7 passed**.
+- The three failures are exactly the credential-spellings, plural-key and
+  sequence-under-a-sensitive-key tests. The over-redaction test passed on both
+  versions — correct, because it guards a property the old matcher already had, so it
+  is not claimed as a negative control.
+- Restored with `git checkout --`; `git hash-object` returns `ace7a5b086b2d...`,
+  matching the pre-experiment value, and `git status --porcelain` is empty.
+
+The published claim is therefore evidence-backed rather than inherited. This is worth
+the time: a negative control is the one claim that says "the tests would have caught
+this", and it is the claim most tempting to copy forward unrun.
+
+### Reconciliation findings
+
+- **A stale `next_action` would have re-implemented a shipped feature.** The
+  checkpoint named NEX-034 as "aggregate over-cap context withholdings into a count";
+  NEX-033's `WithholdingRecorder` port already is that aggregation. The slice was
+  re-scoped to the real defect found reviewing NEX-033's own code path.
+- **A test count was attributed to the wrong slice.** The checkpoint recorded NEX-033
+  as "877 passed"; the true baseline at `bf84a7c` is 873, and 877 was the count after
+  NEX-034's four tests were added. Corrected in `task_statuses.NEX-033`.
+- Both are R24-class, and the first two to be *intent* fields rather than CI notes.
+  R24's detail was widened: any field recording "what to do next" or "what the numbers
+  were" decays the same way a commit field does.
+
+### Files changed
+
+- `docs/NEXUS/CHECKPOINT.json` — NEX-033/NEX-034 verified, R33 added, R24 widened,
+  task lists normalised, `next_task` set to NEX-035.
+- `docs/NEXUS/STATE.md` — position and next-actions refreshed.
+- `docs/NEXUS/BACKLOG.md` — NEX-034 recorded.
+- `docs/NEXUS/EXECUTION_LOG.md` — this entry.
+
+### Tests executed
+
+- `pytest tests/bootstrap/test_logging_config.py` — 10 passed.
+- Negative control (old matcher restored): 3 failed, 7 passed; restored byte-exact.
+- Full-suite gates (ruff format/check, mypy, pytest 877 passed) were run on `e386e02`
+  earlier in this run and are unchanged by a docs-only commit.
+
+### Security findings
+
+- R33 recorded as an **accepted residual, not a closure**: the redactor's vocabulary is
+  finite. The structural hole (one entry per spelling) is closed; a credential named
+  with a word on neither list would still pass. If a real leak is found, add the word
+  **and** a test naming that exact spelling.
+
+### CI status
+
+- `bf84a7c` (NEX-033): green, observed. `e386e02` (NEX-034): 4/4 green, observed.
+- `879b494` (docs): **not polled, not claimed**. A docs head that is superseded in the
+  concurrency group reads `completed/cancelled`, which is not evidence either way.
+
+### Decisions
+
+- Stopped after one slice. ~10 minutes remained at the integration boundary; the
+  operating rules forbid starting a new slice with under 10 minutes, and continuing
+  would have produced an uncommitted tree the next run must discard. The remaining
+  time went to verifying a claim already published rather than to new scope.
+
+### Next action
+
+**NEX-035 — R30.** Build a conformance suite that a real vendor adapter must pass,
+exercising each bound in the decision contract (400-char rationale, `[0.0, 1.0]`
+confidence clamp, candidate choice-set restriction) with an adversarial payload. Every
+one of those bounds has only ever met the stub adapter, which always answers at 0.1
+confidence with a short rationale — so the first real adapter would otherwise be the
+first genuine test of them. No vendor dependency: the suite is the deliverable,
+exercised against a deliberately hostile in-repo fake.
