@@ -2517,3 +2517,84 @@ use heredocs in this environment.
 2. Refresh PR #3's body: counters were last measured at `fa387a9` and the body should cite
    the current head and the NEX-019 change.
 3. Select the next Phase-5 slice from `ROADMAP.md`. Never merge PR #3.
+
+---
+
+## Run `NEX-2026-11-25-21` — CI observation and PR refresh for NEX-019
+
+**Timestamp:** 2026-11-25T09:49Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `66e8cd6`
+**Ending commit:** this docs commit (child of `9a90e3a`)
+
+### What this run did
+
+The previous run left NEX-019 IMPLEMENTED + TESTED with two integration steps outstanding:
+the PR body still carried counters measured at `fa387a9`, and no CI result had been read for
+`66e8cd6`. This run closed both.
+
+| Step | Outcome |
+| --- | --- |
+| PR #3 body refreshed | Patched at `66e8cd6` on 2026-11-25T09:46:26Z |
+| Docs commit | `9a90e3a` pushed (`66e8cd6..9a90e3a`) |
+| CI at `66e8cd6` | **4/4 `completed/success`**, all `head_sha` == `66e8cd6`, polled 09:46Z |
+| CI at `9a90e3a` | **4/4 `completed/success`**, polled 09:48Z |
+| NEX-019 status | IMPLEMENTED + TESTED → **VERIFIED** |
+
+### Why the PR body needed rewriting, not just recounting
+
+Four stale figures were only the visible problem. The body also made a CI claim that could
+not survive its own head moving: it named `ca15eb1` as the head and asserted nothing about
+newer commits. Recounting alone would have produced a body that was wrong in a different
+way, so the CI paragraph was rewritten around what was actually observed:
+
+- **NEX-018 is labelled descendant-CI.** Its fix commit `789d78a` has zero check runs of
+  its own — the docs commit `2b3beb7` followed it and the CI concurrency group cancelled
+  the superseded run. `git merge-base --is-ancestor` confirms `789d78a` is an ancestor of
+  `2b3beb7`, so the green run built a tree containing the fix. Reporting that as "CI green
+  on `789d78a`" would be false; reporting it as descendant-CI is true.
+- **NEX-019 states no CI result**, because at refresh time none existed. It was promoted to
+  VERIFIED only after the 4/4 run was actually read at `66e8cd6`.
+
+### NEX-019 was the exception to this branch's usual cancellation trap
+
+Every earlier product commit here landed without check runs of its own, because a docs
+commit always followed. NEX-019 did not: `66e8cd6`'s push ran to completion before `9a90e3a`
+was pushed, so all four of its check runs are `completed/success` **at that commit**. The
+promotion therefore rests on a run at the commit itself, and no descendant-CI argument is
+needed. That distinction is recorded explicitly in STATE.md rather than glossed over — the
+weaker evidence basis is fine when it is labelled, and misleading when it is not.
+
+### Files changed
+
+- `docs/NEXUS/STATE.md` — phase line, CI row, PR row, NEX-019 status block
+- `docs/NEXUS/CHECKPOINT.json` — run_id, commit `9a90e3a`, CI observation, NEX-019 VERIFIED
+- `docs/NEXUS/BACKLOG.md` — NEX-019 status → VERIFIED with its evidence
+- `docs/NEXUS/EXECUTION_LOG.md` — this entry
+- PR #3 body (via API) — counters at `66e8cd6`, CI paragraph, NEX-018/019 lists
+
+### Validation
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Format | `ruff format --check .` (bare) | 198 files already formatted |
+| Lint | `ruff check .` | All checks passed |
+| CI (code) | check-runs at `66e8cd6` | 4/4 `completed/success` |
+| CI (docs) | check-runs at `9a90e3a` | 4/4 `completed/success` |
+
+### Risks carried forward
+
+- **R18 recurrence is still live.** NEX-018's original test attack was weaker than the real
+  one (it flipped `status` only, leaving `outcome_hash` intact, so a stale-seal branch caught
+  it). The strengthened test closes that instance. The pattern — a forgery test that mutates
+  one field when the threat mutates the pair — is worth checking again on any new seal or
+  hash-chain test.
+- **PR #3 remains draft and unmerged.** Automated merging is prohibited.
+
+### Next action
+
+1. Audit the other versioned aggregates in `infrastructure/db/` for the missing
+   compare-and-set that NEX-019 fixed for the run aggregate. Confirm one exists before
+   adopting it as the next slice.
+2. Otherwise select the next Phase-5 slice from `ROADMAP.md`.
+3. Never merge PR #3.

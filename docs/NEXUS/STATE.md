@@ -7,11 +7,11 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **IMPLEMENTED + TESTED** (`66e8cd6`, CI not yet observed) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `ad21e5b` — the clone started on `main` at `d6f92d0`; `git ls-remote` showed the authorized branch at `ad21e5b`, which was fetched and checked out before any gate was trusted. Verified with `git log -1` and against `origin/feature/agentic-enterprise-platform`. |
 | Head commit (run end) | `66e8cd6` — `fix(agent-runs): refuse a stale write instead of erasing run progress` (NEX-019), plus the docs commit that carries this line. Re-read `git log -1`; do not assume. |
-| Last CI result | **No CI result yet read for `66e8cd6`** (this run's code change) — an absence, not a pass. Last observed green: **4/4 `completed/success` at `2b3beb7`**, polled 2026-11-25T09:28Z (Backend ×2, Frontend ×2), covering NEX-018 by descendant-CI (`789d78a` has 0 runs of its own). Locally this run **on the feature branch at `66e8cd6`**: `ruff format --check` 198 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **725 passed / 4 skipped**. |
+| Last CI result | **4/4 `completed/success` at `66e8cd6`** (NEX-019's own commit — all four check runs report `head_sha` `66e8cd6`), first read 2026-11-25T09:46Z. Also now **4/4 green at `9a90e3a`**, the docs head that carries this file, polled 2026-11-25T09:48Z. Prior: `2b3beb7` 4/4 (NEX-018 by descendant-CI; `789d78a` has 0 runs of its own). Locally this run **on the feature branch at `66e8cd6`**: `ruff format --check` 198 files clean, `ruff check` clean, `mypy` 98 files clean, full `pytest` **725 passed / 4 skipped**. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Body **refreshed 2026-11-25T09:46:26Z** at head `66e8cd6`: **108 files, 29,107 insertions, 10 deletions, 95 commits**, 729 tests collected, 10 migrations, 11 routers. Counters measured from the PR object at that head. `mergeable_state` read `unstable` at refresh time — pending checks on the new head, not failure. |
 | CI status | **NEX-019 commit `66e8cd6`: not yet polled** — an absence, not a pass. Last observed: `2b3beb7` 4/4 `completed/success`. Prior: `fa387a9` 4/4; `ca15eb1` 4/4; `990557d` 4/4; `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. Docs heads superseded by a later push read `completed/cancelled`, which is not the same as passing. |
@@ -33,10 +33,13 @@ seeded on load), and `save` is a compare-and-set: one `UPDATE ... WHERE id AND v
 role, because several mutations can happen between two saves. `VersionConflict` already
 maps to HTTP 409, so the loser reloads and retries instead of assuming its step settled.
 
-Status: **IMPLEMENTED + TESTED** at `66e8cd6` — gates run locally (725 passed / 4 skipped,
-ruff and mypy clean). **CI not yet observed**; promote to VERIFIED only on 4/4
-`completed/success` reporting `66e8cd6`. Three tests in `tests/agent/test_run_concurrency.py`
-include a matching-version success case, so an always-raising guard cannot pass.
+Status: **VERIFIED** — CI **4/4 `completed/success` at `66e8cd6`**, polled 2026-11-25T09:46Z
+with every check run's `head_sha` confirmed equal to `66e8cd6` (Backend ×2, Frontend ×2).
+Because the green run is at the commit itself, NEX-019 needs no descendant-CI reasoning —
+unlike NEX-018. Local gates, run bare on the feature branch: 725 passed / 4 skipped, ruff
+format and check clean over 198 files, mypy clean over 98 source files. Three tests in
+`tests/agent/test_run_concurrency.py` include a matching-version success case, so an
+always-raising guard cannot pass.
 
 ## NEX-018 (run `NEX-2026-11-25-20`) — erasing the seal laundered the verdict
 

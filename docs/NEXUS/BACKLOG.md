@@ -1065,7 +1065,7 @@ fix and ran the new tests. This is not a "green at this exact SHA" claim for
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P1 (data integrity: durable run concurrency) |
-| Status | **IMPLEMENTED + TESTED** — code at `66e8cd6`, gates run locally; CI not yet observed on that SHA |
+| Status | **VERIFIED** — CI 4/4 `completed/success` at `66e8cd6`, polled 2026-11-25T09:46Z (all runs' `head_sha` confirmed); local gates green |
 | Dependencies | NEX-005 (agent runtime), NEX-011 (run aggregate) |
 
 **Objective:** make the run aggregate's version meaningful on write. `AgentRun.version`

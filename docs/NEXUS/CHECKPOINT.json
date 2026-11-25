@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-21",
-  "timestamp": "2026-11-25T09:46:32Z",
+  "timestamp": "2026-11-25T09:49:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "66e8cd6",
-  "commit_note": "66e8cd6 pushed and verified against origin/feature/agentic-enterprise-platform (local and remote SHAs identical). It carries the NEX-019 code fix; the docs commit recording it follows.",
-  "project_phase": "Phase 2 complete; Phase 5 (durable runtime) \u2014 NEX-019 run write concurrency IMPLEMENTED + TESTED at 66e8cd6, CI not yet observed.",
+  "commit": "9a90e3a",
+  "commit_note": "9a90e3a is the docs head carrying this checkpoint, confirmed on origin/feature/agentic-enterprise-platform. Its parent 66e8cd6 carries the NEX-019 code.",
+  "project_phase": "Phase 2 complete; Phase 5 (durable runtime) \u2014 NEX-019 run write concurrency VERIFIED at 66e8cd6 (CI 4/4).",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -29,7 +29,7 @@
     "NEX-016": "VERIFIED",
     "NEX-017": "VERIFIED",
     "NEX-018": "VERIFIED (descendant-CI at 2b3beb7, 4/4 completed/success)",
-    "NEX-019": "IMPLEMENTED + TESTED at 66e8cd6; PUSHED; CI not yet observed"
+    "NEX-019": "VERIFIED (CI 4/4 at 66e8cd6)"
   },
   "completed_tasks": [
     "NEX-001",
@@ -64,12 +64,12 @@
     "architecture": "layering test untouched by this slice; runs.py stays framework-free (no SQLAlchemy import in domain)",
     "migration_chain": "no migration added by NEX-019; head remains e5a3b9c04f21 (revocable_approvals), 10 migration files",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "2b3beb7: 4/4 completed/success, polled 2026-11-25T09:28Z (previous run, covers NEX-018)",
-    "ci_note": "No CI result was read for 66e8cd6 this run. That is recorded as an absence, not a pass. PR #3's mergeable_state read unstable at refresh time (pending checks on the new head), which is also not a failure. NEX-019 must not be promoted on local gates.",
-    "verified_at_commit": "2b3beb7 (NEX-018, previous run)",
-    "verified_by_run": "NEX-2026-11-25-20",
+    "ci_observed": "66e8cd6: 4/4 completed/success, polled 2026-11-25T09:46Z, all four head_sha == 66e8cd6. 9a90e3a (docs head): 4/4 completed/success, polled 2026-11-25T09:48Z. Prior: 2b3beb7 4/4 (covers NEX-018 by descendant-CI).",
+    "ci_note": "NEX-019 is promoted on a run observed at its own commit, not on descendant-CI: the four green check runs at 66e8cd6 each report head_sha 66e8cd6. The superseded docs cancellation concern did not apply here because the docs push 9a90e3a ran its own full suite and passed.",
+    "verified_at_commit": "66e8cd6 (NEX-019)",
+    "verified_by_run": "NEX-2026-11-25-21",
     "evidence_basis": {
-      "note": "NEX-019 is IMPLEMENTED + TESTED only. Local gates are not evidence for promotion (R9/R10).",
+      "note": "NEX-019 VERIFIED: 4/4 completed/success observed at 66e8cd6 with head_sha matching. Local gates agree but are not the basis for promotion.",
       "nex_019_commit": "66e8cd6",
       "criterion_coverage": "Two concurrent writers at one version cannot both commit and the winner's step survives; a matching-version write still succeeds and reaches COMPLETED; a stale write cannot erase an interrupted step."
     },
@@ -80,7 +80,7 @@
       "pytest_full": "pass - 725 passed, 4 skipped, exit 0"
     }
   },
-  "uncommitted_work": "none. 66e8cd6 was pushed to origin/feature/agentic-enterprise-platform before this checkpoint was written; the docs changes carrying it are committed separately.",
+  "uncommitted_work": "none. 66e8cd6 (code) and 9a90e3a (docs) are both pushed; a follow-up docs commit records the CI observation itself.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -167,7 +167,7 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "Poll CI on 66e8cd6 and promote NEX-019 to VERIFIED only on 4/4 completed/success reporting head_sha == 66e8cd6. Then select the next Phase-5 slice from ROADMAP.md; a candidate is auditing other versioned aggregates in infrastructure/db/ for the same missing compare-and-set that NEX-019 fixed for the run aggregate.",
+  "next_task": "Select the next Phase-5 slice from ROADMAP.md. A strong candidate: audit the other versioned aggregates in infrastructure/db/ for the same missing compare-and-set that NEX-019 fixed for the run aggregate \u2014 an aggregate whose version is bumped but never compared on write cannot detect a lost update. Confirm whether any exists before committing to it as a task.",
   "next_action": "1. Refresh PR #3's body at the current head: its counters were last measured at fa387a9 and are now stale by several commits, and the body should cite the verified SHA. 2. Pick the next Phase-5 slice. Never merge PR #3.",
   "recovery_instructions": "Verify branch == feature/agentic-enterprise-platform and git log -1 == 66e8cd6 (or a descendant). Tree should be clean. Then: gh api repos/anotherhale/bluestaq-notes/commits/66e8cd6/check-runs -- promote NEX-019 to VERIFIED only if 4/4 completed/success all report that head_sha. Do NOT merge PR #3.",
   "ci_status": "2b3beb7: 4/4 completed/success (Backend x2, Frontend x2), every run reporting head_sha 2b3beb7, polled 2026-11-25T09:28Z. 789d78a (NEX-018 code): 0 check runs of its own - superseded by the docs commit; descendant-CI applies. Earlier: 4ff4f62 4/4; fa387a9 4/4; ca15eb1 4/4; 990557d 4/4; b9b7207 4/4; c18bac7 4/4. e5f1bb4 and 4c5a6ef (NEX-003, NEX-006) likewise have no runs of their own and rest on descendant-CI. A docs commit followed by another push reads completed/cancelled, which is neither a pass nor a failure.",
