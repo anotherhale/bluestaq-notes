@@ -1262,3 +1262,77 @@ not a guard. Recorded here so a future audit does not re-open it without cause.
 
 **Next action:** observe CI on this commit; on 4/4 `completed/success` at this `head_sha`,
 promote to VERIFIED.
+
+## NEX-022 — A run must be bound to the delegation that planned it, not merely to its agent
+
+| Field | Value |
+| --- | --- |
+| Phase | 5 (durable runtime) |
+| Priority | P0 (security: a durable run could outlive the consent that started it) |
+| Status | **TESTED** — 2 new tests pass, full suite 737 passed / 4 skipped, gates clean, negative control verified. Not VERIFIED: no CI observation at this commit |
+| Dependencies | NEX-003 (agent identity), NEX-017 (delegator re-check per step) |
+
+**Objective:** close the gap between what the run use cases *claim* and what they
+*enforce* about authority.
+
+The `agent_runs.py` module docstring states the invariant the durable runtime exists to
+uphold: *"a durable run cannot outlive the authority that started it. Revoking the token
+stops the run on its next step."* `PlanAgentRun` honours it — it records
+`delegation_id=resolved.delegation.id` on the run at plan time. `AdvanceAgentRun._load_for_agent`
+then re-resolved the token per step (good) but compared **only the agent id**:
+
+```python
+if run is None or AgentId.parse(run.agent_id) != resolved.agent.id:
+    raise ResourceNotFound("run not found")
+```
+
+**Harm.** An agent can hold more than one delegation at a time — a supported state, not an
+edge case (a user grants a narrow delegation, later a wider one; or two teams delegate to
+the same service agent). The stored `delegation_id` was written and then never read on the
+advance path, so:
+
+- a token minted from delegation **B** could drive a run that delegation **A** planned and
+  whose step capabilities were validated against **A** at plan time — so **B** need not
+  even hold the capability the steps require;
+- revoking **A** — the withdrawal of the specific consent that started this run — did not
+  stop the run while any token from **B** existed. The run outlived the authority that
+  started it, which is precisely what per-step re-resolution exists to prevent.
+
+Nothing raised. `delegation_id` was persisted, carried a foreign key, and was inert.
+
+**Root cause:** the check read the field that was convenient (`agent_id`, needed anyway for
+the 404-vs-403 split) and never the field that carried the authority (`delegation_id`). The
+column existed, was written on every plan, and had
+`ForeignKey("agent_delegations.id", ondelete="SET NULL")` — the schema said the binding
+mattered; the code did not read it. Same family as R23: the check was in *a* place, and no
+test asserted the specific binding it was supposed to establish.
+
+**Delivered:**
+- `application/use_cases/agent_runs.py`: `_load_for_agent` now requires
+  `run.delegation_id == resolved.delegation.id`, and fails closed when the binding is
+  `None`. The column is nullable and its FK is `ON DELETE SET NULL`, so a stored run really
+  can lose its binding; an unbound row must not be readable as "any token for this agent
+  will do".
+- `tests/agent/test_agent_runs.py`: two tests.
+  `test_advance_refuses_a_token_from_a_different_delegation` mints a second delegation and
+  token for the same agent, asserts `AccessDenied`, asserts the run was left untouched
+  (every step still `PENDING`, no note created), then asserts a *fresh token from the
+  planning delegation* still completes the run — so the refusal is about the delegation,
+  not about minting a new token.
+  `test_advance_fails_closed_when_a_run_records_no_delegation` clears the binding with a
+  direct `UPDATE` (the adapter's `save` deliberately never rewrites it, so `save` cannot
+  produce the state) and asserts `AccessDenied`.
+
+**Negative control:** deleting the two-line check turns exactly those 2 tests red and leaves
+the other 14 in the file green. Restored and re-verified.
+
+**Security notes:** 404 is still returned for an unknown run or another agent's run, so
+existence is not leaked. `AccessDenied` (403) is returned when the run is *this* agent's but
+bound to a different delegation — the agent already knows the run exists, so 403 is the
+honest answer, consistent with ADR-008.
+
+**Not delivered, deliberately:** no migration (the column and its FK already exist) and no
+change to the plan path (it was already correct). This is a read-path fix.
+
+**Next action:** observe CI on the commit carrying this slice; on 4/4 `completed/success`
+at that `head_sha`, promote to VERIFIED.

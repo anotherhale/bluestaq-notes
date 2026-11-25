@@ -352,3 +352,77 @@ def test_a_planned_step_naming_an_unknown_tool_is_rejected() -> None:
 
     with pytest.raises(ValidationError, match="unknown tool"):
         PlannedStep(tool_name="no_such_tool", arguments={})
+
+
+def test_advance_refuses_a_token_from_a_different_delegation(h: Harness) -> None:
+    """A run is bound to the delegation that planned it, not just to its agent.
+
+    Checking only the agent id let a second delegation's token drive a plan
+    authorised by the first, so a run could outlive the consent that started it.
+    A second token from the *same* delegation is still the same consent and must
+    keep working — the refusal has to be about the delegation, not about minting
+    a fresh token.
+    """
+    agent, secret = h.secret_for(Capability.CREATE_NOTE)
+    run = h.plan.run(secret=secret, steps=[create_step("bound")])
+
+    # A second delegation for the same agent, and a token minted from it.
+    other = h.delegate.run(
+        h.principal, agent_id=str(agent.id), capabilities=[Capability.CREATE_NOTE.value]
+    )
+    foreign_secret = h.issue.run(
+        h.principal,
+        delegation_id=str(other.id),
+        capabilities=[Capability.CREATE_NOTE.value],
+        audience=TOOL_GATEWAY,
+        ttl_seconds=300,
+    ).secret
+
+    with pytest.raises(AccessDenied):
+        h.advance.run(secret=foreign_secret, run_id=str(run.id))
+
+    # The refusal left the run untouched: nothing executed.
+    assert h.run_titles(agent) == []
+    with h.uow() as uow:
+        reloaded = uow.agent_runs.get(run.id)
+    assert reloaded is not None
+    assert all(s.status is StepStatus.PENDING for s in reloaded.ordered_steps)
+
+    # The planning delegation's consent still drives it, even via a fresh token.
+    same_delegation_secret = h.issue.run(
+        h.principal,
+        delegation_id=str(run.delegation_id),
+        capabilities=[Capability.CREATE_NOTE.value],
+        audience=TOOL_GATEWAY,
+        ttl_seconds=300,
+    ).secret
+    advanced = h.advance.run(secret=same_delegation_secret, run_id=str(run.id))
+    assert advanced.run.status is RunStatus.COMPLETED
+    assert h.run_titles(agent) == ["bound"]
+
+
+def test_advance_fails_closed_when_a_run_records_no_delegation(h: Harness) -> None:
+    """An unbound run cannot be advanced on unrecorded authority.
+
+    ``delegation_id`` is nullable and its foreign key is ``ON DELETE SET NULL``,
+    so a stored run really can lose its binding. That must fail closed: an
+    unbound row cannot be read as "any token for this agent will do".
+    """
+    from sqlalchemy import update
+
+    from notes_service.infrastructure.db.models import AgentRunRow
+
+    agent, secret = h.secret_for(Capability.CREATE_NOTE)
+    run = h.plan.run(secret=secret, steps=[create_step("orphan")])
+
+    # ``save`` never rewrites the binding (it is immutable), so clear it the way
+    # the database would: a direct UPDATE, standing in for the SET NULL cascade.
+    with h.uow() as uow:
+        uow.session.execute(
+            update(AgentRunRow).where(AgentRunRow.id == run.id).values(delegation_id=None)
+        )
+        uow.commit()
+
+    with pytest.raises(AccessDenied):
+        h.advance.run(secret=secret, run_id=str(run.id))
+    assert h.run_titles(agent) == []

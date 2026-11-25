@@ -256,6 +256,17 @@ class AdvanceAgentRun(_RunUseCase):
             run = uow.agent_runs.get(parsed)
         if run is None or AgentId.parse(run.agent_id) != resolved.agent.id:
             raise ResourceNotFound("run not found")
+        # A run is bound to the delegation that planned it, not merely to its
+        # agent. Checking the agent alone lets a token minted from a *different*
+        # delegation advance a plan authorised by one whose consent may since
+        # have been withdrawn — the run would then outlive the authority that
+        # started it, which is exactly what re-resolving the token per step is
+        # meant to prevent. A second token from the same delegation is still
+        # accepted: that is the same consent, not a new one. The column is
+        # nullable, so a run with no recorded binding fails closed rather than
+        # being advanced on an unrecorded authority.
+        if run.delegation_id is None or run.delegation_id != resolved.delegation.id:
+            raise AccessDenied("run is bound to a delegation other than this token's")
         return run
 
     def _save(self, run: AgentRun) -> None:

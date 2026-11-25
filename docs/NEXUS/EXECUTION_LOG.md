@@ -2917,3 +2917,67 @@ superseded head as green. Then select the next dependency-ready Phase-5 slice fr
   table updated to 739 collected / 735 passed, and the obsolete "validation after rebasing"
   section replaced with the current relationship to `main`. PR #3 remains **draft and unmerged**.
 - **Next action**: take the next dependency-ready Phase-5 slice from `ROADMAP.md`.
+
+## Run `NEX-2026-11-25-24` — 2026-11-25T11:01Z — NEX-022: a run must be bound to the delegation that planned it
+
+**Starting commit** `88eba9e` (docs head promoting NEX-021). **Branch**
+`feature/agentic-enterprise-platform`. **Phase** 5 (durable runtime).
+
+### What this run did
+
+Found and closed a real runtime defect on the durable-run advance path: the use case that
+re-resolves the agent token before every step validated only *which agent* owned the run,
+never *which delegation* planned it.
+
+`PlanAgentRun` records `delegation_id=resolved.delegation.id` on the run at plan time and
+validates every step's capability against that delegation's token. `AdvanceAgentRun` then
+re-resolved the token per step but compared only `AgentId.parse(run.agent_id) !=
+resolved.agent.id`. The stored binding was written, indexed by a foreign key, and never
+read.
+
+### The defect
+
+An agent may hold several delegations at once. Because the advance path ignored the
+binding:
+
+- a token from delegation **B** could advance a run planned by delegation **A**, whose step
+  capabilities were validated against **A** — so **B** need not hold the capability the
+  steps require;
+- revoking **A**, the specific consent that started the run, did not stop the run while any
+  **B** token existed. The run outlived the authority that started it, contradicting the
+  module's own stated invariant.
+
+No error was raised on any path. This is the same family as R23: a check that exists in
+one place, with no test asserting the specific binding it is supposed to establish.
+
+### The fix
+
+- `application/use_cases/agent_runs.py`: `_load_for_agent` requires
+  `run.delegation_id == resolved.delegation.id` and fails closed when the binding is
+  `None`. Nullable column + `ON DELETE SET NULL` means a stored run can genuinely lose its
+  binding, so an unbound row is refused rather than treated as "any token will do".
+- No migration (column and FK already exist) and no change to the plan path.
+
+### Tests
+
+- `test_advance_refuses_a_token_from_a_different_delegation` — a second delegation and
+  token for the same agent are refused; the run is left untouched (all steps `PENDING`, no
+  note written); a fresh token from the *planning* delegation still completes the run.
+- `test_advance_fails_closed_when_a_run_records_no_delegation` — clears the binding with a
+  direct `UPDATE` (the adapter's `save` never rewrites it) and asserts `AccessDenied`.
+
+**Negative control:** removing the two-line check turns exactly these 2 tests red and
+leaves the other 14 in the file green; the check was restored and the file re-verified at
+16 passed.
+
+### Validation
+
+- `pytest` full suite: **737 passed, 4 skipped**, exit 0 (baseline 735 + these 2 tests).
+- `ruff format --check`: 201 files already formatted. `ruff check`: clean.
+  `mypy`: no issues in 98 source files.
+- No migration added; head unchanged.
+
+### Status
+
+NEX-022 is **TESTED**, not VERIFIED: no CI observation exists at the commit carrying it.
+CI must be polled and 4/4 `completed/success` observed at that `head_sha` before promotion.
