@@ -45,6 +45,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, NoReturn
 from uuid import UUID
 
@@ -342,8 +343,9 @@ class InvokeTool(UseCase):
         """
         deferred_key = _deferred_idempotency_key(idempotency_key)
         with self._uow_factory() as uow:
+            now = self._clock.now()
             request = _open_or_reuse_approval_request(
-                uow, resolved=resolved, tool=tool, resource_ref=resource_ref
+                uow, resolved=resolved, tool=tool, resource_ref=resource_ref, now=now
             )
             already_recorded = uow.tool_invocations.find_by_idempotency_key(
                 resolved.agent.id, deferred_key
@@ -576,6 +578,7 @@ def _open_or_reuse_approval_request(
     resolved: ResolvedToken,
     tool: ToolDefinition,
     resource_ref: str,
+    now: datetime,
 ) -> ApprovalRequest:
     """Reuse this agent's open request for the same action, or open a new one.
 
@@ -583,19 +586,24 @@ def _open_or_reuse_approval_request(
     decision: the human revisits the queue and would face the same approval many
     times over. Only a still-decidable request for the identical
     (capability, resource) pair is reused; anything else opens afresh.
+
+    ``now`` is the gateway's clock and is used for *both* the reuse test and the
+    new request's validity bound, so a request is judged against the same clock
+    that stamped it.
     """
     for existing in uow.approvals.list_for_agent(resolved.agent.id):
         if (
             existing.status is ApprovalStatus.PENDING
             and existing.capability is tool.capability
             and existing.resource_ref == resource_ref
-            and not existing.is_expired
+            and not existing.expired_at(now=now)
         ):
             return existing
     request = ApprovalRequest.open(
         agent=resolved.agent,
         capability=tool.capability,
         resource_ref=resource_ref,
+        now=now,
     )
     uow.approvals.add(request)
     return request

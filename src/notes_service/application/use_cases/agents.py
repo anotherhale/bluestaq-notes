@@ -379,7 +379,9 @@ class OpenApprovalRequest(UseCase):
             raise InvalidInput(f"capability {cap.value} is not sensitive and needs no approval")
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            request = ApprovalRequest.open(agent=agent, capability=cap, resource_ref=resource_ref)
+            request = ApprovalRequest.open(
+                agent=agent, capability=cap, resource_ref=resource_ref, now=self._clock.now()
+            )
             uow.approvals.add(request)
             uow.commit()
             return request

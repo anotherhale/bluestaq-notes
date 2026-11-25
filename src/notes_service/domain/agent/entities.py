@@ -285,7 +285,19 @@ class ApprovalRequest:
         # recorded is not an approval with unlimited validity. Reading NULL as
         # "never expires" is how an unpersisted column silently becomes
         # permanent authority, so the absent case is treated as lapsed.
-        return self.expires_at is None or _utcnow() >= self.expires_at
+        return self.expired_at(now=_utcnow())
+
+    def expired_at(self, *, now: datetime) -> bool:
+        """Whether the validity bound has lapsed as of ``now``.
+
+        Every caller that has a clock must use this rather than the
+        ``is_expired`` property. The bound is stamped from the caller's clock
+        when the request is opened, so judging it against the wall clock makes
+        the two disagree whenever they differ (a frozen or injected clock, or
+        simple skew): a lapsed approval can read as live, and a fresh one as
+        expired. Comparing one instant against another is the only honest test.
+        """
+        return self.expires_at is None or now >= self.expires_at
 
     def is_usable(self, *, now: datetime | None = None) -> bool:
         """Whether this approval may authorise an action right now.
@@ -316,14 +328,14 @@ class ApprovalRequest:
         moment = now or _utcnow()
         return moment < self.expires_at
 
-    def _assert_decidable(self, approver_user_id: UserId | None) -> UserId:
+    def _assert_decidable(self, approver_user_id: UserId | None, *, now: datetime) -> UserId:
         if approver_user_id is None:
             raise InvariantViolation(
                 "an agent cannot approve its own action; a human approver is required"
             )
         if self.status is not ApprovalStatus.PENDING:
             raise InvariantViolation(f"approval request is already {self.status.value}")
-        if self.is_expired:
+        if self.expired_at(now=now):
             # Deciding an expired request would produce an APPROVED row that the
             # gateway must then refuse; refuse the decision instead, so the
             # recorded status never claims an authority that has lapsed.
@@ -338,10 +350,11 @@ class ApprovalRequest:
         reason: str | None = None,
     ) -> None:
         approver = UserId.parse(approver_user_id) if approver_user_id is not None else None
-        self._assert_decidable(approver)
+        decided_at = now or _utcnow()
+        self._assert_decidable(approver, now=decided_at)
         self.status = ApprovalStatus.APPROVED
         self.decided_by_user_id = approver
-        self.decided_at = now or _utcnow()
+        self.decided_at = decided_at
         self.reason = reason
         self._bump()
 
@@ -353,10 +366,11 @@ class ApprovalRequest:
         reason: str | None = None,
     ) -> None:
         approver = UserId.parse(approver_user_id) if approver_user_id is not None else None
-        self._assert_decidable(approver)
+        decided_at = now or _utcnow()
+        self._assert_decidable(approver, now=decided_at)
         self.status = ApprovalStatus.DENIED
         self.decided_by_user_id = approver
-        self.decided_at = now or _utcnow()
+        self.decided_at = decided_at
         self.reason = reason
         self._bump()
 
