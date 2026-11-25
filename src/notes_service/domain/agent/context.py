@@ -123,6 +123,58 @@ class ContextField:
             )
 
 
+#: A digest is a SHA-256 rendered as lowercase hex. Validated at mint time so a
+#: malformed digest can never reach a request.
+_CONTEXT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+#: Construction token. Only :meth:`ContextHash._mint` holds it, and only
+#: :class:`ContextEnvelope` calls that. A plain ``ContextHash("…")`` — the shape a
+#: caller would write to hand-assemble a declassification — raises instead.
+_MINT = object()
+
+
+class ContextHash(str):
+    """A context digest that only an envelope may mint.
+
+    The distinction this type exists to make is *who decided what left the
+    process*. A digest is a fingerprint of the included fields, so asserting one
+    is asserting "these were the inputs". If any caller could construct the
+    digest directly, it could present a hash that does not correspond to the
+    envelope it is sending — deciding the declassification itself, which is
+    exactly what ADR-012 forbids.
+
+    It subclasses ``str`` so that it serialises, compares, and hashes as the
+    plain hex digest in JSON, logs, and audit records; the type is a
+    construction-time guard, not a new wire format.
+
+    Honest limit: ``str.__new__(ContextHash, …)`` still bypasses this, and a
+    determined caller can reach it. The guard's job is to make the mistake
+    impossible to write by accident and the bypass deliberate and visible, not
+    to defeat a hostile process that already runs in this one.
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, digest: str, *, _token: object | None = None) -> ContextHash:
+        if _token is not _MINT:
+            raise ValidationError(
+                "a ContextHash may only be minted by a ContextEnvelope; "
+                "construct the envelope and read its context_hash"
+            )
+        if not isinstance(digest, str) or not _CONTEXT_HASH_RE.fullmatch(digest):
+            raise ValidationError("a context hash must be a lowercase 64-character hex digest")
+        return super().__new__(cls, digest)
+
+    @classmethod
+    def _mint(cls, digest: str) -> ContextHash:
+        return cls(digest, _token=_MINT)
+
+    @property
+    def digest(self) -> str:
+        """The digest as a plain ``str``, for explicit unwrapping at boundaries."""
+        return str.__str__(self)
+
+
 def _canonical(fields: tuple[ContextField, ...]) -> str:
     """Canonical JSON of the *included* fields.
 
@@ -199,14 +251,15 @@ class ContextEnvelope:
         return tuple(sorted(field.name for field in self.fields if not self._is_included(field)))
 
     @property
-    def context_hash(self) -> str:
-        """SHA-256 over the included fields only.
+    def context_hash(self) -> ContextHash:
+        """SHA-256 over the included fields only, minted by this envelope.
 
         Fields above the ceiling are absent from the canonical form, so their
         values cannot be recovered from, confirmed against, or even distinguished
         by this digest.
         """
-        return hashlib.sha256(_canonical(self.included_fields).encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(_canonical(self.included_fields).encode("utf-8")).hexdigest()
+        return ContextHash._mint(digest)
 
 
 __all__ = [
@@ -215,5 +268,6 @@ __all__ = [
     "MAX_FIELD_VALUE_LENGTH",
     "ContextEnvelope",
     "ContextField",
+    "ContextHash",
     "DataClassification",
 ]

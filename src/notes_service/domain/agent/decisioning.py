@@ -34,14 +34,11 @@ sensitive content is still a fingerprint of it — hashing is not declassificati
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from enum import StrEnum
 
-from notes_service.domain.agent.context import ContextEnvelope
+from notes_service.domain.agent.context import ContextEnvelope, ContextHash
 from notes_service.domain.errors import ValidationError
-
-_CONTEXT_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # Bounds. A judgment service is a third party; every shape it can influence is
 # capped so a misbehaving provider cannot grow a payload the caller must hold.
@@ -125,9 +122,18 @@ class AbstentionReason(StrEnum):
     LOW_CONFIDENCE = "low_confidence"
 
 
-def _validate_context_hash(value: str) -> str:
-    if not isinstance(value, str) or not _CONTEXT_HASH_RE.match(value):
-        raise ValidationError("context_hash must be a lowercase 64-character hex digest")
+def _validate_context_hash(value: ContextHash) -> ContextHash:
+    """Refuse anything an envelope did not mint.
+
+    The type is the check. A ``str`` that merely looks like a digest is exactly
+    the hand-assembled hash ADR-012 warned about, so it is rejected here rather
+    than trusted for its shape.
+    """
+    if not isinstance(value, ContextHash):
+        raise ValidationError(
+            "context_hash must be a ContextHash minted by a ContextEnvelope, "
+            "not a caller-assembled string"
+        )
     return value
 
 
@@ -140,7 +146,7 @@ class DecisionRequest:
     """
 
     kind: DecisionKind
-    context_hash: str
+    context_hash: ContextHash
     candidates: tuple[str, ...] = ()
     correlation_id: str | None = None
     #: Names (never values) of context fields withheld from ``context_hash``
@@ -191,9 +197,10 @@ class DecisionRequest:
 
         This is the only sanctioned way to turn context into a question, because
         it is what guarantees the hash the provider sees was computed over
-        content a :class:`ContextEnvelope` approved. Hand-assembling a
-        ``context_hash`` is still possible — the field is a plain string — but a
-        caller doing so has taken on the declassification decision itself.
+        content a :class:`ContextEnvelope` approved. ``context_hash`` is typed
+        :class:`ContextHash`, so a caller cannot substitute a string it
+        assembled itself: doing so would silently take on the declassification
+        decision the envelope exists to make.
         """
         if not isinstance(envelope, ContextEnvelope):
             raise ValidationError("a decision request requires a ContextEnvelope")

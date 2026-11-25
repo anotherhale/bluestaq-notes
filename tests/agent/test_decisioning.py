@@ -29,6 +29,12 @@ import pytest
 
 from notes_service.application.ports.decisioning import DecisionProvider
 from notes_service.application.use_cases.decisioning import EvaluateDecision
+from notes_service.domain.agent.context import (
+    ContextEnvelope,
+    ContextField,
+    ContextHash,
+    DataClassification,
+)
 from notes_service.domain.agent.decisioning import (
     MAX_CANDIDATE_LENGTH,
     MAX_CANDIDATES,
@@ -43,7 +49,22 @@ from notes_service.domain.agent.decisioning import (
 from notes_service.domain.errors import ValidationError
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
 
-CONTEXT = "a" * 64
+
+def _context_hash() -> ContextHash:
+    """A real digest, minted the only way one can be: by an envelope."""
+    return ContextEnvelope(
+        fields=(
+            ContextField(
+                name="note_body",
+                classification=DataClassification.PUBLIC,
+                value="hello",
+            ),
+        ),
+        ceiling=DataClassification.INTERNAL,
+    ).context_hash
+
+
+CONTEXT = _context_hash()
 
 
 def _choice_request(*candidates: str, kind=DecisionKind.INTENT_ROUTING) -> DecisionRequest:
@@ -138,10 +159,45 @@ def test_duplicate_candidates_are_rejected() -> None:
         _choice_request("alpha", "alpha")
 
 
-def test_context_hash_must_be_a_sha256_digest() -> None:
-    for bad in ("", "not-a-hash", "A" * 64, "a" * 63, "a" * 65):
+def test_context_hash_must_be_minted_by_an_envelope() -> None:
+    """A digest-shaped string is not a credential; only an envelope may mint one.
+
+    ADR-012 recorded that a caller could hand-assemble ``context_hash`` and so
+    take the declassification decision itself. A ``str`` that is 64 lowercase
+    hex characters is *exactly* that forged value, so it must be refused even
+    though it looks correct.
+    """
+    for bad in ("", "not-a-hash", "A" * 64, "a" * 64, "a" * 63, "a" * 65):
         with pytest.raises(ValidationError):
             DecisionRequest(kind=DecisionKind.RISK_SCORE, context_hash=bad)
+
+
+def test_context_hash_cannot_be_constructed_without_the_mint_authority() -> None:
+    with pytest.raises(ValidationError):
+        ContextHash("a" * 64)
+
+
+def test_context_hash_is_a_str_so_it_serialises_as_the_digest() -> None:
+    assert isinstance(CONTEXT, str)
+    assert len(CONTEXT) == 64
+    assert CONTEXT.digest == CONTEXT
+    assert f"{CONTEXT}" == CONTEXT.digest
+
+
+def test_from_context_mints_the_envelope_hash_and_records_exclusions() -> None:
+    envelope = ContextEnvelope(
+        fields=(
+            ContextField(
+                name="note_body",
+                classification=DataClassification.PUBLIC,
+                value="hello",
+            ),
+        ),
+        ceiling=DataClassification.INTERNAL,
+    )
+    request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+    assert isinstance(request.context_hash, ContextHash)
+    assert request.context_hash == envelope.context_hash
 
 
 def test_confidence_is_bounded() -> None:
