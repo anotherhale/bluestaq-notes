@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-27",
-  "timestamp": "2026-11-25T12:24:00Z",
+  "timestamp": "2026-11-25T12:22:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "b069c0e",
+  "commit": "5d7d182",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
   "active_task": "none - NEX-024 VERIFIED at eaaae23; next Phase-5 slice to be selected",
   "task_statuses": {
@@ -231,5 +231,5 @@
   ],
   "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA.",
-  "commit_scope": "b069c0e is the docs head this checkpoint was written against. The commit that contains this checkpoint file is its child, so git rev-parse HEAD will be one commit ahead. The code slice carrying CI evidence is eaaae23 (NEX-024), observed 4/4 completed/success with every head_sha equal to it."
+  "commit_scope": "5d7d182 is the last docs head this checkpoint describes. The commit that writes this checkpoint is its child, so git rev-parse HEAD is exactly one commit ahead of this field by construction - that is expected, not staleness. The code slice carrying CI evidence is eaaae23 (NEX-024), observed 4/4 completed/success with every head_sha equal to it. Docs-only heads after it (517208f, b069c0e, c181e8a, 5d7d182) are not code slices; any that is superseded reads completed/cancelled, which is neither a pass nor a failure."
 }
