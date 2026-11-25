@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-26",
-  "timestamp": "2026-11-25T12:10:00Z",
+  "run_id": "NEX-2026-11-25-27",
+  "timestamp": "2026-11-25T12:24:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "2b8be83",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-023 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) is TESTED, not VERIFIED - local gates green, CI not yet observed at this head.",
-  "active_task": "NEX-024 - TESTED; awaiting CI observation at the slice commit before promotion",
+  "commit": "eaaae23",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-024 all VERIFIED. NEX-024 (aborting must seal the audit link a crash left open) reached VERIFIED on an observed 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z.",
+  "active_task": "none - NEX-024 VERIFIED at eaaae23; next Phase-5 slice to be selected",
   "task_statuses": {
     "NEX-001": "VERIFIED",
     "NEX-002": "VERIFIED",
@@ -33,7 +33,7 @@
     "NEX-021": "VERIFIED",
     "NEX-022": "VERIFIED — 4/4 completed/success at 1156f6e (polled 2026-11-25T11:27:56Z)",
     "NEX-023": "VERIFIED - 4/4 completed/success at c367746, polled 2026-11-25T11:50:20Z",
-    "NEX-024": "TESTED - local gates green, CI not observed at this head"
+    "NEX-024": "VERIFIED - 4/4 completed/success at eaaae23, polled 2026-11-25T12:16Z"
   },
   "completed_tasks": [
     "NEX-001",
@@ -61,7 +61,8 @@
     "NEX-020",
     "NEX-021",
     "NEX-022",
-    "NEX-023"
+    "NEX-023",
+    "NEX-024"
   ],
   "validation": {
     "pytest_full": "742 passed, 4 skipped, exit 0 - run bare this session with the NEX-024 slice. Baseline 740; delta is exactly the 2 new NEX-024 tests.",
@@ -74,16 +75,14 @@
     "architecture": "layering test untouched; domain/ and application/ import no framework code in this change",
     "migration_chain": "No migration added. tool_invocations already carries status, outcome and the seal.",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": "NEX-024: NOT observed at this head. Do not promote on local gates.",
+    "ci_observed": "NEX-024: 4/4 completed/success at eaaae23 (head_sha matches the polled commit), polled 2026-11-25T12:16Z. Two Backend (ruff, mypy, pytest, migrations) and two Frontend (typecheck, lint, test, build) - push and pull_request events.",
     "ci_note": "NEX-021 is deliberately TESTED, not VERIFIED. Local gates are recorded above for reproducibility, not as proof (R9/R10). This run put code, tests and docs in one commit specifically so the next run can observe a single CI run covering the whole tree, instead of having to reason about descendant-CI.",
     "evidence_basis": {
-      "note": "NEX-023 VERIFIED on its own commit c367746 - a run whose head_sha equals the polled SHA, not descendant-CI. NEX-022 remains VERIFIED at 1156f6e. NEX-001..NEX-023 all VERIFIED.",
-      "nex_020_commit": "460a26a",
-      "nex_021_commit": "e459f98",
-      "criterion_coverage": "NEX-022: a token from a different delegation cannot advance a run; a run with no recorded binding cannot be advanced; a fresh token from the planning delegation still can.",
-      "negative_control": "Removing the check turns exactly the 2 new tests red; the other 14 stay green.",
-      "nex_022_commit": "1156f6e",
-      "nex_023_commit": "c367746"
+      "note": "NEX-024 VERIFIED on its own commit eaaae23 - a run whose head_sha equals the polled SHA, not descendant-CI. NEX-001..NEX-024 all VERIFIED.",
+      "nex_023_commit": "c367746",
+      "nex_024_commit": "eaaae23",
+      "criterion_coverage": "NEX-024: aborting a run settles every mid-flight step and seals the matching gateway invocation as failed in the same transaction; no link stays `started`; an already-settled step and link are never rewritten.",
+      "negative_control": "Removing only the seal loop turns exactly test_abort_seals_the_audit_link_the_crash_left_open red; the other 20 in the file stay green."
     },
     "gates_this_run": {
       "ruff_format_check": "pass - 201 files already formatted",
@@ -101,30 +100,30 @@
       "note": "A run at the slice's own commit: code, tests and docs landed in this one commit, so coverage is direct rather than descendant-CI."
     },
     "environment": ".venv did not exist in this clone; created with `uv venv .venv --python 3.12` and `uv pip install -e \".[dev]\"`. All gates ran from .venv/bin, matching CI's pip install.",
-    "verified_at_commit": "c367746 (NEX-023, the last VERIFIED slice; NEX-024 is TESTED only)",
-    "verified_by_run": "NEX-2026-11-25-25 (NEX-023)"
+    "verified_at_commit": "eaaae23",
+    "verified_by_run": "NEX-2026-11-25-26 (NEX-024)"
   },
-  "uncommitted_work": "none (code, tests and docs committed together this run)",
+  "uncommitted_work": "none after this docs commit",
   "pr_state": {
     "number": 3,
     "state": "open (draft, unmerged)",
-    "head": "1156f6e",
+    "head": "eaaae23",
     "body_updated_at": "2026-11-25T10:20:26Z",
     "counters": {
-      "additions": 29971,
+      "additions": 31408,
       "deletions": 10,
-      "files": 110,
-      "commits_ahead_of_main": 102,
-      "measured_at_commit": "23a36dc",
-      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), re-measured after the push to 23a36dc. The body text still attributes 29,950 / 110 / 101 to e09a819, which is true of that commit; the delta is this docs commit's 31 lines. Not from per-file sums (R21)."
+      "files": 111,
+      "commits_ahead_of_main": 112,
+      "measured_at_commit": "eaaae23",
+      "source": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (the PR object), re-measured at eaaae23. The body text still names an older head; the body has NOT been refreshed this run."
     },
-    "note": "PR #3 is open, draft and unmerged. Its body predates NEX-022; re-measure counters from the PR object (additions, deletions, changed_files, commits) before quoting — never from per-file sums (R21).",
+    "note": "PR #3 is open, draft and unmerged, head eaaae23. Its body is stale and must be refreshed from the PR object's counters before quoting - never per-file sums (R21).",
     "merge": "prohibited — must remain unmerged for human review"
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment": "7158867562 (NEX-019 VERIFIED) at 2026-11-25T09:50Z — not updated this run"
+    "last_comment": "not updated this run - NEX-024 VERIFIED at eaaae23 is recorded here and in STATE.md/EXECUTION_LOG.md"
   },
   "blockers": [],
   "risks": [
@@ -133,7 +132,7 @@
       "severity": "high",
       "summary": "A terminal state in one record is not a terminal state in the record that describes the same event.",
       "detail": "NEX-023 closed this on the resolve path: InvokeTool commits its ToolInvocation as `started` before entering the handler (correct - a crash must leave a trace), and ResolveInterruptedStep had settled the run without closing that row. NEX-024 found the same defect on the other settle path: AbortAgentRun flipped the run to aborted and never sealed the link, while AgentRun.abort also left a `started` step inside a terminal run. Both halves now settle, in one transaction. General rule, now proven to recur once: any operation that makes a run terminal must settle its mid-flight steps AND seal their invocations in the same transaction. A third settle path reopens this. Two records that disagree are not a partial success.",
-      "status": "closed on both existing settle paths (resolve: NEX-023; abort: NEX-024); reopens if a third settle path is added"
+      "status": "closed on both existing settle paths (resolve: NEX-023; abort: NEX-024)"
     },
     {
       "id": "R26",
@@ -197,10 +196,10 @@
       "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018."
     }
   ],
-  "next_task": "1) Poll CI at the NEX-024 slice commit; promote to VERIFIED only on an observed 4/4 completed/success whose head_sha is that commit. 2) Then re-read ROADMAP.md Phase 5 and pick the next dependency-ready slice. 3) PR #3's body is stale (names an older head and test count) - refresh from the PR object's own counters, never per-file sums (R21).",
-  "next_action": "Poll CI at the pushed NEX-024 commit; promote only on 4/4 completed/success at that exact head_sha. Then re-read ROADMAP.md Phase 5 before choosing the next slice. Never merge PR #3.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-023 VERIFIED (NEX-023 at c367746, 4/4, polled 2026-11-25T11:50:20Z). NEX-024 is TESTED at this run's commit: local gates green (742 passed / 4 skipped, ruff/mypy clean), CI not yet observed. PR #3 is draft and must never be auto-merged; its body is stale. Next: poll CI for NEX-024, then pick the next Phase-5 slice from ROADMAP.md.",
-  "ci_status": "NEX-024 slice commit: not yet observed. Last observed green: c367746 (NEX-023) 4/4 completed/success at 2026-11-25T11:50:20Z with head_sha equal to the polled commit. 2b8be83 and 58768a6 are docs-only heads whose own runs were not observed to completion; a docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
+  "next_task": "1) Refresh PR #3's body from the PR object's own counters (31,408 additions / 10 deletions / 111 files / 112 commits at eaaae23) - never per-file sums (R21). 2) Re-read ROADMAP.md Phase 5 and pick the next dependency-ready slice.",
+  "next_action": "Refresh PR #3 body from PR-object counters; then read ROADMAP.md Phase 5 and select the next dependency-ready slice. Never merge PR #3.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. NEX-001..NEX-024 all VERIFIED. NEX-024 at eaaae23 with an observed 4/4 completed/success (polled 2026-11-25T12:16Z, every head_sha equal to the polled commit). This docs-only commit may read completed/cancelled if superseded - neither pass nor failure. PR #3 is draft, head eaaae23, body stale since e459f98; never auto-merge.",
+  "ci_status": "eaaae23 (NEX-024): 4/4 completed/success, polled 2026-11-25T12:16Z, all head_sha equal to the polled commit (Backend x2: ruff/mypy/pytest/migrations; Frontend x2: typecheck/lint/test/build). Prior greens: c367746 4/4 (11:50Z), 1156f6e 4/4 (11:27Z), e459f98 4/4 (10:46Z), 23a36dc 4/4 (10:29Z), 460a26a 4/4 (10:16Z), 66e8cd6, 2b3beb7, 9a90e3a, 990557d, b9b7207 all 4/4. e5f1bb4, 4c5a6ef and 789d78a have 0 check runs of their own and rest on descendant-CI. A docs head superseded by a later push reads completed/cancelled - neither pass nor failure.",
   "verified_tasks": [
     "NEX-001",
     "NEX-002",
@@ -227,10 +226,9 @@
     "NEX-020",
     "NEX-021",
     "NEX-022",
-    "NEX-023"
+    "NEX-023",
+    "NEX-024"
   ],
-  "in_progress_tasks": {
-    "NEX-024": "TESTED - aborting now settles mid-flight steps and seals their invocations in the run-save transaction; awaiting a 4/4 completed/success at the slice commit"
-  },
+  "in_progress_tasks": {},
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value is VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. Verifying requires 4/4 completed/success observed on that exact SHA."
 }

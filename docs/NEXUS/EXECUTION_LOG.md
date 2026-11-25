@@ -3086,9 +3086,9 @@ messages to a file rather than piping them through a heredoc.
 | --- | --- |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit | `2b8be83` |
-| Ending commit | (this run's commit — code, tests and docs in one commit) |
+| Ending commit | `eaaae23` (code, tests and docs in one commit) |
 | Task | NEX-024 — aborting a run must seal the audit link the crash left open |
-| Status | **TESTED** — local gates green; CI not yet observed at this head |
+| Status | **VERIFIED** — 4/4 `completed/success` at `eaaae23`, polled 2026-11-25T12:16Z |
 
 **Slice.** NEX-023 closed R27 on the *resolve* path — an owner ruling on an interrupted step
 now seals the gateway invocation the crash left open. It did not close the owner's other way
@@ -3142,10 +3142,67 @@ code.
 operation that makes a run terminal must settle its mid-flight steps and seal their
 invocations in the same transaction.* A third settle path added later reopens R27.
 
-**CI.** Not observed at this head. NEX-024 stays **TESTED** until a 4/4
-`completed/success` is seen whose `head_sha` is this run's commit. Do not promote on local
+**CI.** Not observed at this head in the implementing run. NEX-024 stayed **TESTED** until a
+4/4 `completed/success` was seen whose `head_sha` is this run's commit. Do not promote on local
 gates (R9/R10).
 
 **Next action.** Poll CI at the pushed head; promote NEX-024 to VERIFIED only on an observed
 4/4 `completed/success` at that `head_sha`. Then re-read `ROADMAP.md` Phase 5 and pick the
 next dependency-ready slice. PR #3 remains draft and must never be merged.
+
+---
+
+## Run `NEX-2026-11-25-27` — CI observation: NEX-024 promoted to VERIFIED
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-25-27` |
+| Started | 2026-11-25T12:01Z (`RUN_START=1795608086`) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `eaaae23` |
+| Ending commit | (this docs-only commit) |
+| Task | NEX-024 — CI observation and promotion |
+| Status | **VERIFIED** |
+
+**Observation.** The push of `eaaae23` had completed before this run began. Local gates were
+re-confirmed at that exact tree: `pytest` **742 passed, 4 skipped**.
+
+**CI evidence (the whole point of this run).** Polled
+`GET /repos/anotherhale/bluestaq-notes/commits/eaaae23/check-runs` at 2026-11-25T12:16Z:
+`total_count` 4, `all_green` 4, `all_head_match` 4 — i.e. every one of the four check runs is
+`completed/success` **and** carries `head_sha = eaaae235847a435915f585a226d719e0abf3ff52`,
+the commit being polled.
+
+| Check | Result |
+| --- | --- |
+| Backend (ruff, mypy, pytest, migrations) — push | `completed/success` |
+| Frontend (typecheck, lint, test, build) — push | `completed/success` |
+| Backend (ruff, mypy, pytest, migrations) — pull_request | `completed/success` |
+| Frontend (typecheck, lint, test, build) — pull_request | `completed/success` |
+
+Because `head_sha` equals the polled commit, this is a run **at** the slice's own SHA, not
+descendant-CI (the weaker `evidence_basis` used for `e5f1bb4`, `4c5a6ef` and `789d78a`, which
+have zero check runs of their own). NEX-024 is therefore **VERIFIED**, not merely TESTED.
+
+**Reconciliation note.** The clone's `main` sat at `d6f92d0` (grafted, `origin/main`) and the
+worktree had been moved to `feature/agentic-enterprise-platform` at `75c4d59` before this
+run's commit; `eaaae23`'s parent is `75c4d59`, and the push was a clean fast-forward
+`75c4d59..eaaae23`. Reflog confirms no work was discarded and no force-push occurred.
+
+**R27.** Closed on both existing settle paths (resolve: NEX-023 at `c367746`; abort: NEX-024
+at `eaaae23`), each with its own observed 4/4. The standing invariant is unchanged: *any
+operation that makes a run terminal must settle its mid-flight steps and seal their
+invocations in the same transaction.*
+
+**R12 recurrence (self-inflicted, caught before damage).** A `python3 -c "..."` promotion
+script for `STATE.md` embedded backticks inside a double-quoted shell string; bash performed
+command substitution on `eaaae23`, mangling the script and failing with a `SyntaxError`. No
+file was written — verified by `git status` showing only `CHECKPOINT.json` modified and
+`STATE.md` still holding its 6 original `TESTED` mentions. All subsequent prose edits were
+made with the file-editor tool instead. This is the same class as R12 (shell/heredoc corrupts
+prose payloads): *write prose through the editor, never through an interpolating shell.*
+
+**Next action.** Read `ROADMAP.md` Phase 5 and select the next dependency-ready slice. PR #3's
+body is stale (it names an older head and test count) and should be refreshed from the PR
+object's own counters — `additions`/`deletions`/`changed_files`/`commits` — never per-file sums
+(R21). PR #3 stays draft and must never be merged.

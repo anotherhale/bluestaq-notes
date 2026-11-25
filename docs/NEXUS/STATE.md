@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **VERIFIED** (`e459f98`, CI 4/4); NEX-022 run↔delegation binding **VERIFIED** (`1156f6e`, CI 4/4); NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4). The compare-and-set audit of `infrastructure/db/` is **closed**. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4); NEX-017 delegator tenant-access re-check **VERIFIED** (`990557d`, CI 4/4); NEX-018 outcome-seal forgery **VERIFIED** (`2b3beb7`, descendant-CI 4/4); NEX-019 run write concurrency **VERIFIED** (`66e8cd6`, CI 4/4); NEX-020 approval-decision CAS **VERIFIED** (`460a26a`, CI 4/4); NEX-021 agent-identity CAS **VERIFIED** (`e459f98`, CI 4/4); NEX-022 run↔delegation binding **VERIFIED** (`1156f6e`, CI 4/4); NEX-023 crash-orphaned audit link **VERIFIED** (`c367746`, CI 4/4); NEX-024 abort-orphaned audit link **VERIFIED** (`eaaae23`, CI 4/4) — R27 now closed on both settle paths. The compare-and-set audit of `infrastructure/db/` is **closed**. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `b630ff3` — the clone started on `main` at `d6f92d0`; the authorized branch was fetched and checked out before any gate was trusted, then verified with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `b630ff3`). |
-| Head commit (run end) | `1156f6e` — the single commit carrying the NEX-022 fix, its two tests and this documentation, on top of `88eba9e`. Pushed and confirmed with `git rev-parse` against `origin/feature/agentic-enterprise-platform` before CI was polled, so this is the SHA CI actually ran on. |
-| Last CI result | **`1156f6e` (NEX-022): 4/4 `completed/success`, every check run reporting `head_sha` `1156f6e`, polled 2026-11-25T11:27:56Z.** A run at the slice's own commit, not descendant-CI. Local gates on the same tree: `ruff format` clean (201 files), `ruff check` clean, `mypy` 98 files clean, full `pytest` **737 passed / 4 skipped**, negative control verified (2 new tests red with the check removed). |
+| Base commit (run start) | `eaaae23` — this run began with the NEX-024 slice already committed and pushed; its job was CI observation, promotion, and reconciliation of stale status claims. |
+| Head commit (run end) | `eaaae23` — the single commit carrying the NEX-024 fix, its two tests and its documentation. Pushed and confirmed with `git rev-parse HEAD origin/feature/agentic-enterprise-platform` (both `eaaae23`), so this is the SHA CI actually ran on. |
+| Last CI result | **`eaaae23` (NEX-024): 4/4 `completed/success`, every check run reporting `head_sha` `eaaae23`, polled 2026-11-25T12:16Z.** A run at the slice's own commit, not descendant-CI. Local gates on the same tree: `ruff format` clean (201 files), `ruff check` clean, `mypy` 98 files clean, full `pytest` **742 passed / 4 skipped**, negative control verified (1 new test red with the seal loop removed). |
 | Tracking issue | #2 (open) |
-| Draft PR | #3 (draft, unmerged — human review required). Body refreshed at `e459f98`: 30,474 additions / 10 deletions / 111 files / 104 commits, recomputed from the PR object itself. It now documents seven defects, thirteen VERIFIED slices, and 739 collected / 735 passed. Never quote per-file sums (R21). |
-| CI status | **`1156f6e` (NEX-022): 4/4 `completed/success`, every run reporting `head_sha` `1156f6e`, polled 11:27Z.** Prior: **`e459f98` (NEX-021): 4/4 `completed/success`, every run reporting `head_sha` `e459f98`, polled 10:46Z.** Earlier observations, all `completed/success` with matching `head_sha`: `460a26a` 4/4 (10:16Z), `23a36dc` 4/4 (10:29Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
+| Draft PR | #3 (draft, unmerged — human review required). Head `eaaae23`. The body has **not** been refreshed since `e459f98`, where it read 30,474 additions / 10 deletions / 111 files / 104 commits. The PR object at `eaaae23` now reports **31,408 additions / 10 deletions / 111 files / 112 commits** — quote those, and only from the PR object, never per-file sums (R21). Refreshing the body is the next run's first delivery task. |
+| CI status | **`eaaae23` (NEX-024): 4/4 `completed/success`, every run reporting `head_sha` `eaaae23`, polled 12:16Z.** Prior: **`c367746` (NEX-023): 4/4 `completed/success`** at 11:50Z. Earlier observations, all `completed/success` with matching `head_sha`: `1156f6e` 4/4 (11:27Z), `e459f98` 4/4 (10:46Z), `23a36dc` 4/4 (10:29Z), `460a26a` 4/4 (10:16Z), `f8115fd` 4/4, `66e8cd6` 4/4, `9a90e3a` 4/4, `2b3beb7` 4/4, `fa387a9` 4/4, `ca15eb1` 4/4, `990557d` 4/4, `b9b7207` 4/4. `e5f1bb4` (NEX-003), `4c5a6ef` (NEX-006) and `789d78a` (NEX-018) have **no check runs of their own** — they are ancestors of green heads, so their coverage is descendant-CI. A docs head superseded by a later push reads `completed/cancelled`, which is neither a pass nor a failure. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-020 (run `NEX-2026-11-25-22`) — a stale decision must not resurrect spent authority
@@ -241,8 +241,8 @@ Recorded so a later audit does not re-open it without cause.
 | Field | Value |
 | --- | --- |
 | Task | NEX-024 — aborting a run must seal the audit link the crash left open |
-| Status | **TESTED** — local gates green at `2b8be83`+this slice; CI not yet observed at this head. Not VERIFIED until a 4/4 `completed/success` is observed whose `head_sha` is the slice commit. |
-| Next action | Poll CI at the pushed head; promote to VERIFIED only on an observed 4/4 `completed/success` whose `head_sha` is that commit. |
+| Status | **VERIFIED** — 4/4 `completed/success` at `eaaae23`, polled 2026-11-25T12:16Z. All four `head_sha` values equal the polled commit, so this is a run at the slice's own SHA, not descendant-CI. |
+| Next action | Read `ROADMAP.md` Phase 5 and select the next dependency-ready slice. |
 
 ## NEX-024 (run `NEX-2026-11-25-26`) — aborting is settling, so it must seal too
 
@@ -263,14 +263,29 @@ the same transaction as the run save. It writes `fail(...)`, not `succeed(...)`:
 not a ruling that the effect landed, and claiming success would fabricate evidence. Absent
 or already-terminal links are left alone, as in NEX-023.
 
-Status: **TESTED**. `ruff format` clean, `ruff check` clean, `mypy` clean, full `pytest`
-**742 passed / 4 skipped** (baseline 740, delta exactly these 2 tests),
-`tests/agent/test_agent_runs.py` 21 passed. Negative control: removing only the seal loop
-turns exactly `test_abort_seals_the_audit_link_the_crash_left_open` red.
+Status: **VERIFIED** at `eaaae23` — 4/4 `completed/success` (two Backend `ruff, mypy,
+pytest, migrations` and two Frontend `typecheck, lint, test, build`, for the push and
+pull-request events), polled 2026-11-25T12:16Z; all four `head_sha` values equal the polled
+commit. Local gates at the slice: `ruff format` clean (201 files), `ruff check` clean, `mypy`
+clean over 98 sources, full `pytest` **742 passed / 4 skipped** (baseline 740, delta exactly
+these 2 tests), `tests/agent/test_agent_runs.py` 21 passed. Negative control: removing only
+the seal loop turns exactly `test_abort_seals_the_audit_link_the_crash_left_open` red.
 
 ## Last completed task
 
-**NEX-023 (VERIFIED, `c367746`, CI 4/4)** — a ruled-on effect left the audit trail asserting
+**NEX-024 (VERIFIED, `eaaae23`, CI 4/4)** — aborting a run settled it in one record and left
+the other mid-flight. `AgentRun.abort` flipped the run to `aborted` and touched nothing else,
+so a `started` step stayed inside a terminal run, and `AbortAgentRun` never closed the gateway
+invocation, so the audit chain kept reporting `started` for a run that was definitively over —
+indistinguishable, forever, from a call still in flight. Both halves now settle in the same
+transaction: the aggregate abandons every non-terminal, non-`pending` step (`started` →
+`failed`, `interrupted` → *effect not confirmed*) and the use case seals each matching
+invocation as `fail(...)`. It never writes `succeed(...)`: aborting is not a ruling that the
+effect landed, and claiming success would fabricate audit evidence. `pending` steps are
+untouched because they never began. R27 is now closed on both settle paths that exist —
+resolve (NEX-023) and abort (this slice).
+
+Previously, **NEX-023 (VERIFIED, `c367746`, CI 4/4)** — a ruled-on effect left the audit trail asserting
 "outcome unknown" forever. `InvokeTool` commits its `ToolInvocation` as `started` before
 entering the handler, which is right: a crash must leave a trace. But
 `ResolveInterruptedStep` settled the run and never closed that row, so after an owner ruled
@@ -363,8 +378,10 @@ the shared `_page` helper the other agent listings use. An audit trail grows
 without bound, so a caller has to be able to walk it deliberately; `limit` is
 capped at 200 and validated at the edge.
 
-Pinned by `tests/api/test_audit_trail_api.py` (8 tests). **Status: TESTED, not
-VERIFIED** — backend CI had not concluded on the commit.
+Pinned by `tests/api/test_audit_trail_api.py` (8 tests). **Status: VERIFIED** — it
+reached VERIFIED on an observed 4/4 `completed/success`; the earlier "not yet
+verified" note was a snapshot of the run that wrote this section and is no longer
+true.
 
 Previously, **NEX-009-HTTP — Durable agent runs over HTTP** (run `NEX-2026-11-25-10`, `e817d04`).
 Slice 1 built the durable runtime but left it unreachable: the use cases existed
@@ -392,8 +409,9 @@ the audit of the one case that matters. The mismatch is now unrepresentable
 rather than merely rejected.
 
 Pinned by `tests/api/test_agent_runs_api.py` (9 tests) and two new domain tests
-in `tests/agent/test_agent_runs.py` (14 total). **Status: TESTED, not VERIFIED** —
-CI has not yet run on the commit.
+in `tests/agent/test_agent_runs.py` (14 total). **Status: VERIFIED** — it reached
+VERIFIED on an observed 4/4 `completed/success`; the earlier "CI has not yet run"
+note was a snapshot of the run that wrote this section.
 
 Previously, **NEX-009 slice 1 — Durable agentic runtime** (run `NEX-2026-11-25-09`, `0e74d4f`).
 A governed tool invocation was atomic: it ran or it refused, and nothing survived

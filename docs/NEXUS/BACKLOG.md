@@ -1415,7 +1415,7 @@ guess on the operator's behalf.
 | --- | --- |
 | Phase | 5 (durable runtime) / audit integrity |
 | Priority | P0 (R27 recurrence: the trail keeps asserting "unknown" about a run that is definitively over) |
-| Status | **TESTED** — local gates green, CI not yet observed at this head. Full suite 742 passed / 4 skipped (baseline 740; delta is exactly these 2 tests); `ruff format`/`ruff check`/`mypy` clean; negative control verified. Promotion to VERIFIED requires an observed 4/4 `completed/success` whose `head_sha` is this commit. |
+| Status | **VERIFIED** — 4/4 `completed/success` at `eaaae23`, polled 2026-11-25T12:16Z; all four `head_sha` equal the polled commit, so this is a run at the slice's own SHA (not descendant-CI). Full suite 742 passed / 4 skipped (baseline 740; delta is exactly these 2 tests); `ruff format`/`ruff check`/`mypy` clean; negative control verified. |
 | Dependencies | NEX-011 (audit trail), NEX-012 (hash chain), NEX-018 (a missing seal counts as a break), NEX-023 (same defect on the resolve path) |
 
 **Objective:** close R27 on the last settle path that still leaked an open audit link.
