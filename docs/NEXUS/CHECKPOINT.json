@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-16",
-  "timestamp": "2026-11-25T08:24:00Z",
+  "timestamp": "2026-11-25T08:28:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "b9b7207",
-  "commit_note": "b9b7207 is the NEX-016 product commit and is the current head; it is pushed and verified on the remote. Its local gates are green (ruff/lint/mypy/pytest 714 passed, 4 skipped) but CI has NOT yet been observed on this sha. The docs commit carrying this file is a child of b9b7207 and is likewise unobserved, as expected.",
-  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-015 VERIFIED at 414a222 on 4/4 CI. NEX-016 (approval-gated steps park instead of failing the run) is TESTED at b9b7207 on green local gates; CI observation outstanding.",
+  "commit_note": "b9b7207 is the NEX-016 product commit, pushed, and now CI-verified 4/4. The docs commits beneath/above it (10ae3c7 and the one carrying this file) are unobserved, as expected - they change Markdown and JSON only.",
+  "project_phase": "Phase 2 complete. Phase 5 durable runtime in progress. NEX-016 (approval-gated steps park instead of failing the run) VERIFIED at b9b7207 on 4/4 CI. NEX-015 VERIFIED at 414a222.",
   "active_task": null,
   "task_statuses": {
     "NEX-001": "VERIFIED",
@@ -26,7 +26,7 @@
     "NEX-013": "VERIFIED",
     "NEX-014": "VERIFIED",
     "NEX-015": "VERIFIED",
-    "NEX-016": "TESTED"
+    "NEX-016": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-006",
@@ -57,18 +57,18 @@
     "mutation_check": "Not run for NEX-016. The three new tests were observed failing before the fix (wrong field name) and passing after.",
     "migration_chain": "no migration added by NEX-016; head remains e5a3b9c04f21 (revocable_approvals)",
     "frontend_gates": "not run locally - no frontend files changed",
-    "ci_observed": false,
-    "ci_note": "CI has NOT been observed on b9b7207. Last observed green: 4/4 on 038db7e (docs-only) and on 414a222. NEX-016 must not be called VERIFIED until CI reports on b9b7207.",
-    "verified_at_commit": "414a222",
-    "verified_by_run": "NEX-2026-11-25-15",
-    "local_gates_are_not_ci_evidence": "Recorded for reproducibility only; they do not promote NEX-016."
+    "ci_observed": true,
+    "ci_note": "CI green 4/4 on b9b7207 (Backend x2, Frontend x2, completed/success), polled 2026-11-25T08:23Z.",
+    "verified_at_commit": "b9b7207",
+    "verified_by_run": "NEX-2026-11-25-16",
+    "local_gates_are_not_ci_evidence": "Superseded for NEX-016: CI was observed on b9b7207 directly, so the promotion rests on CI."
   },
   "uncommitted_work": "none; tree clean after the docs commit",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "b9b7207",
+    "head": "10ae3c7",
     "body_refreshed": "NOT refreshed this run - the body still describes the branch as of an earlier head.",
     "metrics_at_head": {
       "additions": 27936,
@@ -127,9 +127,9 @@
       "detail": "On a diff over 20,000 lines, /pulls/{n}/files reports additions:0 for 20 files (every test file) and /pulls/{n}/diff returns HTTP 406, with no error on the stats endpoints to signal the truncation. Per-file sums gave 20,309 and /compare gave 19,366 against a true 27,659. Quote the PR object's additions field or `git diff --shortstat origin/main...HEAD` on a full clone."
     }
   ],
-  "next_task": "Observe CI on b9b7207; refresh PR #3 body/metrics; then select the next Phase-5 slice.",
-  "next_action": "1) Poll CI for head b9b7207; on 4/4 success promote NEX-016 to VERIFIED in BACKLOG + CHECKPOINT, otherwise diagnose the failure first. 2) Refresh PR #3 description against the PR object counters (106 files / 27,936 additions / 77 commits / 718 tests) - the body is stale at 7ce6f8b. 3) Never merge PR #3.",
-  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is TESTED at b9b7207 (green local gates, CI unobserved). NEX-015 is VERIFIED at 414a222 (CI 4/4). Carry R22 forward: for a governance control, test the full decision-to-effect path, not each half separately. The clone is grafted - three-dot diffs fail with 'no merge base' even though the refspec is standard; use PR object counters for metrics. Never merge PR #3. Write scripts to /tmp via file_editor; never use a heredoc.",
+  "next_task": "Refresh PR #3 body/metrics at the current head, then select the next Phase-5 slice.",
+  "next_action": "1) Refresh PR #3's description against the PR object counters - it is stale at 7ce6f8b. 2) Verify CI on 10ae3c7 (docs-only). 3) Select the next dependency-ready Phase-5 slice from ROADMAP.md. Never merge PR #3.",
+  "recovery_instructions": "Read STATE.md and BACKLOG.md. NEX-016 is VERIFIED at b9b7207 (CI 4/4) - do not re-implement. Carry R22 forward: for a governance control, test the full decision-to-effect path, not each half separately. The clone is grafted, so three-dot diffs fail with 'no merge base' even with a standard refspec; use PR object counters for metrics. Never merge PR #3. Write scripts to /tmp via file_editor; never use a heredoc.",
   "ci_status": {
     "configured": true,
     "workflows_present": 1,
@@ -141,20 +141,20 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T07:53Z",
-    "note": "Last observed green: 4/4 on 038db7e. NOT yet observed on b9b7207 - the NEX-016 product commit."
+    "observed": "2026-11-25T08:23Z",
+    "note": "Green 4/4 on b9b7207 (the NEX-016 product commit). 10ae3c7 was queued at last poll."
   },
   "notes_on_pr_body": "PR #3's body is now STALE: it was last written at 7ce6f8b and the branch has moved to b9b7207. Measured at b9b7207 from the PR object: 106 files, 27,936 additions, 10 deletions, 77 commits, 718 tests collected. Two-dot `git diff --shortstat origin/main..HEAD` gives 111 files / 27,998 / 943 - it disagrees because the clone is grafted and lacks a merge base, so it is NOT a trustworthy substitute here (this differs from the 2026-11-25-15 finding, where the refspec was the cause; the refspec is now standard and three-dot still fails on 'no merge base'). Prefer the PR object counters. Refresh the body next run.",
   "validation_status": {
-    "gates": "local this session at b9b7207: ruff format --check clean, ruff check clean, mypy clean, pytest 714 passed / 4 skipped.",
-    "ci": "NOT observed on b9b7207. Do not report CI passing for this head.",
-    "note": "Product verification remains 414a222 (NEX-015, 4/4 green) for the pre-existing slices."
+    "gates": "local at b9b7207: ruff format --check clean, ruff check clean, mypy clean, pytest 714 passed / 4 skipped.",
+    "ci": "b9b7207: 4/4 completed/success, polled 2026-11-25T08:23Z.",
+    "note": "NEX-016 is VERIFIED on CI, not merely on local gates."
   },
   "pr_status": {
     "number": 3,
     "state": "open",
     "draft": true,
-    "head": "b9b7207",
+    "head": "10ae3c7",
     "body_updated": "2026-11-25T07:49:37Z",
     "body_metrics_verified": false,
     "merge": "prohibited - must remain unmerged for human review"

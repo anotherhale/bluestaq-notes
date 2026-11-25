@@ -916,7 +916,7 @@ status fails the three `?status=` tests, and restoring it passes all eight.
 | --- | --- |
 | Phase | 5 (durable runtime) |
 | Priority | P0 (a human approval could never be honoured - the gate was unusable) |
-| Status | **TESTED** - full suite `714 passed, 4 skipped` bare at `b9b7207`; the three new tests pass. Not yet CI-observed on this head. |
+| Status | **VERIFIED** - CI reported 4/4 check runs `completed/success` on `b9b7207` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. Local gates at the same sha were also green: `ruff format --check` 196 files, `ruff check`, `mypy` 98 files, `pytest 714 passed / 4 skipped`. |
 | Dependencies | NEX-009 (durable runtime), NEX-003 (approval lifecycle), NEX-013 (approval validity), NEX-014 (revocation) |
 | Architecture | durable execution, explicit authorization, fail-closed governance |
 

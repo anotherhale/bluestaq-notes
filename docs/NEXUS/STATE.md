@@ -7,11 +7,11 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **TESTED** (`b9b7207`, green local gates, CI unobserved) |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): NEX-009 slice 1 VERIFIED (`0e74d4f`); NEX-009-HTTP VERIFIED (`e817d04`); NEX-011 audit trail VERIFIED (`f50a78d`); NEX-012 audit chain VERIFIED (`3aade7c`, CI 4/4); NEX-013 approval validity **VERIFIED** (`12584a1`, CI 4/4 — after a correction); NEX-014 revocation VERIFIED (`b27b6b5`, CI 4/4); NEX-015 decided-approval visibility **VERIFIED** (`414a222`, CI 4/4); NEX-016 approval-gated steps park instead of failing the run **VERIFIED** (`b9b7207`, CI 4/4) |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `8e3d767` |
 | Head commit (run end) | `b9b7207` (NEX-016 product slice; pushed and verified on the remote). The docs commit carrying this file is its child. |
-| Last CI result | **Not observed on `b9b7207`.** Last green: 4/4 `completed/success` on `038db7e` (polled 2026-11-25T07:53Z) and on `414a222` before it. NEX-016 rests on green local gates only until CI reports. |
+| Last CI result | **Green on `b9b7207`**, 4/4 `completed/success` (Backend ×2, Frontend ×2), polled 2026-11-25T08:23Z. This is the NEX-016 product commit. |
 | Tracking issue | #2 (open) |
 | Draft PR | #3 (draft, unmerged — human review required). Head `b9b7207`. Body **stale**: last written at `7ce6f8b`. Measured at `b9b7207` from the PR object: **106 files, 27,936 insertions, 10 deletions, 77 commits**, 718 tests collected. |
 | Authorized to merge to `main` | No — automated merging is prohibited |

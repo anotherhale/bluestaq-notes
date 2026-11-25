@@ -2137,3 +2137,5 @@ Quoted the PR object instead. This refines, and partly contradicts, the
 
 **Next action:** poll CI for `b9b7207`; on 4/4 promote NEX-016 to VERIFIED.
 Then refresh the PR body and select the next Phase-5 slice.
+
+**CI observation (same run):** `b9b7207` reported 4/4 `completed/success` (Backend x2, Frontend x2), polled 2026-11-25T08:23Z. NEX-016 promoted **TESTED -> VERIFIED** on that evidence. The follow-up docs commit (10ae3c7) was queued at poll time and is Markdown/JSON only.
