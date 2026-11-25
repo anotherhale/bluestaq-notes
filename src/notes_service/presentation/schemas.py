@@ -802,6 +802,7 @@ class ApprovalAdvisoryResponse(ResponseModel):
     provider_name: str
     context_hash: str
     excluded_context_fields: tuple[str, ...] = ()
+    over_cap_context_fields: tuple[str, ...] = ()
     latency_ms: float
     advisory_available: bool
 
@@ -815,6 +816,7 @@ class ApprovalAdvisoryResponse(ResponseModel):
             provider_name=advisory.provider_name,
             context_hash=advisory.context_hash,
             excluded_context_fields=advisory.excluded_context_fields,
+            over_cap_context_fields=advisory.over_cap_context_fields,
             latency_ms=advisory.latency_ms,
             advisory_available=advisory.is_advisory_available,
         )

@@ -155,6 +155,11 @@ class DecisionRequest:
     #: make "we discarded the relevant input" indistinguishable from "there was
     #: none".
     excluded_context_fields: tuple[str, ...] = ()
+    #: Names withheld because the value exceeded the field cap — the subset of
+    #: ``excluded_context_fields`` that signals a thinner-than-expected advisory
+    #: rather than a deliberate classification exclusion. Carried separately so
+    #: an operator can watch this number without parsing per-field reasons.
+    over_cap_context_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_context_hash(self.context_hash)
@@ -184,6 +189,15 @@ class DecisionRequest:
                 f"correlation_id may be at most {MAX_CORRELATION_LENGTH} characters"
             )
 
+        # The over-cap names are a *subset* of the excluded names. Two records
+        # that disagree about which inputs were held back are worse than one, so
+        # the relation is enforced rather than assumed.
+        stray = set(self.over_cap_context_fields) - set(self.excluded_context_fields)
+        if stray:
+            raise ValidationError(
+                f"over-cap context fields must also be excluded context fields: {sorted(stray)!r}"
+            )
+
     @classmethod
     def from_context(
         cls,
@@ -210,6 +224,7 @@ class DecisionRequest:
             candidates=candidates,
             correlation_id=correlation_id,
             excluded_context_fields=envelope.excluded_field_names,
+            over_cap_context_fields=envelope.over_cap_field_names,
         )
 
 

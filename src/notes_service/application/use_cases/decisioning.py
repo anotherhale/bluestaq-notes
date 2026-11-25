@@ -67,6 +67,11 @@ class DecisionEvaluation:
     #: an audit reader can tell "we asked with less than we had" from "there was
     #: nothing else". Names only; no value reaches this record.
     excluded_context_fields: tuple[str, ...] = ()
+    #: The subset of ``excluded_context_fields`` withheld because the value did
+    #: not fit the field cap. This is the one worth watching: an above-ceiling
+    #: exclusion is policy working, an over-cap exclusion means the advisory was
+    #: computed on less than the caller held.
+    over_cap_context_fields: tuple[str, ...] = ()
 
     @property
     def is_decided(self) -> bool:
@@ -185,6 +190,7 @@ class EvaluateDecision:
             latency_ms=latency_ms,
             threshold=self._min_confidence,
             excluded_context_fields=request.excluded_context_fields,
+            over_cap_context_fields=request.over_cap_context_fields,
         )
 
     def _elapsed_ms(self, started: float) -> float:

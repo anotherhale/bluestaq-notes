@@ -84,6 +84,7 @@ class ApprovalAdvisory:
     provider_name: str
     context_hash: str
     excluded_context_fields: tuple[str, ...]
+    over_cap_context_fields: tuple[str, ...]
     latency_ms: float
 
     @property
@@ -148,8 +149,12 @@ class RecommendApprovalDecision(UseCase):
         reach ``MAX_TITLE_LENGTH``. The context field cap is an independent
         constant; if it were ever below the title cap, a long-but-valid title
         must be *withheld and named*, not turned into a failed advisory for a
-        read the caller is entitled to. Both withholding reasons land in the same
-        audit list, so "we asked with less than we held" stays visible.
+        read the caller is entitled to. Both withholding reasons land in the
+        audit list, and the over-cap ones are *also* named separately in
+        ``over_cap_context_fields``: an above-ceiling exclusion is the policy
+        working, whereas an over-cap exclusion means the advisory was computed
+        on less than the caller held. Folding them into one list made a routine
+        design decision indistinguishable from a quiet degradation.
         """
         now = self._clock.now()
         age_seconds = max(0, int((now - request.requested_at).total_seconds()))
@@ -209,6 +214,7 @@ def _advisory_from(evaluation: DecisionEvaluation, *, approval_id: str) -> Appro
         provider_name=evaluation.provider_name,
         context_hash=evaluation.context_hash,
         excluded_context_fields=evaluation.excluded_context_fields,
+        over_cap_context_fields=evaluation.over_cap_context_fields,
         latency_ms=evaluation.latency_ms,
     )
 

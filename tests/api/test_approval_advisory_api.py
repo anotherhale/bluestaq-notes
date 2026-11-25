@@ -45,7 +45,14 @@ def _pending(client: TestClient, agent_id: str, resource_ref: str) -> str:
 
 def test_advisory_route_returns_an_opinion_without_deciding(client: TestClient) -> None:
     agent_id = _agent(client)
-    approval_id = _pending(client, agent_id, "note:00000000-0000-0000-0000-000000000001")
+    # A real note, so the subject title is a genuine confidential candidate. A
+    # fabricated id would make the ceiling check vacuous and let this test pass
+    # while proving nothing about withholding.
+    note = client.post(
+        "/api/v1/notes", headers=auth_headers(ALICE), json={"title": "Q3 payroll", "content": "b"}
+    )
+    assert note.status_code == 201, note.text
+    approval_id = _pending(client, agent_id, f"note:{note.json()['id']}")
 
     response = client.get(
         f"/api/v1/agents/approvals/{approval_id}/advisory", headers=auth_headers(ALICE)
@@ -62,11 +69,19 @@ def test_advisory_route_returns_an_opinion_without_deciding(client: TestClient) 
         "provider_name",
         "context_hash",
         "excluded_context_fields",
+        "over_cap_context_fields",
         "latency_ms",
         "advisory_available",
     }
     assert "approved" not in body and "decision" not in body and "status" not in body
     assert len(body["context_hash"]) == 64
+
+    # The two withholding reasons must not be conflated at the boundary. The
+    # subject note's title is confidential, so it is withheld *by the ceiling* —
+    # routine policy, not degradation — and must therefore appear in the audit
+    # list without appearing in the over-cap list.
+    assert body["excluded_context_fields"] == ["note_title"]
+    assert body["over_cap_context_fields"] == []
 
     # The request is untouched: still pending, no decider recorded.
     reloaded = client.get(f"/api/v1/agents/approvals/{approval_id}", headers=auth_headers(ALICE))

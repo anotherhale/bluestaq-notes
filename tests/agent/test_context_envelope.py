@@ -23,6 +23,7 @@ from notes_service.domain.agent.context import (
     ContextEnvelope,
     ContextField,
     DataClassification,
+    WithholdingReason,
 )
 from notes_service.domain.agent.decisioning import DecisionKind, DecisionRequest
 from notes_service.domain.errors import ValidationError
@@ -299,4 +300,140 @@ class TestWithholdingAnOverCapValue:
                 fields=(_field("note_kind", "memo", DataClassification.PUBLIC),),
                 ceiling=DEFAULT_CEILING,
                 withheld_field_names=("note_kind",),
+            )
+
+    def test_an_over_cap_candidate_still_validates_its_classification(self) -> None:
+        """The withheld path must not be a hole in the type check.
+
+        Regression: an over-cap candidate skipped validation entirely because the
+        field was never constructed, so a caller could pass a bare string and be
+        told nothing, while the identical mistake under the cap raised. Silent
+        acceptance on the one path that discards the value is how a type error
+        becomes a policy gap.
+        """
+        with pytest.raises(ValidationError, match="requires a DataClassification"):
+            ContextEnvelope.from_candidates(
+                [("note_title", "confidential", "x" * (MAX_FIELD_VALUE_LENGTH + 1))]  # type: ignore[list-item]
+            )
+
+    def test_an_over_cap_candidate_still_validates_its_value(self) -> None:
+        with pytest.raises(ValidationError, match="value must be a string"):
+            ContextEnvelope.from_candidates(
+                [("note_title", DataClassification.PUBLIC, 42)]  # type: ignore[list-item]
+            )
+
+
+class TestWithholdingReasonsAreDistinguishable:
+    """A routine exclusion and a degraded one must not look the same.
+
+    ``excluded_field_names`` answers "was an input held back". It cannot answer
+    "why", and the two reasons have opposite operational meanings: an
+    above-ceiling exclusion is the control working as designed, whereas an
+    over-cap exclusion means the advisory was computed on less than the caller
+    held. Only the second is worth alerting on.
+    """
+
+    def test_an_above_ceiling_field_reports_its_reason(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [
+                _field("note_kind", "memo", DataClassification.PUBLIC),
+                _field("owner_email", "a@example.com", DataClassification.CONFIDENTIAL),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("owner_email", WithholdingReason.ABOVE_CEILING)
+        ]
+        # And it is *not* reported as degradation.
+        assert envelope.over_cap_field_names == ()
+
+    def test_an_over_cap_field_reports_its_reason(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP)
+        ]
+        assert envelope.over_cap_field_names == ("note_title",)
+
+    def test_both_reasons_are_reported_without_shadowing(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP),
+            ("owner_email", WithholdingReason.ABOVE_CEILING),
+        ]
+        assert envelope.over_cap_field_names == ("note_title",)
+        # The flat list is unchanged: it still names both, exactly once each.
+        assert envelope.excluded_field_names == ("note_title", "owner_email")
+
+    def test_a_field_that_is_both_over_cap_and_above_the_ceiling_is_counted_once(self) -> None:
+        """One input, one reason — never double-counted in telemetry.
+
+        Over-cap wins: the value did not fit, which is the more actionable fact,
+        and reporting the name twice would make one input look like two.
+        """
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1))]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP)
+        ]
+        assert envelope.excluded_field_names == ("note_title",)
+
+    def test_an_envelope_with_nothing_withheld_reports_nothing(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        )
+
+        assert envelope.withheld_fields == ()
+        assert envelope.over_cap_field_names == ()
+
+    def test_the_reason_is_recorded_even_though_the_value_is_not(self) -> None:
+        """Only names travel: the withheld value must not be reachable.
+
+        A withheld field that carried its value would leave the raw subject text
+        one refactor away from the digest — the exact leak withholding prevents.
+        """
+        secret = "y" * (MAX_FIELD_VALUE_LENGTH + 1)
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.INTERNAL, secret)]
+        )
+
+        assert secret not in repr(envelope.withheld_fields)
+        assert not hasattr(envelope.withheld_fields[0], "value")
+
+
+class TestDecisionRequestCarriesTheOverCapSubset:
+    def test_the_over_cap_names_reach_the_request(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+        request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+
+        assert request.excluded_context_fields == ("note_title", "owner_email")
+        assert request.over_cap_context_fields == ("note_title",)
+
+    def test_an_over_cap_name_must_also_be_an_excluded_name(self) -> None:
+        """Two records that disagree about what was withheld are worse than one."""
+        with pytest.raises(ValidationError, match="must also be excluded"):
+            DecisionRequest(
+                kind=DecisionKind.RISK_SCORE,
+                context_hash=ContextEnvelope.from_fields(
+                    [_field("note_kind", "memo", DataClassification.PUBLIC)]
+                ).context_hash,
+                over_cap_context_fields=("note_title",),
             )

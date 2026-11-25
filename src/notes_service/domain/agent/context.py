@@ -97,6 +97,48 @@ _RANK: dict[DataClassification, int] = {
 DEFAULT_CEILING = DataClassification.INTERNAL
 
 
+class WithholdingReason(StrEnum):
+    """Why a context field was held back from an outbound judgment.
+
+    The two reasons are operationally different even though both mean "present,
+    not sent", which is why they are not one flag:
+
+    * :attr:`ABOVE_CEILING` is the control *working as designed*. The caller
+      classified the value and the envelope's ceiling excluded it. Nothing is
+      wrong, and nothing should change.
+    * :attr:`OVER_CAP` means the value did not fit ``MAX_FIELD_VALUE_LENGTH``, so
+      it could not be represented at all. This is the thinner-than-expected
+      signal: if it happens routinely, every advisory is being computed on less
+      context than the caller believes, and the caller should either send a
+      reference instead of content or the cap should be revisited deliberately.
+
+    Collapsing the two into one list made a routine design decision
+    indistinguishable from a quiet degradation.
+    """
+
+    ABOVE_CEILING = "above_ceiling"
+    OVER_CAP = "over_cap"
+
+
+@dataclass(frozen=True, slots=True)
+class WithheldField:
+    """A field name withheld from the digest, with the reason it was withheld.
+
+    Names only — never values. The value that was withheld is deliberately not
+    retained here: keeping it would leave the raw subject text in memory one
+    refactor away from the canonical form, which is the thing withholding exists
+    to prevent.
+    """
+
+    name: str
+    reason: WithholdingReason
+
+    def __post_init__(self) -> None:
+        _validate_field_name(self.name)
+        if not isinstance(self.reason, WithholdingReason):
+            raise ValidationError("a withheld field requires a WithholdingReason")
+
+
 def _validate_field_name(name: object) -> str:
     """Reject a name that is not a stable, aggregate-able identifier.
 
@@ -204,6 +246,10 @@ def _by_name(field: ContextField) -> str:
     return field.name
 
 
+def _by_withheld_name(field: WithheldField) -> str:
+    return field.name
+
+
 @dataclass(frozen=True, slots=True)
 class ContextEnvelope:
     """The classified inputs to one outbound judgment, and their shared digest.
@@ -300,6 +346,14 @@ class ContextEnvelope:
         withheld: set[str] = set()
         for name, classification, value in candidates:
             _validate_field_name(name)
+            # Validate the classification on *both* paths. Previously an over-cap
+            # candidate skipped this check entirely, because the field was never
+            # constructed — so a caller could pass a bare string and learn nothing,
+            # while the same mistake under the cap raised. The withheld path must
+            # not be a hole in the type check just because it is the path that
+            # discards the value.
+            if not isinstance(classification, DataClassification):
+                raise ValidationError("a context field requires a DataClassification")
             if not isinstance(value, str):
                 raise ValidationError("a context field value must be a string")
             if len(value) > MAX_FIELD_VALUE_LENGTH:
@@ -327,9 +381,49 @@ class ContextEnvelope:
         Two distinct reasons are folded into one list because an audit reader
         needs the same fact either way — *this input was held back*. Above-ceiling
         classification and an over-cap value are both "present, not sent".
+
+        Use :attr:`withheld_fields` when the *reason* matters: this list cannot
+        tell a deliberate exclusion from a value that did not fit.
         """
         by_classification = {field.name for field in self.fields if not self._is_included(field)}
         return tuple(sorted(by_classification | set(self.withheld_field_names)))
+
+    @property
+    def withheld_fields(self) -> tuple[WithheldField, ...]:
+        """Every withheld field with the reason it was withheld.
+
+        The reason is what makes a thinner-than-expected advisory visible.
+        ``excluded_field_names`` says *that* an input was held back; this says
+        *why*, and an :attr:`~WithholdingReason.OVER_CAP` entry is the one worth
+        watching — it means the value could not be represented, not that policy
+        excluded it.
+
+        An over-cap value that is also above the ceiling is reported once, as
+        ``OVER_CAP``: the value did not fit, and reporting it twice would double
+        count one input in telemetry. ``excluded_field_names`` still names it
+        exactly once.
+        """
+        over_cap = set(self.withheld_field_names)
+        withheld = [
+            WithheldField(name=field.name, reason=WithholdingReason.ABOVE_CEILING)
+            for field in self.fields
+            if not self._is_included(field) and field.name not in over_cap
+        ]
+        withheld.extend(
+            WithheldField(name=name, reason=WithholdingReason.OVER_CAP)
+            for name in self.withheld_field_names
+        )
+        return tuple(sorted(withheld, key=_by_withheld_name))
+
+    @property
+    def over_cap_field_names(self) -> tuple[str, ...]:
+        """Names withheld because the value exceeded the field cap.
+
+        The subset of :attr:`excluded_field_names` that signals degradation
+        rather than design. Kept as its own accessor so a caller (or a metric)
+        can watch it without parsing reasons.
+        """
+        return tuple(sorted(self.withheld_field_names))
 
     @property
     def context_hash(self) -> ContextHash:
@@ -351,4 +445,6 @@ __all__ = [
     "ContextField",
     "ContextHash",
     "DataClassification",
+    "WithheldField",
+    "WithholdingReason",
 ]
