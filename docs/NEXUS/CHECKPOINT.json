@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-25-08",
-  "timestamp": "2026-11-25T03:51:00Z",
+  "timestamp": "2026-11-25T03:57:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "0fcc078",
-  "commit_note": "The last commit whose gates and CI were verified (4/4 green on both push and pull_request). The docs commit recording this run is its child.",
+  "commit": "d2abf48",
+  "commit_note": "d2abf48 is the branch tip and is itself CI-verified: 4/4 check runs completed/success on both the push and pull_request events. The previous verified commit was 0fcc078, which carried the product and test changes; the two commits after it are docs-only.",
   "project_phase": "Phase 2 complete - agent identity & delegation VERIFIED (tool gateway incl. HTTP surface, tenant-scoped capability answer, OIDC token verifier). Next: Phase 5 durable agentic runtime.",
   "active_task": null,
   "task_statuses": {
@@ -42,8 +42,8 @@
     "migration_sqlite": "alembic upgrade head then downgrade base both succeeded on a fresh SQLite db (unchanged this run)",
     "mutation_check": "each of verify_aud, verify_iss, verify_exp, verify_iat, verify_signature, the nonce check, the nonce comparison, the blank-subject guard, and the algorithm allowlist was disabled in turn and each produced a red suite; deleting the 'require' claim list survives because issuer=/audience= and the _as_datetime guard already refuse those tokens",
     "ci_observed": true,
-    "ci_note": "4/4 check runs completed/success on 0fcc078 for both the push (45541856292) and pull_request (45541862595) events. 0fcc078 descends from 2dd7a0c, so CI ran the full suite including the 21 new OIDC verifier tests. This is what promotes NEX-010 and NEX-002 from TESTED to VERIFIED.",
-    "verified_at_commit": "0fcc078",
+    "ci_note": "4/4 check runs completed/success on d2abf48 (branch tip) for both push and pull_request. 0fcc078 was the prior verified commit and carried the 21 OIDC verifier tests, which is what promotes NEX-010 and NEX-002 from TESTED to VERIFIED. The commits between 0fcc078 and d2abf48 are docs-only (PR body refresh, execution-log addendum, checkpoint).",
+    "verified_at_commit": "d2abf48",
     "verified_by_run": "NEX-2026-11-25-08",
     "ci_first_push_was_red": "2dd7a0c failed the backend job at ruff format --check on a Python fence in docs/NEXUS/EXECUTION_LOG.md. Not a test or product defect: CI runs the gate bare and repo-wide and ruff formats Python inside Markdown, while the pre-push local run had been scoped to `src tests` and skipped docs/. Fixed in 0fcc078; the trap is now recorded in AGENTS.md."
   },
@@ -81,7 +81,7 @@
       "frontend"
     ],
     "check_runs_on_head": 4,
-    "observed": "2026-11-25T03:46Z",
-    "note": "Green on 0fcc078 for both push (45541856292) and pull_request (45541862595); all four check runs completed/success."
+    "observed": "2026-11-25T03:56Z",
+    "note": "Green on d2abf48 (4/4 completed/success) and on 0fcc078 before it. Verified with gh api .../commits/<sha>/check-runs, not from a cached ref."
   }
 }

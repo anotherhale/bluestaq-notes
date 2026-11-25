@@ -1167,8 +1167,12 @@ than starting NEX-009 with under 10 minutes left.
 - PR #3 stays an **open draft, unmerged**. Marking it ready for review is a human
   decision; this run did not make it.
 
-**Honest CI status at the time of writing:** `b804573` has four check runs
-`queued`/`in_progress` — **not yet green**. The claim in this log is that CI was
-green on `0fcc078` (observed, 4/4) and that the two docs-only commits on top are
-still running. Recording it that way rather than waiting is deliberate: the
-window was closing, and a truthful "pending" beats an inferred "green".
+**CI status — observed, then confirmed.** At the time the entry above was first
+written, `b804573` had four check runs `queued`/`in_progress`, and it was recorded
+as pending rather than inferred as green. The run then waited and confirmed:
+**4/4 `completed/success` on `d2abf48`** (branch tip) for both the push and
+`pull_request` events, checked with
+`gh api repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs`.
+`0fcc078` remains the commit that carried the product and test changes; the three
+commits after it are docs-only. The checkpoint's `commit` field now names
+`d2abf48` as the verified tip.
