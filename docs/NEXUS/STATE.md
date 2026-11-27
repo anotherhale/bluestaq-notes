@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md) names the signal as the delegating human's recorded authentication assurance. Four of the five named obligations have real mechanisms; `step-up` now has a designed mechanism whose **vocabulary and persistence are the recorded prerequisite (NEX-058)**. **Remaining gaps, named:** `step-up` enforcement (blocked on NEX-058), `second-approver`, risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md). **NEX-058** (run 59): assurance is persisted and `step-up` is **enforced** from evidence, not refused. Four of the five named obligations have real mechanisms. **Remaining gaps, named:** `second-approver`, risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 57) | `27bbc82` — read from `git ls-remote` at run start, not from a stored field. |
 | Head commit (measured) | Product commit `e7c7315` (NEX-056), pushed and verified by an independent `git ls-remote` after the push. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
@@ -16,6 +16,45 @@ truth; this file records intent and reconciliation.
 | Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body now carries NEX-052…NEX-056 evidence** (appended this run, 21968 chars, 33 files). Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-058 (run `NEX-2026-11-27-59`) — `step-up` is enforced, not merely designed
+
+ADR-015 named the signal; this slice makes it real. `AuthenticationAssurance`
+(`domain/identity/assurance.py`) is a closed, **ordered** vocabulary — `single-factor` <
+`multi-factor` — with floor semantics, so a level satisfies every floor at or below it. The
+IdP's `acr`/`amr` claims are derived into that vocabulary inside the adapter; they are never
+carried through as free text, because two deployments spelling `mfa`, `mfa2` and
+`multi-factor` would each mean whatever they liked inside an enforcement path.
+
+Three decisions carry the control, and each had a tempting wrong version:
+
+- **Fixed at grant, not read live per call.** Assurance is recorded on the session at login,
+  rehydrated into the `Principal` on resolve, and copied onto the delegation when the human
+  consents. The gateway reads it from the *delegation*. A delegation can outlive its session;
+  re-reading live would let an agent act under authority the human never held at consent.
+- **A floor a policy author cannot move.** `STEP_UP_FLOOR` is a static application constant.
+  A policy may *ask* for step-up; it may not define what satisfies it. Reading the floor from
+  the policy version would let the rule that requests the control weaken it.
+- **Absent reads as weakest.** `AuthenticationAssurance.parse` coerces an unknown or missing
+  value to `SINGLE_FACTOR` and never raises. The columns are nullable because pre-migration
+  rows carry no proof, and a null that read as multi-factor — or a SQL default of
+  multi-factor — would turn an unpersisted value into authority. That is the exact failure
+  ADR-015 forbids.
+
+A refusal is audited as a `denied` invocation naming the obligation and the assurance
+actually held, so a weaker delegation is visible in the trail rather than only as a 403 the
+caller saw.
+
+**Tests, in both directions.** An obligation that can only ever refuse is not enforced — it is
+unimplemented. The slice adds a **positive** gateway case (a multi-factor delegation satisfies
+`step-up`) beside the refusal cases, plus five persistence tests including
+absent-reads-as-single-factor.
+
+**Migration** `b8d3e1f5a274` adds nullable `assurance` columns to `user_sessions` and
+`agent_delegations`; `alembic heads` reports a single head.
+
+**Status:** IMPLEMENTED, TESTED locally, COMMITTED, PUSHED at `c5a4f4e`. **Not VERIFIED** —
+CI was not polled before the clock expired, and a push is not a verdict.
 
 ## NEX-057 ADR DELIVERED (run `NEX-2026-11-27-58`) — `step-up` has a deterministic signal
 
@@ -1111,9 +1150,9 @@ Recorded so a later audit does not re-open it without cause.
 
 | Field | Value |
 | --- | --- |
-| Task | NEX-032 — withholding is observable with a reason per field |
-| Status | **IMPLEMENTED, TESTED, VERIFIED, COMMITTED, PUSHED, CI PASSED** at `fe5eadc` (860 passed / 4 skipped; 4/4 `completed/success` at that SHA, polled 16:47Z). PR #3 and issue #2 updated. |
-| Next action | NEX-033: aggregate over-cap withholdings into a count (monitoring slice). Decide structured-log vs metric port first; no new metrics dependency without a demonstrated need. |
+| Task | NEX-059 — enforce `second-approver` with a second **distinct** human |
+| Status | Nothing in flight. **NEX-058** is IMPLEMENTED + TESTED + COMMITTED + PUSHED at `c5a4f4e`; CI unpolled, so **not VERIFIED**. |
+| Next action | 1. Poll CI for the head read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; on 4/4 `completed/success` promote NEX-058 to VERIFIED. 2. Clear delivery debt: append NEX-057 + NEX-058 to PR #5 and post one issue #2 comment covering both. 3. Then NEX-059 — the last named obligation without a mechanism, and the one where "any second approval" silently defeats the control. |
 
 ## NEX-032 (run `NEX-2026-11-25-34`) — a withheld field that cannot say why is not a signal
 

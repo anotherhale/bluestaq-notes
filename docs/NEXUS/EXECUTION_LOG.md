@@ -7265,3 +7265,81 @@ trustworthy.
 `completed_tasks` now includes NEX-057. It stays out of the VERIFIED set, and that distinction is
 the point of the whole run: a green build on an ADR proves the ADR compiles, not that the
 obligation it designs is enforced.
+
+---
+
+## NEX-2026-11-27-59 — NEX-058: persist authentication assurance, enforce `step-up`
+
+**Run ID** NEX-2026-11-27-59 · **Branch** `feature/agentic-enterprise-platform`
+**Start** a282dc9 · **End** c5a4f4e (product) + this docs commit · **Phase** 3 (governance)
+
+### What changed, and why it is not just plumbing
+
+The previous run left `step-up` designed but refused. That was the honest state, and it was
+also the reason the obligation could not be called enforced: a rule naming `step-up` was
+inexpressible in practice. NEX-058 closes it by persisting the one deterministic signal
+ADR-015 names — the authentication assurance of the human behind the agent — and comparing
+it against a floor.
+
+Three design points carry the security argument, and each of them had a tempting wrong
+version:
+
+- **Fixed at grant, not read live.** The assurance is copied onto the delegation when the
+  human consents, and the gateway reads it from there. A delegation can outlive the session
+  that created it; re-reading the session per call would let an agent act under authority
+  the human never held at the moment they made the choice.
+- **A floor a policy author cannot move.** `STEP_UP_FLOOR` is a static application constant.
+  A policy may *ask* for step-up; it may not define what satisfies it. Reading the floor from
+  the policy version would let the same rule that requests the control weaken it.
+- **Absent reads as weakest.** `AuthenticationAssurance.parse` coerces an unknown or missing
+  value to `SINGLE_FACTOR` and never raises. The columns are nullable because rows written
+  before this migration carry no proof, and a null that read as multi-factor — or a SQL
+  default of multi-factor — would turn an unpersisted value into authority. That is exactly
+  the failure ADR-015 forbids.
+
+The IdP's `acr`/`amr` claims are derived into this closed, ordered vocabulary in the adapter,
+never carried through as free text: two deployments spelling `mfa`, `mfa2` and `multi-factor`
+must not each silently mean whatever they like in an enforcement path.
+
+### Tests, in both directions
+
+An obligation that can only ever refuse is not enforced — it is unimplemented. So the slice
+adds a **positive** gateway test (a multi-factor delegation satisfies `step-up`) next to the
+refusal cases, and a persistence suite that includes the case that matters most: an absent
+value reads as single-factor.
+
+Two defects surfaced while running the new tests, both in the test code rather than the
+product: the positive test was written against a stale `Harness` API (`h.agent(...)` no
+longer exists) and referenced `TOOL_GATEWAY` without importing it. Both were fixed by using
+the same explicit `register`/`delegate`/`issue` sequence the rest of the file uses, which is
+also clearer about what the test actually constructs.
+
+A stale module docstring in the obligations test still claimed the gateway had no adapter for
+`step-up`, `rate-limit` or `enhanced-audit`. Two of those had been implemented in earlier
+slices and the third in this one, so the docstring was corrected to name only
+`second-approver` as the remaining gap.
+
+### Validation
+
+Run bare, exactly as CI runs them, on the committed tree:
+
+- `.venv/bin/ruff format` → 295 files (one reformat, an import block)
+- `.venv/bin/ruff check` → all checks passed (3 import errors autofixed first)
+- `.venv/bin/mypy` → success, 139 source files
+- `.venv/bin/python -m pytest -q` → exit 0, full suite green
+- targeted: `tests/agent/test_tool_gateway_obligations.py` + `tests/persistence/test_assurance_persistence.py` → 31 passed
+- `.venv/bin/alembic heads` → `b8d3e1f5a274 (head)`, single head, chain linear
+
+### Honest status
+
+NEX-058 is **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `c5a4f4e`. It is **not
+VERIFIED**: the run's clock expired before the check-runs concluded, and a push is not a
+verdict. The next run owes a poll of the current head and, on 4/4 success, promotion.
+
+Delivery debt is also owed: NEX-057 (the ADR) and NEX-058 (the code behind it) are both
+unreported to PR #5 and issue #2. Reporting them together is more useful than either alone —
+the interesting fact is that the ADR now has an implementation.
+
+**Next** NEX-059: `second-approver`, the last of the five named obligations without a real
+mechanism, and the one where the obvious implementation (any second approval) silently
+defeats the control. It must be a second *distinct* human.
