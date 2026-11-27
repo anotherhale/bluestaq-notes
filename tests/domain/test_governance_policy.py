@@ -237,6 +237,40 @@ def test_a_draft_cannot_be_evaluated() -> None:
         evaluate((draft,), {})
 
 
+def test_a_retired_version_cannot_be_evaluated() -> None:
+    """A superseded release must not stay in force (regression: fail-open).
+
+    A retired version is a perfectly valid object, so the only thing marking it
+    out of force is its status. Before this test, ``evaluate`` refused a draft
+    but *consulted* a retired version, so a caller that passed a policy's
+    ``history()`` instead of its ``all_published()`` would keep enforcing rules
+    a later release had already replaced — an allow rule would still allow.
+    """
+    draft = new_policy_version(
+        policy_id="p",
+        version=1,
+        rules=(_rule("allow-all", PolicyEffect.ALLOW),),
+        rationale="x",
+        drafted_by="dana",
+    )
+    retired = draft.publish(now=NOW, published_by="alice").retire()
+    assert retired.status is PolicyStatus.RETIRED
+    with pytest.raises(ValidationError, match="is retired and cannot be evaluated"):
+        evaluate((retired,), {})
+
+
+def test_a_retired_version_alongside_a_published_one_still_refuses() -> None:
+    """One retired version in the set refuses the whole evaluation, not just itself.
+
+    Silently skipping it would be the other half of the same bug: the caller
+    would believe the retired rules applied when they did not.
+    """
+    live = _published((_rule("live", PolicyEffect.ALLOW, None),), policy_id="alpha")
+    stale = _published((_rule("stale", PolicyEffect.ALLOW, None),), policy_id="beta").retire()
+    with pytest.raises(ValidationError, match="is retired and cannot be evaluated"):
+        evaluate((live, stale), {})
+
+
 def test_decision_records_the_versions_consulted() -> None:
     """A decision must name which policy versions produced it."""
     a = _published((_rule("r", PolicyEffect.ALLOW, None),), policy_id="alpha")

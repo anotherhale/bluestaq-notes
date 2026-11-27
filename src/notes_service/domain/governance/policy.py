@@ -648,8 +648,13 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
        policy set therefore denies everything, which is the only safe default for
        a governance surface.
     3. **Only published versions may be consulted.** A draft in force is a policy
-       nobody approved, so passing one raises rather than being ignored: silently
-       dropping it would make a caller believe its rules applied.
+       nobody approved, and a retired version is one a later release explicitly
+       superseded. Passing *either* raises rather than being ignored: silently
+       dropping it would make a caller believe its rules applied, and silently
+       *keeping* a retired version would enforce rules the platform has already
+       replaced. ``RETIRED`` is the sharper trap because the version is a
+       perfectly valid object — only its lifecycle position says it is no longer
+       in force — so the check is on ``is not PUBLISHED``, not on ``is DRAFT``.
     """
     matched: list[str] = []
     consulted: list[str] = []
@@ -659,8 +664,13 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
     for version in versions:
         if not isinstance(version, PolicyVersion):
             raise ValidationError("evaluate requires PolicyVersion instances")
-        if version.status is PolicyStatus.DRAFT:
-            raise ValidationError(f"policy {version.ref} is a draft and cannot be evaluated")
+        if version.status is not PolicyStatus.PUBLISHED:
+            # Draft and retired both refuse, for different reasons that share one
+            # rule: a version that is not in force must never be enforced. The
+            # message names the actual status so a caller can tell a draft it has
+            # not published from a release it has already superseded.
+            label = "a draft" if version.status is PolicyStatus.DRAFT else "retired"
+            raise ValidationError(f"policy {version.ref} is {label} and cannot be evaluated")
         consulted.append(version.ref)
         for rule in version.rules:
             if rule.when is not None and not _evaluate_node(rule.when, attributes):
