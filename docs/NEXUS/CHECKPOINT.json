@@ -34,7 +34,7 @@
       "mypy: Success, no issues found in 135 source files",
       "pytest full suite: 1257 passed, 4 skipped"
     ],
-    "not_run": "No CI poll this run: the push landed at the budget boundary, so CI status for 22124f2 is UNKNOWN, not green. Poll it first next run."
+    "not_run": "No PostgreSQL-marked tests run locally (4 skipped by marker); CI's Backend job runs the migration path and passed at 22124f2."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -50,9 +50,9 @@
   "tracking_issue": {
     "issue": 2,
     "state": "open",
-    "last_reported_task": "NEX-048",
-    "comment_id": 7220035523,
-    "delivery_debt": "none for NEX-048; PR #3 section for NEX-048 still outstanding"
+    "last_reported_task": "NEX-049",
+    "comment_id": 7220681767,
+    "delivery_debt": "PR #3 sections for NEX-048 and NEX-049 still outstanding."
   },
   "blockers": [
     {
@@ -279,8 +279,13 @@
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust a head field in this file. 2. NEX-049 is COMMITTED and PUSHED at 22124f2 - do not redo it. 3. Its CI has NOT been polled: poll it first. 4. Delivery debt: PR #3 sections for NEX-048 and NEX-049, plus an issue #2 comment for NEX-049. Use lists, not tables, in issue comments. 5. Then start NEX-050 per next_action.",
   "ci_status": {
     "commit": "22124f2",
-    "status": "UNKNOWN - not polled",
-    "prior": "4/4 completed/success at 810d1dc (NEX-048)."
+    "status": "4/4 completed/success",
+    "polled_at": "2026-11-27T07:34Z",
+    "checks": [
+      "Backend (ruff, mypy, pytest, migrations) success",
+      "Frontend (typecheck, lint, test, build) success"
+    ],
+    "note": "Both the push and pull_request events report success at this exact SHA. The docs commit 083cf2c is not polled and will read cancelled once superseded."
   },
   "verified_tasks": [
     "NEX-047",
@@ -356,8 +361,8 @@
     "remote_verified": true,
     "remote_verified_by": "git ls-remote returned 22124f27dd1d3a6da4c183542faa8d1a109efcea",
     "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "PR #3 sections for NEX-048 and NEX-049 unwritten; issue #2 not yet told about NEX-049."
+    "issue_updated": true,
+    "delivery_debt": "PR #3 sections for NEX-048 and NEX-049 unwritten. Issue #2 is current as of NEX-049."
   },
   "run_summary": "NEX-049 delivered and pushed at 22124f2: /api/v1/ops/policies with draft, publish, rollback and history. The operator gate lives in the application use cases (DraftPolicy / PublishDraft / RollbackPolicy / GetPolicyHistory), not the router, so every future caller is gated by the same code. Scope is per operation, so a drafting grant cannot publish a policy into force. published_by is stamped from the authenticated Principal and mapped to a lowercase identifier (user-<uuid>) because the domain rejects a raw UUID; a caller cannot attribute a published policy to someone else. Local gates green; CI unpolled; PR #3 and issue #2 delivery debt open.",
   "head_observation": {
@@ -375,7 +380,7 @@
   "last_completed_task": {
     "id": "NEX-049",
     "title": "Policy lifecycle over HTTP behind per-operation operator scopes",
-    "status": "PUSHED at 22124f2; local gates green; CI unknown for this commit",
+    "status": "VERIFIED - CI 4/4 at 22124f2",
     "evidence": [
       "pytest full suite: 1257 passed, 4 skipped",
       "ruff format --check clean, ruff check clean, mypy clean (135 source files)",

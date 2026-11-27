@@ -11,9 +11,9 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `d00c661` (run `NEX-2026-11-27-50`; the clone arrived on `main` at `d6f92d0`, the feature branch was already present and `d00c661` was its measured head before this run's commit). Prior: `80114ca`.) |
 | Head commit (measured) | `22124f2` (NEX-049 product + this docs commit follows it; read the true head from `git ls-remote`). Prior: `994c1c8` — `docs(nexus): checkpoint NEX-048 at 810d1dc, hand NEX-049 to next run`, pushed as `810d1dc..994c1c8` and `ls-remote`-verified at `994c1c8999ef849e56f9ac55166f6bcf22e813aa`. The NEX-048 **product** commit beneath it is `810d1dc` (CI 4/4 success). Prior: `810d1dc`, `0ef42ec` (docs), `379a98a` (NEX-047 product). The true branch head is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
-| Last CI result | **`810d1dc`: 4/4 `completed/success`, polled 2026-11-27T13:47Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) on both the `push` and `pull_request` events. The Backend job running migrations is what exercises the Postgres path for migration `4b1e7a9c3f28`. Prior: `19f06a7` 4/4 success. The docs commit `994c1c8` is not polled; it carries only NEXUS state files and reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. See `ci_status` in `CHECKPOINT.json`. |
-| Tracking issue | #2 (open) — **NEX-048 reported** (comment `7220035523`, 3163 chars, HTTP 201). **No issue delivery debt outstanding.** NEX-047 reported (comment `7219198697`), NEX-046 (comment `7218689144`). The issue stays open: the programme is not done. |
-| Draft PR | #3 (draft, unmerged — human review required). Body 108,965 chars as last measured at `16bab4b`. **NEX-048 section NOT yet appended** — deferred to the next run with the CI poll, so the PR body does not yet describe `810d1dc`. Still `draft=true`. Automated merging is prohibited; a human reviewer decides. |
+| Last CI result | **`22124f2` (NEX-049): 4/4 `completed/success`, polled 2026-11-27T07:34Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), on both the `push` and `pull_request` events. Prior: **`810d1dc`: 4/4 `completed/success`, polled 2026-11-27T13:47Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) on both the `push` and `pull_request` events. The Backend job running migrations is what exercises the Postgres path for migration `4b1e7a9c3f28`. Prior: `19f06a7` 4/4 success. The docs commit `994c1c8` is not polled; it carries only NEXUS state files and reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. See `ci_status` in `CHECKPOINT.json`. |
+| Tracking issue | #2 (open) — **NEX-049 reported** (comment `7220681767`, 2540 chars, HTTP 201). NEX-048 reported (comment `7220035523`). **Issue delivery debt: none.** Prior note: **NEX-048 reported** (comment `7220035523`, 3163 chars, HTTP 201). NEX-047 reported (comment `7219198697`), NEX-046 (comment `7218689144`). The issue stays open: the programme is not done. |
+| Draft PR | #3 (draft, unmerged — human review required). Body 108,965 chars as last measured at `16bab4b`. **NEX-048 and NEX-049 sections NOT yet appended** — the PR body does not yet describe `810d1dc` or `22124f2`. Still `draft=true`. Automated merging is prohibited; a human reviewer decides. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -43,10 +43,10 @@ failed with a `ValidationError`. The fix is one function at the boundary —
 `_publisher_label` returns `user-<uuid>` — because a domain that validates an actor label
 and a boundary that holds a UUID need exactly one place that knows both.
 
-Status: IMPLEMENTED, TESTED, COMMITTED, PUSHED at `22124f2`. CI for that commit is
-**UNKNOWN** — the push landed at the budget boundary and was not polled, so it is not
-green. PR #3 does not yet describe this slice, and issue #2 has not been told about it.
-Both are delivery debt for the next run.
+Status: IMPLEMENTED, TESTED, COMMITTED, PUSHED, **CI PASSED** at `22124f2` (4/4
+`completed/success` on both the `push` and `pull_request` events, polled
+2026-11-27T07:34Z). Reported to issue #2 (comment `7220681767`). PR #3 does not yet
+describe this slice or NEX-048 — that is the remaining delivery debt.
 
 ## NEX-048 PUSHED (run `NEX-2026-11-27-50`) — a published policy that a restart cannot empty
 
