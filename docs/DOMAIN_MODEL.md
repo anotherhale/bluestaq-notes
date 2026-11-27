@@ -1,7 +1,11 @@
 # Domain Model
 
-The domain is pure Python with no framework dependencies. It is split into two
+The domain is pure Python with no framework dependencies. The currently implemented domain is split into two
 bounded contexts — **identity** and **notes** — under `src/notes_service/domain/`.
+The proposed enterprise expansion adds an **authorization** domain capability;
+its canonical target model is documented in
+[Authorization Domain Model](AUTHORIZATION_DOMAIN_MODEL.md). This is a target
+design, not a claim that the authorization domain has already been implemented.
 
 ## Bounded contexts
 
@@ -170,3 +174,20 @@ The domain knows nothing about SQLAlchemy. The mapping lives entirely in
 `infrastructure/db/repositories.py`, which translates `UserRow`/`NoteRow`/
 `NotePermissionRow`/`FolderRow`/`NoteStarRow` rows to and from these domain
 objects. See `docs/ADR/ADR-005-sqlalchemy-repository-uow.md`.
+
+
+## Enterprise authorization target (proposed)
+
+The current identity and Notes domain types remain authoritative for the
+implemented application. The proposed authorization model introduces typed
+actors, scopes, capabilities, roles, scoped role assignments, resource grants,
+policies, delegations, authorization contexts/requests/decisions, and
+obligations. These concepts must not duplicate existing `UserId`,
+`Principal`, or Notes `PermissionLevel`; adapters should bridge the existing
+identity and Notes permission model into the unified policy evaluator.
+
+See [Authorization Domain Model](AUTHORIZATION_DOMAIN_MODEL.md) for canonical
+concepts, invariants, application ports, compatibility requirements, and
+implementation sequencing. ADR-004 remains the accepted description of the
+current authorization provider contract; ADR-011 records the proposed
+enterprise target.

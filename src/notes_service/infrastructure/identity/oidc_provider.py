@@ -20,6 +20,7 @@ from jwt import PyJWKClient
 
 from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.identity import AuthenticationContext
+from notes_service.application.use_cases.tenant_access import ensure_tenant_access
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import ProviderSubject
 
@@ -95,6 +96,10 @@ class OidcIdentityProvider:
             user = uow.users.get(identity.user_id)
             if user is None or not user.is_active:
                 raise AuthenticationError("linked user is missing or inactive")
+            # A valid token is not an entitlement: the same tenant-access rule
+            # that guards browser sessions must guard bearer tokens, otherwise a
+            # revoked membership could keep calling the API with its old token.
+            ensure_tenant_access(uow, user_id=str(user.id))
 
             return Principal(
                 user_id=user.id,

@@ -16,3 +16,12 @@ and immutable; superseding a decision means adding a new ADR.
 | [ADR-008](ADR-008-http-error-semantics.md) | HTTP error and inaccessible-resource semantics |
 | [ADR-009](ADR-009-folders-stars-search-rich-text.md) | Folders, per-user stars, search and rich-text content |
 | [ADR-010](ADR-010-whiteboard-client-side.md) | Whiteboards are a client-side spatial view, not a new domain aggregate |
+| [ADR-011](ADR-011-unified-authorization-model.md) | Unified enterprise authorization model (proposed) |
+| [ADR-012](ADR-012-context-assembly-before-judgment.md) | Context assembly precedes outbound judgment |
+| [ADR-013](ADR-013-git-refs-as-coordination-primitive.md) | Git refs as the coordination primitive |
+
+
+See also the [Enterprise Authorization Architecture](../AUTHORIZATION_ARCHITECTURE.md) and [Authorization Policy Model](../AUTHORIZATION_POLICY_MODEL.md).
+
+
+The canonical proposed authorization types and invariants are documented in the [Authorization Domain Model](../AUTHORIZATION_DOMAIN_MODEL.md).

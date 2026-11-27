@@ -16,6 +16,10 @@ Every `/api/v1` endpoint requires authentication.
 
 Missing or invalid credentials → `401` with `WWW-Authenticate: Bearer`.
 
+**Exception — the tool gateway** (`/api/v1/agents/tools/*`) is agent-facing: it
+accepts only `Authorization: Bearer <agent token>` and deliberately ignores
+`X-Demo-User-ID`. See [Tool gateway](#tool-gateway-agents).
+
 ## Error envelope
 
 Every failure uses the same shape:
@@ -357,6 +361,67 @@ Revoke a collaborator's access.
 
 **204** on success. `404` if no such grant exists or the note is not readable.
 `403` if the caller can read but is not the owner.
+
+---
+
+## Tool gateway (agents)
+
+Agent-only surface. It is the HTTP edge over the same governed use case that
+application code calls, so audience, revocation, capability, approval, and audit
+are enforced in exactly one place — this router adds no decisions of its own.
+
+### `POST /api/v1/agents/tools/invoke`
+
+**Authentication:** `Authorization: Bearer <agent token>` only. The
+`X-Demo-User-ID` header is **ignored** here, so holding a demo user id is not
+authority to invoke a tool. Missing or malformed credentials → `401`.
+
+The token must have been minted for `TokenAudience.TOOL_GATEWAY`. A Notes-API
+token presented here is refused with `403` even though it is otherwise valid.
+
+**Request**
+
+```json
+{
+  "tool": "read_note",
+  "arguments": {"note_id": "b1f2..."},
+  "idempotency_key": "run-42-step-7"
+}
+```
+
+`idempotency_key` is required: a retry with the same key replays the recorded
+outcome (`replayed: true`) instead of repeating the side effect. Reusing a key
+with *different* arguments is a `409`, never a silent overwrite.
+
+**Response — 200**
+
+```json
+{
+  "id": "0d9c...",
+  "tool": "read_note",
+  "capability": "read_note",
+  "status": "succeeded",
+  "resource_ref": "note:b1f2...",
+  "idempotency_key": "run-42-step-7",
+  "invoked_at": "2026-11-25T02:40:11Z",
+  "completed_at": "2026-11-25T02:40:11Z",
+  "outcome": null,
+  "replayed": false,
+  "output": {"note": {"id": "b1f2...", "title": "..."}}
+}
+```
+
+**Refusals** are audited and return a status, not a `500`:
+
+| Status | When |
+|---|---|
+| `401` | No or malformed bearer token |
+| `403` | Token audience is not the tool gateway; capability not granted; delegation revoked or attenuated below the tool |
+| `409` | `idempotency_key` reused with different arguments |
+| `422` | Unknown tool name, or arguments failing the tool's schema |
+
+`output` is empty for a refusal; `outcome` carries the reason. The agent token is
+never echoed in any response.
 
 ---
 

@@ -153,3 +153,93 @@ class TestListSettingsFromEnvironment:
         monkeypatch.setenv("OIDC_ALGORITHMS", "RS256,ES256")
         settings = Settings(database_url="sqlite://")
         assert settings.oidc_algorithms == ["RS256", "ES256"]
+
+
+class TestSessionCookieContext:
+    """The ``Cookie`` header must be parsed without help from the framework."""
+
+    def test_extracts_named_cookie(self) -> None:
+        context = HeaderAuthenticationContext.from_headers(
+            {"Cookie": "other=1; notes_session=abc123"}
+        )
+        assert context.session_cookie == "abc123"
+
+    def test_absent_cookie_header_yields_none(self) -> None:
+        assert HeaderAuthenticationContext.from_headers({}).session_cookie is None
+
+    def test_cookie_name_is_configurable(self) -> None:
+        context = HeaderAuthenticationContext.from_headers(
+            {"Cookie": "notes_session=abc; my_sess=xyz"}, cookie_name="my_sess"
+        )
+        assert context.session_cookie == "xyz"
+
+    def test_unrelated_cookie_does_not_match(self) -> None:
+        context = HeaderAuthenticationContext.from_headers({"Cookie": "notes_session_x=abc"})
+        assert context.session_cookie is None
+
+    def test_empty_value_is_treated_as_absent(self) -> None:
+        # ``notes_session=`` must not authenticate as an empty token.
+        context = HeaderAuthenticationContext.from_headers({"Cookie": "notes_session="})
+        assert context.session_cookie is None
+
+
+class TestSessionCookieIsAuthoritative:
+    """A presented session cookie must never be downgraded to the demo header.
+
+    This is the security-critical half of the routing rule: if a stale or forged
+    cookie fell through to demo authentication, an attacker could pin a broken
+    cookie and silently assume whatever demo identity they named in a header.
+    """
+
+    def test_inert_cookie_does_not_break_demo_auth(self, client: TestClient) -> None:
+        # With browser login disabled there is no session provider, so a stray
+        # cookie is simply ignored and the demo header still governs. This
+        # asserts the cookie is *inert*, not that it authenticates anyone: the
+        # demo identity here is one the caller already named in a header.
+        response = client.get(
+            "/api/v1/me",
+            headers={"Cookie": "notes_session=forged", "X-Demo-User-ID": ALICE},
+        )
+        assert response.status_code == 200
+        assert response.json()["email"] == "alice@example.com"
+
+    def test_cookie_alone_never_authenticates_without_login_enabled(
+        self, client: TestClient
+    ) -> None:
+        response = client.get("/api/v1/me", headers={"Cookie": "notes_session=forged"})
+        assert response.status_code == 401
+
+    def test_routing_prefers_session_over_demo(self) -> None:
+        from notes_service.domain.identity.principal import Principal
+        from notes_service.domain.identity.value_objects import UserId
+
+        class _RejectingSession:
+            name = "session"
+
+            def authenticate(self, context: object) -> Principal:
+                raise AuthenticationError("bad cookie")
+
+        class _RecordingDemo:
+            name = "demo"
+            called = False
+
+            def authenticate(self, context: object) -> Principal:
+                self.called = True
+                return Principal(
+                    user_id=UserId("11111111-1111-1111-1111-111111111111"),
+                    provider="demo",
+                    subject="demo",
+                )
+
+        demo = _RecordingDemo()
+        provider = RoutingIdentityProvider(
+            oidc_provider=None, demo_provider=demo, session_provider=_RejectingSession()
+        )
+        context = HeaderAuthenticationContext(
+            demo_user_id_header="11111111-1111-1111-1111-111111111111",
+            session_cookie="forged",
+        )
+
+        with pytest.raises(AuthenticationError):
+            provider.authenticate(context)
+        assert demo.called is False, "demo provider must not run when a cookie was presented"

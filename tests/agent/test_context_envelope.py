@@ -1,0 +1,439 @@
+"""Context assembly: a digest must not become a declassification.
+
+The defect these tests exist to prevent is subtle and common: "we only send a
+hash, so nothing sensitive leaves". That is false. A SHA-256 of a short, guessable
+value (an email address, a note title) is a value an attacker can confirm by
+hashing candidates, so sending the digest is sending a fingerprint of the secret.
+
+The load-bearing test is therefore
+:func:`test_confidential_value_cannot_influence_the_digest`: two envelopes that
+differ *only* in a confidential field must hash identically. If that ever fails,
+a confidential value is influencing an outbound digest and the module's whole
+premise is broken.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from notes_service.domain.agent.context import (
+    DEFAULT_CEILING,
+    MAX_FIELD_VALUE_LENGTH,
+    MAX_FIELDS,
+    ContextEnvelope,
+    ContextField,
+    DataClassification,
+    WithholdingReason,
+)
+from notes_service.domain.agent.decisioning import DecisionKind, DecisionRequest
+from notes_service.domain.errors import ValidationError
+
+
+def _field(name: str, value: str, classification: DataClassification) -> ContextField:
+    return ContextField(name=name, classification=classification, value=value)
+
+
+class TestClassificationLadder:
+    def test_rank_orders_public_below_restricted(self) -> None:
+        assert DataClassification.PUBLIC.rank < DataClassification.INTERNAL.rank
+        assert DataClassification.INTERNAL.rank < DataClassification.CONFIDENTIAL.rank
+        assert DataClassification.CONFIDENTIAL.rank < DataClassification.RESTRICTED.rank
+
+    def test_default_ceiling_excludes_the_subject_confidential_material(self) -> None:
+        assert DEFAULT_CEILING is DataClassification.INTERNAL
+        assert DataClassification.CONFIDENTIAL.rank > DEFAULT_CEILING.rank
+
+
+class TestContextField:
+    @pytest.mark.parametrize("name", ["Note", "note id", "", "1note", "n" * 65, "note-id"])
+    def test_field_name_must_be_a_lowercase_identifier(self, name: str) -> None:
+        with pytest.raises(ValidationError):
+            _field(name, "value", DataClassification.PUBLIC)
+
+    def test_field_name_accepts_snake_case(self) -> None:
+        assert _field("note_kind", "x", DataClassification.PUBLIC).name == "note_kind"
+
+    def test_value_over_the_cap_is_refused(self) -> None:
+        with pytest.raises(ValidationError):
+            _field("note_kind", "x" * (MAX_FIELD_VALUE_LENGTH + 1), DataClassification.PUBLIC)
+
+    def test_value_at_the_cap_is_allowed(self) -> None:
+        assert len(
+            _field("note_kind", "x" * MAX_FIELD_VALUE_LENGTH, DataClassification.PUBLIC).value
+        )
+
+
+class TestContextEnvelopeConstruction:
+    def test_duplicate_field_names_are_refused(self) -> None:
+        with pytest.raises(ValidationError, match="duplicate context field name"):
+            ContextEnvelope.from_fields(
+                [
+                    _field("note_kind", "a", DataClassification.PUBLIC),
+                    _field("note_kind", "b", DataClassification.PUBLIC),
+                ]
+            )
+
+    def test_restricted_ceiling_is_a_construction_error(self) -> None:
+        """The hardest rule: no configuration may send restricted content out."""
+        with pytest.raises(ValidationError, match="restricted context may never leave"):
+            ContextEnvelope.from_fields(
+                [_field("note_kind", "a", DataClassification.PUBLIC)],
+                ceiling=DataClassification.RESTRICTED,
+            )
+
+    def test_too_many_fields_are_refused(self) -> None:
+        fields = [
+            _field(f"field_{i}", "v", DataClassification.PUBLIC) for i in range(MAX_FIELDS + 1)
+        ]
+        with pytest.raises(ValidationError, match="at most"):
+            ContextEnvelope.from_fields(fields)
+
+    def test_non_field_member_is_refused(self) -> None:
+        with pytest.raises(ValidationError):
+            ContextEnvelope.from_fields(["not-a-field"])  # type: ignore[list-item]
+
+
+class TestHashIsMinimalAndHonest:
+    def test_confidential_value_cannot_influence_the_digest(self) -> None:
+        """Two envelopes differing only in a confidential field hash the same.
+
+        This is the property the module exists for. If the confidential value
+        contributed to the hash at all, these two would differ and the test names
+        the leak.
+        """
+        shared = _field("note_kind", "memo", DataClassification.PUBLIC)
+        withheld_a = _field("owner_email", "alice@example.com", DataClassification.CONFIDENTIAL)
+        withheld_b = _field("owner_email", "bob@example.com", DataClassification.CONFIDENTIAL)
+
+        envelope_a = ContextEnvelope.from_fields([shared, withheld_a])
+        envelope_b = ContextEnvelope.from_fields([shared, withheld_b])
+
+        assert envelope_a.context_hash == envelope_b.context_hash
+
+    def test_confidential_value_is_absent_from_the_canonical_input(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [
+                _field("note_kind", "memo", DataClassification.PUBLIC),
+                _field("owner_email", "alice@example.com", DataClassification.CONFIDENTIAL),
+            ]
+        )
+        assert [f.name for f in envelope.included_fields] == ["note_kind"]
+        assert envelope.excluded_field_names == ("owner_email",)
+
+    def test_included_value_changes_the_digest(self) -> None:
+        a = ContextEnvelope.from_fields([_field("note_kind", "memo", DataClassification.PUBLIC)])
+        b = ContextEnvelope.from_fields([_field("note_kind", "letter", DataClassification.PUBLIC)])
+        assert a.context_hash != b.context_hash
+
+    def test_hash_is_independent_of_field_order(self) -> None:
+        first = _field("alpha", "1", DataClassification.PUBLIC)
+        second = _field("beta", "2", DataClassification.PUBLIC)
+        assert (
+            ContextEnvelope.from_fields([first, second]).context_hash
+            == ContextEnvelope.from_fields([second, first]).context_hash
+        )
+
+    def test_hash_is_a_lowercase_sha256_hex_digest(self) -> None:
+        digest = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        ).context_hash
+        assert len(digest) == 64
+        assert digest == digest.lower()
+        int(digest, 16)
+
+    def test_classification_itself_is_not_part_of_the_content_identity(self) -> None:
+        """Labelling a value more strictly must not change the digest of the value."""
+        as_public = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        )
+        as_internal = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.INTERNAL)]
+        )
+        assert as_public.context_hash == as_internal.context_hash
+
+    def test_widening_the_ceiling_admits_more_fields(self) -> None:
+        fields = [
+            _field("note_kind", "memo", DataClassification.PUBLIC),
+            _field("owner_email", "a@example.com", DataClassification.CONFIDENTIAL),
+        ]
+        narrow = ContextEnvelope.from_fields(fields)
+        wide = ContextEnvelope.from_fields(fields, ceiling=DataClassification.CONFIDENTIAL)
+        assert narrow.context_hash != wide.context_hash
+        assert narrow.excluded_field_names == ("owner_email",)
+        assert wide.excluded_field_names == ()
+
+    def test_exclusion_record_names_the_field_without_its_value(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [_field("owner_email", "alice@example.com", DataClassification.CONFIDENTIAL)]
+        )
+        assert envelope.excluded_field_names == ("owner_email",)
+        assert "alice@example.com" not in repr(envelope.excluded_field_names)
+
+
+class TestDecisionRequestFromContext:
+    def test_request_takes_the_envelope_hash(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        )
+        request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+        assert request.context_hash == envelope.context_hash
+
+    def test_request_records_excluded_field_names(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [
+                _field("note_kind", "memo", DataClassification.PUBLIC),
+                _field("owner_email", "a@example.com", DataClassification.CONFIDENTIAL),
+            ]
+        )
+        request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+        assert request.excluded_context_fields == ("owner_email",)
+
+    def test_choice_request_still_requires_candidates(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        )
+        with pytest.raises(ValidationError):
+            DecisionRequest.from_context(DecisionKind.INTENT_ROUTING, envelope)
+        ok = DecisionRequest.from_context(
+            DecisionKind.INTENT_ROUTING, envelope, candidates=("create", "search")
+        )
+        assert ok.candidates == ("create", "search")
+
+    def test_from_context_rejects_a_non_envelope(self) -> None:
+        with pytest.raises(ValidationError, match="requires a ContextEnvelope"):
+            DecisionRequest.from_context(DecisionKind.RISK_SCORE, object())  # type: ignore[arg-type]
+
+
+class TestEvaluationCarriesTheExclusionRecord:
+    def test_evaluate_decision_surfaces_excluded_fields(self) -> None:
+        from notes_service.application.use_cases.decisioning import EvaluateDecision
+        from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
+
+        envelope = ContextEnvelope.from_fields(
+            [
+                _field("note_kind", "memo", DataClassification.PUBLIC),
+                _field("owner_email", "a@example.com", DataClassification.CONFIDENTIAL),
+            ]
+        )
+        request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+        evaluation = EvaluateDecision(
+            provider=StubDecisionProvider(), enabled=True, min_confidence=0.05
+        ).run(request)
+
+        assert evaluation.excluded_context_fields == ("owner_email",)
+        assert evaluation.context_hash == envelope.context_hash
+
+
+class TestWithholdingAnOverCapValue:
+    """A record-derived value over the cap is withheld, never a failed request.
+
+    The two caps are independent constants: ``MAX_TITLE_LENGTH`` (200) belongs to
+    the notes domain, ``MAX_FIELD_VALUE_LENGTH`` (200) to context minimisation.
+    They agree today by coincidence. ``from_fields`` refuses an over-cap value,
+    which is right for hand-authored references but wrong for subject content: a
+    legal note title would turn into a denied advisory. ``from_candidates``
+    withholds it instead and names it, so the audit trail still says the input
+    existed.
+    """
+
+    def test_over_cap_value_is_withheld_and_named(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [f.name for f in envelope.fields] == ["note_kind"]
+        assert "note_title" in envelope.excluded_field_names
+
+    def test_a_withheld_value_never_reaches_the_digest(self) -> None:
+        """The load-bearing property: withheld content cannot influence the hash.
+
+        Two envelopes that differ *only* in an over-cap value must hash
+        identically, exactly as they do for an above-ceiling value.
+        """
+        first = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "a" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+        other = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.CONFIDENTIAL, "b" * (MAX_FIELD_VALUE_LENGTH + 2)),
+            ]
+        )
+
+        assert first.context_hash == other.context_hash
+        assert first.excluded_field_names == ("note_title",)
+
+    def test_a_value_at_the_cap_is_included(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.INTERNAL, "x" * MAX_FIELD_VALUE_LENGTH)]
+        )
+
+        assert [f.name for f in envelope.fields] == ["note_title"]
+        assert envelope.excluded_field_names == ()
+
+    def test_ceiling_and_over_cap_withholding_are_unioned(self) -> None:
+        """Both reasons fold into one audit list without shadowing each other."""
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert envelope.excluded_field_names == ("note_title", "owner_email")
+
+    def test_a_withheld_name_still_has_to_be_a_legal_name(self) -> None:
+        with pytest.raises(ValidationError, match="lowercase identifier"):
+            ContextEnvelope.from_candidates(
+                [("Note Title", DataClassification.PUBLIC, "x" * (MAX_FIELD_VALUE_LENGTH + 1))]
+            )
+
+    def test_a_name_cannot_be_both_included_and_withheld(self) -> None:
+        with pytest.raises(ValidationError, match="both included and withheld"):
+            ContextEnvelope(
+                fields=(_field("note_kind", "memo", DataClassification.PUBLIC),),
+                ceiling=DEFAULT_CEILING,
+                withheld_field_names=("note_kind",),
+            )
+
+    def test_an_over_cap_candidate_still_validates_its_classification(self) -> None:
+        """The withheld path must not be a hole in the type check.
+
+        Regression: an over-cap candidate skipped validation entirely because the
+        field was never constructed, so a caller could pass a bare string and be
+        told nothing, while the identical mistake under the cap raised. Silent
+        acceptance on the one path that discards the value is how a type error
+        becomes a policy gap.
+        """
+        with pytest.raises(ValidationError, match="requires a DataClassification"):
+            ContextEnvelope.from_candidates(
+                [("note_title", "confidential", "x" * (MAX_FIELD_VALUE_LENGTH + 1))]  # type: ignore[list-item]
+            )
+
+    def test_an_over_cap_candidate_still_validates_its_value(self) -> None:
+        with pytest.raises(ValidationError, match="value must be a string"):
+            ContextEnvelope.from_candidates(
+                [("note_title", DataClassification.PUBLIC, 42)]  # type: ignore[list-item]
+            )
+
+
+class TestWithholdingReasonsAreDistinguishable:
+    """A routine exclusion and a degraded one must not look the same.
+
+    ``excluded_field_names`` answers "was an input held back". It cannot answer
+    "why", and the two reasons have opposite operational meanings: an
+    above-ceiling exclusion is the control working as designed, whereas an
+    over-cap exclusion means the advisory was computed on less than the caller
+    held. Only the second is worth alerting on.
+    """
+
+    def test_an_above_ceiling_field_reports_its_reason(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [
+                _field("note_kind", "memo", DataClassification.PUBLIC),
+                _field("owner_email", "a@example.com", DataClassification.CONFIDENTIAL),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("owner_email", WithholdingReason.ABOVE_CEILING)
+        ]
+        # And it is *not* reported as degradation.
+        assert envelope.over_cap_field_names == ()
+
+    def test_an_over_cap_field_reports_its_reason(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("note_kind", DataClassification.PUBLIC, "memo"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP)
+        ]
+        assert envelope.over_cap_field_names == ("note_title",)
+
+    def test_both_reasons_are_reported_without_shadowing(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP),
+            ("owner_email", WithholdingReason.ABOVE_CEILING),
+        ]
+        assert envelope.over_cap_field_names == ("note_title",)
+        # The flat list is unchanged: it still names both, exactly once each.
+        assert envelope.excluded_field_names == ("note_title", "owner_email")
+
+    def test_a_field_that_is_both_over_cap_and_above_the_ceiling_is_counted_once(self) -> None:
+        """One input, one reason — never double-counted in telemetry.
+
+        Over-cap wins: the value did not fit, which is the more actionable fact,
+        and reporting the name twice would make one input look like two.
+        """
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.CONFIDENTIAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1))]
+        )
+
+        assert [(w.name, w.reason) for w in envelope.withheld_fields] == [
+            ("note_title", WithholdingReason.OVER_CAP)
+        ]
+        assert envelope.excluded_field_names == ("note_title",)
+
+    def test_an_envelope_with_nothing_withheld_reports_nothing(self) -> None:
+        envelope = ContextEnvelope.from_fields(
+            [_field("note_kind", "memo", DataClassification.PUBLIC)]
+        )
+
+        assert envelope.withheld_fields == ()
+        assert envelope.over_cap_field_names == ()
+
+    def test_the_reason_is_recorded_even_though_the_value_is_not(self) -> None:
+        """Only names travel: the withheld value must not be reachable.
+
+        A withheld field that carried its value would leave the raw subject text
+        one refactor away from the digest — the exact leak withholding prevents.
+        """
+        secret = "y" * (MAX_FIELD_VALUE_LENGTH + 1)
+        envelope = ContextEnvelope.from_candidates(
+            [("note_title", DataClassification.INTERNAL, secret)]
+        )
+
+        assert secret not in repr(envelope.withheld_fields)
+        assert not hasattr(envelope.withheld_fields[0], "value")
+
+
+class TestDecisionRequestCarriesTheOverCapSubset:
+    def test_the_over_cap_names_reach_the_request(self) -> None:
+        envelope = ContextEnvelope.from_candidates(
+            [
+                ("owner_email", DataClassification.CONFIDENTIAL, "a@example.com"),
+                ("note_title", DataClassification.INTERNAL, "x" * (MAX_FIELD_VALUE_LENGTH + 1)),
+            ]
+        )
+        request = DecisionRequest.from_context(DecisionKind.RISK_SCORE, envelope)
+
+        assert request.excluded_context_fields == ("note_title", "owner_email")
+        assert request.over_cap_context_fields == ("note_title",)
+
+    def test_an_over_cap_name_must_also_be_an_excluded_name(self) -> None:
+        """Two records that disagree about what was withheld are worse than one."""
+        with pytest.raises(ValidationError, match="must also be excluded"):
+            DecisionRequest(
+                kind=DecisionKind.RISK_SCORE,
+                context_hash=ContextEnvelope.from_fields(
+                    [_field("note_kind", "memo", DataClassification.PUBLIC)]
+                ).context_hash,
+                over_cap_context_fields=("note_title",),
+            )
