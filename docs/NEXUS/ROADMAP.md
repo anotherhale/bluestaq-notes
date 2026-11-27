@@ -57,7 +57,7 @@ interruption without duplicating side effects.
 
 | Milestone | Status | Depends on |
 | --- | --- | --- |
-| M3.1 Governance policy model + versioning | NOT STARTED | M1.2 |
+| M3.1 Governance policy model + versioning | IN PROGRESS - domain + lifecycle done (NEX-047, 379a98a); durable adapter + HTTP next | M1.2 |
 | M3.2 Audit integrity (append-only, tamper-evident) | NOT STARTED | M2.5 |
 | M3.3 Separation of duties / approval workflows | NOT STARTED | M3.1 |
 | M3.4 System One / Jev classifier integration | NOT STARTED | M2.5 |

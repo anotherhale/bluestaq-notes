@@ -2459,3 +2459,72 @@ exercise both and were skipped locally. CI at `0e86304` was not polled.
 
 **Next.** NEX-047 — poll CI at `0e86304`, then clear delivery debt: issue #2 comment
 and PR #3 section for NEX-046 (lists, not tables, for issue comments on this repo).
+
+## NEX-047 (run `NEX-2026-11-27-50`) — M3.1: typed policy AST with immutable published versions
+
+**Status**: IMPLEMENTED + TESTED (local gates green) + PUSHED at `379a98a`; CI not yet
+polled; issue #2 comment and PR #3 section owed.
+
+**Phase**: 3 (governance) · **Priority**: P1 · **Milestone**: M3.1 · **Dependencies**:
+M1.2 (complete) · **Complexity**: medium · **Risk opened**: none
+
+**Objective.** The security architecture requires a declarative policy model with an
+immutable published release and explicit conflict semantics. Before this slice the
+platform had authorization rules scattered through use cases and no way to express a
+policy, version it, or answer "what was in force when this decision was made".
+
+**Scope.** `domain/governance/policy.py` (the AST, `PolicyRule`, `PolicyVersion`,
+`evaluate`), `application/ports/policy_versions.py`,
+`application/use_cases/policy_lifecycle.py` (draft, publish, rollback, history),
+`infrastructure/governance/policy_versions.py` (in-memory adapter), and 56 tests.
+
+**Acceptance criteria — met.**
+
+- The AST is closed and typed: four node types over a fixed operator vocabulary; no
+  `eval`, no fifth node a caller can invent.
+- Type combinations are checked at construction: a numeric operator needs a NUMBER
+  attribute, a `bool` is not an `int`, a NUMBER attribute refuses a `str` value.
+- A wrong-typed value at evaluation raises rather than denying, because a silent deny
+  would hide a data defect in the one place a reviewer most needs to see it.
+- A missing attribute never satisfies a condition, under every operator including
+  `!=`. Pinned by a parametrised test, because `classification != secret` passing an
+  unclassified resource is the failure mode that matters.
+- Conflict order is stated once and tested: explicit deny overrides allow, an empty or
+  non-matching policy set denies, and rule order is irrelevant.
+- `DRAFT → PUBLISHED → RETIRED` is the only transition path; `publish()` and
+  `retire()` return new values; a PUBLISHED version cannot be constructed without a
+  publisher and timestamp, and a DRAFT cannot carry them.
+- The store assigns version numbers, so two authors cannot both claim v4.
+- Publishing retires the predecessor in the same operation, so exactly one version per
+  policy id is ever in force; the retire is written first so a crash leaves nothing
+  published (deny) rather than two published versions.
+- Rollback is a new release, not a rewrite: it drafts the old rules under the next
+  number, so the rollback itself is recorded and the originals stay readable.
+- Timestamps come from the injected `Clock`, never the wall clock (R29).
+
+**Required tests** — `tests/domain/test_governance_policy.py` (34) and
+`tests/application/test_policy_lifecycle.py` (22): type refusals, missing-attribute
+non-satisfaction across four operators, deny-overrides in both orders, empty-set deny,
+composite trees, draft-not-evaluable, version immutability and lifecycle refusals,
+duplicate rule ids, bounded rationale, version-number assignment, predecessor
+retirement, rollback-as-new-release, rollback-to-draft refusal, deterministic
+`all_published` ordering.
+
+**Residual — stated, not hidden.**
+
+- **Approve is absent.** The full lifecycle includes an approval step. It depends on
+  separation of duties (M3.3), which is not built. An approval gate that always passes
+  would be a policy surface that looks governed and is not, so this slice records the
+  publisher and leaves the requirement to the slice that can enforce it.
+- **The adapter is in-memory.** A restart forgets every version, including published
+  ones. `name` reports `"in-memory"` so a reader cannot mistake it for durable. The
+  durable adapter belongs behind this same port and is the natural next governance
+  slice.
+- **No HTTP surface yet.** There is no route to draft or publish a policy. This is a
+  domain + application slice; the API and the M4.3 policy UI come later, and neither
+  should reimplement the lifecycle.
+
+**Next.** NEX-048 — a durable `PolicyVersionRepository` (SQLAlchemy + migration)
+behind the unchanged port, which turns "a restart forgets the policy" into a
+historical fact rather than a live gap. Then poll CI at `379a98a` and clear delivery
+debt for NEX-046 and NEX-047.

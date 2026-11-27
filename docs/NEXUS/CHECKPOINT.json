@@ -1,19 +1,21 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-49",
-  "timestamp": "2026-11-27T12:46:00Z",
+  "run_id": "NEX-2026-11-27-50",
+  "timestamp": "2026-11-27T13:04:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "0e86304",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Run NEX-2026-11-27-49 closed R40: operator grants moved from a process-local dict to a table, so a restart no longer forgets a bounded grant and workers no longer hold divergent copies. The port did not change - OperatorGate and ListOperatorGrants depend on OperatorGrantRepository, which is what the port was for. replace_configured is new and load-bearing: with a durable store a seed that only appended would add the whole configuration on every restart, so the seed path now reconciles its own grants and leaves human-issued ones alone.",
+  "commit": "379a98a",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Phase 3 (governance) is now open. Run NEX-2026-11-27-50 delivered NEX-047 / M3.1: a closed, typed policy AST (Comparison/AllOf/AnyOf/Not over a fixed operator vocabulary - no eval, no inventable node type), PolicyRule and PolicyVersion value objects with a DRAFT -> PUBLISHED -> RETIRED lifecycle, a PolicyVersionRepository port, a PolicyLifecycle use case, and an in-memory adapter that names itself in-memory. Publishing retires the predecessor in the same operation and writes the retire FIRST, so a crash leaves nothing published (deny) rather than two versions in force; exactly one version per policy id is ever in force. Rollback is a new release rather than a rewrite, so the rollback is itself recorded. Three semantics are pinned: a missing attribute never satisfies a condition under ANY operator including !=; a wrong-typed value raises rather than denying; explicit deny overrides allow with an empty or non-matching set denying. The store assigns version numbers. approve is deliberately absent (it needs separation of duties, M3.3 - a gate that always passes would look governed and not be), the adapter is in-memory, and there is no HTTP surface yet: all three are recorded gaps, not silent ones.",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
     "R36-auditable-half": "VERIFIED",
     "R36-governance-half": "VERIFIED",
     "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)",
-    "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed"
+    "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed",
+    "NEX-047": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a - CI NOT POLLED, delivery debt open"
   },
   "completed_tasks": [
+    "NEX-047",
     "NEX-046",
     "NEX-045",
     "R36-governance-half",
@@ -27,34 +29,31 @@
   ],
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format (199 files, 4 reformatted then clean)",
-      "ruff check (all passed after SIM103 fix)",
-      "mypy (125 source files, no issues)",
-      "pytest full suite: 1149 passed, 4 skipped, 0 failed (16.98s)",
-      "pytest new files: domain 17, application 13, API 4 - all passed",
-      "CI at e6f58c0: Backend and Frontend both completed/success, 4/4 across push and PR events"
+      "ruff check --fix (1 error fixed: unused Self import)",
+      "ruff format (275 files, 1 reformatted then clean)",
+      "mypy (132 source files, no issues)",
+      "pytest full suite: 1228 passed, 4 skipped, 0 failed (16.84s)",
+      "pytest slice files: domain 34, application 22 - all passed"
     ],
-    "status": "VERIFIED - local gates clean and CI 4/4 green at e6f58c0",
-    "note": "The slice shipped with zero dedicated tests in the prior segment; this segment added tests/domain/test_operator_grant.py (17), tests/application/test_operator_grants.py (13) and tests/api/test_ops_operator_grants_api.py (4). Expiry - the whole point of the slice - was previously untested."
+    "status": "VERIFIED LOCALLY - gates clean on the exact committed tree 379a98a; CI NOT polled",
+    "note": "The prior segment left this slice uncommitted and red: two mypy defects and an unused import. The three mypy errors were one root cause - the AST child annotations named _Node (the base class) while the validator and node_count() expect Condition (the union) - so they were widened to the union, and the Self return types on publish/retire became PolicyVersion, which is what they return once the value is a frozen dataclass. Nothing was rewritten; the 56 tests were already passing and stayed passing."
   },
-  "uncommitted_work": "None at push time. The product slice is committed and pushed at 0e86304; this docs commit follows it and is not implementation.",
+  "uncommitted_work": "None for the product slice: it is committed and pushed at 379a98a. This docs commit follows it and carries no implementation.",
   "pr_state": {
     "number": 3,
     "state": "open",
     "draft": true,
     "merged": false,
-    "body_len": 96880,
-    "body_updated_at": "2026-11-27T12:16Z",
-    "body_update_scope": "NEX-044 and NEX-045 report sections appended (oldest first) after the prior body. The AI-disclosure footer was stripped from both sections because it belongs on the issue comment. Read back at 96880 chars and asserted on short substrings, since GitHub re-wraps lines and long phrases fail spuriously.",
-    "note": "Draft and unmerged. The NEX-046 section IS appended: body 96880 -> 102516 chars, read back with 9 substring assertions and exactly one NEX-046 heading. Still draft - a human reviewer decides, and automated merging is prohibited."
+    "body_len": 102516,
+    "body_updated_at": "2026-11-27T12:48Z",
+    "body_update_scope": "NEX-046 section only. The NEX-047 section is NOT appended: outstanding delivery debt.",
+    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "reports_posted_this_segment": [
-      7218689144
-    ],
-    "note": "NEX-046 reported by comment 7218689144 (4734 chars, read back byte-identical, HTTP 201). No delivery debt outstanding. The issue stays open: the program is not done."
+    "reports_posted_this_segment": [],
+    "note": "NEX-047 is NOT yet reported: outstanding delivery debt, first action of the next run. NEX-046 is reported by comment 7218689144 (4734 chars, read back byte-identical, HTTP 201). The issue stays open: the programme is not done."
   },
   "blockers": [
     {
@@ -277,22 +276,18 @@
     }
   ],
   "next_task": {
-    "id": "NEX-047",
-    "title": "Select and implement the next Phase 5 slice (no risk-ledger entry is open)",
-    "detail": "NEX-046 is fully delivered: committed, pushed, CI 4/4 green, issue and PR both reported. Nothing is owed. R40 was the last open risk that a stored grant could close, so the next slice must come from the Phase 5 roadmap remainder rather than from the risk ledger - read the current phase section of ROADMAP.md and pick the highest-value dependency-ready item. Two candidates worth weighing: (1) run the four PostgreSQL-marked tests against a real server, which is the one gap this slice recorded and would close it rather than carry it again; (2) whatever the roadmap names next for durable runtime. Prefer (1) only if the roadmap has no higher-value dependency-ready work, because a recorded gap that is never exercised tends to be rediscovered as a bug."
+    "id": "NEX-048",
+    "title": "Durable PolicyVersionRepository behind the unchanged port (SQLAlchemy + migration)",
+    "detail": "NEX-047 records the in-memory adapter as a live gap: a restart forgets every published policy version, so a published policy has no history across a deploy. The port already exists and the use case depends on it, not on a store - this is the same shape as NEX-046 and should swap the store without moving a caller. Two properties the port promises must survive a table: version_number assignment must stay server-side and be unique per policy id (two authors must not both claim v4), and 'exactly one published version per policy id' must be enforced by the store, not only by the use case's write ordering. Also: a unique constraint on (policy_id, version_number), and a partial unique index or an equivalent guard so two rows cannot both be PUBLISHED for one policy id. Do NOT reimplement the lifecycle in SQL.",
+    "alternative": "Before starting NEX-048, spend the first minutes on delivery debt: poll CI at 379a98a, then post the NEX-047 section to issue #2 and PR #3. That is owed and is cheaper than a slice, but it is not a substitute for one."
   },
-  "next_action": "Read the Phase 5 section of docs/NEXUS/ROADMAP.md, select the next dependency-ready slice, and begin implementing it. Nothing is owed from NEX-046.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. NEX-046 is DONE and PUSHED at 0e86304 - do not redo it. 3. Its CI has not been polled: poll it first, and if it failed read the note in next_task.detail about the CHECK constraint and UTCDateTime round trip on PostgreSQL. 4. Delivery debt: the issue #2 comment and the PR #3 section for NEX-046 are both unwritten. Use lists, not tables, for issue comments on this repository. 5. The lease CLI is `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools.",
+  "next_action": "Poll CI at 379a98a. Then clear delivery debt: append the NEX-047 section to PR #3 and post the NEX-047 comment to issue #2 (lists, not tables - tables in an issue comment body return HTTP 500 on this repository). Then start NEX-048, the durable policy version store.",
+  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. NEX-047 is COMMITTED and PUSHED at 379a98a - do not redo it. 3. Its CI has NOT been polled: poll it first. 4. Delivery debt: the issue #2 comment and the PR #3 section for NEX-047 are both unwritten. Use lists, not tables, for issue comments on this repository. 5. Then start NEX-048, the durable policy version store, per next_task.detail.",
   "ci_status": {
-    "commit": "0e86304",
-    "observed_at": "2026-11-27T12:48Z",
-    "check_runs": [
-      "Backend (ruff, mypy, pytest, migrations) - completed/success - head_sha 0e86304",
-      "Frontend (typecheck, lint, test, build) - completed/success - head_sha 0e86304",
-      "Backend (ruff, mypy, pytest, migrations) - completed/success - head_sha 0e86304",
-      "Frontend (typecheck, lint, test, build) - completed/success - head_sha 0e86304"
-    ],
-    "verdict": "PASS - 4/4 completed/success at 0e86304, polled 2026-11-27T12:48Z, every check run reporting head_sha 0e86304. Two pairs because CI runs on both push and pull_request. The Backend job runs ruff, mypy, pytest and migrations, so the migration this slice adds is exercised by CI as well as locally."
+    "commit": "379a98a",
+    "observed_at": null,
+    "check_runs": [],
+    "verdict": "NOT POLLED. The window closed before CI at 379a98a could be read. This is outstanding verification, not a pass. Prior slice 0e86304 was 4/4 completed/success, polled 2026-11-27T12:48Z."
   },
   "verified_tasks": [
     "NEX-001",
@@ -340,10 +335,20 @@
     "NEX-040",
     "NEX-044"
   ],
-  "in_progress_tasks": [],
+  "in_progress_tasks": [
+    {
+      "id": "NEX-047",
+      "status": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a",
+      "missing_for_verified": [
+        "CI at 379a98a not polled",
+        "issue #2 comment not posted",
+        "PR #3 section not appended"
+      ]
+    }
+  ],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "3045a6b95b7b95af80e3d71056793a47ae375163",
+  "head_at_checkpoint": "379a98a3bce96e64f2a85cf300e317f877402bdf",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
   "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
   "completed_task_notes": {
@@ -359,22 +364,20 @@
   "branch_head_observed_at": "2026-11-27T12:16Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "0e86304"
+    "379a98a"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "0e86304",
+    "head": "379a98a",
     "remote_verified": true,
-    "remote_verified_by": "git ls-remote returned 0e863043634109e934d1ef5dc67236875f72197e == git rev-parse HEAD",
-    "product_commit": "0e86304",
-    "pr_updated": true,
-    "issue_updated": true,
-    "delivery_debt": "NONE for NEX-046. Issue #2 comment 7218689144 posted (4734 chars, read back byte-identical). PR #3 body PATCHed 96880 -> 102516 chars, read back and asserted on short substrings, still draft=true and state=open.",
-    "issue_comment_id": 7218689144,
-    "issue_comment_chars": 4734,
+    "remote_verified_by": "git ls-remote returned 379a98a3bce96e64f2a85cf300e317f877402bdf == git rev-parse HEAD",
+    "product_commit": "379a98a",
+    "pr_updated": false,
+    "issue_updated": false,
+    "delivery_debt": "OPEN for NEX-047: PR #3 section and issue #2 comment both owed. NEX-046 debt is clear.",
     "pr_body_chars": 102516
   },
-  "run_summary": "NEX-046 delivered as a vertical slice and pushed at 0e86304: a durable OperatorGrantRepository behind the unchanged port, with migration f7b3c0d95a12 and 23 persistence tests. R40 is closed in the risk ledger. Local gates green. CI not polled and delivery debt (issue #2 comment, PR #3 section) is open - both are the next run's first actions.",
+  "run_summary": "NEX-047 / M3.1 delivered as a domain + application vertical slice and pushed at 379a98a: a closed typed policy AST, PolicyRule/PolicyVersion with an immutable DRAFT -> PUBLISHED -> RETIRED lifecycle, a PolicyVersionRepository port, a PolicyLifecycle use case (draft/publish/rollback/history) whose publish retires its predecessor first and whose rollback is a new release, an in-memory adapter that names itself in-memory, and 56 tests. Local gates green: ruff format/check clean, mypy 132 files clean, pytest 1228 passed / 4 skipped. CI at 379a98a NOT polled and delivery debt (issue #2, PR #3) is open - both are the next run's first actions.",
   "head_observation": {
     "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -386,24 +389,25 @@
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
-    "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T12:16Z",
-    "note": "Final pushed head of this run, equal to local HEAD."
+    "sha": "379a98a3bce96e64f2a85cf300e317f877402bdf",
+    "remote_sha": "379a98a3bce96e64f2a85cf300e317f877402bdf",
+    "read_from": "git rev-parse HEAD and git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+    "at": "2026-11-27T13:03Z",
+    "note": "Local HEAD and the remote ref agree exactly, so the product slice is fully pushed. The run began on main at d6f92d0 in a fresh shallow clone; the feature branch was fetched at 80114ca and the slice committed on that true remote head, so no rebase was needed."
   },
   "head_at_checkpoint_note": "Final verified HEAD before the last docs commit was 3045a6b (product commit e6f58c0 plus docs commits 217ac7d and 3045a6b), confirmed with git ls-remote after push. The final docs commit that writes this file necessarily postdates it, so its own SHA cannot appear here; read the branch head with git ls-remote rather than trusting this field for the very last commit.",
   "last_completed_task": {
-    "id": "NEX-046",
-    "title": "A durable OperatorGrantRepository (closes R40)",
-    "status": "VERIFIED - local gates green and CI 4/4 at 0e86304",
+    "id": "NEX-047",
+    "title": "M3.1 governance policy model + versioning (typed AST, immutable published versions)",
+    "status": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a - NOT yet VERIFIED (CI unpolled)",
     "evidence": [
-      "ruff format clean (268 files already formatted)",
+      "ruff format clean (275 files already formatted)",
       "ruff check clean",
-      "mypy clean (126 source files)",
-      "pytest 1172 passed / 4 skipped / 0 failed",
-      "23 new persistence tests in tests/persistence/test_operator_grants.py",
-      "alembic single head f7b3c0d95a12, parent c7a91e3d5b62, no model drift",
-      "pushed c9bb7d6..0e86304; git ls-remote returned 0e86304 == git rev-parse HEAD"
+      "mypy clean (132 source files)",
+      "pytest 1228 passed / 4 skipped / 0 failed in 16.84s",
+      "56 new tests: tests/domain/test_governance_policy.py (34) + tests/application/test_policy_lifecycle.py (22)",
+      "architecture layering test green - domain/governance imports no framework, ORM or JWT library",
+      "pushed 80114ca..379a98a; git ls-remote returned 379a98a == git rev-parse HEAD"
     ]
   },
   "closed_items": [

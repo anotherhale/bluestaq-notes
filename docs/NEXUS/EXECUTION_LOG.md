@@ -5996,3 +5996,59 @@ then edited with `file_editor` instead.
 
 Poll CI at `0e86304`, then post the NEX-046 report to issue #2 and append its
 section to draft PR #3. Delivery debt is open until both are done.
+
+## Run `NEX-2026-11-27-50` — 2026-11-27T13:00Z
+
+| | |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `80114ca` (remote head, fetched into a fresh shallow clone) |
+| Ending commit | `379a98a` |
+| Push | `80114ca..379a98a`, `ls-remote` returned `379a98a` == `git rev-parse HEAD` |
+| Phase | 3 — governance, audit, Jev integration |
+| Task | NEX-047 / M3.1 governance policy model + versioning |
+
+**Recovered, not restarted.** The prior segment left this slice uncommitted and
+lint/type-red: 56 tests passing, two mypy defects and an unused import. Nothing was
+rewritten. The three mypy errors were one root cause — the AST's child annotations
+said `_Node` (the base class) while the validator and `node_count()` expect
+`Condition` (the union) — so the annotations were widened to the union and `Self`
+return types on `publish`/`retire` were replaced with `PolicyVersion`, which is what
+they actually return once the value is a frozen dataclass. After that: `ruff check`
+clean, `ruff format` reformatted one file, `mypy` clean across 132 files.
+
+**Delivered.** A closed, typed policy AST; `PolicyRule`/`PolicyVersion` value objects
+with a `DRAFT → PUBLISHED → RETIRED` lifecycle; a `PolicyVersionRepository` port; a
+`PolicyLifecycle` use case (draft, publish, rollback, history) whose publish retires
+its predecessor in the same operation and whose rollback is a new release rather than
+a rewrite; an in-memory adapter that names itself `in-memory`; 56 tests.
+
+**Decisions made this run.**
+
+- Publishing retires the predecessor *first*. A crash between the two writes then
+  leaves nothing published — deny — instead of two versions in force. Fail-closed at
+  the write-ordering level, not just at the evaluation level.
+- A wrong-typed attribute value raises at evaluation rather than denying. A silent
+  deny hides a data defect in exactly the place an auditor needs to see it. Missing
+  attributes are the different case and deny under every operator, `!=` included.
+- The store assigns version numbers, not the caller. Two authors cannot both claim v4.
+- Approval is not implemented. It needs separation of duties (M3.3), which is not
+  built; a gate that always passes would be a policy surface that looks governed and
+  is not. Recorded as a residual in the backlog entry instead of faked.
+
+**Validation.** ruff format clean (275 files), ruff check clean, mypy clean (132
+source files), `pytest` 1228 passed / 4 skipped / 0 failed in 16.84s, including the
+architecture layering test — so `domain/governance` imports no framework, ORM or JWT
+library. The 4 skips are the pre-existing PostgreSQL-marked tests.
+
+**Status, precisely.** IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED: CI at
+`379a98a` has not been polled yet, and this run's window did not reach it. Not
+delivered: the issue #2 comment and PR #3 section for NEX-047.
+
+**Recorded gaps.** The adapter is in-memory — a restart forgets every published
+version. There is no HTTP surface for drafting or publishing a policy. Both are named
+in the backlog entry, and the durable adapter is the next slice.
+
+**Environment note.** Two prior runs lost time to this terminal mangling multi-line
+heredocs and inline `python3 -c` blocks. This run wrote every multi-line body with
+`file_editor` and appended with `cat <file> >>`, and hit no corruption.

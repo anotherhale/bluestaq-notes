@@ -83,3 +83,53 @@ reporting inaccuracy only, because acquisition is gated on expiry, never on live
 cannot produce a false takeover. Legacy leases written with `host-pid` remain un-releasable by
 the new code and must be allowed to expire; the ref must never be force-deleted.
 
+
+## NEX-047 (run `NEX-2026-11-27-50`) — policy semantics chosen where silence would be a decision
+
+These are coordinator-level decisions. They shape a security-relevant contract, so
+they are recorded rather than left to be inferred from the code.
+
+**1. A missing attribute never satisfies a condition, under every operator including
+`!=`.** The natural reading of `!=` is "the value differs", and an absent value
+arguably differs from `"secret"`. That reading is a privilege escalation: a policy
+written as `classification != secret` — the obvious way to say "not classified" —
+would *pass* a resource that has no classification at all. Absence is not evidence, so
+absence denies. Pinned across all four operators by a parametrised test.
+
+**2. A wrong-typed attribute value raises; a missing one denies.** These look like the
+same case and are not. A missing attribute is normal: not every resource carries every
+attribute, and deny is the right answer. A value of the wrong type is a *defect* —
+something wrote a string where the schema promised a number. Denying quietly would
+report that defect as "not permitted", which is the one place an auditor will believe
+it. Raising sends the reader to the actual problem.
+
+**3. Retire before publish.** Publishing a new version must leave exactly one version
+in force. Doing the retire first means a crash between the two writes leaves *nothing*
+published, which denies; doing it the other way round leaves two in force, which is a
+policy question with no correct answer. Fail-closed is achieved by write ordering, not
+by a transaction the in-memory adapter does not have.
+
+**4. Rollback is a new release.** The tempting implementation restores the old rules
+in place. That erases the evidence that a rollback happened and makes the history
+unable to answer "was v3 ever in force". Drafting the old rules under a new number
+costs one row and keeps the history honest.
+
+**5. The store assigns version numbers, never the caller.** A caller-supplied number
+lets two authors both write v4 and makes "what was in force" ambiguous. This mirrors
+the repository-wide rule that no caller identity or owner id comes from a request body.
+
+**6. `approve` is not implemented, deliberately.** The lifecycle's full form includes
+approval, which needs separation of duties (M3.3). A gate that always passes would be a
+policy surface that *looks* governed and is not, and the failure would be invisible
+because the surface exists. An absent gate is visible; a fake one is not.
+
+**7. `name` on the adapter reports `"in-memory"`.** This follows NEX-046's
+`source_name` precedent: an adapter that cannot be mistaken for durable storage is
+worth a string constant. It is not cosmetic — it is the difference between a reader
+asking "where is this stored" and assuming an answer.
+
+**Carried forward.** Durable `PolicyVersionRepository` (NEX-048) must keep decisions 3
+and 5 true at the database level, not only in the use case: a unique constraint on
+`(policy_id, version_number)` and a guard that two rows cannot both be PUBLISHED for
+one policy id. Reimplementing the lifecycle in SQL is not the goal; enforcing its two
+invariants is.
