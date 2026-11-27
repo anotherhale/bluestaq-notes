@@ -5554,7 +5554,7 @@ injects both use cases from it, so the two callers cannot diverge again.
 | `ruff format --check` | clean |
 | `ruff check src/ tests/` | all checks passed |
 | `mypy` | no issues in 120 source files |
-| `pytest` (full) | 1092 passed, 4 skipped, 0 failed |
+| `pytest` (full) | 1079 passed, 4 skipped, 0 failed |
 | New tests | 9 in `test_operator_gate.py`, +2 ordering tests in `test_withholding_report.py` |
 
 The architecture layering test (`tests/architecture/test_layering.py`) is part of the full run

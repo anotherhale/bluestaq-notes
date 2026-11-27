@@ -64,7 +64,7 @@ not — and `test_audit_sweep.py` now drives the same shared gate, so the drift 
 cannot silently reappear in one of the two callers.
 
 **Validation.** ruff format clean, ruff check clean, mypy clean (120 source files), `pytest`
-**1092 passed, 4 skipped, 0 failed**. Product commit `1eb1d3b`, pushed and `ls-remote`-verified.
+**1079 passed, 4 skipped, 0 failed**. Product commit `1eb1d3b`, pushed and `ls-remote`-verified.
 
 ## R39 (run `NEX-2026-11-27-46`) — the lease could be acquired but never released
 

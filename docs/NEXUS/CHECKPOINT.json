@@ -19,14 +19,15 @@
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "clean (ruff format src/ tests/)",
+    "ruff_format": "clean (ruff format --check . -> 253 files already formatted)",
     "ruff_check": "All checks passed (src/ and tests/).",
     "mypy": "Success: no issues found in 120 source files.",
-    "pytest_full": "1092 passed, 4 skipped, 0 failed. Full suite on the committed tree.",
+    "pytest_full": "1079 passed, 4 skipped, 0 failed. Full suite re-measured on the committed tree by this run, not taken from a briefing.",
     "targeted": "tests/application/test_operator_gate.py + test_withholding_report.py + test_audit_sweep.py = 19 passed.",
     "architecture": "tests/architecture/test_layering.py green; the new port and use case import no FastAPI/SQLAlchemy/JWT.",
     "ci": "4/4 completed/success at 1eb1d3b (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 1eb1d3b, so the result is attributable to the pushed slice and not to a superseded run. Polled 2026-11-27T10:39Z.",
-    "commit_message_note": "Heredoc corrupted the message body again (third occurrence); amended with `git commit --amend -F <file>` before any push, so 1eb1d3b is the only version that reached the remote."
+    "commit_message_note": "Heredoc corrupted the message body again (third occurrence); amended with `git commit --amend -F <file>` before any push, so 1eb1d3b is the only version that reached the remote.",
+    "correction_note": "An earlier version of these records claimed 1092 passed. That figure came from a briefing describing a different tree; re-running the suite on 1eb1d3b gives 1079 passed, 4 skipped. Corrected in STATE.md, EXECUTION_LOG.md, this checkpoint, issue #2 comment 7216150877 and the PR #3 body. Recorded rather than silently overwritten."
   },
   "uncommitted_work": "None; the checkpoint commit that writes this field follows.",
   "pr_state": {
@@ -372,7 +373,7 @@
     "tracking_issue_comment_len": 4364,
     "tracking_issue_comment_scope": "R36 auditable half: defect, the two orderings, why it is not an AuthorizationProvider decision, the residual governance gap, the nine tests, validation, CI at 1eb1d3b. Lists only, no tables. Read back with 7/7 substring assertions."
   },
-  "run_summary": "NEX-2026-11-27-47. Closed the auditable half of R36. Started from the true remote head de7db43 (git ls-remote; local HEAD after checking out the feature branch). Extracted the duplicated operator allowlist check from GetWithholdingReport and SweepAuditIntegrity into one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared. Every granted read appends one entry stamped by the request's own clock; refusals record nothing, so the log is evidence of authorisation rather than of attempts. 9 files, +454/-43. Gates green on the committed tree: ruff format clean, ruff check clean, mypy 120 files, pytest 1092 passed / 4 skipped / 0 failed. Committed 1eb1d3b, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 1eb1d3b. Delivery debt cleared in-run: issue #2 comment 7216150877 and PR #3 body section, both read back and asserted.",
+  "run_summary": "NEX-2026-11-27-47. Closed the auditable half of R36. Started from the true remote head de7db43 (git ls-remote; local HEAD after checking out the feature branch). Extracted the duplicated operator allowlist check from GetWithholdingReport and SweepAuditIntegrity into one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared. Every granted read appends one entry stamped by the request's own clock; refusals record nothing, so the log is evidence of authorisation rather than of attempts. 9 files, +454/-43. Gates green on the committed tree: ruff format clean, ruff check clean, mypy 120 files, pytest 1079 passed / 4 skipped / 0 failed. Committed 1eb1d3b, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 1eb1d3b. Delivery debt cleared in-run: issue #2 comment 7216150877 and PR #3 body section, both read back and asserted.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit.",
     "last_observed_sha": "1eb1d3be842db46138c7b3ebf882df1b00ea7908",
