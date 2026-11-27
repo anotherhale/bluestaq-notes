@@ -6405,3 +6405,42 @@ same reason the gate is.
 - **CI**: UNPOLLED — the run budget expired first. Next run must poll 5a96ef6.
 - **Delivery debt**: PR #3 section and issue #2 comment for NEX-050.
 - **Next action**: poll CI for 5a96ef6, clear the delivery debt, then start NEX-051.
+
+## NEX-2026-11-27-53 (continued) — 2026-11-27T14:41Z–15:20Z
+
+Continuation of the same run id after an interruption; the NEX-050 entry above ends at
+14:41Z. This segment delivered NEX-051 and cleared the delivery debt.
+
+- **Branch**: feature/agentic-enterprise-platform
+- **Starting commit**: 5a96ef6
+- **Ending commit**: f4eae90d81ac33750510f3e8d8d69338c6921d0d
+- **Tasks completed**: NEX-051 — published governance policy enforced at the tool gateway.
+- **Files changed** (NEX-051, commit f1cafeb): application/use_cases/tools.py (+143),
+  bootstrap/container.py (+4), tests/agent/test_tool_gateway_policy.py (new, +245).
+- **Merge commit** (f4eae90): merges origin/main 4d57f39 into the branch.
+- **Tests**: 1275 passed, 4 skipped (up 11 from the restored demo-seed tests).
+- **Gates**: ruff format 286 files unchanged, ruff check clean, mypy clean (137 files).
+- **Decisions**:
+  - Enforcement sits at the tool gateway, after the capability check and before any
+    handler, because that is the one seam every agent action passes through.
+  - Deny-only, and only on a matched rule. `evaluate(())` returns DENY, which is correct
+    for a bare evaluator but would refuse every call in a deployment with no published
+    policy. Removing the `matched_rules` guard makes `create_note` fail with
+    `refused by published policy ()` — the guard is proven load-bearing, not decorative.
+  - Fails closed on evaluation error; a refusal writes the same `denied` invocation row a
+    capability refusal writes and replays idempotently.
+- **Delivery debt cleared**:
+  - PR #3 was already **merged by a human** at b0f9b56 — the debt was not PR upkeep but the
+    absence of any PR for NEX-050/NEX-051. Opened **draft PR #5** targeting main.
+  - Issue #2 updated (comment 7221930939) with NEX-051 status and the avoided-revert finding.
+- **Revert avoided**: main advanced past the branch point with d6f92d0 (demo dataset, #1).
+  A PR from the branch as-is would have deleted demo_content.py and test_demo_seed.py,
+  silently reverting #1. Rebase needs a force-push (prohibited), so origin/main was merged
+  in at f4eae90. `git diff --diff-filter=D origin/main..HEAD` now reports no files, and
+  main is an ancestor of HEAD.
+- **Blocker (BLOCKER-C)**: GITHUB_TOKEN and GH_TOKEN both began returning 401 at ~T+1100s.
+  PR #5 was already created, so delivery was unaffected; the issue comment used the repo
+  owner's local gh credential. The secret needs refreshing before the next run.
+- **CI**: polled at run end — Backend and Frontend `in_progress`. **Not claimed as passing.**
+- **Push**: f1cafeb..f4eae90, verified against the GitHub API (remote head f4eae90).
+- **Next action**: poll CI on f4eae90 / PR #5, fix any failure, then continue governance.
