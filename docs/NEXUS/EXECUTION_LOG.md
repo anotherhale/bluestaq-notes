@@ -6876,3 +6876,132 @@ code — the branch is pushed and green — and they are the next run's first ac
 **Next task**: NEX-055, the `enhanced-audit` obligation adapter. It reuses the enforcement
 seam NEX-054 established (resolve the obligation in the decision, apply it on the way out,
 record that it fired), so it should be a small slice rather than a new mechanism.
+
+## Run NEX-2026-11-27-56 — NEX-055: the `enhanced-audit` obligation gets a mechanism
+
+- **Timestamp**: 2026-11-27T17:22Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `691f9c8` (read from `git ls-remote`, not from a stored field)
+- **Ending commit**: `c55fb9f` (product commit; the docs commit that records this entry descends from it)
+- **Project phase**: Phase 3 (governance)
+
+### Task completed
+
+**NEX-055 — `enhanced-audit` obligation adapter.** Status: IMPLEMENTED, TESTED,
+COMMITTED, PUSHED. **Not CI-verified** — the clock reached the integration
+boundary before CI could be polled, so no CI claim is made.
+
+### The defect
+
+`enhanced-audit` was the last obligation with no mechanism behind it. A policy
+could impose it, the gateway would accept the obligation as satisfiable, and
+then write exactly the row it writes for any other allow. The policy read as
+enforced while the "more evidence" it demanded was never recorded. That is worse
+than the previous behaviour (an outright refusal), because a refusal is visible
+and a silently-ignored obligation is not.
+
+### The shape of the fix
+
+The obligation's mechanism *is* the record, so there is no adapter to defer to
+and nothing to filter on the way out. `_enforce_published_policy` now builds a
+`DecisionEvidence` when the decision imposes `enhanced-audit`, carrying:
+
+- the matched **rule** ids (the default trail names only the policy *versions*),
+- the **obligations** the decision imposed, so a reader sees the allow was
+  conditional rather than absolute,
+- the **attribute snapshot** the decision was evaluated against, so the decision
+  is reproducible instead of merely plausible.
+
+It is built from the same `decision` and `attributes` the gate just used — never
+re-derived from the repository — so the evidence cannot describe a different
+evaluation than the one that allowed the call. It is threaded through both the
+direct and the approval-gated paths and sealed into the invocation's
+`intent_hash`, which is what makes it evidence rather than a claim.
+
+### Migration
+
+`a1f4c8d2e635` adds `tool_invocations.decision_evidence` with
+`server_default=''` and then drops the default in a separate batch, so:
+
+- pre-NEX-055 rows backfill to "no evidence", which is exactly true of them, and
+  still verify because an empty field recomputes the earlier intent payload;
+- a writer that forgets the column fails loudly instead of silently recording
+  "no evidence";
+- the two steps must not share a batch — SQLite implements a batch as
+  create-copy-drop-rename, and copying into a table that both lacks the column
+  and has no default violates NOT NULL on every pre-existing row.
+
+No backfill was written deliberately: fabricating evidence would assert which
+rules decided a call nobody recorded.
+
+### Tests
+
+`tests/agent/test_tool_gateway_obligations.py` — 17 passed.
+
+- `enhanced-audit` removed from the parametrised "no adapter, so refuse" case;
+  it is no longer unsatisfiable.
+- `test_an_enhanced_audit_obligation_allows_the_call_and_records_evidence` — the
+  call proceeds *and* evidence exists, with all three fields checked.
+- `test_without_the_obligation_no_evidence_is_recorded` — the control; without it
+  the first test could pass for the wrong reason.
+- `test_the_evidence_is_sealed_into_the_hash_chain` — the chain verifies with the
+  evidence present, and stripping it is reported as a break.
+- `test_enhanced_audit_composes_with_redaction` — satisfying one obligation must
+  not skip the other.
+
+Two assertions were corrected during the run against real behaviour rather than
+weakened: rule ids are namespaced by the store (`gateway@allow-tool`), and
+`ChainVerdict` exposes `first_break`, not `break_at`.
+
+### Validation
+
+Run bare from the repo root on the committed tree:
+
+- `ruff format` — 291 files left unchanged
+- `ruff check` — All checks passed
+- `mypy` — Success, no issues in 138 source files
+- `pytest` (full) — **1308 passed, 4 skipped**
+- `pytest tests/agent/test_tool_gateway_obligations.py` — 17 passed
+
+**CI: not polled.** PostgreSQL-marked tests skip locally; the CI Backend job is
+what exercises the migration path on Postgres.
+
+### Decisions
+
+**D-055**: `enhanced-audit` is satisfied by recording, not by gating. The record
+*is* the mechanism, so it must be built from the evaluated decision rather than
+re-derived, and it must live inside the hash chain or it is only a claim.
+
+### Incident — heredoc corruption, fourth occurrence
+
+The first commit attempt used a heredoc for the message. The environment
+mangled the input: the body echoed back interleaved and repeated, the shell hung
+to its 120s timeout, and the commit silently did not run. The repository tree was
+**undamaged** (`git log` unchanged at `691f9c8`, working tree intact) because the
+corruption happens in the input path before execution. The message was rewritten
+with the file editor to `/tmp/nex055-msg.txt` and passed to `git commit -F`; that
+succeeded first time. Standing rule reaffirmed: never use a heredoc for
+multi-line content in this environment.
+
+### Push and verification
+
+`git push origin HEAD:refs/heads/feature/agentic-enterprise-platform` reported
+`691f9c8..c55fb9f`, and `git ls-remote` independently returned
+`c55fb9f536ecc98d85959dd8b49a949a6eb932c8` for the branch. Containment was
+verified structurally, not by grepping push output.
+
+### Delivery debt owed to the next run
+
+1. Poll CI check-runs for the head of `feature/agentic-enterprise-platform` and
+   promote NEX-055 to VERIFIED only on a concluded success. A `cancelled` job is
+   supersession by the concurrency group, never a failure.
+2. Append the NEX-055 section to PR #5.
+3. Comment on issue #2.
+
+### Next task
+
+**NEX-056** — clear the delivery debt above, then take the next dependency-ready
+governance slice: `step-up` or `rate-limit` (both reuse the NEX-054/055
+enforcement seam), or risk-based approval. `step-up`, `second-approver` and
+`rate-limit` still fail closed by refusing the call — honest, but they leave the
+policy language unable to express those requirements.

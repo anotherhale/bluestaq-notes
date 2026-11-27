@@ -3,8 +3,8 @@
  "run_id": "NEX-2026-11-27-56",
  "timestamp": "2026-11-27T17:22Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "1878cd14578ab454fbc84ca4e73067c6e512943c",
- "project_phase": "Phase 3 (governance). NEX-054 VERIFIED: the redaction obligation has a real output-filtering adapter at the tool gateway, green on CI. Remaining named gaps: the other obligation adapters (step-up, second-approver, rate-limit, enhanced-audit) and risk-based approval.",
+ "commit": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
+ "project_phase": "Phase 3 (governance). NEX-055 VERIFIED LOCALLY (IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f; CI not yet polled). All four previously-unenforceable obligations named by the programme are now accounted for: `redaction` (NEX-054, output filter) and `enhanced-audit` (NEX-055, recorded evidence sealed into the hash chain) have real mechanisms; `step-up`, `second-approver` and `rate-limit` still fail closed by refusing the call, which is honest but leaves them inexpressible. Next named gap: risk-based approval.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -17,9 +17,11 @@
   "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
   "NEX-052": "VERIFIED - CI 4/4 completed/success at 57f50d1 (polled 2026-11-27T16:30Z by run 54).",
   "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z).",
-  "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c + CI PASSED on that commit. 1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit."
+  "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c + CI PASSED on that commit. 1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit.",
+  "NEX-055": "PUSHED, NOT YET CI-VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f536ecc98d85959dd8b49a949a6eb932c8. Local gates on the committed tree: ruff format (291 files), ruff check clean, mypy 138 files, pytest 1308 passed / 4 skipped. CI for c55fb9f has NOT been polled; the next run must poll the current head from `git ls-remote` before promoting this to VERIFIED."
  },
  "completed_tasks": [
+  "NEX-055",
   "NEX-054",
   "NEX-052",
   "NEX-051",
@@ -39,15 +41,15 @@
  ],
  "validation": {
   "commands_run_on_committed_tree": [
-   "ruff format: 290 files left unchanged",
+   "ruff format: 291 files left unchanged",
    "ruff check: All checks passed",
    "mypy: Success, no issues found in 138 source files",
-   "pytest tests/agent/test_tool_gateway_obligations.py tests/bootstrap tests/architecture: exit 0",
-   "pytest (full suite): exit 0"
+   "pytest tests/agent/test_tool_gateway_obligations.py: 17 passed",
+   "pytest (full suite): 1308 passed, 4 skipped"
   ],
-  "scope": "Run bare from the repo root on the feature-branch tree, first at the checkout 2631f4f plus the NEX-054 working tree, then on the committed tree.",
-  "not_run": "PostgreSQL-marked tests skipped locally; the CI Backend job runs the migration path. CI was not polled this run.",
-  "ci": "1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit."
+  "scope": "Run bare from the repo root on the feature branch, on the exact tree that was committed.",
+  "not_run": "CI was not polled this run - the clock reached the integration boundary. PostgreSQL-marked tests skip locally; the CI Backend job exercises the migration path.",
+  "ci": "NOT POLLED for c55fb9f. Do not claim CI passed for NEX-055."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -77,10 +79,11 @@
  "risks": [
   "Concurrent agent runs push to this branch. Fetch and verify containment with `git merge-base --is-ancestor <sha> <remote head>`; never trust grep over push output.",
   "An obligation kind with no handler refuses agents by design. The refusal must name the kind, or the policy author sees an unexplained outage.",
-  "Heredocs corrupt multi-line input in this environment (three occurrences across two runs, one of them silently truncating a commit message). Write multi-line content with the file editor and pass it to `git commit -F <file>` or `python3 <file>`."
+  "Heredocs corrupt multi-line input in this environment (four occurrences now, including this run's first commit attempt). Write multi-line content with the file editor to a file and pass it to `git commit -F <file>` or `python3 <file>`. The repo tree was undamaged, but the commit silently did not run and the command burned its timeout.",
+  "enhanced-audit evidence is built from the same decision object the gate used, never re-read from the repository, so it cannot describe a different evaluation. Do not 'helpfully' re-derive it later."
  ],
- "next_task": "NEX-055: report NEX-054 to PR #5 and issue #2 (the outstanding delivery debt), then take the next dependency-ready governance task - most likely the `enhanced-audit` obligation adapter, which reuses the same enforcement seam NEX-054 established.",
- "next_action": "1. Start NEX-055: the enhanced-audit obligation adapter, reusing the enforcement seam NEX-054 established (resolve in the decision, apply on the way out, record that it fired). 2. Poll CI on the head. 3. Report NEX-055 to PR #5 and issue #2.",
+ "next_task": "NEX-056: report NEX-055 to PR #5 and issue #2 (append the enhanced-audit section with its local gate evidence and an explicit 'CI not yet polled' caveat), poll CI on the head for c55fb9f, then take the next dependency-ready governance task - most likely `step-up` or `rate-limit`, which share the NEX-054/055 enforcement seam, or risk-based approval.",
+ "next_action": "1. Poll CI check-runs for the current head of feature/agentic-enterprise-platform; promote NEX-055 to VERIFIED only on a concluded success (a `cancelled` job is supersession, never a failure). 2. Append the NEX-055 section to PR #5. 3. Comment on issue #2. 4. Begin the next obligation adapter.",
  "recovery_instructions": "NEX-054 product code is COMMITTED and PUSHED at 1878cd1; containment was verified structurally (merge-base --is-ancestor plus cat-file on the remote head). Nothing is in flight. CI for 1878cd1 was not polled. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5.",
  "ci_status": {
   "head_polled": "c825db61859591a46b5d4fc1d957130f126db9f8",
@@ -161,16 +164,16 @@
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "1878cd14578ab454fbc84ca4e73067c6e512943c",
+  "head": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
   "remote_verified": true,
-  "remote_verified_by": "git merge-base --is-ancestor 1878cd1 <remote head>, and git cat-file -e <remote head>:src/notes_service/domain/redaction.py",
-  "pr_updated": true,
-  "issue_updated": true,
-  "delivery_debt": "None. NEX-054 is in PR #5 (body 15204 -> 17344 chars, section verified present) and reported on issue #2 (comment 7224338413). PR #5 remains unmerged for human review.",
-  "ci_verified": true,
-  "issue_comment": "7224338413"
+  "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned exactly c55fb9f536ecc98d85959dd8b49a949a6eb932c8 after the push (691f9c8..c55fb9f).",
+  "pr_updated": false,
+  "issue_updated": false,
+  "delivery_debt": "NEX-055 is NOT yet reported to PR #5 or issue #2, and its CI is not polled. Both are owed to the next run. PR #5 remains unmerged for human review.",
+  "ci_verified": false,
+  "issue_comment": null
  },
- "run_summary": "Implemented NEX-054. The redaction obligation previously had no adapter, so a policy that said 'allow with redaction' was refused outright. The shape-based credential judgement moved from bootstrap/logging_config.py into domain/redaction.py so the log formatter and the tool gateway share one implementation instead of drifting copies; the formatter re-exports it so no importer changed. InvokeTool now filters the tool result when a redaction obligation is present, on both the direct and the approval-gated path, and records an audit outcome that says redaction fired without naming the withheld fields. Filtering happens on the way out only, so the stored note is untouched. Unenforceable obligations still refuse the whole call. The run also found and corrected a run-integrity problem: it began on main instead of the authorized branch, so the gates were re-run on the feature-branch tree before the commit was made.",
+ "run_summary": "Implemented NEX-055. `enhanced-audit` was the last obligation with no mechanism: a policy could demand that an attempt be recorded with more evidence than the default while the gateway wrote the identical row, so the policy would have read as enforced with nothing behind it. Because the obligation's mechanism *is* the record, there is no separate adapter and nothing to defer: the gateway now builds DecisionEvidence (matched rule ids, obligations imposed, attribute snapshot) from the very decision and attributes it just evaluated, threads it through both the direct and the approval-gated paths, and seals it into the invocation's intent_hash so it cannot be added to, trimmed, or rewritten afterwards. Migration a1f4c8d2e635 adds the column with a server default and then drops it, so pre-NEX-055 rows read back as 'no evidence' - which is true of them - and still verify; no backfill, because fabricating evidence would assert which rules decided a call nobody recorded. Four tests pin the contract, including that removing the evidence breaks chain verification. The run also hit the environment's heredoc corruption on its first commit attempt; the tree was undamaged, the message was rewritten to a file, and the commit succeeded. CI was not polled - the clock reached the integration boundary.",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -219,7 +222,7 @@
  "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
  "last_run": "NEX-2026-11-27-54",
  "decisions_this_run": [
-  "D-054: obligations are a separate axis on PolicyDecision, not a third PolicyEffect (ADR-014). Unknown obligation denies. Satisfaction at the enforcement point, not in evaluate()."
+  "D-055: enhanced-audit is satisfied by recording, not by gating. The record is the mechanism, so it must be built from the evaluated decision rather than re-derived, and it must be inside the hash chain or it is only a claim."
  ],
  "ci": {
   "head": "2ae495d",
