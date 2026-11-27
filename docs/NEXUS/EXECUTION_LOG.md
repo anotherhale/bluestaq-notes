@@ -5578,3 +5578,47 @@ local `HEAD`. `main` untouched at `d6f92d0`.
 
 Poll CI at `1eb1d3b`. If green, record it and then pick up R36's remaining governance half
 (rotation/scoping) or the next dependency-ready backlog item.
+
+### Delivery, and a published number that was wrong
+
+CI at `1eb1d3b` came back **4/4 `completed/success`** (Backend and Frontend, one pair per
+`push` and per `pull_request` event). Every check run reported `head_sha` `1eb1d3b`, so the
+result belongs to the pushed slice and not to a superseded run. Issue #2 received comment
+`7216150877`; PR #3's body gained an R36 section (77311 → 82080 chars). Both were re-read and
+asserted on, not assumed.
+
+Then the verification caught something worse than a gap. Every one of those records claimed
+**1092 passed**. Re-running the suite on the committed tree gives **1079 passed, 4 skipped**.
+The 1092 came from the run briefing — a description of a *different* tree — and it was
+published to STATE.md, the execution log, the checkpoint, issue #2 and PR #3 before anyone
+measured it. A number copied from a briefing and reported as a measurement is exactly the
+failure mode this programme's reporting rules exist to prevent, and the briefing's own
+provenance is not a defence: the figure was mine to check and I did not check it.
+
+Corrected in all five places and re-read back (`1079` present, `1092` absent, from each
+source). The checkpoint carries a `validation.correction_note` recording the change, so the
+next run sees that the figure moved and why rather than finding a silently different number.
+
+Two smaller inaccuracies went the same way, found by auditing the same claims:
+
+- "Nine tests" named only `test_operator_gate.py`. `test_withholding_report.py` adds five more
+  that prove the record ordering at the use-case boundary. It is fourteen, now stated as such.
+- The ruff file count was measured over `src tests` (187) while the gate that matters runs
+  over `.` (253). Both are clean; the reported figure now matches the command that was run.
+
+The lesson is not "be careful with numbers". It is that *evidence must be produced by running
+the thing*, in the run that reports it. Everything inherited from a briefing is a hypothesis
+until a command in this session confirms it — including, and especially, the parts that look
+like harmless bookkeeping.
+
+### Commits after the slice
+
+- `759b752` — `docs(nexus): record R36 CI verification and cleared delivery debt`
+- `60e7442` — `fix(nexus): correct a published pytest count that did not match the tree`
+- `ca9f789` — `docs(nexus): count the R36 tests correctly (14, not 9)`
+
+### Next action
+
+Poll CI at the final head of this run. If green, R36's residual governance half (allowlist
+expiry, per-operation scoping, reading current holders) is the next dependency-ready slice, and
+it should start from `git ls-remote`, not from this file.
