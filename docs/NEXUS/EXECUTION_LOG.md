@@ -5719,3 +5719,49 @@ integrated is worse than not starting it. It is the next run's first task, and
 that run must establish the branch head with `git ls-remote` before planning:
 this run began on `main` in a fresh clone and had to fast-forward the feature
 branch to reach `7ac7230`.
+
+## Run NEX-2026-11-27-48 (second segment) — NEX-044, per-operation scoping of the operator allowlist
+
+**Start:** `70353c7` (true remote head, from `git ls-remote`; the run began on `main` at `d6f92d0`
+in a fresh shallow clone and fetched the feature branch rather than trusting the local ref).
+**End:** `16b0287` plus the docs commit that writes this entry. **Branch:**
+`feature/agentic-enterprise-platform`. **Phase:** Phase 5, R36's governance half.
+
+**Delivered — NEX-044.** The operator allowlist was one flat set, so each grant
+bought every platform-wide view. Grants are now `<user-id>:<scope>`; an unnamed
+scope is not granted; `*` is the only way to grant everything and nothing grants it
+by default; an id with an empty scope set admits nobody. Wrong-scope refusal is
+**404**, not 403, so probing learns neither that the endpoint exists nor that the
+caller is any kind of operator. 13 files, +360/-47.
+
+**A real defect, found by the test that was written to be able to find it.**
+`UserId` subclasses `uuid.UUID`; its constructor takes a hex string, not a `UUID`
+object. The config parser passed a `UUID`, so every *valid* grant was rejected as
+"non-UUID". Fail-closed, but it would have locked every operator out at startup and
+blamed their configuration for it. A test asserting only that malformed grants
+raise would have passed. The test that caught it asserted that a valid grant
+*parses*.
+
+**Validation, all run in this session on the committed tree.** `ruff format` 257
+files already formatted; `ruff check` all passed (one F401 fixed — an unused
+`UserId` import left in `container.py` once the gate stopped parsing ids itself);
+`mypy` no issues in 121 source files; `pytest` **1115 passed, 4 skipped, 0 failed**
+(full suite, not a subset).
+
+**Push.** `70353c7..16b0287`, a fast-forward, verified with `git ls-remote` — not
+inferred from a zero exit code. `main` untouched at `d6f92d0`.
+
+**CI: no verdict.** Four check runs were created against `head_sha` `16b0287` and
+were still `in_progress` when the window closed. This entry deliberately does not
+call that green. The next run polls `/commits/16b0287/check-runs` first.
+
+**Delivery debt, stated plainly.** The issue #2 comment and the PR #3 section for
+NEX-044 are **not written**. The window went to the slice, its gates and the push,
+and integration of *code* was prioritised over integration of *prose*. PR #3
+remains draft and unmerged.
+
+**Next task.** R36's remaining half: a stored grant — user, scope, granted-at,
+expires-at, granted-by — with a repository port and adapter, so a grant can expire
+and an operator can read who currently holds what. `OPS_OPERATOR_USER_IDS` becomes
+the seed path for it. Keep the 404-not-403 refusal and the record-on-grant
+behaviour: those are the parts already right.
