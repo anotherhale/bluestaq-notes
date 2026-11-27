@@ -7343,3 +7343,88 @@ the interesting fact is that the ADR now has an implementation.
 **Next** NEX-059: `second-approver`, the last of the five named obligations without a real
 mechanism, and the one where the obvious implementation (any second approval) silently
 defeats the control. It must be a second *distinct* human.
+
+## Run `NEX-2026-11-27-60` — NEX-059: `second-approver` becomes a real two-person control
+
+| Field | Value |
+| --- | --- |
+| Started | 2026-11-27T19:31Z |
+| Ended | 2026-11-27T19:52Z |
+| Starting commit | `bfb4e2c` (read from `git ls-remote`, not a stored field) |
+| Ending commit | `39fa1db` (product; a docs commit follows) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Run budget | 30 min hard cap, 25 min working deadline |
+
+**Tasks completed.** NEX-059 — `second-approver` enforcement. One vertical slice: domain
+aggregate, application threshold derivation, persistence, one additive migration, 11 tests.
+Backlog entry written. Checkpoint, STATE and this log updated.
+
+**What the slice actually decides.** The obligation was refused because no mechanism
+existed. The obvious mechanism — accept any approval when the obligation is present —
+silently defeats the control: the action runs and nothing records that one human signed.
+So the threshold is persisted on the request (`required_approvals`, closed 1-or-2) instead
+of being passed to the gateway, where a forgotten argument would silently weaken a
+two-person control to one signature. `approve()` records the first signature and leaves the
+request `PENDING`; a second **distinct** human completes it, and distinctness is enforced
+in the aggregate rather than the use case.
+
+**Fail-closed edges.** `is_usable` is false when `approvals_recorded < required_approvals`,
+so a contradictory row cannot spend an unsatisfied control. `raise_required_approvals()`
+only raises and refuses once a signature exists. A denial after a partial approval keeps
+both the grant and the refusal on the record.
+
+**Files changed.** `domain/agent/entities.py` (+165), `application/use_cases/tools.py` (+46),
+`infrastructure/db/agent_repositories.py` (+48), `infrastructure/db/models.py` (+20),
+`tests/agent/test_tool_gateway_obligations.py` (retargeted, ±30),
+`migrations/versions/e5a9c3b7d812_two_person_approval.py` (new),
+`tests/agent/test_second_approver_obligation.py` (new, 11 tests), plus `BACKLOG.md`,
+`STATE.md`, `CHECKPOINT.json`, this file.
+
+**Tests executed.** `.venv/bin/python -m pytest -q` → exit 0, full suite green, 0 FAILED.
+`tests/agent/test_second_approver_obligation.py` → 11 passed.
+`tests/agent/test_tool_gateway_obligations.py` → passed. `alembic heads` → `e5a9c3b7d812`,
+single linear head.
+
+**Gates.** `.venv/bin/ruff format` → 1 reformatted then `--check` clean at 297 files.
+`.venv/bin/ruff check` → All checks passed. `.venv/bin/mypy` → 139 files, no issues. All run
+bare, exactly as CI runs them.
+
+**Decisions.** D-059a threshold persisted on the request, not passed to the gateway.
+D-059b distinctness in the aggregate, not the use case. D-059c closed 1-or-2 vocabulary; a
+larger value is a `ValidationError`, not a silent clamp. D-059d a denial after a partial
+approval preserves the first grant in its own field. D-059e the stale fail-closed test was
+retargeted, not deleted.
+
+**Mid-run repairs.** Two self-inflicted defects in the new test file, both caught by the
+gates rather than by CI: three `RUF059` unused-unpack warnings, and one over-eager rename
+that broke two `F821` references (that test *did* use `secret` and `note` further down). A
+third failure was a test asserting a no-op: `raise_required_approvals(2)` on a request that
+already required 2 returns early, so the guard it meant to exercise never ran. Rewritten to
+raise a 1-approver request to 2 with a signature already present — the case the guard
+exists for.
+
+**Commits created.** `39fa1db` — `feat(agent): enforce second-approver as a real two-person
+control`. Commit message written via `file_editor` to `/tmp` and passed with `git commit -F`;
+verified afterwards (`0` corruption markers, 41 lines as authored) before pushing.
+
+**Push status.** Pushed `bfb4e2c..39fa1db`. Verified by independent `git ls-remote`: remote
+and local both read `39fa1dbcbd93550426d370d6ea9988c89fc8a636`.
+
+**CI results.** **NOT POLLED.** The clock expired after the push. NEX-059 is therefore
+IMPLEMENTED + TESTED + COMMITTED + PUSHED, but **not VERIFIED** — a push is not a verdict.
+
+**PR / issue.** Not updated this run; budget went to the slice and the integration step.
+Delivery debt now covers NEX-057, NEX-058 and NEX-059.
+
+**Risks.** Eight slices stack in PR #5; review cost is real. A UI reading only
+`decided_by_user_id` would render a half-approved-then-denied request as a plain approval.
+`required_approvals` is only as safe as the absence of a writer that sets `status` directly;
+`is_usable` is the backstop, not the primary defence.
+
+**Next exact action.** Poll
+`GET /repos/anotherhale/bluestaq-notes/commits/39fa1db/check-runs` until every entry is
+`status=completed`; on 4/4 `success` promote NEX-059 to VERIFIED in the checkpoint and
+STATE. Then append NEX-057/058/059 to PR #5 and post one issue #2 comment — the interesting
+fact is that all five ADR-015 obligations now have mechanisms behind them. Then add the
+`derive_assurance` acr/amr mapping test, still untested, which is the signal `step-up` rests
+on.

@@ -7,15 +7,52 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md). **NEX-058** (run 59): assurance is persisted and `step-up` is **enforced** from evidence, not refused. Four of the five named obligations have real mechanisms. **Remaining gaps, named:** `second-approver`, risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md). **NEX-058** (run 59): assurance is persisted and `step-up` is **enforced** from evidence, not refused. **NEX-059** (run 60): `second-approver` is a real **two-person** control — all five named obligations now have mechanisms. **Remaining gap, named:** risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 57) | `27bbc82` — read from `git ls-remote` at run start, not from a stored field. |
-| Head commit (measured) | Product commit `e7c7315` (NEX-056), pushed and verified by an independent `git ls-remote` after the push. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
-| Last CI result | **`e7c7315` (NEX-056): Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both `completed/success`**, polled 2026-11-27T18:14Z. Previous anchors `c55fb9f` (NEX-055) and `1878cd1` (NEX-054) also 4/4 green. |
-| Tracking issue | #2 (open) — **reported NEX-054/055/056 this run** (comment `7225253883`). The issue stays open: the programme is not done. |
-| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body now carries NEX-052…NEX-056 evidence** (appended this run, 21968 chars, 33 files). Automated merging is prohibited; a human reviewer decides. |
+| Starting commit (run 60) | `bfb4e2c` — read from `git ls-remote` at run start, not from a stored field. |
+| Head commit (measured) | Product commit `39fa1db` (NEX-059), pushed and verified by an independent `git ls-remote` after the push (remote and local both read `39fa1db`). The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
+| Last CI result | **`a4003bf` (NEX-058 docs head): all four check-runs `completed/success`**, polled 2026-11-27T19:23Z. **`39fa1db` (NEX-059) was NOT polled** — the clock ran out; a push is not a verdict. Poll it before promoting NEX-059. |
+| Tracking issue | #2 (open) — last reported NEX-056 (comment `7225253883`). **NEX-057/058/059 delivery is owed.** The issue stays open: the programme is not done. |
+| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body carries NEX-052…NEX-056 evidence**; NEX-057/058/059 are owed. Eight slices now stack in one PR — a reviewer may reasonably ask for a split. Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-059 (run `NEX-2026-11-27-60`) — one signature must not authorise a two-person control
+
+`second-approver` was the last of ADR-015's obligations the gateway simply refused. The
+obvious fix — "the obligation is present, so accept an approval" — *silently defeats* the
+control: the request is approved, the action runs, and nothing anywhere records that only
+one human signed.
+
+So the threshold lives on the request, not in a gateway argument. `required_approvals` is a
+closed 1-or-2 vocabulary. A gateway that forgot to pass the number cannot accept one
+signature for a two-person control, because the requirement travels with the thing being
+approved. `approve()` records the first signature and leaves the status `PENDING`; only a
+second, **distinct** human completes it. Distinctness is checked in the aggregate, not the
+use case — a use-case check is one refactor away from being skipped.
+
+Three fail-closed edges are worth naming. `is_usable` returns false when fewer signatures
+are recorded than required, so a hand-written `UPDATE`, a partial migration, or a future
+writer that sets `status` directly cannot spend a control it never satisfied.
+`raise_required_approvals()` may only raise and refuses once any signature exists —
+silently un-approving a recorded human decision would rewrite history. And a denial after
+a partial approval keeps **both** the grant and the refusal, because an auditor needs both
+to understand how the control actually behaved.
+
+| Evidence | Value |
+| --- | --- |
+| Commit | `39fa1db` — pushed, `git ls-remote` and `git rev-parse HEAD` both read it |
+| Tests | 11/11 in `tests/agent/test_second_approver_obligation.py` |
+| Gates | ruff format 297 files, ruff check clean, mypy 139 files, full pytest exit 0 |
+| Migration | `e5a9c3b7d812`, additive, single linear head, `required_approvals` defaults to 1 |
+| CI | **NOT POLLED** — the clock ran out. A push is not a verdict. |
+
+One existing test had to be retargeted rather than deleted: it asserted `second-approver`
+had no adapter, which stopped being true. The module docstring that made the same claim was
+corrected so it does not mislead the next reader.
+
+**Next:** poll `39fa1db`, promote on 4/4, then clear delivery debt. After that, the last
+named obligation without a mechanism is risk-based approval.
 
 ## NEX-058 (run `NEX-2026-11-27-59`) — `step-up` is enforced, not merely designed
 
