@@ -133,3 +133,27 @@ and 5 true at the database level, not only in the use case: a unique constraint 
 `(policy_id, version_number)` and a guard that two rows cannot both be PUBLISHED for
 one policy id. Reimplementing the lifecycle in SQL is not the goal; enforcing its two
 invariants is.
+
+## D-054 — Obligations are a separate axis on `PolicyDecision` (ADR-014)
+
+**Run:** NEX-2026-11-27-54 · **Status:** decided, implementation not started
+
+`PolicyEffect` has two members and its docstring argues deliberately against a third. The
+security architecture names three effects and requires obligations be satisfied before an
+operation proceeds. Both are right, and they are not in conflict once you separate the
+questions: effect answers *may this proceed at all*, obligations answer *what must happen
+for it to proceed*.
+
+So obligations become a tuple on `PolicyDecision`, not a third effect. An obligation on a
+`DENY` is a contradiction and raises. An obligation the gateway has no handler for
+**denies** — that is the fail-closed rule, and it is what allows the type to land before
+every obligation kind is implemented, without a window where it fails open.
+
+Satisfaction happens at the enforcement point, not in `evaluate()`. `evaluate()` is pure
+and cannot observe approvals or the clock; asking it to would require trusting a
+caller-supplied "satisfied" flag, which is the exact claim the gateway exists to refuse.
+
+Recorded as ADR-014 rather than implemented directly because it changes the shape of the
+decision type that every enforcement path consumes. That is an architecture decision, and
+the repository's rule is that architecture documents are contracts — a shape change gets an
+ADR before code.

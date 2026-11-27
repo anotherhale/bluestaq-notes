@@ -84,7 +84,7 @@
   "Enforcement is deny-only by design: a published allow rule cannot restore authority. Do not read an allow rule as a grant.",
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
- "next_task": "Obligations - the third policy effect the security architecture lists (deny, allow, obligations) and the only one the gateway does not model. An obligation allows the call but attaches required actions, so the decision must carry them back to the caller and into the audit trail. Read the obligation contract in docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md first, and write an ADR if the gateway return type has to change shape.",
+ "next_task": "Implement ADR-014 (obligations) in three steps, each separately committable. (1) Domain: add Obligation value type, PolicyRule.requires, and PolicyDecision.obligations; evaluate() collects them from matched ALLOW rules and raises if a DENY rule carries one. (2) Gateway: obligation registry keyed by kind; unknown kind or unmet handler denies through the existing _record_policy_denial audit path, naming the obligation. (3) Tests: unknown obligation denies, unmet obligation denies, satisfied obligation proceeds and is audited. Start with step 1 only - it is domain-only and cannot fail open.",
  "next_action": "1. Read the obligation contract in docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md. 2. Design the slice: a policy decision that allows a call but attaches required actions, which the gateway must surface to the caller and record in the audit trail. 3. Write an ADR if the gateway's return type must change shape.",
  "recovery_instructions": "Read docs/NEXUS/STATE.md. HEAD is pushed, the tree is clean, and CI is green at 57f50d1. For any future CI check poll the current branch head from `git ls-remote origin feature/agentic-enterprise-platform` rather than a SHA quoted in this file: writing this file creates a commit, which cancels any run still in progress. A concluded run is never retracted. If the branch falls behind origin/main, merge origin/main (never rebase; force-push is prohibited). Never merge PR #5.",
  "ci_status": {
@@ -215,5 +215,8 @@
   "note": "NEX-052 verification is anchored to the CI evidence commit, which is a concluded run and therefore permanent. It is not anchored to the moving head."
  },
  "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
- "last_run": "NEX-2026-11-27-54"
+ "last_run": "NEX-2026-11-27-54",
+ "decisions_this_run": [
+  "D-054: obligations are a separate axis on PolicyDecision, not a third PolicyEffect (ADR-014). Unknown obligation denies. Satisfaction at the enforcement point, not in evaluate()."
+ ]
 }
