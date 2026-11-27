@@ -6680,9 +6680,45 @@ would fail open. With it, the feature lands incrementally and a missing handler 
 refusal, not a skip.
 
 Implementation is scoped into three separately committable steps, recorded in
-`CHECKPOINT.json` → `next_task`. Step 1 is domain-only and cannot fail open; that is the
-one to start with.
+`CHECKPOINT.json` → `next_task`.
+
+**Correction (same run, see addendum below).** The claim that step 1 is "domain-only and
+cannot fail open" is wrong and is retracted. `PolicyRule` is persisted as JSON by
+`infrastructure/governance/policy_codec.py`, which encodes only `rule_id`/`effect`/`when`.
+A `requires` field added to the dataclass alone would vanish on reload - a stored
+obligation silently disappearing, failing open in the precise direction the feature
+exists to prevent. Step 1 is **domain + codec**, with a round-trip test.
 
 ### Format gate
 
 `.venv/bin/ruff format --check`: 288 files already formatted (ADR-014 added one).
+
+### Addendum - run 54 continuation (09:20-09:47Z)
+
+Continued past the first checkpoint to close the run cleanly.
+
+- `03f4620` - committed the state + log corrections (checkpoint fields, decisions).
+- `2ae495d` - recorded the codec round-trip hazard in `next_task` and retracted the
+  "domain-only" scoping above. Found by reading `policy_codec.py` rather than assuming the
+  domain type was self-contained.
+- `fd33953` - recorded CI evidence and promoted PR #5 to ready for review.
+
+**CI, verified not assumed.** Polled `check-runs` on head `2ae495d` until both jobs reached a
+terminal state: Backend (ruff, mypy, pytest, migrations) = success, Frontend (typecheck,
+lint, test, build) = success. The two preceding docs commits (`ef81697`, `03f4620`) show
+`conclusion=cancelled` in the runs list because each later push superseded its run -
+supersession, not failure. Recorded in `CHECKPOINT.json` -> `ci` so no future run reads those
+as red.
+
+**PR #5** promoted out of draft (`markPullRequestReadyForReview`), still **unmerged** -
+NEXUS never merges. 27 files, +1990/-532, mergeable.
+
+**Tooling note worth keeping.** `PATCH /pulls/5 {"draft": false}` returns HTTP 200 and does
+nothing at all; only the GraphQL `markPullRequestReadyForReview` mutation changes draft
+state. A 200 is therefore not evidence - read `isDraft` back. Same class of trap as the
+`tsc --noEmit` no-op already documented in `AGENTS.md`.
+
+**Scope discipline.** About nine minutes remained after the CI poll. That is below the
+threshold for starting ADR-014 step 1 (domain + codec + tests, a security-sensitive slice),
+so the run stopped with the tree clean and the next action recorded rather than beginning
+work it could not finish and verify.
