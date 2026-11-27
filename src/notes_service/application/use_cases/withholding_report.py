@@ -17,19 +17,25 @@ an explicit operator allowlist and fails closed in both directions:
 
 The snapshot carries counts only — never a field name, value, note id or user id.
 
+The allowlist and its record now live in
+:class:`~notes_service.application.use_cases.operator_gate.OperatorGate`, shared
+with every other operational view, so the two cannot drift and each granted read
+is recorded. See that module for the gate's own guarantees.
+
 It takes no unit of work: reading a counter mutates nothing and must not open a
 transaction to say so.
 """
 
 from __future__ import annotations
 
-from notes_service.application.errors import ResourceNotFound
 from notes_service.application.ports.withholding import (
     WithholdingRecorder,
     WithholdingSnapshot,
 )
+from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.domain.identity.principal import Principal
-from notes_service.domain.identity.value_objects import UserId
+
+OPERATION = "withholding-report"
 
 
 class GetWithholdingReport:
@@ -39,17 +45,16 @@ class GetWithholdingReport:
         self,
         *,
         withholding_recorder: WithholdingRecorder,
-        operator_ids: frozenset[UserId],
+        operator_gate: OperatorGate,
     ) -> None:
         self._withholding_recorder = withholding_recorder
-        self._operator_ids = operator_ids
+        self._operator_gate = operator_gate
 
     def run(self, principal: Principal) -> WithholdingSnapshot:
-        # Explicit, single-point gate. Deliberately not an AuthorizationProvider
-        # decision: that policy decides note *content* access, and platform
-        # operations must never be reachable by content access alone.
-        if principal.user_id not in self._operator_ids:
-            raise ResourceNotFound("not found")
+        # Platform operations must never be reachable by content access alone, so
+        # the gate is explicit rather than an AuthorizationProvider decision. A
+        # granted read is recorded; a refused one is not.
+        self._operator_gate.authorize(principal, operation=OPERATION)
         return self._withholding_recorder.snapshot()
 
 

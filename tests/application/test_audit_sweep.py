@@ -28,10 +28,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.errors import ResourceNotFound
 from notes_service.application.use_cases.audit_sweep import SweepAuditIntegrity
+from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.db.models import ToolInvocationRow
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from notes_service.infrastructure.security.clock import SystemClock
+from notes_service.infrastructure.security.operator_access_log import (
+    InMemoryOperatorAccessLog,
+)
 from tests.conftest import ALICE, BOB, auth_headers
 
 READ = "read_note"
@@ -58,7 +63,11 @@ def _use_case(
 ) -> SweepAuditIntegrity:
     return SweepAuditIntegrity(
         uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
-        operator_ids=frozenset(UserId.parse(raw) for raw in operators),
+        operator_gate=OperatorGate(
+            operator_ids=frozenset(UserId.parse(raw) for raw in operators),
+            access_log=InMemoryOperatorAccessLog(),
+            clock=SystemClock(),
+        ),
         max_agents=max_agents,
     )
 

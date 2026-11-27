@@ -17,9 +17,14 @@ from __future__ import annotations
 import pytest
 
 from notes_service.application.errors import ResourceNotFound
+from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
+from notes_service.infrastructure.security.clock import SystemClock
+from notes_service.infrastructure.security.operator_access_log import (
+    InMemoryOperatorAccessLog,
+)
 from notes_service.infrastructure.security.withholding_recorder import (
     InMemoryWithholdingRecorder,
 )
@@ -45,10 +50,23 @@ def _recorder() -> InMemoryWithholdingRecorder:
     return recorder
 
 
-def test_an_operator_reads_the_totals() -> None:
-    use_case = GetWithholdingReport(
-        withholding_recorder=_recorder(), operator_ids=frozenset({ALICE})
+def _use_case(
+    *,
+    operators: frozenset[UserId],
+    access_log: InMemoryOperatorAccessLog | None = None,
+) -> GetWithholdingReport:
+    return GetWithholdingReport(
+        withholding_recorder=_recorder(),
+        operator_gate=OperatorGate(
+            operator_ids=operators,
+            access_log=access_log or InMemoryOperatorAccessLog(),
+            clock=SystemClock(),
+        ),
     )
+
+
+def test_an_operator_reads_the_totals() -> None:
+    use_case = _use_case(operators=frozenset({ALICE}))
     snapshot = use_case.run(_principal(ALICE))
     assert snapshot.advisories_total == 2
     assert snapshot.over_cap_advisories_total == 1
@@ -57,14 +75,31 @@ def test_an_operator_reads_the_totals() -> None:
 
 
 def test_an_empty_allowlist_admits_nobody() -> None:
-    use_case = GetWithholdingReport(withholding_recorder=_recorder(), operator_ids=frozenset())
+    use_case = _use_case(operators=frozenset())
     with pytest.raises(ResourceNotFound):
         use_case.run(_principal(ALICE))
 
 
 def test_a_non_operator_is_refused_as_not_found() -> None:
-    use_case = GetWithholdingReport(
-        withholding_recorder=_recorder(), operator_ids=frozenset({ALICE})
-    )
+    use_case = _use_case(operators=frozenset({ALICE}))
     with pytest.raises(ResourceNotFound):
         use_case.run(_principal(BOB))
+
+
+def test_a_granted_read_is_recorded() -> None:
+    access_log = InMemoryOperatorAccessLog()
+    _use_case(operators=frozenset({ALICE}), access_log=access_log).run(_principal(ALICE))
+
+    entries = access_log.recent(limit=10)
+    assert len(entries) == 1
+    assert entries[0].user_id == ALICE
+    assert entries[0].operation == "withholding-report"
+
+
+def test_a_refused_read_leaves_no_record() -> None:
+    access_log = InMemoryOperatorAccessLog()
+    use_case = _use_case(operators=frozenset({ALICE}), access_log=access_log)
+    with pytest.raises(ResourceNotFound):
+        use_case.run(_principal(BOB))
+
+    assert access_log.recent(limit=10) == ()

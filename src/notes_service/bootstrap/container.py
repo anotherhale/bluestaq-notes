@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.decisioning import DecisionProvider
 from notes_service.application.ports.identity import IdentityProvider
+from notes_service.application.ports.operator_access import OperatorAccessLog
 from notes_service.application.ports.organization_authorization import (
     OrganizationAuthorizationProvider,
 )
@@ -88,6 +89,7 @@ from notes_service.application.use_cases.notes import (
     UnstarNote,
     UpdateNote,
 )
+from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
     ChangeMemberRole,
@@ -132,6 +134,9 @@ from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRel
 from notes_service.infrastructure.identity.routing_provider import RoutingIdentityProvider
 from notes_service.infrastructure.identity.session_provider import SessionIdentityProvider
 from notes_service.infrastructure.security.clock import SystemClock
+from notes_service.infrastructure.security.operator_access_log import (
+    InMemoryOperatorAccessLog,
+)
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from notes_service.infrastructure.security.withholding_recorder import (
     InMemoryWithholdingRecorder,
@@ -160,6 +165,10 @@ class Container:
     # port is what lets a shared store or exporter replace it without touching
     # the use case.
     withholding_recorder: WithholdingRecorder
+    # Every granted read of a platform-wide operational view, in this process.
+    # Exposed so a test (or a future ops endpoint) can answer "who read this"
+    # without reaching into the gate.
+    operator_access_log: OperatorAccessLog
     clock: SystemClock
 
     # Browser login (authorization-code + PKCE). These are ``None`` unless
@@ -369,6 +378,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         window_seconds=settings.rate_limit_window_seconds,
     )
     withholding_recorder = InMemoryWithholdingRecorder()
+    operator_access_log = InMemoryOperatorAccessLog()
 
     # The stub is the default adapter: deterministic, offline, and it abstains
     # under any real threshold. A deployment opts into a real vendor by setting
@@ -404,25 +414,28 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             withholding_recorder=withholding_recorder,
         )
 
+    # One gate for every platform-wide operational view. Parsed here, inside
+    # build_container, so the allowlist is converted once per process rather than
+    # once per request. ``Settings`` has already validated every value is a UUID;
+    # an unset allowlist yields an empty set, which the gate treats as "nobody".
+    # Sharing one gate is the point of R36: two copies of this check can drift,
+    # and only one of them would have grown the access record.
+    operator_gate = OperatorGate(
+        operator_ids=frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids),
+        access_log=operator_access_log,
+        clock=clock,
+    )
+
     def make_get_withholding_report() -> GetWithholdingReport:
-        # Parsed here, inside build_container, so the allowlist is converted once
-        # per process rather than once per request. ``Settings`` has already
-        # validated every value is a UUID; an unset allowlist yields an empty set,
-        # which the use case treats as "nobody".
-        operator_ids = frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids)
         return GetWithholdingReport(
             withholding_recorder=withholding_recorder,
-            operator_ids=operator_ids,
+            operator_gate=operator_gate,
         )
 
     def make_sweep_audit_integrity() -> SweepAuditIntegrity:
-        # Same allowlist as the withholding report. The sweep names agents and
-        # their owners, so ordinary authentication must not reach it; an unset
-        # allowlist yields an empty set, which the use case treats as "nobody".
-        operator_ids = frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids)
         return SweepAuditIntegrity(
             uow_factory=uow_factory,
-            operator_ids=operator_ids,
+            operator_gate=operator_gate,
         )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
@@ -506,6 +519,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         authorization_provider=authorization_provider,
         rate_limiter=rate_limiter,
         withholding_recorder=withholding_recorder,
+        operator_access_log=operator_access_log,
         clock=clock,
         relying_party=relying_party,
         begin_login=begin_login,
