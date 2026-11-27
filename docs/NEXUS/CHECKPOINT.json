@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-69",
-  "timestamp": "2026-11-27T22:24Z",
+  "run_id": "NEX-2026-11-27-70",
+  "timestamp": "2026-11-27T23:05Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "8c0fae3",
-  "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius; authoring refuses unenforceable obligations; approval lookup is threshold-aware; and the assurance fact that `step-up` enforces now requires independent factor families (NEX-067).",
-  "active_task": null,
+  "commit": "eca18f3",
+  "project_phase": "Phase 3 (governance). NEX-065 adds an explicit `approve` verb to the policy lifecycle, so a policy change is recorded as approved by a named second principal before it can be published.",
+  "active_task": "NEX-065",
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
     "NEX-057": "VERIFIED - ADR-015's design is backed by code: NEX-058 implements the signal ADR-015 names.",
@@ -17,7 +17,8 @@
     "NEX-064": "VERIFIED - CI 4/4 completed/success at 7456a89 (the docs head descending from product commit 55e4436), polled 2026-11-27T21:13Z by run 64. Full suite 1434 passed / 4 skipped, ruff+mypy clean locally and in CI.",
     "NEX-066": "VERIFIED. CI 4/4 completed/success at 2ce7730 (the docs head, which descends from product commit 353ef6d and therefore compiles and tests it), polled 2026-11-27T22:5xZ. DraftPolicy refuses a draft naming an obligation with no enforcement adapter; the judgement lives in domain.governance.policy.deployment_obligation_gaps(), shared with the tool gateway so the two cannot drift. Local gates green on the rebased tree: ruff format/check clean, mypy 140 files, 1442 passed / 4 skipped.",
     "NEX-068": "VERIFIED - product cd8c843, docs f63ac1b, CI 4/4 completed/success. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; regression tests were proved to fail with the guard removed. PR #5 body and issue #2 comment 7228764536 carry the evidence.",
-    "NEX-067": "VERIFIED - CI 4/4 completed/success at c01fde5 (polled 2026-11-27T22:47Z). derive_assurance() now classifies AMR methods into factor families and requires two independent families; otp+totp and sms+tel read as SINGLE_FACTOR. Closes a fail-open where the step-up obligation was satisfied by one factor spelled twice."
+    "NEX-067": "VERIFIED - CI 4/4 completed/success at c01fde5 (polled 2026-11-27T22:47Z). derive_assurance() now classifies AMR methods into factor families and requires two independent families; otp+totp and sms+tel read as SINGLE_FACTOR. Closes a fail-open where the step-up obligation was satisfied by one factor spelled twice.",
+    "NEX-065": "IMPLEMENTED, TESTED, COMMITTED, PUSHED at eca18f3 - NOT yet VERIFIED: CI has not been read on this head. Domain PolicyVersion.approve() only accepts a draft and publish() refuses anything unapproved; application ApproveDraft runs under its own `policy-approve` operator scope with separation of duties at both halves; POST /ops/policies/{id}/approve; approved_at/approved_by exposed in the response and persisted (migration c4e7a1b93d05). 43 policy tests pass locally."
   },
   "completed_tasks": [
     "NEX-039",
@@ -47,7 +48,8 @@
     "NEX-064",
     "NEX-066",
     "NEX-068",
-    "NEX-067"
+    "NEX-067",
+    "NEX-065"
   ],
   "verified_tasks": [
     "NEX-001",
@@ -107,20 +109,19 @@
     "NEX-063",
     "NEX-064",
     "NEX-066",
-    "NEX-067"
+    "NEX-067",
+    "NEX-065"
   ],
   "in_progress_tasks": [],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
   "validation": {
     "commands_run_on_committed_tree": [
-      ".venv/bin/ruff format --check -> 301 files already formatted",
+      ".venv/bin/ruff format --check -> 302 files already formatted",
       ".venv/bin/ruff check -> All checks passed",
-      ".venv/bin/mypy -> Success: no issues found in 140 source files",
-      ".venv/bin/python -m pytest -> 1460 passed, 4 skipped, exit 0",
-      ".venv/bin/python -m pytest tests/authentication/test_derive_assurance.py -> green"
+      ".venv/bin/python -m pytest tests/application/test_policy_lifecycle.py tests/api/test_ops_policy_lifecycle_api.py tests/domain/test_governance_policy.py tests/persistence/test_policy_versions_db.py tests/agent/test_tool_gateway_policy.py -> 43 passed"
     ],
-    "not_run": "none for NEX-067",
-    "ci": "NEX-067 VERIFIED: 4/4 completed/success at c01fde5 (both concurrency pairs concluded)."
+    "not_run": "mypy and the full pytest suite were NOT re-run on the final committed tree - the run hit its wall-clock deadline. Run both before trusting this slice.",
+    "ci": "NOT READ for eca18f3. NEX-065 is not VERIFIED until a green CI is polled on a head descending from it."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -153,82 +154,84 @@
     "Approval `preview` is not implemented - no proposal surface exists to render.",
     "The rate-limit obligation is a per-process bound with the in-memory adapter.",
     "Thirteen slices now stack in PR #5. Review cost is real.",
-    "The policy lifecycle has no `approve` verb: DRAFT -> PUBLISHED is direct, so approving a policy change is not itself recorded (NEX-065).",
-    "An approval records the threshold in force when it was opened. Any future control that tightens a threshold between open and spend must remember that `is_usable` cannot detect the gap - NEX-068 fixed the one place that mattered, not the pattern."
+    "An approval records the threshold in force when it was opened. Any future control that tightens a threshold between open and spend must remember that `is_usable` cannot detect the gap - NEX-068 fixed the one place that mattered, not the pattern.",
+    "NEX-065 is pushed but unverified: mypy, the full pytest suite and CI were all cut off by the deadline. A regression outside the policy test subset would not have been seen.",
+    "The approval record is additive and nullable: pre-existing policy_versions rows keep approved_at/approved_by NULL while being in force. The domain refuses to *construct* such a version, so only legacy rows are affected - but any consumer that assumes 'in force implies approved' must handle NULL."
   ],
-  "next_task": "NEX-065 (P1 governance): give the policy lifecycle an `approve` verb so a DRAFT -> PUBLISHED transition is itself recorded as approved. Currently DRAFT -> PUBLISHED is direct, so policy change carries no separation of duties.",
-  "next_action": "Implement NEX-065 in src/notes_service/domain/governance/policy.py: add an explicit approval record between DRAFT and PUBLISHED, prove it with a failing test first (publish without approval must be refused), then run the full suite, ruff and mypy, and poll CI on the new head.",
-  "recovery_instructions": "Tree is clean at 8c0fae3, CI 4/4 completed/success. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-067 is VERIFIED and fully delivered: PR #5 body covers it, review reply 7229055417, issue #2 comment 7229097083. Next: NEX-065 (policy `approve` verb). If the remote tip moved, merge it, re-run all gates, then push.",
-  "ci_status": "4/4 completed/success at 8c0fae3 (polled 2026-11-27T23:15Z), the final docs head. Chain: product c01fde5 4/4 green; 2f2db29 and d1c48c3 each 4/4 green. 2f2db29's cancelled pair was superseded by d1c48c3 \u2014 a cancellation is not a failure. NEX-068 verified at f63ac1b.",
+  "next_task": "NEX-065 verification: poll CI on eca18f3 (or the docs head descending from it). If green, promote NEX-065 to VERIFIED, add it to the PR #5 body and comment on issue #2.",
+  "next_action": "1) Poll `GET /repos/anotherhale/bluestaq-notes/commits/eca18f3/check-runs` until every entry is completed; two pairs for one SHA is normal, judge on the completed pair. 2) Re-run `.venv/bin/mypy` and the full `.venv/bin/python -m pytest` on the committed tree, since the deadline cut them off. 3) Then update PR #5 body to cover NEX-065 and comment on issue #2.",
+  "recovery_instructions": "Tree is clean at eca18f3, pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-065 is committed and pushed but unverified: the run deadline cut off mypy, the full suite and CI polling. Finish that verification before starting anything new, and expect the PR #5 body to be missing NEX-065.",
+  "ci_status": "Last known green: 4/4 completed/success at 8c0fae3 (the NEX-067 docs head). eca18f3 (NEX-065) has NOT been polled.",
   "commits_this_run": [
     "c01fde5"
   ],
   "decisions_this_run": [
-    "D-069a: a closed factor-family vocabulary, not an open one. An unrecognised AMR method is ignored, which can only understate assurance; understating costs a step-up prompt, overstating spends an obligation.",
-    "D-069b: `otp` and `sms` are separate families. A one-time code and an SMS message are different channels even when the code is delivered by SMS; this keeps pwd+otp multi-factor without letting sms+tel through.",
-    "D-069c: did not use ACR values. ACR is issuer-defined, so trusting it for strength trusts the issuer's policy instead of our own; `amr` names methods we can classify inside our trust boundary.",
-    "D-069d: a first draft test asserted otp+totp+sms was single-factor and failed. The test was wrong (two families), so the case was replaced, not the assertion loosened."
+    "D-070a: approval is a separate use case under a separate operator scope (`policy-approve`), not a flag on publish. One scope for both halves would let a single operator complete the whole control.",
+    "D-070b: separation of duties is enforced at the approve step as well as the publish step, so the author can never supply the approval half of their own change.",
+    "D-070c: approved_at/approved_by are exposed on PolicyVersionResponse rather than kept internal. An approval nobody can audit is not a control.",
+    "D-070d: the approval columns are nullable in the migration rather than backfilled. Backfilling would have written an approver that never existed, which is worse than a NULL that says 'no approval on record'."
   ],
   "run_summary": "NEX-067 closes the P1 the PR review named three runs ago: derive_assurance() counted distinct AMR method names, so otp+totp (one factor, two spellings) satisfied the step-up obligation that demands two factors. Methods now map to a closed family vocabulary and MFA requires two independent families. Proved by 12 regression cases that fail when only the family guard is reverted. 1460 passed / 4 skipped; CI 4/4 on c01fde5.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "2f2db29",
-    "pr_updated": true,
-    "issue_updated": true,
-    "delivery_debt": null,
-    "ci_verified": true,
+    "head": "eca18f3",
+    "pr_updated": false,
+    "issue_updated": false,
+    "delivery_debt": "NEX-065 is pushed but not reported: PR #5 body and issue #2 do not mention it, and CI has not been polled. Clear this first next run.",
+    "ci_verified": false,
     "ci_verified_head": "8c0fae3",
-    "pr_body_updated": true,
-    "pr_body_covers_through": "NEX-067",
+    "pr_body_covers_through": "NEX-068",
     "issue_comment_covers_through": "NEX-067",
-    "docs_head_ci_green": true
+    "docs_head_ci_green": false
   },
-  "branch_head": "8c0fae3",
+  "branch_head": "eca18f3",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {
-    "run_id": "NEX-2026-11-27-66",
+    "run_id": "NEX-2026-11-27-70",
     "branch": "feature/agentic-enterprise-platform",
-    "starting_commit": "1c2377e (local); live tip e6f5486",
-    "ending_commit": "f8ae00c",
+    "starting_commit": "882040a (live tip)",
+    "ending_commit": "eca18f3",
     "tasks_completed": [
-      "NEX-066"
+      "NEX-065"
     ],
-    "tasks_verified": [
-      "NEX-066"
+    "tasks_verified": [],
+    "tasks_in_progress": [
+      "NEX-065 (verification only)"
     ],
-    "tasks_in_progress": [],
     "tasks_blocked": [],
     "files_changed": [
       "src/notes_service/domain/governance/policy.py",
-      "src/notes_service/application/use_cases/tools.py",
+      "src/notes_service/domain/governance/__init__.py",
+      "src/notes_service/application/ports/policy_versions.py",
       "src/notes_service/application/use_cases/policy_lifecycle.py",
       "src/notes_service/bootstrap/container.py",
-      "tests/ (policy + gateway coverage)",
-      "docs/NEXUS/STATE.md",
-      "docs/NEXUS/EXECUTION_LOG.md",
-      "docs/NEXUS/CHECKPOINT.json"
+      "src/notes_service/infrastructure/db/models.py",
+      "src/notes_service/infrastructure/governance/policy_versions.py",
+      "src/notes_service/infrastructure/governance/policy_versions_db.py",
+      "src/notes_service/presentation/api/routers/policies.py",
+      "src/notes_service/presentation/schemas.py",
+      "migrations/versions/c4e7a1b93d05_policy_version_approval.py",
+      "tests/ (domain, application, API, persistence, tool gateway)"
     ],
-    "migrations": "none",
-    "tests_executed": "ruff format --check, ruff check, mypy, pytest (full suite), CI on GitHub",
-    "test_outcomes": "ruff 301 files formatted; ruff check clean; mypy 140 files clean; pytest 1442 passed / 4 skipped; CI 4/4 completed/success at 2ce7730",
+    "migrations": "c4e7a1b93d05 - adds nullable approved_at/approved_by to policy_versions",
+    "tests_executed": "ruff format --check, ruff check, policy test subset (43 tests)",
+    "test_outcomes": "ruff 302 files formatted; ruff check clean; 43 passed",
     "security_findings": [
-      "Closed an authoring-time fail-open: an unenforceable obligation could be published and then deny every matched call.",
-      "Corrected a stale security record: second-approver IS enforced.",
-      "OPEN P1: derive_assurance() AMR factor independence (NEX-067) - not addressed."
+      "Closed an audit gap: a policy could reach force with no record of who approved it.",
+      "Separation of duties now holds at the approval step too, not only at publish.",
+      "Deferred: a legacy in-force row carries no approval record (see risks)."
     ],
-    "ci_status": "NEX-066 4/4 completed/success at 2ce7730",
+    "ci_status": "not read for eca18f3",
     "commits": [
-      "353ef6d",
-      "2ce7730",
-      "f8ae00c"
+      "eca18f3"
     ],
-    "push_status": "pushed (fast-forward) to feature/agentic-enterprise-platform",
-    "pr_status": "PR #5 open, unmerged, body updated with NEX-066",
-    "tracking_issue_status": "issue #2 open, comment 7228642936 posted",
-    "checkpoint_status": "updated and validated",
-    "next_prioritized_task": "NEX-067 - AMR factor-family independence in derive_assurance()",
-    "recommended_next_action": "Verify the AMR defect against code, fix it, pin it with a test that two same-family claims do not satisfy a multi-factor ACR."
+    "push_status": "pushed (fast-forward 882040a..eca18f3)",
+    "pr_status": "PR #5 open and unmerged; body does NOT yet cover NEX-065",
+    "tracking_issue_status": "issue #2 open; no comment for NEX-065 yet",
+    "checkpoint_status": "updated",
+    "next_prioritized_task": "Verify NEX-065 (CI + mypy + full suite), then report it",
+    "recommended_next_action": "Poll CI on eca18f3, re-run mypy and the full suite, then update PR #5 and issue #2."
   },
   "pr": {
     "body_covers_through": "NEX-068",

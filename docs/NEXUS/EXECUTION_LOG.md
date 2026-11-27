@@ -8216,3 +8216,56 @@ pass" is the wrong instinct when the test itself is the thing that is wrong.
 **Commits.** `c01fde5` (product + tests), plus the state commit for this record.
 **Push status.** Pushed; remote head confirmed equal to local via `git ls-remote`.
 **Next action.** NEX-065 — the policy `approve` verb, the remaining item from the same review.
+
+## NEX-2026-11-27-70 — NEX-065: an explicit `approve` verb for the policy lifecycle
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `882040a` (live tip read with `git ls-remote`)
+- **Ending commit:** `eca18f3`
+- **Task:** NEX-065 (P1 governance) — a policy change from DRAFT to PUBLISHED was a
+  single step, so nothing in the record showed that a second principal had reviewed
+  it. Approval is now its own verb.
+
+**Implementation**
+
+- Domain (`domain/governance/policy.py`): `PolicyVersion` carries `approved_at` and
+  `approved_by`. `approve()` accepts only a draft; `publish()` refuses anything that
+  is not approved, so a draft can no longer reach force without a recorded approval.
+  The invariant is on construction as well, so the illegal state cannot be built.
+- Application (`application/use_cases/policy_lifecycle.py`): new `ApproveDraft` use
+  case under its own operator scope `policy-approve`, separate from `policy-publish`.
+  Separation of duties is enforced at *both* halves, so one operator cannot supply the
+  approval and the publication for the same version.
+- API (`presentation/api/routers/policies.py`): `POST /api/v1/ops/policies/{id}/approve`,
+  operator-only and rate limited. `PolicyVersionResponse` exposes `approved_at` and
+  `approved_by` — an approval nobody can audit is not a control.
+- Persistence: `policy_versions` gains nullable approval columns (migration
+  `c4e7a1b93d05`). Deliberately not backfilled: writing an approver that never existed
+  is worse than a NULL that says "no approval on record".
+- Reuses the existing approval domain and operator-gate mechanism; no parallel approval
+  machinery was introduced.
+
+**Validation**
+
+- `.venv/bin/ruff format --check` → 302 files already formatted.
+- `.venv/bin/ruff check` → All checks passed.
+- `.venv/bin/python -m pytest` over the policy subset (domain, application, API,
+  persistence, tool gateway) → 43 passed.
+
+**Not done — the deadline cut it off**
+
+- `mypy` and the full pytest suite were **not** re-run on the committed tree.
+- CI was **not** polled for `eca18f3`.
+- PR #5 body and issue #2 do not yet mention NEX-065.
+
+NEX-065 is therefore IMPLEMENTED, TESTED (subset), COMMITTED and PUSHED — **not
+VERIFIED**. The next run must finish the verification before starting anything new.
+
+**Decisions**
+
+- D-070a: a separate use case and a separate operator scope, not a flag on publish.
+  One scope for both halves would let a single operator complete the whole control.
+- D-070b: separation of duties holds at the approve step too, so an author cannot
+  approve their own change.
+- D-070c: the approval is exposed in the API response rather than kept internal.
+- D-070d: nullable columns, no backfill (see above).
