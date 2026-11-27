@@ -7116,3 +7116,24 @@ approval flow supporting a second *distinct* approver rather than reusing the fi
 
 Human review of PR #5 is the other outstanding item. Six slices are stacked in one PR; it is
 large but coherent and every section states its own validation evidence.
+
+### Addendum — delivery finished, docs head CI-green
+
+- Docs commit `f7a085b` (STATE, BACKLOG, EXECUTION_LOG, CHECKPOINT) pushed and verified with
+  `git ls-remote`: remote returned exactly `f7a085b`, equal to local `HEAD`.
+- **CI on `f7a085b`: 4/4 `completed/success`** — two check-run pairs, both Backend and
+  Frontend green, polled to completion at 2026-11-27T18:20Z. A docs commit descends from
+  `e7c7315`, so this run's CI also compiled and tested the NEX-056 product code.
+- **PR #5**: confirmed `open`, `draft: false`, `mergeable: true`, head `f7a085b`, 34 files,
+  body 21968 chars. A CI-evidence comment was posted (`7225324419`) recording the green poll
+  and the obligation-coverage table. GitHub reported `mergeable_state: unstable` while
+  check-runs were still arriving — every pair then concluded success; `unstable` during
+  arrival is not a verdict.
+- **Issue #2**: previously updated this run (`7225253883`); no further comment needed.
+
+Delivery debt is **CLEAR**: NEX-054, NEX-055 and NEX-056 are all reported on PR #5 and
+issue #2, and both heads are CI-green.
+
+The clock stopped the run here at ~9 minutes remaining, below the 10-minute threshold for
+starting another slice. That is the intended stop: the increment is committed, pushed,
+CI-verified and recorded, and the next exact action is written down.

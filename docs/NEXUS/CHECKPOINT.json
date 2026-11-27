@@ -59,15 +59,19 @@
   "draft": false,
   "merged": false,
   "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-  "head_sha": "e7c7315",
+  "head_sha": "f7a085b",
   "base": "main",
   "title": "Enforce published governance policy at the tool gateway",
-  "changed_files": 33,
+  "changed_files": 34,
   "mergeable": true,
-  "mergeable_state": "clean",
+  "mergeable_state": "unstable",
   "body_len": 21968,
-  "note": "Body now carries NEX-052 through NEX-056 evidence. Six slices stacked in one PR; large but coherent, each section states its own validation. Never merge without human review.",
-  "reviews": "none yet; no review comments"
+  "note": "Body carries NEX-052 through NEX-056 evidence. A CI-evidence comment (7225324419) was posted this run after the green poll. Six slices stacked in one PR; large but coherent, each section states its own validation. Never merge without human review.",
+  "reviews": "none yet; no review comments",
+  "mergeable_state_note": "GitHub reports `unstable` while check-runs are still arriving; every check-run pair concluded success. `mergeable` is true. Not a failure signal.",
+  "comments_this_run": [
+   7225324419
+  ]
  },
  "tracking_issue": {
   "issue": 2,
@@ -84,7 +88,7 @@
   "Six slices are stacked in PR #5 (33 files). Review cost is real; a reviewer may reasonably ask for it to be split, but splitting a stacked branch needs care not to lose the merge of main."
  ],
  "next_task": "NEX-057: the `step-up` obligation. Largest remaining obligation slice - it needs a decision about which evidence raises the requirement (risk signal -> higher assurance), so start with an ADR rather than code. `second-approver` follows and depends on the approval flow supporting a second *distinct* approver rather than reusing the first. Human review of PR #5 is the other outstanding item.",
- "next_action": "1. Poll CI for the head of feature/agentic-enterprise-platform (docs commit descends from e7c7315, so its CI still compiles and tests the product code). 2. Write ADR-015 for step-up: what risk evidence raises the assurance requirement and what satisfies it. 3. Then implement step-up behind that ADR.",
+ "next_action": "1. Nothing is in flight; both heads are CI-green. 2. Write ADR-015 for `step-up`: name the deterministic signal that raises the assurance requirement, and define what satisfies it - an obligation whose satisfaction is undefined is not enforceable. 3. Then implement NEX-057 behind that ADR. `second-approver` follows and needs a second *distinct* approver, not a repeat click. Human review of PR #5 is the outstanding item outside NEXUS's authority.",
  "recovery_instructions": "Nothing is in flight. Product commit e7c7315 is COMMITTED, PUSHED and CI-verified 4/4. The docs commit that writes this file descends from it; read the true head with `git rev-parse HEAD` or `git ls-remote`, never from a SHA field here. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5. Next: ADR-015 for step-up.",
  "ci_status": {
   "head_polled": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
@@ -93,7 +97,9 @@
   "conclusion": "success",
   "polled_at": "2026-11-27T18:14Z",
   "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, filtered to the current head from `git ls-remote origin feature/agentic-enterprise-platform`.",
-  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair."
+  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair.",
+  "docs_head": "f7a085b23344472d4c50aabb2fc18a634c103fd7",
+  "docs_head_result": "4/4 completed/success (two check-run pairs, both green) polled 2026-11-27T18:20Z. A docs commit descends from e7c7315, so this CI also compiles and tests the product code."
  },
  "verified_tasks": [
   "NEX-056",
@@ -164,20 +170,22 @@
  "branch_head_observed_at": "2026-11-27T13:44:00Z",
  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
  "commits_this_run": [
-  "e7c73157050a2fc0363b1090f4e17749b66bfe91"
+  "e7c73157050a2fc0363b1090f4e17749b66bfe91",
+  "f7a085b23344472d4c50aabb2fc18a634c103fd7"
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
+  "head": "f7a085b23344472d4c50aabb2fc18a634c103fd7",
   "remote_verified": true,
-  "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned exactly e7c73157050a2fc0363b1090f4e17749b66bfe91 after the push (27bbc82..e7c7315).",
+  "remote_verified_by": "Two pushes verified by an independent `git ls-remote` after each: 27bbc82..e7c7315 (product) then e7c7315..f7a085b (docs). Remote returned exactly f7a085b, equal to HEAD.",
   "pr_updated": true,
   "issue_updated": true,
   "delivery_debt": "None. NEX-054, NEX-055 and NEX-056 are all reported to PR #5 and issue #2.",
   "ci_verified": true,
-  "issue_comment": 7225253883
+  "issue_comment": 7225253883,
+  "pr_comment": 7225324419
  },
- "run_summary": "Implemented NEX-056: the `rate-limit` obligation got its enforcement adapter. It was the third of five named obligations with no mechanism - the gateway refused every call a policy placed it on, which is honest but left the policy language unable to express a volume bound at all. The adapter reuses the `RateLimiter` port the HTTP boundary already depends on, keyed per agent AND per tool so a hot tool cannot exhaust the budget of every other tool the same agent may call. An idempotent retry does not consume budget (a replay of a recorded decision is not a new call), and a refusal is audited as a denial naming the retry window. Enforcement runs before the approval gate so a flood cannot fill the approval queue. Still fails closed with no limiter wired, which is why the old 'unsatisfiable' test survives in a no-limiter harness. Gates: ruff format 291 files, ruff check clean, mypy 138 files, pytest 1308 passed / 4 skipped. Pushed as e7c7315 and CI polled to 4/4 completed/success. This run also cleared run 56's delivery debt: NEX-054 and NEX-055 sections appended to PR #5 (21968 chars, 33 files) and a NEX-054/055/056 status comment posted to issue #2 (7225253883).",
+ "run_summary": "Implemented NEX-056: the `rate-limit` obligation got its enforcement adapter. It was the third of five named obligations with no mechanism - the gateway refused every call a policy placed it on, which is honest but left the policy language unable to express a volume bound at all. The adapter reuses the `RateLimiter` port the HTTP boundary already depends on, keyed per agent AND per tool so a hot tool cannot exhaust the budget of every other tool the same agent may call. An idempotent retry does not consume budget (a replay of a recorded decision is not a new call), and a refusal is audited as a denial naming the retry window. Enforcement runs before the approval gate so a flood cannot fill the approval queue. Still fails closed with no limiter wired, which is why the old 'unsatisfiable' test survives in a no-limiter harness. Gates: ruff format 291 files, ruff check clean, mypy 138 files, pytest 1308 passed / 4 skipped. Pushed as e7c7315 and CI polled to 4/4 completed/success. This run also cleared run 56's delivery debt: NEX-054 and NEX-055 sections appended to PR #5 (21968 chars, 33 files) and a NEX-054/055/056 status comment posted to issue #2 (7225253883). Delivery finished: docs commit f7a085b pushed and remote-verified, PR #5 CI-evidence comment posted (7225324419), and CI on the docs head polled to 4/4 success.",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -237,7 +245,9 @@
    "Frontend (typecheck, lint, test, build)": "success"
   },
   "verified_at": "2026-11-27T18:14Z",
-  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit."
+  "note": "Two heads verified green this run: product e7c7315 and docs f7a085b. A docs commit descends from the product commit, so its CI still compiles and tests the product code.",
+  "docs_head": "f7a085b",
+  "docs_head_conclusion": "SUCCESS"
  },
  "pr": {
   "number": 5,
