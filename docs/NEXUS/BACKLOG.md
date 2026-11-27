@@ -2862,7 +2862,7 @@ defaults to 1, which is the behaviour every existing row already had.
 | --- | --- |
 | Phase | 3 (governance) |
 | Priority | P1 — foundational |
-| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** (CI not yet polled) |
+| Status | VERIFIED — CI 4/4 `completed/success` at `934774e`, polled 2026-11-27T20:52Z (run 63) |
 | Dependencies | NEX-059 (`required_approvals`, closed 1–2 vocabulary), ADR-015 |
 | Blocks | the "risk-based approval" clause of `ENTERPRISE_SECURITY_ARCHITECTURE_V1` L147 and L212 |
 
@@ -2921,7 +2921,7 @@ request-level facts the gateway does not collect.
 | Task ID | NEX-064 |
 | Phase | 3 (governance) |
 | Priority | P1 — authorization correctness |
-| Status | IMPLEMENTED + TESTED + COMMITTED + PUSHED (CI not yet polled) |
+| Status | VERIFIED — CI 4/4 `completed/success` at `7456a89`, polled 2026-11-27T21:13Z |
 | Dependencies | none — `evaluate()` already existed |
 
 **Objective.** Make `evaluate()` honour its own rule 3, *"Only published versions may be
@@ -2960,7 +2960,7 @@ a draft already failed, so existing audit behaviour is unchanged.
 
 **Complexity.** Low.
 
-**Next.** Poll CI on the pushed head; if green, promote to VERIFIED and extend PR #5 / issue #2.
+**Verified.** CI 4/4 `completed/success` at `7456a89` (2026-11-27T21:13Z); PR #5 body and issue #2 updated by run 64.
 **Named follow-up (not this task):** the policy lifecycle has no `approve` verb — `DRAFT →
 PUBLISHED` is direct, so approval of a policy change is not itself recorded. That is the
 next governance slice.

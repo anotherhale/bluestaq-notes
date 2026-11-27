@@ -11,7 +11,7 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 64) | `33c780d` — the live feature-branch tip read from `git ls-remote`, which the clone was already on with a clean tree. |
 | Head commit (measured) | Product commit `55e4436` (NEX-064), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`934774e` (NEX-063 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:52Z — NEX-063 VERIFIED. NEX-064 is PUSHED, CI not yet polled. |
+| Last CI result | **`7456a89` (NEX-064 docs head): 4/4 `completed/success`**, polled 2026-11-27T21:13Z — NEX-064 VERIFIED. |
 | Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open. |
 | Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-063** evidence; NEX-064 pending. Twelve slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
@@ -19,7 +19,7 @@ truth; this file records intent and reconciliation.
 
 ## NEX-064 (run `NEX-2026-11-27-64`) — a retired policy version can no longer stay in force
 
-**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED — CI not yet polled.**
+**Status: VERIFIED — CI 4/4 `completed/success` at `7456a89`, polled 2026-11-27T21:13Z.**
 
 A latent **fail-open** in `evaluate()`. Its own docstring states rule 3 as *"Only published
 versions may be consulted"*, and it refused a `DRAFT` — but it **consulted a `RETIRED`**
@@ -46,7 +46,7 @@ needs no migration, no new port, and no schema change.
 
 ## NEX-063 VERIFIED (run `NEX-2026-11-27-63`) — the approval gate follows the blast radius
 
-**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED — CI not yet polled.**
+**Status: VERIFIED — CI 4/4 `completed/success` at `7456a89`, polled 2026-11-27T21:13Z.**
 
 Approval strength now follows how dangerous an action is, not only what a policy author wrote.
 `domain/agent/risk.py` classifies every `Capability` into a closed ordered tier

@@ -14,7 +14,7 @@
     "NEX-060": "VERIFIED - CI 4/4 at 29f71e5 (promoted by run 61).",
     "NEX-062": "VERIFIED - CI 4/4 at 0e2ca47 (polled 2026-11-27T20:16Z by run 62).",
     "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63.",
-    "NEX-064": "PUSHED - fail-open closed in evaluate(): RETIRED versions were consulted and could grant ALLOW. Full suite 1434 passed / 4 skipped, ruff+mypy clean. CI not yet polled."
+    "NEX-064": "VERIFIED - CI 4/4 completed/success at 7456a89 (the docs head descending from product commit 55e4436), polled 2026-11-27T21:13Z by run 64. Full suite 1434 passed / 4 skipped, ruff+mypy clean locally and in CI."
   },
   "completed_tasks": [
     "NEX-039",
@@ -110,8 +110,8 @@
       ".venv/bin/python -m pytest -> 1434 passed, 4 skipped, exit 0",
       ".venv/bin/python -m pytest tests/domain/test_governance_policy.py tests/application/test_policy_lifecycle.py tests/agent/test_tool_gateway_policy.py -> 73 passed"
     ],
-    "not_run": "CI has not been polled for the NEX-064 head. That is the next action.",
-    "ci": "Last measured: 4/4 completed/success at 934774e (NEX-063, polled 2026-11-27T20:52Z)."
+    "not_run": null,
+    "ci": "4/4 completed/success at 7456a89 (Frontend x2, Backend x2), polled 2026-11-27T21:13Z. The docs head descends from product commit 55e4436, so its CI compiles and tests the NEX-064 product code."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -145,15 +145,15 @@
     "The policy lifecycle has no `approve` verb: DRAFT -> PUBLISHED is direct, so approving a policy change is not itself recorded. NEX-064 closed the enforcement fail-open, not this."
   ],
   "next_task": "NEX-065: add an explicit policy `approve` lifecycle transition so DRAFT -> APPROVED -> PUBLISHED is recorded, with the approver identity persisted and separation of duties enforced (approver != drafter). Needs a migration and a new use case.",
-  "next_action": "Poll CI on the NEX-064 head (`GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` until every check-run is completed). If 4/4 success, promote NEX-064 to VERIFIED. Then start NEX-065.",
+  "next_action": "Start NEX-065: an explicit policy `approve` lifecycle transition (DRAFT -> APPROVED -> PUBLISHED) with the approver identity persisted and separation of duties enforced. Needs a migration and a new use case, so give it a full run rather than a tail.",
   "recovery_instructions": "Tree is clean and the branch is pushed. This file's `commit` names the NEX-064 product commit; the checkpoint commit itself is a docs-only descendant. Do not redo NEX-060, NEX-062 or NEX-063. NEX-064 is PUSHED but unverified - poll CI before promoting it.",
   "ci_status": {
-    "head_polled": "934774eb9aff59649531138947a44ee08d6c1af5",
-    "product_commit": "19836ad",
+    "head_polled": "7456a890ac13bbb8083e7db6d5689233168bfdf6",
+    "product_commit": "55e4436",
     "result": "4/4 completed/success",
     "conclusion": "success",
-    "polled_at": "2026-11-27T20:52Z",
-    "note": "This is NEX-063's evidence. NEX-064's head has not been polled yet."
+    "polled_at": "2026-11-27T21:13Z",
+    "note": "NEX-064 verified. Two check-run pairs for one SHA is the branch concurrency group re-running; both pairs completed/success."
   },
   "commits_this_run": [
     "55e4436"
@@ -164,13 +164,14 @@
     "D-064c: keep the message specific (`is a draft` vs `is retired`). One means nobody published it; the other means a later release replaced it. An operator needs to know which.",
     "D-064d: scope held to the domain predicate. The missing `approve` lifecycle verb is a real gap but needs a new transition plus persistence and audit surface; the fail-open was the higher-value fix inside one run and needed no migration."
   ],
-  "run_summary": "NEX-064 closes a latent fail-open in the policy engine. evaluate()'s docstring states rule 3 as 'Only published versions may be consulted', and the code refused a DRAFT - but it consulted a RETIRED version, so an allow rule from a superseded release still allowed. It was probed empirically before any edit: a retired allow-all version returned effect=allow. The gateway passes all_published() so no production path exploited it; the exposure is the next caller, since history() is exactly what the policy-history endpoint returns, and a caller using it would keep enforcing replaced rules. The fix is one predicate - refuse when status is not PUBLISHED - plus two regression tests, one of which asserts a retired version in a mixed set refuses the whole evaluation rather than being silently skipped. All gates green on the committed tree: ruff format and check clean, mypy clean across 140 files, 1434 passed / 4 skipped. Status is IMPLEMENTED, TESTED, COMMITTED, PUSHED - deliberately not VERIFIED, because CI has not been polled for this head.",
+  "run_summary": "NEX-064 closes a latent fail-open in the policy engine. evaluate()'s docstring states rule 3 as 'Only published versions may be consulted', and the code refused a DRAFT - but it consulted a RETIRED version, so an allow rule from a superseded release still allowed. It was probed empirically before any edit: a retired allow-all version returned effect=allow. The gateway passes all_published() so no production path exploited it; the exposure is the next caller, since history() is exactly what the policy-history endpoint returns, and a caller using it would keep enforcing replaced rules. The fix is one predicate - refuse when status is not PUBLISHED - plus two regression tests, one of which asserts a retired version in a mixed set refuses the whole evaluation rather than being silently skipped. All gates green on the committed tree: ruff format and check clean, mypy clean across 140 files, 1434 passed / 4 skipped. CI then concluded 4/4 completed/success at 7456a89, so NEX-064 is VERIFIED.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
     "head": "READ IT FROM GIT. Verify with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`.",
     "pr_updated": true,
     "issue_updated": true,
     "delivery_debt": "Cleared for NEX-064 by this run.",
-    "ci_verified": false
+    "ci_verified": true,
+    "ci_verified_head": "7456a890ac13bbb8083e7db6d5689233168bfdf6"
   }
 }

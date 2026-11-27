@@ -7836,11 +7836,15 @@ wording is preserved byte-for-byte, so no existing assertion needed weakening.
 **Delivery.** Commit and push to `feature/agentic-enterprise-platform`. PR #5 body and issue #2
 are updated with this slice. **Never merged** — human review is required.
 
-**Status.** IMPLEMENTED + TESTED + COMMITTED + PUSHED. **Not VERIFIED** — CI has not been polled
-for this head. That is the next action, not a gap in this run.
+**Status.** VERIFIED. CI concluded **4/4 `completed/success`** at `7456a89` (the docs head
+descending from product commit `55e4436`), polled 2026-11-27T21:13Z. Two check-run pairs for one
+SHA is the branch concurrency group re-running; both pairs completed/success.
 
-**Next action.** Poll CI on the pushed head
-(`GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` until every check-run is
-`completed`). If 4/4 `success`, promote NEX-064 to VERIFIED and record it. Then the next
-governance slice is the missing policy `approve` lifecycle verb.
+**Delivery cleared.** PR #5 body extended with the NEX-064 section; issue #2 received a
+NEX-064 comment. Both state that the slice is unmerged pending human review.
+
+**Next action.** Start NEX-065: an explicit policy `approve` lifecycle transition
+(`DRAFT -> APPROVED -> PUBLISHED`) with the approver identity persisted and separation of duties
+enforced. It needs a migration and a new use case, so it wants a full run — this run closed with
+~11 minutes left, which is not enough to land that safely.
 
