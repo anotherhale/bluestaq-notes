@@ -45,7 +45,8 @@
     "body_len": 109037,
     "body_updated_at": "2026-11-27T13:19Z",
     "body_update_scope": "Header, validation row and measurement note all recomputed at 0ef42ec: 51,008 additions / 32 deletions / 189 files / 237 commits, 1,232 tests, read 2026-11-27T13:19Z. NEX-046 and NEX-047 sections each present exactly once; Phase 6 governance row present.",
-    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides."
+    "note": "Draft and unmerged; automated merging is prohibited. Description last measured at 0ef42ec. NEX-048 and NEX-049 are documented in comment 7220694491 rather than in the body. A later run may fold them in.",
+    "comment_id": 7220694491
   },
   "tracking_issue": {
     "issue": 2,
@@ -275,7 +276,7 @@
     }
   ],
   "next_task": "NEX-050",
-  "next_action": "Poll CI for 22124f2. Then: (a) write the outstanding PR #3 sections for NEX-048 and NEX-049 and report NEX-049 to issue #2; (b) implement NEX-050, separation of duties on the policy lifecycle - the same principal must not both draft and publish a policy version, enforced in the application layer so the router cannot bypass it.",
+  "next_action": "1. Poll CI for the docs head. 2. Fold the NEX-048/NEX-049 PR comment into the PR description and recompute its header metrics. 3. Implement NEX-050, separation of duties on the policy lifecycle: the principal that drafted a version must not publish it, enforced in the application layer so the router cannot bypass it.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust a head field in this file. 2. NEX-049 is COMMITTED and PUSHED at 22124f2 - do not redo it. 3. Its CI has NOT been polled: poll it first. 4. Delivery debt: PR #3 sections for NEX-048 and NEX-049, plus an issue #2 comment for NEX-049. Use lists, not tables, in issue comments. 5. Then start NEX-050 per next_action.",
   "ci_status": {
     "commit": "22124f2",
@@ -357,12 +358,13 @@
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "22124f27dd1d3a6da4c183542faa8d1a109efcea",
+    "head": "84774785822d7b18d480be19d56447fe90c97ff0",
     "remote_verified": true,
-    "remote_verified_by": "git ls-remote returned 22124f27dd1d3a6da4c183542faa8d1a109efcea",
-    "pr_updated": false,
+    "remote_verified_by": "git ls-remote returned 84774785822d7b18d480be19d56447fe90c97ff0",
+    "pr_updated": true,
     "issue_updated": true,
-    "delivery_debt": "PR #3 sections for NEX-048 and NEX-049 unwritten. Issue #2 is current as of NEX-049."
+    "delivery_debt": "CLEAR for NEX-048 and NEX-049. The PR description itself was not rewritten: at 109k chars a full-body patch is not a safe operation with minutes left, so the two slices are documented in PR comment 7220694491 and the description's measured head (0ef42ec) is left as a truthful, stale marker.",
+    "pr_update_kind": "comment 7220694491"
   },
   "run_summary": "NEX-049 delivered and pushed at 22124f2: /api/v1/ops/policies with draft, publish, rollback and history. The operator gate lives in the application use cases (DraftPolicy / PublishDraft / RollbackPolicy / GetPolicyHistory), not the router, so every future caller is gated by the same code. Scope is per operation, so a drafting grant cannot publish a policy into force. published_by is stamped from the authenticated Principal and mapped to a lowercase identifier (user-<uuid>) because the domain rejects a raw UUID; a caller cannot attribute a published policy to someone else. Local gates green; CI unpolled; PR #3 and issue #2 delivery debt open.",
   "head_observation": {
