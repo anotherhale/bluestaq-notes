@@ -2682,8 +2682,9 @@ obligation — an ADR, not a quiet widening (D-056).
 | --- | --- |
 | Phase | 3 (governance) |
 | Priority | P1 |
-| Status | **TODO** |
+| Status | **IMPLEMENTED** (ADR delivered; enforcement deferred to NEX-058) |
 | Dependencies | NEX-053, NEX-054, NEX-055, NEX-056 (the four satisfied obligations) |
+| ADR | [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md) |
 
 **Objective:** give `step-up` a mechanism, or record an ADR explaining why it cannot have one
 in the current model. Today a policy that names it refuses every call.
@@ -2718,3 +2719,73 @@ step-up trigger is a deterministic application-layer control.
 
 **Next:** `second-approver` follows and depends on the approval flow supporting a second
 *distinct* approver rather than reusing the first — separation of duties, not a repeat click.
+
+**Resolution (NEX-057, run NEX-2026-11-27-58):** the second acceptance path was taken — *not
+feasible without a vocabulary change* — but narrowly: the signal itself is deterministic and
+half-modelled already; the assurance vocabulary and its persistence do not exist yet.
+
+ADR-015 names the signal as the **recorded authentication assurance of the delegating human**.
+An agent has no assurance of its own — every tool handler acts as the delegator — so the honest
+question is how strongly the *human* authenticated when they granted this authority. That is a
+stored fact, read by the gateway, never inferred. Assurance is a closed ordered vocabulary
+(`single-factor` < `multi-factor`) derived server-side from the IdP's `acr`/`amr` claims at
+login, carried on `Principal`, copied onto `DelegatedAuthorization.grant`, and compared against a
+static `STEP_UP_FLOOR` of multi-factor by ordinal rank. Absent or unrecognised assurance reads as
+single-factor, so an unpersisted value can never become authority. The gateway keeps refusing
+`step-up` until NEX-058 lands — correct, because an obligation satisfied by a weaker check than
+its name promises is worse than a refusal.
+
+Rejected in the ADR, with reasons: a model-scored risk signal (§10 forbids a model raising its
+own requirement, and it is unauditable); denial-count risk accumulation (measures behaviour, not
+identity, and an adversary can steer it in both directions); deriving it from the capability's
+`requires_approval` (makes it the same obligation as `approval` under a second name); data
+classification (says what data may flow, not who is acting, and lets a policy author widen the
+step-up set by relabelling data); and reading the delegator's live session assurance per call
+(the delegation can outlive the session, and it couples the gateway to the session store for a
+fact that should be fixed at consent).
+
+---
+
+## NEX-058 — persist authentication assurance so `step-up` becomes enforceable
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **TODO** |
+| Dependencies | NEX-057 (ADR-015), NEX-053 (delegation model) |
+| Blocks | NEX-057 enforcement; `second-approver` (needs distinct-human identity) |
+
+**Objective:** implement ADR-015's prerequisites so the gateway satisfies `step-up` instead of
+refusing it.
+
+**Scope**
+
+1. `domain/identity/assurance.py` — `AuthenticationAssurance` (`single-factor`,
+   `multi-factor`), `rank`, `meets()`. Closed vocabulary; absent reads as the lowest rank.
+2. `Principal.assurance` — default `SINGLE_FACTOR`; derived in
+   `infrastructure/identity/oidc_relying_party.py` from `acr`/`amr`, never from a request.
+3. `DelegatedAuthorization.assurance`, set in `grant()` from the granting principal.
+4. `DelegationRow.assurance` + migration: NOT NULL with `server_default='single-factor'`, then
+   drop the default in a second batch (the `b7d2c48e91af` pattern).
+5. `_delegation_to_domain` / `SqlAlchemyDelegationRepository.add` / `.save` carry the field.
+6. Gateway: `STEP_UP` satisfied iff `resolved.delegation.assurance.meets(STEP_UP_FLOOR)`.
+7. The OIDC adapter logs the raw *claim shape* (not the value) when it defaults to
+   single-factor, so an operator whose IdP does support MFA can see why step-up policies refuse.
+
+**Acceptance criteria**
+
+- Raise path: a single-factor delegation is refused `step-up`, audited as a denial.
+- Satisfy path: a multi-factor delegation is allowed and its assurance appears in the evidence.
+- Fail-closed path: absent or unknown assurance is refused, never treated as satisfied.
+- A test asserts that no request body or header can set assurance.
+
+**Required tests:** the three gateway paths above, the migration on a populated table, and the
+`acr`/`amr` mapping in the OIDC adapter.
+
+**Security considerations:** the only writer of `assurance` is the verified-token path; the
+gateway never re-derives it. Widening the enum is a vocabulary change and needs an ADR.
+
+**Migration implications:** one additive column, nullable-then-NOT-NULL via server default.
+
+**Next:** after NEX-058 lands, implement `second-approver` on the same distinct-human footing.

@@ -7137,3 +7137,83 @@ issue #2, and both heads are CI-green.
 The clock stopped the run here at ~9 minutes remaining, below the 10-minute threshold for
 starting another slice. That is the intended stop: the increment is committed, pushed,
 CI-verified and recorded, and the next exact action is written down.
+
+## Run `NEX-2026-11-27-58` — NEX-057: the `step-up` obligation gets a deterministic signal
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `e7c7315` (read from git at run start, not from a stored field)
+- **Ending commit:** the docs commit carrying this entry; read the true head with
+  `git rev-parse HEAD` or `git ls-remote`
+- **Run ID:** `NEX-2026-11-27-58`
+
+### What was delivered
+
+NEX-057, the fifth named policy obligation. Acceptance had two paths: enforce `step-up`, or
+record an ADR naming a deterministic signal and the vocabulary change needed. The second path
+was taken, narrowly, because the signal itself is deterministic and half-modelled already; what
+does not exist is the assurance vocabulary and its persistence.
+
+`docs/ADR/ADR-015-step-up-assurance-signal.md` names the signal as the **recorded authentication
+assurance of the delegating human**. The reasoning that makes this the only honest option: an
+agent has no assurance of its own — `_actor_principal` returns the delegator for every tool
+handler — so the question "is this actor's assurance sufficient" reduces to "how strongly did the
+human authenticate when they granted this authority", which is a stored fact.
+
+Five alternatives were rejected in the ADR, each with the reason that kills it: model-scored risk
+(§10 forbids a model raising its own requirement, and it is unauditable), denial-count risk
+accumulation (measures behaviour not identity, steerable in both directions), deriving it from
+`requires_approval` (collapses it into `approval` under a second name), data classification (says
+what data may flow, not who is acting, and lets a policy author widen the step-up set by
+relabelling data), and reading the delegator's live session assurance per call (the delegation can
+outlive the session, and it couples the gateway to the session store for a fact that should be
+fixed at consent).
+
+NEX-058 is recorded in the backlog as the prerequisite slice: domain vocabulary, `Principal` and
+`DelegatedAuthorization` fields, an additive `DelegationRow.assurance` migration, repository
+carrying, the gateway comparison against a static `STEP_UP_FLOOR`, and the three gateway tests
+(raise / satisfy / fail-closed) plus a test that no request can set assurance.
+
+The gateway still refuses `step-up`. That is deliberate and correct: an obligation satisfied by a
+weaker check than its name promises is worse than a refusal, because the policy would then read as
+enforced.
+
+### Decision recorded
+
+- **D-058:** `step-up`'s signal is the delegating human's *recorded* assurance at consent, not a
+  live per-call reading and not a computed risk score. Recorded because a delegation can outlive
+  the session that created it; at consent because that is the moment the human made the choice.
+  Enforcement is deferred to NEX-058 rather than half-wired, because a nullable assurance column
+  with no writer is a column that would silently read as "satisfied" once someone forgot to check.
+
+### Damage control
+
+A heredoc append to `docs/NEXUS/BACKLOG.md` corrupted ~4 KB of the file: fragments of words
+repeated hundreds of times mid-word, and a heading spliced into its own repeated prefix. The
+corruption reached the file this time — `git diff` showed the garbage inline. Repaired by
+`git checkout --` of the backlog and redoing both edits with the file editor. Verified
+afterwards: byte size back to the HEAD size before editing, `grep -c` for each corruption marker
+returned 0, and `git diff --stat` shows the intended `+73/-1` only.
+
+### Gates run on the committed tree
+
+- `uvx ruff format --check .` → **292 files already formatted** (repo-wide, exactly as CI runs it;
+  this caught a `python` fence in ADR-015 whose comment alignment ruff wanted reformatted — the
+  documented CI trap, fixed before committing).
+- No Python source changed, so `ruff check` / `mypy` / `pytest` were not re-run; their last green
+  result covers an identical `src/` and `tests/` tree. This is recorded rather than glossed: this
+  run changed documentation only.
+
+### Status
+
+- NEX-057: **IMPLEMENTED** (ADR-015 delivered) — not VERIFIED as *enforcement*, because there is
+  no enforcement. The backlog says exactly this.
+- NEX-058: **TODO**, recorded as the prerequisite for enforcement.
+- Commit: docs-only. Push: verified with `git ls-remote` after the push.
+
+### Next exact action
+
+Implement NEX-058 in one vertical slice: `domain/identity/assurance.py`, `Principal.assurance`,
+`DelegatedAuthorization.assurance`, the additive migration, repository carrying, the gateway
+comparison, and the three gateway tests. `second-approver` follows on the same distinct-human
+footing.
+

@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
- "run_id": "NEX-2026-11-27-57",
- "timestamp": "2026-11-27T18:16Z",
+ "run_id": "NEX-2026-11-27-58",
+ "timestamp": "2026-11-27T18:45Z",
  "branch": "feature/agentic-enterprise-platform",
  "commit": "e7c7315",
- "project_phase": "Phase 3 (governance). NEX-056 VERIFIED: the `rate-limit` obligation is enforced against the existing `RateLimiter` port on a per-agent-per-tool key, with the refusal audited as a denial carrying the retry window. Four of the five named obligations now have real mechanisms (`approval`, `redaction`, `enhanced-audit`, `rate-limit`). `step-up` and `second-approver` still fail closed by refusing the call - honest, but inexpressible. Next named gap: `step-up` (needs an ADR on what evidence raises the requirement), then risk-based approval.",
+ "project_phase": "Phase 3 (governance). NEX-057 IMPLEMENTED: the `step-up` obligation got its ADR - ADR-015 names the signal as the delegating human's recorded authentication assurance, derived from IdP acr/amr at login, carried on Principal, copied onto the delegation at grant, compared to a static multi-factor floor by ordinal rank, absent reading as single-factor. Four of the five named obligations have real mechanisms; step-up now has a designed mechanism whose vocabulary and persistence are the recorded prerequisite (NEX-058). The gateway still refuses step-up - deliberately, because an obligation satisfied by a weaker check than its name promises is worse than a refusal. Remaining gaps: step-up enforcement (blocked on NEX-058), second-approver, risk-based approval.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -19,7 +19,9 @@
   "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z).",
   "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd1, CI 4/4 at that SHA. Reported to PR #5 and issue #2 this run (delivery debt cleared).",
   "NEX-055": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f, CI 4/4 at that SHA. Reported to PR #5 and issue #2 this run (delivery debt cleared).",
-  "NEX-056": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at e7c73157050a2fc0363b1090f4e17749b66bfe91, and CI PASSED on that exact commit: check-runs polled 2026-11-27T18:14Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run pair for the same SHA was still in_progress - the concurrency group re-running, not a failure."
+  "NEX-056": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at e7c73157050a2fc0363b1090f4e17749b66bfe91, and CI PASSED on that exact commit: check-runs polled 2026-11-27T18:14Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run pair for the same SHA was still in_progress - the concurrency group re-running, not a failure.",
+  "NEX-057": "IMPLEMENTED - ADR-015 delivered (docs/ADR/ADR-015-step-up-assurance-signal.md). NOT enforcement: the gateway still refuses step-up, by design, until NEX-058 lands. Accepted on the second acceptance path the task allowed (ADR naming a deterministic signal plus the vocabulary change needed).",
+  "NEX-058": "TODO - prerequisite slice for step-up enforcement: domain assurance vocabulary, Principal.assurance, DelegatedAuthorization.assurance, additive DelegationRow migration, repository carrying, gateway comparison, and raise/satisfy/fail-closed gateway tests."
  },
  "completed_tasks": [
   "NEX-056",
@@ -43,14 +45,11 @@
  ],
  "validation": {
   "commands_run_on_committed_tree": [
-   "ruff format: 291 files left unchanged",
-   "ruff check: All checks passed",
-   "mypy: Success, no issues found in 138 source files",
-   "pytest (full suite): 1308 passed, 4 skipped"
+   "uvx ruff format --check . : 292 files already formatted"
   ],
-  "scope": "Run bare from the repo root on the feature branch, on the exact tree that was committed.",
-  "not_run": "PostgreSQL-marked tests skip locally; the CI Backend job exercises the migration path (and passed).",
-  "ci": "PASSED on e7c7315: Backend completed/success, Frontend completed/success, polled 2026-11-27T18:14Z."
+  "scope": "Docs-only run: ADR-015, ADR README, BACKLOG, STATE, EXECUTION_LOG, CHECKPOINT. No Python source changed, so ruff check / mypy / pytest were not re-run; their last green result covers an identical src/ and tests/ tree.",
+  "not_run": "ruff check, mypy, pytest - no source changed this run. Not glossed: this run changed documentation only.",
+  "ci": "Not yet polled for this docs commit at checkpoint-write time; the parent product commit e7c7315 is CI-green 4/4."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -83,23 +82,24 @@
  "blockers": [],
  "risks": [
   "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push.",
-  "`step-up` and `second-approver` have no adapter and refuse the call. Fail-closed, but a policy naming them is inexpressible in practice. The refusal must name the kind.",
-  "DecisionEvidence must keep being built from the evaluated decision object, never re-read from the repository, or it could describe a different evaluation than the one enforced.",
-  "Six slices are stacked in PR #5 (33 files). Review cost is real; a reviewer may reasonably ask for it to be split, but splitting a stacked branch needs care not to lose the merge of main."
+  "`step-up` is designed but not enforced: the gateway refuses the call. Fail-closed and honest, but a policy naming it is still inexpressible in practice until NEX-058.",
+  "NEX-058 must fail closed on absent/unknown assurance. A nullable column with no writer, or a default of multi-factor, would turn an unpersisted value into authority - the exact failure ADR-015 forbids.",
+  "`second-approver` must be a distinct human, not a second click by the first approver. Reusing the first approver would make separation of duties a formality.",
+  "DecisionEvidence must keep being built from the evaluated decision object, never re-read from the repository.",
+  "Seven slices now stack in PR #5. Review cost is real; a reviewer may ask for a split."
  ],
- "next_task": "NEX-057: the `step-up` obligation. Largest remaining obligation slice - it needs a decision about which evidence raises the requirement (risk signal -> higher assurance), so start with an ADR rather than code. `second-approver` follows and depends on the approval flow supporting a second *distinct* approver rather than reusing the first. Human review of PR #5 is the other outstanding item.",
- "next_action": "1. Nothing is in flight; both heads are CI-green. 2. Write ADR-015 for `step-up`: name the deterministic signal that raises the assurance requirement, and define what satisfies it - an obligation whose satisfaction is undefined is not enforceable. 3. Then implement NEX-057 behind that ADR. `second-approver` follows and needs a second *distinct* approver, not a repeat click. Human review of PR #5 is the outstanding item outside NEXUS's authority.",
- "recovery_instructions": "Nothing is in flight. Product commit e7c7315 is COMMITTED, PUSHED and CI-verified 4/4. The docs commit that writes this file descends from it; read the true head with `git rev-parse HEAD` or `git ls-remote`, never from a SHA field here. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5. Next: ADR-015 for step-up.",
+ "next_task": "NEX-058: persist authentication assurance so `step-up` becomes enforceable. One vertical slice: domain/identity/assurance.py, Principal.assurance, DelegatedAuthorization.assurance, additive DelegationRow.assurance migration (server_default then drop, b7d2c48e91af pattern), repository carrying, gateway comparison against a static STEP_UP_FLOOR, and the raise/satisfy/fail-closed tests plus a test that no request can set assurance.",
+ "next_action": "1. Nothing is in flight; this run committed and pushed docs only. 2. Read ADR-015, then implement NEX-058 as one slice with its three gateway tests. 3. Then `second-approver`, which needs a second DISTINCT approver, not a repeat click. Human review of PR #5 remains the outstanding item outside NEXUS authority.",
+ "recovery_instructions": "Nothing is in flight. This run changed documentation only (ADR-015 + NEXUS state). The product head is still e7c7315, CI-green 4/4. Read the true head with `git rev-parse HEAD` or `git ls-remote`, never from a SHA field here, because saving this file creates a commit. If the branch is behind origin, MERGE origin rather than rebasing - force-push is prohibited. Never merge PR #5. Next: implement NEX-058.",
  "ci_status": {
   "head_polled": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
   "product_commit": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
   "result": "Backend (ruff, mypy, pytest, migrations) completed/success; Frontend (typecheck, lint, test, build) completed/success",
   "conclusion": "success",
   "polled_at": "2026-11-27T18:14Z",
+  "note": "This run changed documentation only, so the product evidence still stands at e7c7315. The docs commit descends from it, so its CI also compiles and tests the product code.",
   "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, filtered to the current head from `git ls-remote origin feature/agentic-enterprise-platform`.",
-  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair.",
-  "docs_head": "f7a085b23344472d4c50aabb2fc18a634c103fd7",
-  "docs_head_result": "4/4 completed/success (two check-run pairs, both green) polled 2026-11-27T18:20Z. A docs commit descends from e7c7315, so this CI also compiles and tests the product code."
+  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair."
  },
  "verified_tasks": [
   "NEX-056",
@@ -175,23 +175,12 @@
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "READ IT FROM GIT - do not trust this field. Three commits were pushed this run: e7c7315 (product), f7a085b (docs: NEX-056 VERIFIED), and a final docs commit recording the docs-head CI poll. Each push was verified with `git ls-remote` immediately after, and each returned exactly the local HEAD. The last verified tip was the third commit; `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` is the only truth.",
-  "remote_verified": true,
-  "remote_verified_by": "`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` run after each of the three pushes; every time it returned exactly the SHA of local HEAD at that moment.",
-  "pr_updated": true,
-  "issue_updated": true,
-  "delivery_debt": "None. NEX-054, NEX-055 and NEX-056 are all reported to PR #5 and issue #2.",
-  "ci_verified": true,
-  "issue_comment": 7225253883,
-  "pr_comment": 7225324419,
-  "head_at_write": "f7a085b23344472d4c50aabb2fc18a634c103fd7",
-  "pushes_verified": [
-   "27bbc82..e7c7315 - product commit, remote returned e7c7315",
-   "e7c7315..f7a085b - docs commit, remote returned f7a085b",
-   "f7a085b..(final docs) - docs commit, remote returned the same SHA as local HEAD"
-  ]
+  "head": "READ IT FROM GIT - do not trust this field. This run pushed one docs commit. Verify with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`.",
+  "pr_updated": false,
+  "issue_updated": false,
+  "delivery_debt": "NEX-057 is not yet reported to PR #5 or issue #2. It is a docs/ADR slice, not enforcement, so the next run should append it to PR #5's body and comment on issue #2 when it delivers NEX-058 - reporting both together is more useful to a reviewer than an ADR with no code behind it."
  },
- "run_summary": "Implemented NEX-056: the `rate-limit` obligation got its enforcement adapter. It was the third of five named obligations with no mechanism - the gateway refused every call a policy placed it on, which is honest but left the policy language unable to express a volume bound at all. The adapter reuses the `RateLimiter` port the HTTP boundary already depends on, keyed per agent AND per tool so a hot tool cannot exhaust the budget of every other tool the same agent may call. An idempotent retry does not consume budget (a replay of a recorded decision is not a new call), and a refusal is audited as a denial naming the retry window. Enforcement runs before the approval gate so a flood cannot fill the approval queue. Still fails closed with no limiter wired, which is why the old 'unsatisfiable' test survives in a no-limiter harness. Gates: ruff format 291 files, ruff check clean, mypy 138 files, pytest 1308 passed / 4 skipped. Pushed as e7c7315 and CI polled to 4/4 completed/success. This run also cleared run 56's delivery debt: NEX-054 and NEX-055 sections appended to PR #5 (21968 chars, 33 files) and a NEX-054/055/056 status comment posted to issue #2 (7225253883). Delivery finished: docs commit f7a085b pushed and remote-verified, PR #5 CI-evidence comment posted (7225324419), and CI on the docs head polled to 4/4 success.",
+ "run_summary": "Implemented NEX-057 on its ADR acceptance path. The `step-up` obligation was the hardest of the five because the other four are predicates over facts the gateway already holds, while step-up asks a judgement - and a model-made judgement is exactly what section 10 forbids. ADR-015 resolves it by replacing the judgement with a deterministic stored fact: the recorded authentication assurance of the delegating human, since every tool handler acts as the delegator and an agent has no assurance of its own. The vocabulary is closed and ordered, derived from IdP acr/amr at login, carried on Principal, copied onto the delegation at grant, compared to a static multi-factor floor, with absent reading as single-factor so an unpersisted value can never become authority. Five alternatives were rejected with reasons, the most tempting being denial-count risk accumulation, which measures behaviour not identity and is steerable in both directions. The gateway still refuses step-up, which is correct: a weaker check under the obligation's name would make the policy read as enforced. NEX-058 records the vocabulary-and-persistence prerequisite. This run also repaired real file corruption: a heredoc append mangled ~4KB of BACKLOG.md, restored via git checkout and redone with the file editor, verified by byte size, marker grep and diffstat. Gates: uvx ruff format --check . -> 292 files formatted (repo-wide, as CI runs it); this caught a python fence in ADR-015 that ruff wanted reformatted - the documented CI trap, fixed before commit. No Python source changed, so check/mypy/pytest were not re-run.",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -238,10 +227,9 @@
   ]
  },
  "checkpoint_self_reference_note": "A SHA recorded in this file is stale the instant it is committed, and a docs-only commit advances the head without changing product code. That is why delivery_state.head is prose, not a SHA. To verify delivery: `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`, and `git status --porcelain` (empty = nothing uncommitted). Do NOT compare a stored SHA to HEAD and call a mismatch a lost push - it is arithmetic.",
- "last_run": "NEX-2026-11-27-57",
+ "last_run": "NEX-2026-11-27-58",
  "decisions_this_run": [
-  "D-056: the rate-limit bound is deployment configuration, not policy vocabulary. A rule says 'a volume bound applies'; the operator sets the number. A per-rule bound would need a parameterised PolicyObligation - a vocabulary change and therefore an ADR.",
-  "D-057: rate-limit is checked before approval, not after. A caller already over budget must be refused before it can open an approval request, otherwise a flood fills the human approval queue with requests that can never be used."
+  "D-058: step-up's signal is the delegating human's RECORDED assurance at consent - not a live per-call session read and not a computed risk score. Recorded because a delegation can outlive the session that created it; at consent because that is the moment the human made the choice. Enforcement deferred to NEX-058 rather than half-wired, because a nullable assurance column with no writer silently reads as satisfied once someone forgets to check."
  ],
  "ci": {
   "head": "e7c7315",

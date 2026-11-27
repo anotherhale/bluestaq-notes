@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-055 VERIFIED** in PR #5. **NEX-056** (`e7c7315`): the `rate-limit` obligation is enforced against the existing `RateLimiter` port on a per-agent-per-tool key, with the refusal audited. Four of the five named obligations now have real mechanisms. **Remaining gaps, named:** `step-up` and `second-approver` still fail closed by refusing the call (honest, but inexpressible), plus risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md) names the signal as the delegating human's recorded authentication assurance. Four of the five named obligations have real mechanisms; `step-up` now has a designed mechanism whose **vocabulary and persistence are the recorded prerequisite (NEX-058)**. **Remaining gaps, named:** `step-up` enforcement (blocked on NEX-058), `second-approver`, risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 57) | `27bbc82` — read from `git ls-remote` at run start, not from a stored field. |
 | Head commit (measured) | Product commit `e7c7315` (NEX-056), pushed and verified by an independent `git ls-remote` after the push. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
@@ -16,6 +16,40 @@ truth; this file records intent and reconciliation.
 | Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body now carries NEX-052…NEX-056 evidence** (appended this run, 21968 chars, 33 files). Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-057 ADR DELIVERED (run `NEX-2026-11-27-58`) — `step-up` has a deterministic signal
+
+`step-up` was the hardest of the five named obligations because the other four are *predicates*
+over facts the gateway already holds — they either fire or they do not. `step-up` asks a
+*judgement*: is this actor's current assurance enough for this action? A judgement made by a
+model would be exactly what §10 of the operating directive forbids, so the question is not *what
+should decide* but **what deterministic, already-recorded fact can stand in for the judgement**.
+
+[ADR-015](../ADR/ADR-015-step-up-assurance-signal.md) answers it: the signal is the **recorded
+authentication assurance of the delegating human**. An agent has no assurance of its own — every
+tool handler acts as the delegator (`_actor_principal` returns that human) — so the honest
+question is how strongly the *human* authenticated when they granted the authority. That is a
+stored fact, read by the gateway and never inferred.
+
+The mechanism, once NEX-058 lands it:
+
+- a closed, ordered vocabulary (`single-factor` < `multi-factor`), because a floor is a minimum
+  and a free-text assurance label in an enforcement path is a suggestion;
+- derived server-side from the IdP's `acr`/`amr` claims at the code exchange, carried on
+  `Principal`, copied onto `DelegatedAuthorization.grant` — never accepted from a request, for
+  the same reason no route supplies `owner_id`;
+- compared against a static `STEP_UP_FLOOR` of multi-factor by ordinal rank;
+- **absent or unrecognised reads as single-factor**, so an unpersisted column can never become
+  permanent authority.
+
+Five alternatives were rejected in the ADR with reasons, the most tempting being
+denial-count risk accumulation: it measures *behaviour*, not *identity*, and an adversary can
+steer it in both directions — staying quiet avoids step-up, and driving up denials on a victim's
+agent forces prompts onto the victim.
+
+The gateway keeps refusing `step-up` until NEX-058 lands, and that is correct: an obligation
+"satisfied" by a weaker check than its name promises is worse than a refusal, because the policy
+would read as enforced.
 
 ## NEX-056 PUSHED (run `NEX-2026-11-27-57`) — the `rate-limit` obligation gets an adapter
 

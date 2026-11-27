@@ -20,6 +20,7 @@ and immutable; superseding a decision means adding a new ADR.
 | [ADR-012](ADR-012-context-assembly-before-judgment.md) | Context assembly precedes outbound judgment |
 | [ADR-013](ADR-013-git-refs-as-coordination-primitive.md) | Git refs as the coordination primitive |
 | [ADR-014](ADR-014-obligations-as-separate-axis.md) | Obligations are a separate decision axis, not a third effect |
+| [ADR-015](ADR-015-step-up-assurance-signal.md) | `step-up` is satisfied by a recorded authentication assurance, not a judgement |
 
 
 See also the [Enterprise Authorization Architecture](../AUTHORIZATION_ARCHITECTURE.md) and [Authorization Policy Model](../AUTHORIZATION_POLICY_MODEL.md).
