@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-48",
-  "timestamp": "2026-11-27T11:45:00Z",
+  "timestamp": "2026-11-27T11:50:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "16b0287",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-044 VERIFIED. Run NEX-2026-11-27-48 closed R36's governance half: the operator allowlist was one flat set, so every grant bought every platform-wide view. Grants are now '<user-id>:<scope>' entries; a scope that is not named is not granted, '*' is the only way to say 'all operations', and nothing grants it by default. A listed id with an empty scope set admits nobody, so operator_ids reports only ids with at least one scope. A wrong-scope caller receives 404 exactly like an unlisted one: a 403 would confirm both that the endpoint exists and that the caller is some kind of operator. Allowlist expiry and holder visibility remain open; they need a stored grant, not a narrower env var.",
@@ -22,15 +22,15 @@
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "clean - 257 files already formatted (ruff format applied to 10 files this run).",
-    "ruff_check": "All checks passed. One F401 fixed: an unused UserId import left in container.py after the gate stopped parsing ids itself.",
-    "mypy": "Success: no issues found in 121 source files.",
-    "pytest_full": "1115 passed, 4 skipped, 1 warning in 16.76s (-p no:randomly). Full suite, not a subset.",
-    "pytest_targeted": "tests/bootstrap/test_operator_grants.py 6 passed after the UserId fix; tests/application/test_operator_gate.py 54 passed earlier in the run.",
-    "architecture": "tests/architecture/test_layering.py green inside the full run; the gate change touches only application + bootstrap.",
-    "new_tests": "Per-operation scoping block in test_operator_gate.py (including an operator with no scopes admitting nobody), tests/bootstrap/test_operator_grants.py (malformed grants fail at startup), and a conftest operator_grant(user, scope) helper that the three ops API test files now use.",
-    "defect_found_by_own_tests": "UserId subclasses uuid.UUID, whose constructor takes a hex string, not a UUID object. The config parser passed a UUID, so every VALID grant was rejected as 'non-UUID' - a fail-closed bug that would have locked every operator out at startup. Caught because the bootstrap test asserted a valid grant parses, not just that invalid ones raise. Fixed in config.py.",
-    "measurement_note": "Every count above was produced by running the command in this session."
+    "commands_run_on_committed_tree": [
+      "ruff format --check (257 files)",
+      "ruff check (all passed)",
+      "mypy (121 source files, no issues)",
+      "pytest full suite: 1115 passed, 4 skipped, 0 failed",
+      "pytest targeted re-run this segment: 55 passed, exit 0"
+    ],
+    "independent_invariant_check": "Executed /tmp/nex048_invariant.py against the committed OperatorGate: a withholding-report operator is granted that operation and refused 404 on audit-integrity and operator-access-report; an id mapped to an empty scope set is not reported in operator_ids and is refused 404; after one grant and three refusals the access log holds exactly 1 entry, confirming refusals precede the write. All assertions passed.",
+    "status": "VERIFIED"
   },
   "uncommitted_work": "None. This checkpoint write is the final commit of the segment.",
   "pr_state": {
@@ -269,10 +269,12 @@
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R36 is CLOSED in all three of its halves (read side, auditable half, governance half) - do not redo them. 5. Delivery debt outstanding: poll CI at 16b0287, then write the issue #2 comment and the PR #3 section for NEX-044.",
   "ci_status": {
     "product_slice_sha": "16b0287",
-    "product_slice_result": "3/4 completed/success at head_sha 16b0287. The fourth run (Backend on the push event) reads completed/cancelled because the docs commit 7e48857 superseded it in the CI concurrency group. Cancelled is not failed and is not evidence either way; the Backend result that counts is the one on 7e48857, whose tree is a docs-only superset of 16b0287.",
-    "docs_head_sha": "7e48857",
-    "docs_head_result": "in_progress when this file was written; the next run must poll it.",
-    "standing_rule": "A commit superseded in the concurrency group reads queued/null or completed/cancelled forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed."
+    "product_slice_result": "3/4 completed/success at head_sha 16b0287; the fourth run (Backend, push event) reads completed/cancelled because the docs commit 7e48857 superseded it in the CI concurrency group. Cancelled is not failed, but it is also not a pass.",
+    "verifying_sha": "7e48857",
+    "verifying_sha_result": "4/4 completed/success, polled twice (in_progress at 11:42, all success at 11:43). 7e48857's tree is 16b0287's tree plus coordination docs only, so this is the run that actually certifies the NEX-044 product code. VERIFIED: CI PASSED for the slice.",
+    "docs_only_sha": "8dadd24",
+    "docs_only_result": "checkpoint-only commit; 2 success / 2 in_progress at last poll.",
+    "standing_rule": "A commit superseded in the concurrency group reads completed/cancelled forever. Read the check runs of the head that actually ran, confirm head_sha matches the sha being claimed, and prefer the newest green head whose tree is a docs-only superset of the slice."
   },
   "verified_tasks": [
     "NEX-001",
@@ -345,12 +347,12 @@
     "pushed": true,
     "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 7e488579702cd2ad9b4857dd650abfc7b4a4235f, equal to local HEAD. Two pushes this segment: 70353c7..16b0287 (the slice) and 16b0287..7e48857 (coordination docs), both fast-forwards.",
     "ci_verified": true,
-    "ci_verifying_sha": "16b0287",
-    "ci_result": "3/4 completed/success at 16b0287; the fourth cancelled as superseded, not failed.",
+    "ci_verifying_sha": "7e48857",
+    "ci_result": "4/4 completed/success at 7e48857 (docs-only superset of the 16b0287 product tree).",
     "tracking_issue_updated": true,
     "tracking_issue_detail": "Issue #2 comment 7217371713 posted (HTTP 201, 3947 chars stored vs 3947 local - exact). Lists and prose only, no tables (tables 500 on this repo's issue comments).",
     "pr_updated": true,
-    "pr_detail": "PR #3 body PATCHed 84930 -> 88601 chars with the R36 governance-half section. Read back and asserted on 5 substrings. Still draft, still open, still unmerged.",
+    "pr_detail": "PR #3 body PATCHed 84930 -> 88601 chars with the R36 governance-half section, then corrected to cite CI at 7e48857 rather than the superseded 16b0287. Read back and asserted on 5 substrings. Still draft, still open, still unmerged.",
     "delivery_debt": "None carried out of this segment. Poll the CI of docs head 7e48857; that is a check, not debt.",
     "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
