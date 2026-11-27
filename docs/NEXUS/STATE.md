@@ -2237,3 +2237,47 @@ carry real review cost.
    then `GET /commits/<sha>/check-runs` — and promote NEX-062 only on 4/4 `completed`/`success`.
 2. Comment on issue #2 with NEX-062 and the fail-open it fixed; append NEX-062 to PR #5's body.
 3. NEX-063: risk-based approval — the last named ADR-015 obligation without a mechanism.
+
+### Run NEX-2026-11-27-62 close-out
+
+**Current commit.** `0e2ca47` (docs-only), descending from product commit `acb1fd9`.
+
+**NEX-062 — VERIFIED.** CI polled to a verdict rather than inferred: head
+`0e2ca4793e0f891a9eadf299a93693755c8eba6f`, four check-runs, all `completed`/`success` — Backend
+(ruff, mypy, pytest, migrations) twice and Frontend (typecheck, lint, test, build) twice. The
+duplicate pairs are the branch concurrency group re-running. `0e2ca47` descends from `acb1fd9`
+through a docs-only commit, so that CI compiled and tested the fix.
+
+What NEX-062 fixed: `derive_assurance` decided multi-factor by substring, so `urn:acme:mfa-optional`,
+`urn:acme:mfa-not-required`, `urn:acme:mfa-disabled` and `urn:acme:not-multifactor` all resolved to
+multi-factor. ADR-015 makes `step-up` enforceable by naming the delegating human's recorded
+assurance, and this function is the only thing that mints it — so the control was reading a
+fail-open value. Same class as NEX-060, one layer down. Now matched by segment with an adjacent
+negation veto; 12 of the new tests fail if the fix is reverted.
+
+**Delivery state — no debt.** PR #5 body extended to 29082 chars with a NEX-062 section (verified:
+one section, NEX-060 intact). Issue #2 comment `7227311410` posted. Both carry the AI-agent
+disclosure line. PR #5 remains unmerged for human review.
+
+**CI status.** 4/4 `completed`/`success` on `0e2ca47`. An earlier poll of the same head showed
+Backend `in_progress`; only the all-completed read was accepted.
+
+**Why the run stopped.** Clock-checked, not assumed. ~926s remained before `DEADLINE`, but NEX-063
+is a design-first security slice whose own framing requires reading ADR-015 and the approval
+aggregate before designing — not enough room to finish, and starting it would have left an
+uncommitted tree. Closed on a verified, pushed, recoverable increment instead.
+
+**Blockers.** None.
+
+**Risks.** Unchanged: ten slices stack in PR #5 and the reviewer's "consider a split" note stands.
+That is a human decision; NEXUS may not split or merge unilaterally.
+
+**Next best actions.**
+
+1. **NEX-063 — risk-based approval.** The last named ADR-015 obligation without a mechanism. Read
+   ADR-015's risk-based approval section, then the existing approval aggregate, before designing.
+2. Poll CI on any head this run's successor produces, and treat `cancelled` as superseded rather
+   than failed.
+3. Keep PR #5 unmerged and its body current; the split decision is human.
+
+**Do not redo** NEX-060 or NEX-062 — both are CI-verified.

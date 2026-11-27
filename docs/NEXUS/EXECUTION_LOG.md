@@ -7615,3 +7615,62 @@ promote NEX-062 only on 4/4 `completed`/`success`. Then comment on issue #2 with
 fail-open it fixed, append NEX-062 to PR #5's body, and move to NEX-063 (risk-based approval, the
 last named ADR-015 obligation without a mechanism). Human review of PR #5 stays outside NEXUS
 authority.
+
+---
+
+## Run NEX-2026-11-27-62 — CI verdict closed, delivery debt cleared
+
+**Ending commit** `0e2ca47` · **Branch** `feature/agentic-enterprise-platform` · **Phase** 3 —
+Agent Platform / security enforcement
+
+This is the same run continuing after its slice was committed. The earlier section recorded
+NEX-062 as COMMITTED + PUSHED and explicitly refused to call it VERIFIED until CI was read. That
+read is now done, so the status changes here and only here.
+
+**CI polled to a verdict.** Head `0e2ca4793e0f891a9eadf299a93693755c8eba6f`, four check-runs:
+
+| check | status | conclusion |
+| --- | --- | --- |
+| Backend (ruff, mypy, pytest, migrations) | completed | success |
+| Backend (ruff, mypy, pytest, migrations) | completed | success |
+| Frontend (typecheck, lint, test, build) | completed | success |
+| Frontend (typecheck, lint, test, build) | completed | success |
+
+The duplicate pairs are the branch concurrency group re-running, not a second verdict — the
+established reading on this repo. An earlier poll of the same head had Frontend `success` with
+Backend still `in_progress`; only the all-completed read was treated as the verdict. `0e2ca47`
+descends from product commit `acb1fd9` through a docs-only commit, so this CI compiled and tested
+the NEX-062 product code rather than only documentation.
+
+**NEX-062 is therefore VERIFIED** — IMPLEMENTED + TESTED + COMMITTED + PUSHED + CI PASSED. That
+completes the promotion chain the previous section deliberately left unfinished.
+
+**Delivery debt cleared in the same window**, while CI ran rather than after it:
+
+- PR #5 body extended 26040 → 29082 chars with a NEX-062 section that leads with the four-row
+  before/after table, then the fix, the deliberate non-mappings, the 12-test negative check, and a
+  status line that claims COMMITTED + PUSHED but not VERIFIED. Verified one NEX-062 section, no
+  duplication, NEX-060 section intact.
+- Issue #2 comment `7227311410` (3041 chars) reports NEX-062 and states the same precise status.
+- Both carry the AI-agent disclosure line.
+
+**Why the run stopped here.** The clock was the reason, and it was checked rather than assumed.
+At the CI verdict, 574s of the 1500s window had elapsed, leaving ~926s to the 1500s deadline and
+~1300s to the 1800s kill boundary — but the rule that governs a second slice is the 10-minute
+(600s) floor before `DEADLINE`, and ~926s against a task whose own framing says it must "read
+ADR-015's risk-based approval section first, then the existing approval aggregate, before
+designing" would have been a slice started with no room to finish. NEX-063 is a design-first
+security slice; starting it would have produced an uncommitted tree for the next run to discard.
+That is the defect the protocol names. So the run closed on a verified, pushed, recoverable
+increment instead.
+
+**Decisions.** None new. NEX-062's blunt-negation-veto trade-off and its deliberate refusal to map
+numeric level conventions were already recorded and are unchanged by the CI result.
+
+**Risks.** The ten-slice PR #5 remains the main delivery risk, and it is unchanged by this run:
+the reviewer's "consider a split" note stands and is a human decision, not something NEXUS may
+take unilaterally. PR #5 stays unmerged for human review, as required.
+
+**Next exact action.** NEX-063, risk-based approval — the last named ADR-015 obligation without a
+mechanism. Read ADR-015's risk-based approval section, then the existing approval aggregate,
+before designing. Do not redo NEX-060 or NEX-062.
