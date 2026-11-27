@@ -11,7 +11,7 @@ truth; this file records intent and reconciliation.
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 60) | `bfb4e2c` — read from `git ls-remote` at run start, not from a stored field. |
 | Head commit (measured) | Product commit `39fa1db` (NEX-059), pushed and verified by an independent `git ls-remote` after the push (remote and local both read `39fa1db`). The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
-| Last CI result | **`a4003bf` (NEX-058 docs head): all four check-runs `completed/success`**, polled 2026-11-27T19:23Z. **`39fa1db` (NEX-059) was NOT polled** — the clock ran out; a push is not a verdict. Poll it before promoting NEX-059. |
+| Last CI result | **`b9811d7` (NEX-059 docs head): all four check-runs `completed/success`**, polled 2026-11-27T19:53Z. `b9811d7` descends from product commit `39fa1db`, so its CI compiled and tested the NEX-059 code — **NEX-059 is VERIFIED**. Previous anchor `a4003bf` (NEX-058) also 4/4 green. |
 | Tracking issue | #2 (open) — last reported NEX-056 (comment `7225253883`). **NEX-057/058/059 delivery is owed.** The issue stays open: the programme is not done. |
 | Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body carries NEX-052…NEX-056 evidence**; NEX-057/058/059 are owed. Eight slices now stack in one PR — a reviewer may reasonably ask for a split. Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
@@ -45,7 +45,7 @@ to understand how the control actually behaved.
 | Tests | 11/11 in `tests/agent/test_second_approver_obligation.py` |
 | Gates | ruff format 297 files, ruff check clean, mypy 139 files, full pytest exit 0 |
 | Migration | `e5a9c3b7d812`, additive, single linear head, `required_approvals` defaults to 1 |
-| CI | **NOT POLLED** — the clock ran out. A push is not a verdict. |
+| CI | **4/4 `completed/success`** on `b9811d7`, polled 2026-11-27T19:53Z — VERIFIED. |
 
 One existing test had to be retargeted rather than deleted: it asserted `second-approver`
 had no adapter, which stopped being true. The module docstring that made the same claim was
