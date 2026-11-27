@@ -2527,8 +2527,13 @@ retirement, rollback-as-new-release, rollback-to-draft refusal, deterministic
 ## NEX-048 — a durable `PolicyVersionRepository` behind the unchanged port
 
 **Phase** 3 — governance, audit, Jev integration · **Priority** P1 (foundational) ·
-**Status** READY (not started) · **Complexity** medium · **Depends on** NEX-047
-(VERIFIED at `379a98a`)
+**Status** **PUSHED** at `810d1dc` (IMPLEMENTED, TESTED, COMMITTED, PUSHED; CI for that
+commit **not yet polled**; delivery to issue #2 / PR #3 outstanding) · **Complexity**
+medium · **Depends on** NEX-047 (VERIFIED at `379a98a`)
+
+> Implemented as `infrastructure/governance/policy_versions_db.py` rather than the
+> `policy_versions.py` named below: that filename already holds NEX-047's in-memory
+> adapter, which stays for tests. The port is unchanged, as required.
 
 ### Objective
 

@@ -6229,3 +6229,86 @@ threshold for starting a new implementation slice.
 **NEX-048** — durable `PolicyVersionRepository` (SQLAlchemy adapter + migration) enforcing
 unique `(policy_id, version_number)` and at most one `PUBLISHED` row per policy id at the
 storage layer. No delivery debt outstanding; start on product work immediately.
+
+---
+
+## Run `NEX-2026-11-27-50` (continued) — NEX-048 durable policy versions
+
+**Run ID** `NEX-2026-11-27-50` · **Branch** `feature/agentic-enterprise-platform`
+**Starting commit** `d00c661` · **Ending commit** `810d1dc` · **Phase** 3 (governance)
+
+### Tasks
+
+- **NEX-048 — durable `PolicyVersionRepository`.** IMPLEMENTED, TESTED, COMMITTED,
+  PUSHED at `810d1dc`. CI **not polled** for that commit; delivery debt outstanding.
+- NEX-047 remains VERIFIED at `379a98a`; its baseline was confirmed an ancestor of HEAD
+  before any commit (`git merge-base --is-ancestor 379a98a HEAD`).
+
+### Files changed
+
+- `migrations/versions/4b1e7a9c3f28_policy_versions.py` (new, 102 lines)
+- `src/notes_service/infrastructure/governance/policy_codec.py` (new, 169 lines)
+- `src/notes_service/infrastructure/governance/policy_versions_db.py` (new, 257 lines)
+- `tests/persistence/test_policy_versions_db.py` (new, 366 lines)
+- `src/notes_service/infrastructure/db/models.py` (+67)
+- `src/notes_service/bootstrap/container.py` (+37)
+
+`uv.lock` was left untracked and uncommitted: it is an artifact of this workspace's
+`uv` environment, not part of the task, and the repository does not track it.
+
+### Tests executed and outcomes
+
+| Command | Result |
+| --- | --- |
+| `pytest` (full suite) | **1246 passed, 4 skipped** in 17.27s |
+| `pytest tests/architecture` | **13 passed** — layering boundary intact |
+| `ruff check src tests migrations` | All checks passed |
+| `ruff format --check` | 226 files already formatted |
+| `mypy` | Success, 134 source files, no issues |
+| `alembic upgrade head` (fresh SQLite) | applied `f7b3c0d95a12 -> 4b1e7a9c3f28` |
+| `alembic heads` | single head `4b1e7a9c3f28` |
+
+The restart test builds a **new adapter over the same database**, which is what a restart
+actually produces — not a cache clear on the same object.
+
+### Decisions
+
+- **The port did not change.** NEX-047's `PolicyVersionRepository` is a port; a durable
+  store is a second adapter. Changing the port to accommodate SQLAlchemy would have leaked
+  a framework into the application layer and broken the AST-based layering test.
+- **Invariants enforced in the schema as well as the use case.** Defence in depth: the use
+  case retires before publishing, and the partial unique index makes "two versions in
+  force" unrepresentable even for a caller that bypasses it.
+- **Decode re-validates and raises.** A corrupt row is a data-integrity event, logged at
+  WARNING with policy id and version, and surfaced as `ValidationError` — never a silent
+  deny, and never a silently weaker policy.
+- **No backfill.** The prior adapter was process-local, so there was nothing durable to
+  migrate.
+
+### Risks identified
+
+- CI for `810d1dc` is **unknown**. The push landed at the end of the run's budget.
+- The migration was applied against **SQLite only** in this run; the Postgres path is
+  covered by CI's migration job, which has not yet run against this revision.
+- NEX-048 is not yet reported to issue #2 or PR #3 — delivery debt, explicitly recorded.
+
+### Commits, push, PR
+
+- `810d1dc` `feat(governance): make policy versions durable (NEX-048)`
+- Pushed `d00c661..810d1dc`; `ls-remote` confirms the remote head is `810d1dc`.
+- PR #3: **not updated this run.** Tracking issue #2: **not updated this run.**
+
+### Note on process
+
+The first commit attempt used a shell heredoc for the message and the terminal's input
+path corrupted it — the message body was replayed in fragments and truncated mid-sentence.
+The commit object existed but its message was garbage. It was amended from a file
+(`git commit --amend -F`) and verified: 32 lines, each expected marker present exactly
+once. This is the same terminal defect recorded in memory; heredocs for multi-KB bodies
+are unusable here.
+
+### Next action
+
+Poll CI for `810d1dc`. If green, report NEX-048 to issue #2 and append the NEX-048 section
+to PR #3 (clearing the delivery debt), then start **NEX-049** — the HTTP surface for the
+policy lifecycle, gated on an operator scope, converging on the existing use cases.
