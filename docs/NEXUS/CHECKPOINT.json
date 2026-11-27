@@ -16,7 +16,7 @@
     "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63.",
     "NEX-064": "VERIFIED - CI 4/4 completed/success at 7456a89 (the docs head descending from product commit 55e4436), polled 2026-11-27T21:13Z by run 64. Full suite 1434 passed / 4 skipped, ruff+mypy clean locally and in CI.",
     "NEX-066": "VERIFIED. CI 4/4 completed/success at 2ce7730 (the docs head, which descends from product commit 353ef6d and therefore compiles and tests it), polled 2026-11-27T22:5xZ. DraftPolicy refuses a draft naming an obligation with no enforcement adapter; the judgement lives in domain.governance.policy.deployment_obligation_gaps(), shared with the tool gateway so the two cannot drift. Local gates green on the rebased tree: ruff format/check clean, mypy 140 files, 1442 passed / 4 skipped.",
-    "NEX-068": "COMMITTED + PUSHED, NOT CI-POLLED - product cd8c843, docs c2f0ecc. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; the regression tests were proved to fail with the guard removed."
+    "NEX-068": "VERIFIED - product cd8c843, docs f63ac1b, CI 4/4 completed/success. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; regression tests were proved to fail with the guard removed. PR #5 body and issue #2 comment 7228764536 carry the evidence."
   },
   "completed_tasks": [
     "NEX-039",
@@ -135,9 +135,9 @@
   "tracking_issue": {
     "issue": 2,
     "state": "open",
-    "last_reported_task": "NEX-066",
-    "note": "Issue #2 open. Comment 7228642936 covers NEX-064 and NEX-066, the corrected NEX-056 second-approver record, and the open P1 (NEX-067).",
-    "comment_id": 7228642936
+    "last_reported_task": "NEX-068",
+    "note": "Issue #2 open. Comment 7228764536 covers NEX-068; the prior comment 7228642936 covers NEX-064/NEX-066 and the corrected NEX-056 record. The open P1 (NEX-067) is restated in the latest comment.",
+    "comment_id": 7228764536
   },
   "blockers": [],
   "risks": [
@@ -156,7 +156,7 @@
   "next_task": "NEX-067 (P1 security): make `derive_assurance()` require AMR factors from distinct factor families before counting a session as multi-factor.",
   "next_action": "Implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). Verify the defect against the code first; then pin it with a test that two same-family claims do not satisfy a multi-factor ACR. NEX-068 also needs its PR #5 body section and an issue #2 comment (delivery debt below).",
   "recovery_instructions": "Tree is clean. cd8c843 is the NEX-068 product commit, pushed; c2f0ecc is the docs commit. Neither has been CI-polled - poll the check-runs on the head before promoting NEX-068. Do not redo NEX-062/063/064/066/068. The P1 `derive_assurance()` AMR-independence defect (NEX-067) is the top priority and outranks further docs slices; run 68 skipped it and should not set that precedent.",
-  "ci_status": "NEX-066 verified 4/4 completed/success at 2ce7730 (polled 2026-11-27T22:55Z). NEX-068 (cd8c843 product, c2f0ecc docs) NOT YET POLLED. A docs head descends from the product commit, so its CI still compiles and tests the product code; poll the head and judge on a concluded run. `cancelled` means superseded, not failed.",
+  "ci_status": "NEX-068 VERIFIED: 4/4 completed/success at f63ac1b (polled 2026-11-27T22:47Z). Both backend and frontend concluded success; two check-run pairs per SHA is the concurrency group re-running, and both pairs concluded. NEX-066 remains verified at 2ce7730.",
   "commits_this_run": [
     "cd8c843",
     "c2f0ecc"
@@ -171,14 +171,14 @@
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
     "head": "c2f0ecc",
-    "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "NEX-068 still needs a PR #5 body section and an issue #2 comment. The prior run's delivery is complete and must not be redone: PR #5 body covers through NEX-066 (38530 chars) and issue #2 comment 7228642936 covers NEX-064/NEX-066.",
-    "ci_verified": false,
-    "ci_verified_head": "2ce7730",
-    "pr_body_updated": false,
-    "pr_body_covers_through": "NEX-066",
-    "issue_comment_covers_through": "NEX-066"
+    "pr_updated": true,
+    "issue_updated": true,
+    "delivery_debt": "None for NEX-068. PR #5 body covers NEX-052..NEX-068 (40653 chars); issue #2 comment 7228764536 covers NEX-068. PR #5 stays unmerged for human review; the reviewer's 'consider a split' note stands as a human decision.",
+    "ci_verified": true,
+    "ci_verified_head": "f63ac1b",
+    "pr_body_updated": true,
+    "pr_body_covers_through": "NEX-068",
+    "issue_comment_covers_through": "NEX-068"
   },
   "branch_head": "c2f0ecc",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
@@ -226,5 +226,10 @@
     "checkpoint_status": "updated and validated",
     "next_prioritized_task": "NEX-067 - AMR factor-family independence in derive_assurance()",
     "recommended_next_action": "Verify the AMR defect against code, fix it, pin it with a test that two same-family claims do not satisfy a multi-factor ACR."
+  },
+  "pr": {
+    "body_covers_through": "NEX-068",
+    "body_updated_this_run": true,
+    "note": "Body now carries NEX-052..NEX-068 (40653 chars). Fourteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review."
   }
 }

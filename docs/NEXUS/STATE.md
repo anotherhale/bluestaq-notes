@@ -10,18 +10,19 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 68) | `f8ae00c` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product commit `cd8c843` (NEX-068), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`2ce7730` (NEX-066 docs head): 4/4 `completed/success`**, polled 2026-11-27T22:55Z — NEX-066 VERIFIED. **NEX-068 (`cd8c843`) not yet polled.** |
-| Tracking issue | #2 (open) — **comment `7228642936`** covers NEX-064, NEX-066, the corrected NEX-056 record and the open P1. Issue stays open; **NEX-068 comment pending**. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated by run 66**, carries NEX-052…**NEX-066** (38530 chars). **NEX-068 section pending.** Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). **Still not addressed** — run 68 fixed a different defect instead. Top priority next run as **NEX-067**. |
+| Head commit (measured) | Docs head `f63ac1b` (NEX-068, CI-verified), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
+| Last CI result | **`f63ac1b` (NEX-068 head): 4/4 `completed/success`**, polled 2026-11-27T22:47Z — **NEX-068 VERIFIED**. NEX-066 remains verified at `2ce7730`. |
+| Tracking issue | #2 (open) — **comment `7228764536`** covers NEX-068; `7228642936` covers NEX-064/NEX-066, the corrected NEX-056 record and the open P1. Issue stays open. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated this run**, carries NEX-052…**NEX-068** (40653 chars). Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). **Still not addressed** — carried across three runs while enforcement gaps were closed instead. Top priority next run as **NEX-067**; this is now overdue. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-068 (run `NEX-2026-11-27-68`) — an approval weaker than the call's threshold is refused
 
-**Status: COMMITTED + PUSHED (`cd8c843`), NOT CI-POLLED.** Do not promote to VERIFIED until the
-check-runs conclude.
+**Status: VERIFIED.** Product `cd8c843`, docs `f63ac1b`; CI 4/4 `completed/success` at
+`f63ac1b` (polled 2026-11-27T22:47Z). PR #5 body and issue #2 comment `7228764536` carry the
+evidence.
 
 **A real fail-open, found while auditing the gateway.** `_approved_request` matched an approval
 on capability, resource and `is_usable`, but never compared the threshold the row was *opened*

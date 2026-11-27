@@ -8105,3 +8105,37 @@ head conclude `success`.
 **Next action.** NEX-067 (`derive_assurance()` AMR factor-family independence) — the P1 security
 defect the previous checkpoint ranked first. Verify the defect against the code before fixing it.
 
+
+**Delivery (completed this run).** Pushed `c2f0ecc` (state/checkpoint/log) and hit the usual
+concurrent-run race: the live tip had moved `f8ae00c` -> `61ca80c` (run 66 closing its own
+entry and recording the CI-polling rule). Merged `61ca80c` rather than rebasing, because both
+runs had already pushed.
+
+Two conflicts, resolved differently on purpose:
+
+- `CHECKPOINT.json` — rebuilt the file on the *concurrent* run's version and re-applied this
+  run's fields on top. That version carried real delivery evidence this run did not produce
+  (PR #5 body updated, issue #2 comment `7228642936`); starting from my side would have
+  reported that work as undone. Re-parsed through a temp file before replacing.
+- `EXECUTION_LOG.md` — kept **both** appended entries, ordered 66 then 68. This file is
+  append-only history; keeping one side would have deleted another run's record.
+
+Merge commit `f63ac1b`. CI polled on that head: **4/4 `completed/success`** (backend and
+frontend, both concurrency pairs concluded), so NEX-068 is **VERIFIED**, not merely pushed.
+
+Delivery completed: PR #5 body now carries a NEX-068 section (38530 -> 40653 chars) and
+issue #2 has comment `7228764536`. Neither was inherited — the prior run's PR body stopped at
+NEX-066, and both were posted by this run with an AI-disclosure line.
+
+**Not done, and the honest gap.** NEX-067 (`derive_assurance()` AMR factor-family
+independence) was the checkpoint's stated top priority and was not started. A P1 security
+defect has now been carried across three runs while enforcement gaps — real ones — were closed
+instead. This run had the time for exactly one slice and chose the fail-open because it was
+fully understood and testable inside the window. That is a defensible choice once; three
+times is drift. The next run should start NEX-067 before any further governance breadth.
+
+**Commits.** `cd8c843` (product), `c2f0ecc` (state), `f63ac1b` (merge + CI evidence).
+**Push status.** Pushed; remote head confirmed equal to local.
+**Next action.** NEX-067 — read `oidc_relying_party.py`, prove the same-family AMR defect with
+a failing test first, then fix.
+
