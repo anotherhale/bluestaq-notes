@@ -570,6 +570,13 @@ class ToolInvocationRow(Base):
     gateway decided the call (NEX-052), sealed into ``intent_hash``. It is stored
     as JSON text for the same reason ``PolicyVersionRow.rules`` is: the column is
     a durable record of a decision, not a queryable dimension.
+
+    ``decision_evidence`` holds the JSON object of extra proof a policy's
+    ``enhanced-audit`` obligation required (NEX-055), also sealed into
+    ``intent_hash``: the matched rules, the obligations imposed, and the
+    attribute snapshot the decision used. Empty string means "not an
+    enhanced-audit attempt", which is the state of every row written before
+    NEX-055 and reads back as ``None``.
     """
 
     __tablename__ = "tool_invocations"
@@ -598,6 +605,7 @@ class ToolInvocationRow(Base):
     intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     policy_versions: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    decision_evidence: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     __table_args__ = (
         CheckConstraint("status IN ('started','succeeded','failed','denied')", name="status_valid"),

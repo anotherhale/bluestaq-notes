@@ -32,6 +32,7 @@ from enum import StrEnum
 
 from notes_service.domain.agent.audit_chain import (
     GENESIS_HASH,
+    DecisionEvidence,
     intent_hash,
     outcome_hash,
 )
@@ -305,6 +306,13 @@ class ToolInvocation:
     "matched policy versions" field. It is sealed into the intent hash, so the
     decision stays explainable after the policies move on and the cited versions
     cannot be quietly erased. Empty when no policy was consulted.
+
+    ``decision_evidence`` is the extra proof a policy's ``enhanced-audit``
+    obligation requires (NEX-055): which rules matched, which obligations were
+    imposed, and the attribute snapshot the decision was made against. It is
+    sealed into the intent hash exactly as ``policy_versions`` is, so the extra
+    evidence cannot be added to, trimmed from, or rewritten after the fact
+    without breaking the chain. ``None`` for an ordinary attempt.
     """
 
     id: ToolInvocationId
@@ -316,6 +324,7 @@ class ToolInvocation:
     arguments_digest: str
     resource_ref: str
     policy_versions: tuple[str, ...] = ()
+    decision_evidence: DecisionEvidence | None = None
     status: InvocationStatus = InvocationStatus.STARTED
     outcome: str | None = None
     approval_request_id: uuid.UUID | None = None
@@ -341,6 +350,7 @@ class ToolInvocation:
         previous_hash: str = GENESIS_HASH,
         chain_sequence: int = 1,
         policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolInvocation:
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
             raise ValidationError("an idempotency key is required")
@@ -365,6 +375,7 @@ class ToolInvocation:
             arguments_digest=digest,
             resource_ref=resource_ref,
             policy_versions=consulted,
+            decision_evidence=decision_evidence,
             approval_request_id=approval_request_id,
             invoked_at=now,
             chain_sequence=chain_sequence,
@@ -382,6 +393,7 @@ class ToolInvocation:
                 invoked_at=now,
                 previous_hash=previous_hash,
                 policy_versions=consulted,
+                decision_evidence=decision_evidence,
             ),
         )
 

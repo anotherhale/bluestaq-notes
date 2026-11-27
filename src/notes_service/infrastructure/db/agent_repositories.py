@@ -20,7 +20,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
-from notes_service.domain.agent.audit_chain import GENESIS_HASH, ChainAnchor
+from notes_service.domain.agent.audit_chain import (
+    GENESIS_HASH,
+    ChainAnchor,
+    DecisionEvidence,
+)
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import (
@@ -151,6 +155,40 @@ def _decode_policy_versions(raw: str | None) -> tuple[str, ...]:
     return tuple(decoded)
 
 
+def _decode_decision_evidence(raw: str | None) -> DecisionEvidence | None:
+    """Read the stored enhanced-audit evidence back into a value object.
+
+    An empty or absent column means "this was not an enhanced-audit attempt" —
+    the state of every row written before NEX-055 — and must read back as
+    ``None`` so the verifier recomputes the earlier intent payload for it. A
+    malformed value is not swallowed: the row is untrusted on the way back in,
+    and silently degrading it would let corrupted evidence verify as if the
+    decision had never been sealed.
+    """
+    if not raw:
+        return None
+    decoded = json.loads(raw)
+    if not isinstance(decoded, dict):
+        raise ValueError("decision_evidence must be a JSON object")
+    matched = decoded.get("matched_rules", [])
+    obligations = decoded.get("obligations", [])
+    attributes = decoded.get("attributes", {})
+    if not isinstance(matched, list) or not all(isinstance(item, str) for item in matched):
+        raise ValueError("decision_evidence.matched_rules must be a JSON array of strings")
+    if not isinstance(obligations, list) or not all(isinstance(item, str) for item in obligations):
+        raise ValueError("decision_evidence.obligations must be a JSON array of strings")
+    if not isinstance(attributes, dict):
+        raise ValueError("decision_evidence.attributes must be a JSON object")
+    # Sort the attribute pairs by name: the sealing renderer turns them into a
+    # dict, whose canonical form is key-sorted anyway, but a stable order here
+    # keeps a decoded value equal to the one that was sealed.
+    return DecisionEvidence(
+        matched_rules=tuple(matched),
+        obligations=tuple(obligations),
+        attributes=tuple(sorted((str(name), str(value)) for name, value in attributes.items())),
+    )
+
+
 def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
     return ToolInvocation(
         id=ToolInvocationId.parse(row.id),
@@ -162,6 +200,7 @@ def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
         arguments_digest=row.arguments_digest,
         resource_ref=row.resource_ref,
         policy_versions=_decode_policy_versions(row.policy_versions),
+        decision_evidence=_decode_decision_evidence(row.decision_evidence),
         status=InvocationStatus(row.status),
         outcome=row.outcome,
         approval_request_id=(
@@ -596,6 +635,11 @@ class SqlAlchemyToolInvocationRepository:
                 arguments_digest=invocation.arguments_digest,
                 resource_ref=invocation.resource_ref,
                 policy_versions=json.dumps(list(invocation.policy_versions), ensure_ascii=True),
+                decision_evidence=(
+                    json.dumps(invocation.decision_evidence.to_payload(), ensure_ascii=True)
+                    if invocation.decision_evidence is not None
+                    else ""
+                ),
                 status=invocation.status.value,
                 outcome=invocation.outcome,
                 approval_request_id=(

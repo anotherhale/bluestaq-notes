@@ -99,16 +99,22 @@ def intent_hash(
     invoked_at: datetime,
     previous_hash: str,
     policy_versions: tuple[str, ...] = (),
+    decision_evidence: DecisionEvidence | None = None,
 ) -> str:
     """Seal one immutable attempt, chained to the entry before it.
 
-    ``policy_versions`` (NEX-052) is versioned *into the payload*, not added to it
-    unconditionally. An invocation that consulted no policy is sealed with the
-    original ``v: 1`` payload, byte for byte, so every entry written before this
-    field existed still verifies. Only an entry that actually cites policy
-    versions moves to ``v: 2``. Adding the key to every payload would have
-    reported every historical row as tampered — a false alarm that trains an
-    operator to ignore the verifier.
+    The payload version rises only when a field is actually present, so an entry
+    written before that field existed still verifies byte for byte:
+
+    * ``v: 1`` — the original attempt.
+    * ``v: 2`` — NEX-052: the attempt cites ``policy_versions``.
+    * ``v: 3`` — NEX-055: a policy imposed the ``enhanced-audit`` obligation and
+      the attempt carries ``decision_evidence``.
+
+    Adding a key unconditionally would report every historical row as tampered —
+    a false alarm that trains an operator to ignore the verifier. Evidence wins
+    over versions when both are present: an enhanced-audit attempt always cites
+    the policy versions that imposed it, so ``v: 3`` implies ``v: 2``.
     """
     payload: dict[str, object] = {
         "v": 1,
@@ -130,6 +136,9 @@ def intent_hash(
     if policy_versions:
         payload["v"] = 2
         payload["policy_versions"] = list(policy_versions)
+    if decision_evidence is not None:
+        payload["v"] = 3
+        payload["decision_evidence"] = decision_evidence.to_payload()
     return _sha256(_canonical(payload))
 
 
@@ -153,6 +162,55 @@ def outcome_hash(
             }
         )
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEvidence:
+    """Extra proof recorded when a policy imposes the ``enhanced-audit`` obligation.
+
+    The obligation says the attempt "must be recorded with more evidence than the
+    default" (security architecture section 5). A boolean, or a word in the
+    outcome string, would not be evidence — it would be a claim that evidence
+    exists. So this type names the three things the default trail omits and the
+    default trail therefore cannot answer:
+
+    * ``matched_rules`` — *which* rules decided, not just which policy versions
+      were consulted. Without it, "policy@v3 allowed this" cannot distinguish a
+      rule that was meant to apply from one that merely happened to match.
+    * ``obligations`` — the conditions the decision imposed, so a reader sees the
+      call was allowed *conditionally* and what the conditions were.
+    * ``attributes`` — the snapshot the policy was evaluated against, which is
+      what makes the decision reproducible. Without the inputs, the rules can be
+      replayed but the answer cannot be reproduced.
+
+    Every field is a string, because the attribute vocabulary the enforcement
+    path can attest to is strings (capability, tool, resource, agent owner), and
+    because the value is sealed into a hash: a value whose *type* changed between
+    write and read would recompute a different hash and be reported as tampering.
+    ``to_payload`` is the single place that decides how the value renders, so the
+    writer and the verifier cannot disagree.
+
+    None of this is secret. The fields are names and identifiers, never note
+    content or credentials — which is what makes it safe to record them on a
+    trail that more people can read than could read the response.
+    """
+
+    matched_rules: tuple[str, ...] = ()
+    obligations: tuple[str, ...] = ()
+    attributes: tuple[tuple[str, str], ...] = ()
+
+    def to_payload(self) -> dict[str, object]:
+        """A JSON-native rendering, identical on the write and verify paths.
+
+        Lists rather than tuples because a value read back from storage is a
+        list; rendering a tuple here would hash differently from the list the
+        verifier sees and report every enhanced-audit row as tampered.
+        """
+        return {
+            "matched_rules": list(self.matched_rules),
+            "obligations": list(self.obligations),
+            "attributes": dict(self.attributes),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,6 +350,9 @@ class VerifiableEntry(Protocol):
     def policy_versions(self) -> tuple[str, ...]: ...
 
     @property
+    def decision_evidence(self) -> DecisionEvidence | None: ...
+
+    @property
     def approval_request_id(self) -> uuid.UUID | None: ...
 
     @property
@@ -368,6 +429,7 @@ def verify_chain(
             invoked_at=entry.invoked_at,
             previous_hash=previous,
             policy_versions=entry.policy_versions,
+            decision_evidence=entry.decision_evidence,
         )
         if recomputed_intent != entry.intent_hash:
             return ChainVerdict(

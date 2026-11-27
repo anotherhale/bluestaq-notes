@@ -69,6 +69,7 @@ from notes_service.application.use_cases.notes import (
     ListNotes,
     UpdateNote,
 )
+from notes_service.domain.agent.audit_chain import DecisionEvidence
 from notes_service.domain.agent.entities import ApprovalRequest
 from notes_service.domain.agent.tools import (
     _MAX_IDEMPOTENCY_KEY,
@@ -99,6 +100,29 @@ class ToolResult:
     invocation: ToolInvocation
     output: dict[str, object] = field(default_factory=dict)
     replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyGate:
+    """What the published-policy check established about one attempt.
+
+    Bundles the two citations the attempt must carry (``consulted`` versions for
+    NEX-052, ``evidence`` for NEX-055) with the obligations that still have to be
+    enforced (NEX-053/054), so every path that seals a row passes the same three
+    values rather than re-deriving them from a decision it no longer has.
+    """
+
+    consulted: tuple[str, ...] = ()
+    obligations: tuple[PolicyObligation, ...] = ()
+    evidence: DecisionEvidence | None = None
+
+    @property
+    def redaction_required(self) -> bool:
+        return PolicyObligation.REDACTION in self.obligations
+
+    @property
+    def approval_required(self) -> bool:
+        return PolicyObligation.APPROVAL in self.obligations
 
 
 def _actor_principal(resolved: ResolvedToken) -> Principal:
@@ -182,13 +206,15 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
-        consulted, obligations = self._enforce_published_policy(
+        gate = self._enforce_published_policy(
             resolved=resolved,
             tool=tool,
             cleaned=cleaned,
             resource_ref=resource_ref,
             idempotency_key=idempotency_key,
         )
+        consulted = gate.consulted
+        obligations = gate.obligations
 
         principal = _actor_principal(resolved)
 
@@ -220,6 +246,7 @@ class InvokeTool(UseCase):
             if not (
                 (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
                 or obligation is PolicyObligation.REDACTION
+                or obligation is PolicyObligation.ENHANCED_AUDIT
             )
         ]
         if unsatisfiable:
@@ -242,8 +269,8 @@ class InvokeTool(UseCase):
                 "with an unmet obligation"
             )
 
-        redaction_required = PolicyObligation.REDACTION in obligations
-        if tool.requires_approval or PolicyObligation.APPROVAL in obligations:
+        redaction_required = gate.redaction_required
+        if tool.requires_approval or gate.approval_required:
             return self._run_gated(
                 resolved=resolved,
                 tool=tool,
@@ -253,6 +280,7 @@ class InvokeTool(UseCase):
                 idempotency_key=idempotency_key,
                 policy_versions=consulted,
                 redaction_required=redaction_required,
+                decision_evidence=gate.evidence,
             )
         return self._run_direct(
             resolved=resolved,
@@ -263,6 +291,7 @@ class InvokeTool(UseCase):
             idempotency_key=idempotency_key,
             policy_versions=consulted,
             redaction_required=redaction_required,
+            decision_evidence=gate.evidence,
         )
 
     # -- published policy enforcement ------------------------------------
@@ -275,7 +304,7 @@ class InvokeTool(UseCase):
         cleaned: dict[str, object],
         resource_ref: str,
         idempotency_key: str,
-    ) -> tuple[tuple[str, ...], tuple[PolicyObligation, ...]]:
+    ) -> _PolicyGate:
         """Refuse the call when a published policy explicitly denies it (NEX-051).
 
         Until now the policy lifecycle could store and publish versions but
@@ -304,14 +333,16 @@ class InvokeTool(UseCase):
         invocation row is written before raising — so a policy-blocked attempt is
         as visible in the trail as a capability-blocked one.
 
-        Returns the versions that were in force and the obligations that the
-        matching allow rules impose, so the attempt the caller is about to seal
-        can cite them (NEX-052) and so the obligations are enforced rather than
-        merely reported (NEX-053). Both are empty only when no policy repository
-        is wired at all.
+        Returns what the attempt must carry: the versions that were in force, the
+        obligations the matching allow rules impose, and — when the decision
+        imposes ``enhanced-audit`` — the extra evidence that obligation requires
+        (NEX-055). The first two let the attempt cite them (NEX-052) and get them
+        enforced rather than merely reported (NEX-053/054); the third is that
+        enforcement for ``enhanced-audit``, which has no separate mechanism
+        because the *record* is its mechanism.
         """
         if self._policy_versions is None:
-            return (), ()
+            return _PolicyGate()
 
         published = self._policy_versions.all_published()
         consulted = tuple(version.ref for version in published)
@@ -346,7 +377,28 @@ class InvokeTool(UseCase):
                 f"tool {tool.name!r} refused by published policy "
                 f"({', '.join(decision.matched_rules)})"
             )
-        return consulted, decision.obligations
+
+        evidence: DecisionEvidence | None = None
+        if PolicyObligation.ENHANCED_AUDIT in decision.obligations:
+            # The obligation is met by recording more than the default, so the
+            # record *is* the mechanism: no separate adapter, nothing to defer.
+            # The evidence names the rules that matched (the default trail names
+            # only the versions), the obligations imposed (so a reader sees the
+            # allow was conditional), and the attribute snapshot (so the decision
+            # is reproducible rather than merely plausible). Built from the same
+            # ``decision`` and ``attributes`` the gate just used — never re-derived
+            # from the repository — so the evidence cannot describe a different
+            # evaluation than the one that allowed the call.
+            evidence = DecisionEvidence(
+                matched_rules=tuple(decision.matched_rules),
+                obligations=tuple(obligation.value for obligation in decision.obligations),
+                attributes=tuple(sorted((name, str(value)) for name, value in attributes.items())),
+            )
+        return _PolicyGate(
+            consulted=consulted,
+            obligations=decision.obligations,
+            evidence=evidence,
+        )
 
     def _record_policy_denial(
         self,
@@ -401,6 +453,7 @@ class InvokeTool(UseCase):
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
         redaction_required: bool = False,
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -423,6 +476,7 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -461,6 +515,7 @@ class InvokeTool(UseCase):
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
         redaction_required: bool = False,
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -481,6 +536,7 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
             )
 
         # Spend the approval before the side effect, in the same transaction as
@@ -498,6 +554,7 @@ class InvokeTool(UseCase):
                     idempotency_key=idempotency_key,
                     approval_request_id=approval.id,
                     policy_versions=policy_versions,
+                    decision_evidence=decision_evidence,
                 )
                 invocation.deny(outcome="approval request no longer usable")
                 uow.tool_invocations.add(invocation)
@@ -515,6 +572,7 @@ class InvokeTool(UseCase):
                 idempotency_key=idempotency_key,
                 approval_request_id=approval.id,
                 policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -545,6 +603,7 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
     ) -> NoReturn:
         """Open (or reuse) an approval request and park this attempt, never failing it.
 
@@ -574,6 +633,7 @@ class InvokeTool(UseCase):
                     idempotency_key=deferred_key,
                     approval_request_id=request.id,
                     policy_versions=policy_versions,
+                    decision_evidence=decision_evidence,
                 )
                 invocation.deny(outcome=f"human approval required for {tool.capability.value}")
                 uow.tool_invocations.add(invocation)
@@ -649,6 +709,7 @@ class InvokeTool(UseCase):
         idempotency_key: str,
         approval_request_id: UUID | None = None,
         policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolInvocation:
         """Begin an audited invocation, sealed into the agent's hash chain.
 
@@ -661,6 +722,12 @@ class InvokeTool(UseCase):
         ``policy_versions`` are the published policy versions in force when the
         gateway decided this call. They are sealed into the intent hash, so the
         citation is as tamper-evident as the rest of the attempt.
+
+        ``decision_evidence`` is passed only when a published policy imposed
+        ``enhanced-audit`` on this call (NEX-055); it is sealed into the same
+        intent hash, so the extra detail the obligation demands is as
+        tamper-evident as the citation it accompanies. ``None`` is the normal
+        case and records that no enhanced-audit obligation was in force.
         """
         sequence, previous = uow.tool_invocations.next_chain_link(resolved.agent.id)
         invocation = ToolInvocation.begin(
@@ -674,6 +741,7 @@ class InvokeTool(UseCase):
             previous_hash=previous,
             chain_sequence=sequence,
             policy_versions=policy_versions,
+            decision_evidence=decision_evidence,
         )
         # Move the anchor in the same transaction that will insert the entry, so
         # the two cannot disagree. Doing it here rather than at each call site

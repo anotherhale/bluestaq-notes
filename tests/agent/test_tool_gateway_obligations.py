@@ -27,6 +27,8 @@ store is in-memory, because the subject is the enforcement path.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from notes_service.application.errors import AccessDenied
@@ -120,7 +122,6 @@ class TestUnsatisfiableObligationsFailClosed:
             PolicyObligation.STEP_UP,
             PolicyObligation.SECOND_APPROVER,
             PolicyObligation.RATE_LIMIT,
-            PolicyObligation.ENHANCED_AUDIT,
         ],
     )
     def test_an_obligation_with_no_adapter_refuses_the_call(
@@ -279,6 +280,123 @@ class TestRedactionObligationIsEnforced:
         with h.uow() as uow:
             assert len(uow.approvals.list_pending_for_agent(agent.id)) == 1
         assert h.list_notes.run(h.principal).total == 1
+
+
+class TestEnhancedAuditObligationIsEnforced:
+    """NEX-055: ``enhanced-audit`` is met by recording evidence, not by refusing.
+
+    The obligation's mechanism *is* the record, so there is nothing to defer and
+    nothing to filter. What can go wrong is subtler: the gateway could accept the
+    obligation and record exactly the row it always records, which would make the
+    policy read as enforced while the "more evidence" it demanded was never
+    written.
+    """
+
+    def test_an_enhanced_audit_obligation_allows_the_call_and_records_evidence(
+        self, h: Harness
+    ) -> None:
+        _publish(h, (_allow_tool("create_note", PolicyObligation.ENHANCED_AUDIT),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-enhanced-audit",
+        )
+
+        # The call proceeds: the obligation is satisfiable, so it must not be
+        # refused as an unmet requirement.
+        assert result.output["note"]["title"] == "T"  # type: ignore[index]
+
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.SUCCEEDED]
+        evidence = recorded[0].decision_evidence
+        assert evidence is not None, "the obligation was accepted but no evidence was written"
+
+        # Each of the three fields answers a question the default trail cannot.
+        # Rule ids are namespaced by the store (``gateway@<rule_id>``).
+        assert evidence.matched_rules == ("gateway@allow-tool",)
+        assert evidence.obligations == ("enhanced-audit",)
+        attributes = dict(evidence.attributes)
+        assert attributes["tool"] == "create_note"
+        assert attributes["capability"] == Capability.CREATE_NOTE.value
+
+    def test_without_the_obligation_no_evidence_is_recorded(self, h: Harness) -> None:
+        # The control. If a plain allow also carried evidence, the previous test
+        # would pass without the obligation having done anything.
+        _publish(h, (_allow_tool("create_note"),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-no-enhanced-audit",
+        )
+
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.SUCCEEDED]
+        assert recorded[0].decision_evidence is None
+
+    def test_the_evidence_is_sealed_into_the_hash_chain(self, h: Harness) -> None:
+        # Evidence a reader cannot verify is a claim, not evidence. The chain must
+        # still verify with the evidence present, and tampering with it must be
+        # reported as a break rather than silently accepted.
+        from notes_service.domain.agent.audit_chain import verify_chain
+        from notes_service.domain.agent.value_objects import AgentId
+
+        _publish(h, (_allow_tool("create_note", PolicyObligation.ENHANCED_AUDIT),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-enhanced-audit-chain",
+        )
+
+        with h.uow() as uow:
+            chain = uow.tool_invocations.list_chain(AgentId.parse(agent.id))
+        verdict = verify_chain(chain)
+        assert verdict.verified, verdict.reason
+
+        # Strip the evidence from the stored row: the intent hash no longer
+        # recomputes, so the alteration is detected at that entry.
+        assert chain[0].decision_evidence is not None
+        forged = dataclasses.replace(chain[0], decision_evidence=None)
+        tampered = verify_chain([forged])
+        assert tampered.verified is False
+        assert tampered.first_break is not None
+
+    def test_enhanced_audit_composes_with_redaction(self, h: Harness) -> None:
+        # Both obligations are met by different mechanisms (a record and a filter).
+        # Satisfying one must not skip the other.
+        _publish(
+            h,
+            (
+                _allow_tool(
+                    "read_note",
+                    PolicyObligation.ENHANCED_AUDIT,
+                    PolicyObligation.REDACTION,
+                ),
+            ),
+        )
+        agent, secret = h.secret_for(Capability.READ_NOTE)
+        note = h.create_note.run(h.principal, title="T", content="api_key=abc123")
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="read_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-enhanced-redaction",
+        )
+
+        assert result.output["note"]["content"] == REDACTED  # type: ignore[index]
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.SUCCEEDED]
+        assert recorded[0].decision_evidence is not None
+        assert "redaction applied" in (recorded[0].outcome or "")
 
 
 class TestDenyStillWins:
