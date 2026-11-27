@@ -27,7 +27,7 @@ from notes_service.application.use_cases.policy_lifecycle import (
     RollbackPolicyVersion,
 )
 from notes_service.domain.errors import ValidationError
-from notes_service.domain.governance.policy import PolicyEffect, PolicyRule
+from notes_service.domain.governance.policy import PolicyEffect, PolicyObligation, PolicyRule
 from notes_service.infrastructure.governance.policy_codec import decode_condition
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
@@ -58,7 +58,22 @@ def _to_rules(requests: list[PolicyRuleRequest]) -> tuple[PolicyRule, ...]:
                 f"unknown policy effect {request.effect!r}; expected 'allow' or 'deny'"
             ) from error
         condition = decode_condition(request.when) if request.when is not None else None
-        rules.append(PolicyRule(rule_id=request.rule_id, effect=effect, when=condition))
+        obligations: list[PolicyObligation] = []
+        for name in request.obligations:
+            try:
+                obligations.append(PolicyObligation(name))
+            except ValueError as error:
+                raise ValidationError(
+                    f"unknown obligation {name!r} on rule {request.rule_id!r}"
+                ) from error
+        rules.append(
+            PolicyRule(
+                rule_id=request.rule_id,
+                effect=effect,
+                when=condition,
+                obligations=tuple(obligations),
+            )
+        )
     return tuple(rules)
 
 
