@@ -7768,3 +7768,79 @@ NEX-060 or NEX-062.
 - **Next action**: no named ADR-015 obligation remains. Re-read ROADMAP before choosing the
   next slice; NEX-063's deferred items (approval preview, non-capability risk signals) are
   documented decisions, not pending work.
+
+<!-- run-64-start -->
+### Run 64 — NEX-064: a retired policy version must not stay in force
+
+- **Run ID**: `NEX-2026-11-27-64`
+- **Timestamp**: 2026-11-27T21:00Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `33c780d` (live feature-branch tip; the clone was already on the branch
+  with a clean tree, so no reconciliation merge was needed)
+- **Ending commit**: product commit `55e4436`, followed by this docs commit — read the live
+  head with `git rev-parse HEAD`
+- **Project phase**: 3 (governance)
+
+**Task completed — NEX-064.** Closed a latent **fail-open** in `evaluate()`.
+
+**The defect.** `evaluate()`'s own docstring states rule 3 as *"Only published versions may be
+consulted"*, and the code refused a `DRAFT` — but it **consulted a `RETIRED`** version. A
+retired `allow-all` version therefore returned `effect=allow` with `consulted=('p@v1',)`.
+Probed empirically before changing anything (`/tmp/probe_retired.py`), not inferred from reading.
+
+**Why it mattered despite being latent.** The gateway calls `all_published()`, which cannot
+return a retired row, so no production path exploited it. The exposure is the *next* caller:
+`history()` is exactly what the policy-history endpoint returns, so a caller that passed
+`history()` instead of `all_published()` would keep enforcing rules a later release had already
+replaced. The retired case is the sharper trap of the two because the object is perfectly valid
+— only its lifecycle position says it is out of force.
+
+**The fix.** One predicate: refuse when `status is not PUBLISHED` instead of when
+`status is DRAFT`. The message still distinguishes the two (`"is a draft …"` / `"is retired …"`)
+so a caller can tell an unpublished draft from a superseded release. The pre-existing draft
+wording is preserved byte-for-byte, so no existing assertion needed weakening.
+
+**Files changed.**
+- `src/notes_service/domain/governance/policy.py` — the version-loop guard in `evaluate()`
+- `tests/domain/test_governance_policy.py` — two regression tests
+
+**Tests executed and outcomes.**
+- `.venv/bin/python -m pytest` → **1434 passed, 4 skipped**, exit 0 (full backend suite)
+- `.venv/bin/python -m pytest tests/domain/test_governance_policy.py
+  tests/application/test_policy_lifecycle.py tests/agent/test_tool_gateway_policy.py` → 73 passed
+- `.venv/bin/ruff format` → 301 files left unchanged
+- `.venv/bin/ruff check` → All checks passed
+- `.venv/bin/mypy` → Success: no issues found in 140 source files
+
+**Decisions.**
+- D-064a: refuse by *exclusion* (`not PUBLISHED`) rather than by enumerating bad states. A future
+  lifecycle state (e.g. `SUPERSEDED`, `REVOKED`) then fails closed by default instead of silently
+  becoming enforceable — the same reason a deny-by-default policy engine keys on the allow list.
+- D-064b: a retired version in a mixed set refuses the **whole** evaluation rather than being
+  skipped. Skipping would be the other half of the same bug: the caller would believe retired
+  rules applied when they did not. A partial evaluation reported as complete is a false audit
+  record.
+- D-064c: keep the message specific (`draft` vs `retired`). The two conditions are operationally
+  different — one means "nobody published this", the other "a later release replaced this" — and
+  an operator debugging a 4xx needs to know which.
+- D-064d: scope held to the domain predicate. The lifecycle's missing `approve` verb is a real
+  gap, but it needs a new transition plus persistence and audit surface; the fail-open was the
+  higher-value fix available within the run and needed no migration.
+
+**Risks identified.**
+- Concurrent runs push to this branch. The tip was read from `git ls-remote` and matched the
+  local HEAD, so no merge was required; a naive assumption would have been unsafe.
+- The heredoc corruption trap in this environment. All multi-line content in this run was written
+  with `file_editor`, never a heredoc.
+
+**Delivery.** Commit and push to `feature/agentic-enterprise-platform`. PR #5 body and issue #2
+are updated with this slice. **Never merged** — human review is required.
+
+**Status.** IMPLEMENTED + TESTED + COMMITTED + PUSHED. **Not VERIFIED** — CI has not been polled
+for this head. That is the next action, not a gap in this run.
+
+**Next action.** Poll CI on the pushed head
+(`GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` until every check-run is
+`completed`). If 4/4 `success`, promote NEX-064 to VERIFIED and record it. Then the next
+governance slice is the missing policy `approve` lifecycle verb.
+

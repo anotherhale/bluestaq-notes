@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-63",
-  "timestamp": "2026-11-27T20:56Z",
+  "run_id": "NEX-2026-11-27-64",
+  "timestamp": "2026-11-27T21:02Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "19836ad",
-  "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms, and approval strength now follows blast radius (NEX-063). Remaining governance work is breadth, not a named gap: preview, and non-capability risk signals.",
+  "commit": "55e4436",
+  "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms, approval strength follows blast radius (NEX-063), and evaluate() now fails closed on any version that is not published (NEX-064). Remaining governance work is breadth: the policy lifecycle has no approve verb, plus preview and non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -13,7 +13,8 @@
     "NEX-059": "VERIFIED - CI 4/4 at b9811d7 (polled by run 59).",
     "NEX-060": "VERIFIED - CI 4/4 at 29f71e5 (promoted by run 61).",
     "NEX-062": "VERIFIED - CI 4/4 at 0e2ca47 (polled 2026-11-27T20:16Z by run 62).",
-    "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63."
+    "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63.",
+    "NEX-064": "PUSHED - fail-open closed in evaluate(): RETIRED versions were consulted and could grant ALLOW. Full suite 1434 passed / 4 skipped, ruff+mypy clean. CI not yet polled."
   },
   "completed_tasks": [
     "NEX-039",
@@ -39,7 +40,8 @@
     "R36-auditable-half",
     "R36-governance-half",
     "R37",
-    "R39"
+    "R39",
+    "NEX-064"
   ],
   "verified_tasks": [
     "NEX-001",
@@ -102,14 +104,14 @@
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
   "validation": {
     "commands_run_on_committed_tree": [
-      ".venv/bin/ruff format -> 1 file reformatted, 299 unchanged",
+      ".venv/bin/ruff format -> 301 files left unchanged",
       ".venv/bin/ruff check -> All checks passed",
       ".venv/bin/mypy -> Success: no issues found in 140 source files",
-      ".venv/bin/python -m pytest -> 1432 passed, 4 skipped, exit 0",
-      ".venv/bin/python -m pytest tests/agent/test_risk_based_approval.py -> 25 passed"
+      ".venv/bin/python -m pytest -> 1434 passed, 4 skipped, exit 0",
+      ".venv/bin/python -m pytest tests/domain/test_governance_policy.py tests/application/test_policy_lifecycle.py tests/agent/test_tool_gateway_policy.py -> 73 passed"
     ],
-    "not_run": "CI has not been polled for 19836ad. That is the next action, not a gap in this run.",
-    "ci": "4/4 completed/success at 934774e (polled 2026-11-27T20:52Z)."
+    "not_run": "CI has not been polled for the NEX-064 head. That is the next action.",
+    "ci": "Last measured: 4/4 completed/success at 934774e (NEX-063, polled 2026-11-27T20:52Z)."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -120,56 +122,55 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "base": "main",
     "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body carries NEX-052..NEX-062. NEX-063 is NOT yet in the body - delivery debt. Eleven slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision.",
-    "body_covers_through": "NEX-063"
+    "note": "Body carries NEX-052..NEX-064. Twelve slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "body_covers_through": "NEX-064"
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
-    "last_reported_task": "NEX-063",
-    "note": "Comment 7227311410 reports NEX-062. NEX-063 is NOT yet reported - delivery debt. Issue stays open.",
+    "last_reported_task": "NEX-064",
+    "note": "Issue #2 stays open. Comment for NEX-064 is posted by this run.",
     "comment_id": 7227893354
   },
   "blockers": [],
   "risks": [
-    "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push. This run hit a variant: the clone sat on `main` while the feature branch had 60+ commits of prior work, so a naive `git push` would have been rejected or, worse, mistaken for the branch. Always read the remote tip before committing.",
+    "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push. This run's clone was already on the branch and its HEAD matched the remote tip, so no merge was needed - verify, do not assume.",
     "Two concurrent runs can claim the same task ID. Read the execution log before assigning one.",
-    "The heredoc in this environment echoes its own body and can corrupt multi-KB appends. Verify every append with `grep -c '<marker>'` and a `git diff --stat` line-count check. This run's STATE.md edit echoed but landed correctly (35 insertions, no duplicated markers).",
-    "NEX-063's two-signature floor for `high` risk has no production caller: `org_search` is also non-delegable, so no agent token reaches it. The floor is tested as a pure function, not end to end. Kept deliberately - see ADR-016's 'Honest limit'.",
-    "Risk tiering covers only the capability, not request-level signals (bulk volume, unusual patterns, export size) that security architecture L212 names. Deferred with reasons in ADR-016.",
-    "Approval `preview` (L147) is not implemented - no proposal surface exists to render.",
-    "The rate-limit obligation is a per-process bound with the in-memory adapter; a multi-replica deployment gets N per window per process until a shared-store adapter is wired.",
-    "Eleven slices now stack in PR #5. Review cost is real."
+    "The heredoc in this environment echoes its own body and can corrupt multi-KB appends. Every multi-line write in this run used `file_editor`.",
+    "NEX-063's two-signature floor for `high` risk has no production caller: `org_search` is also non-delegable, so no agent token reaches it. Tested as a pure function.",
+    "Risk tiering covers only the capability, not request-level signals (bulk volume, unusual patterns, export size). Deferred with reasons in ADR-016.",
+    "Approval `preview` is not implemented - no proposal surface exists to render.",
+    "The rate-limit obligation is a per-process bound with the in-memory adapter.",
+    "Twelve slices now stack in PR #5. Review cost is real.",
+    "The policy lifecycle has no `approve` verb: DRAFT -> PUBLISHED is direct, so approving a policy change is not itself recorded. NEX-064 closed the enforcement fail-open, not this."
   ],
-  "next_task": "No named ADR-015 obligation remains. Re-read ROADMAP and pick a governance-breadth or agent-runtime slice; do not invent a new obligation.",
-  "next_action": "Start the next slice from the live branch head. NEX-063's deferred items (approval preview, non-capability risk signals) are documented decisions, not pending work.",
-  "recovery_instructions": "Tree is clean and the branch is pushed. This file's `commit` names the NEX-063 product commit (19836ad); the checkpoint commit itself is a docs-only descendant. NEX-062 is VERIFIED on 4/4 CI at 0e2ca47; NEX-063 is PUSHED but unverified. Do not redo NEX-060 or NEX-062. Clear the NEX-063 delivery debt before starting a new slice.",
+  "next_task": "NEX-065: add an explicit policy `approve` lifecycle transition so DRAFT -> APPROVED -> PUBLISHED is recorded, with the approver identity persisted and separation of duties enforced (approver != drafter). Needs a migration and a new use case.",
+  "next_action": "Poll CI on the NEX-064 head (`GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` until every check-run is completed). If 4/4 success, promote NEX-064 to VERIFIED. Then start NEX-065.",
+  "recovery_instructions": "Tree is clean and the branch is pushed. This file's `commit` names the NEX-064 product commit; the checkpoint commit itself is a docs-only descendant. Do not redo NEX-060, NEX-062 or NEX-063. NEX-064 is PUSHED but unverified - poll CI before promoting it.",
   "ci_status": {
     "head_polled": "934774eb9aff59649531138947a44ee08d6c1af5",
     "product_commit": "19836ad",
     "result": "4/4 completed/success",
     "conclusion": "success",
     "polled_at": "2026-11-27T20:52Z",
-    "note": "Two check-run pairs appear for one SHA because the branch concurrency group re-ran; both pairs concluded success. This is NEX-063's evidence."
+    "note": "This is NEX-063's evidence. NEX-064's head has not been polled yet."
   },
   "commits_this_run": [
-    "19836ad"
+    "55e4436"
   ],
   "decisions_this_run": [
-    "D-063a: derive risk from the capability in code, never from a model. A risk figure that sets an approval threshold is authority, and section 10 forbids a model from widening its own. Pure, total, deterministic, I/O-free, TypeError on a non-Capability rather than coercion.",
-    "D-063b: the tier floor can only RAISE the threshold. `min(2, max(1, policy, floor))`. A silent policy must not be able to reduce a high-risk action to one signature - the control that requests a protection must not define it away. Same rule step-up follows.",
-    "D-063c: risk is not a rename of SENSITIVE_CAPABILITIES. The tier separates those four by what they can destroy or expose, and a test asserts every sensitive capability is at least elevated so the two sets cannot drift into disagreement about danger.",
-    "D-063d: test the high-risk floor as a pure function rather than through the gateway. org_search is non-delegable, so no agent token can reach it; writing a gateway test would have required inventing a path that must not exist. Every other tier is exercised through the real gateway.",
-    "D-063e: keep the high-risk tier despite having no production caller. It is the correct answer the day a future ADR permits delegated org-wide search - the control exists before the capability that needs it. Documented as an explicit honest limit, not left implicit.",
-    "D-063f: clamp to the closed 1..2 vocabulary rather than returning 3 for high risk. ApprovalRequest models only 1 or 2; a value no code path can satisfy would be a lie on the record."
+    "D-064a: refuse by exclusion (`status is not PUBLISHED`) rather than by enumerating bad states. A future lifecycle state then fails closed by default instead of silently becoming enforceable.",
+    "D-064b: a retired version in a mixed set refuses the WHOLE evaluation rather than being skipped. Skipping would be the other half of the same bug - the caller would believe retired rules applied when they did not, a false audit record.",
+    "D-064c: keep the message specific (`is a draft` vs `is retired`). One means nobody published it; the other means a later release replaced it. An operator needs to know which.",
+    "D-064d: scope held to the domain predicate. The missing `approve` lifecycle verb is a real gap but needs a new transition plus persistence and audit surface; the fail-open was the higher-value fix inside one run and needed no migration."
   ],
-  "run_summary": "NEX-063 closes the last named ADR-015 obligation. Approval existed, but its threshold was only what a policy author wrote, so a lockout-prone action and a routine read shared the same human gate - 'risk-based' was a name without a mechanism. Risk is now a pure function from capability to a closed ordered tier, and the gateway raises the signature count to the max of the policy threshold and the tier floor, clamped to 1..2. The decisive choice was to make risk code rather than a model score: a risk figure that sets an approval threshold is authority, and section 10 forbids a model from widening its own. The design also refuses to let a silent policy weaken a high-risk action, mirroring step-up's rule that the control which requests a protection cannot define it away. The honest limit is recorded rather than hidden: org_search is the only high-risk capability and it is non-delegable, so the two-signature floor has no production caller and is tested as a pure function; every other tier runs through the real gateway. All gates green on the committed tree - ruff format and check clean, mypy clean across 140 files, 1432 passed / 4 skipped, and 25 new tests. The clone started on main while the feature branch carried 60+ commits of prior work, so the remote tip was read from git ls-remote and the slice committed on top of it, avoiding a push that would have looked like a rewrite. Status is IMPLEMENTED, TESTED, COMMITTED, PUSHED - deliberately not VERIFIED, because CI has not been polled for this head. Delivery debt for NEX-063 (PR #5 body, issue #2) is recorded in this checkpoint for the next run to clear. CI then confirmed the slice: 4/4 completed/success at 934774e, so NEX-063 is VERIFIED rather than merely PUSHED, and PR #5 plus issue #2 now carry it.",
+  "run_summary": "NEX-064 closes a latent fail-open in the policy engine. evaluate()'s docstring states rule 3 as 'Only published versions may be consulted', and the code refused a DRAFT - but it consulted a RETIRED version, so an allow rule from a superseded release still allowed. It was probed empirically before any edit: a retired allow-all version returned effect=allow. The gateway passes all_published() so no production path exploited it; the exposure is the next caller, since history() is exactly what the policy-history endpoint returns, and a caller using it would keep enforcing replaced rules. The fix is one predicate - refuse when status is not PUBLISHED - plus two regression tests, one of which asserts a retired version in a mixed set refuses the whole evaluation rather than being silently skipped. All gates green on the committed tree: ruff format and check clean, mypy clean across 140 files, 1434 passed / 4 skipped. Status is IMPLEMENTED, TESTED, COMMITTED, PUSHED - deliberately not VERIFIED, because CI has not been polled for this head.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
     "head": "READ IT FROM GIT. Verify with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`.",
     "pr_updated": true,
     "issue_updated": true,
-    "delivery_debt": "None for NEX-063. PR #5 body and issue #2 both carry the slice.",
-    "ci_verified": true
+    "delivery_debt": "Cleared for NEX-064 by this run.",
+    "ci_verified": false
   }
 }

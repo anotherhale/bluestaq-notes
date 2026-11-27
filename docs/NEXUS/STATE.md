@@ -7,15 +7,42 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 63) | `997a6ac` locally (the clone sat on `main`); the feature-branch tip `65d6abe` was read from `git ls-remote` and the work committed on top of it. |
-| Head commit (measured) | Product commit `19836ad` (NEX-063), pushed and confirmed by `git ls-remote`. Read the live head with `git rev-parse HEAD`; never trust a SHA recorded in this file. |
-| Last CI result | **`934774e` (NEX-063 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:52Z — NEX-063 VERIFIED. |
+| Starting commit (run 64) | `33c780d` — the live feature-branch tip read from `git ls-remote`, which the clone was already on with a clean tree. |
+| Head commit (measured) | Product commit `55e4436` (NEX-064), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
+| Last CI result | **`934774e` (NEX-063 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:52Z — NEX-063 VERIFIED. NEX-064 is PUSHED, CI not yet polled. |
 | Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-063** evidence. Eleven slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-063** evidence; NEX-064 pending. Twelve slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-064 (run `NEX-2026-11-27-64`) — a retired policy version can no longer stay in force
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED — CI not yet polled.**
+
+A latent **fail-open** in `evaluate()`. Its own docstring states rule 3 as *"Only published
+versions may be consulted"*, and it refused a `DRAFT` — but it **consulted a `RETIRED`**
+version, so an `allow` rule from a superseded release still allowed. Probed before fixing:
+a retired `allow-all` version returned `effect=allow`, `consulted=('p@v1',)`.
+
+Why it was latent and why it still mattered: the gateway calls `all_published()`, which cannot
+return a retired row, so no production path hit it. The exposure is the *next* caller — anyone
+who passes a policy's `history()` (which is exactly what the history endpoint returns) instead
+of its `all_published()` would keep enforcing rules a later release had already replaced. That
+is the same class of bug as a draft leaking into force, and the retired case is the sharper
+trap because the object is perfectly valid; only its lifecycle position says it is out of force.
+
+The fix is one predicate: `status is not PUBLISHED` refuses, not `status is DRAFT`. The message
+still distinguishes the two (`"is a draft …"` / `"is retired …"`) so a caller can tell an
+unpublished draft from a superseded release. Two regression tests pin it — one for a retired
+version alone, one asserting a retired version **alongside** a published one refuses the whole
+evaluation rather than being silently skipped (skipping would be the other half of the bug:
+the caller would believe rules applied that did not).
+
+Deliberately narrow: no approve lifecycle verb this run. The lifecycle gap is real and named
+below, but the domain-level fail-open was the higher-value fix available inside one run, and it
+needs no migration, no new port, and no schema change.
 
 ## NEX-063 VERIFIED (run `NEX-2026-11-27-63`) — the approval gate follows the blast radius
 

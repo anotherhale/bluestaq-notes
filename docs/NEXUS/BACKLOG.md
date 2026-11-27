@@ -2911,3 +2911,57 @@ non-capability risk signals — bulk volume, unusual patterns, export size — w
 request-level facts the gateway does not collect.
 
 **Next:** poll CI on the pushed head; if green, promote to VERIFIED and extend PR #5.
+
+---
+
+## NEX-064 — a retired policy version must not stay in force (fail-open closure)
+
+| Field | Value |
+| --- | --- |
+| Task ID | NEX-064 |
+| Phase | 3 (governance) |
+| Priority | P1 — authorization correctness |
+| Status | IMPLEMENTED + TESTED + COMMITTED + PUSHED (CI not yet polled) |
+| Dependencies | none — `evaluate()` already existed |
+
+**Objective.** Make `evaluate()` honour its own rule 3, *"Only published versions may be
+consulted"*. It refused a `DRAFT` but **consulted a `RETIRED`** version, so an `allow` rule from
+a superseded release still allowed.
+
+**Scope.** `domain/governance/policy.py` — one predicate in the version loop; two regression
+tests in `tests/domain/test_governance_policy.py`. No port, no adapter, no schema, no migration.
+
+**Architecture references.** ADR-015 (deterministic enforcement), `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md`
+(fail-closed), §10 (deterministic application-layer controls, never model judgement).
+
+**Acceptance criteria.**
+- A retired version alone raises `ValidationError` naming it `retired`.
+- A retired version in a set **with** a published one refuses the whole evaluation — it is not
+  silently skipped, because a caller would otherwise believe retired rules applied.
+- The draft message keeps its exact existing wording (`"is a draft and cannot be evaluated"`).
+- Full suite, ruff format/check, and mypy stay green.
+
+**Required tests.** `test_a_retired_version_cannot_be_evaluated`,
+`test_a_retired_version_alongside_a_published_one_still_refuses`. Both pass (verified: 3 passed
+for `-k retired`).
+
+**Security considerations.** This is a **fail-open** closure. It was latent — the gateway passes
+`all_published()`, which cannot contain a retired row — so no production path was exploitable.
+The exposure is the next caller: `history()` (what the history endpoint returns) would keep
+enforcing replaced rules. Fixing the predicate makes the invariant true for every caller rather
+than only the one that happened to pass a safe argument.
+
+**Migration implications.** None.
+
+**Observability implications.** None — the failure is now a `ValidationError` at the same point
+a draft already failed, so existing audit behaviour is unchanged.
+
+**Rollback.** Revert one predicate; no state to unwind.
+
+**Complexity.** Low.
+
+**Next.** Poll CI on the pushed head; if green, promote to VERIFIED and extend PR #5 / issue #2.
+**Named follow-up (not this task):** the policy lifecycle has no `approve` verb — `DRAFT →
+PUBLISHED` is direct, so approval of a policy change is not itself recorded. That is the
+next governance slice.
+
