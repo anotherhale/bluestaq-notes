@@ -84,7 +84,7 @@
   "Enforcement is deny-only by design: a published allow rule cannot restore authority. Do not read an allow rule as a grant.",
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
- "next_task": "Obligations: the third policy effect the security architecture lists (deny, allow, obligations) and the only one the gateway does not model.",
+ "next_task": "Obligations - the third policy effect the security architecture lists (deny, allow, obligations) and the only one the gateway does not model. An obligation allows the call but attaches required actions, so the decision must carry them back to the caller and into the audit trail. Read the obligation contract in docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md first, and write an ADR if the gateway return type has to change shape.",
  "next_action": "1. Read the obligation contract in docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md. 2. Design the slice: a policy decision that allows a call but attaches required actions, which the gateway must surface to the caller and record in the audit trail. 3. Write an ADR if the gateway's return type must change shape.",
  "recovery_instructions": "Read docs/NEXUS/STATE.md. HEAD is pushed, the tree is clean, and CI is green at 57f50d1. For any future CI check poll the current branch head from `git ls-remote origin feature/agentic-enterprise-platform` rather than a SHA quoted in this file: writing this file creates a commit, which cancels any run still in progress. A concluded run is never retracted. If the branch falls behind origin/main, merge origin/main (never rebase; force-push is prohibited). Never merge PR #5.",
  "ci_status": {
@@ -93,7 +93,10 @@
   "evidence": "4/4 completed/success on both push and pull_request events, polled 2026-11-27T16:30Z.",
   "why_this_commit_counts": "57f50d1 is a docs-only descendant of 3215e08, so the Backend job compiles and tests the NEX-052 product code, including the migration path against Postgres that local gates do not exercise.",
   "conclusion": "SUCCESS",
-  "durability_note": "A concluded run is durable evidence. Branch concurrency cancellation only affects runs still in progress, so later checkpoint pushes cannot retract this verdict. Earlier 3215e08 runs read 'cancelled' purely because d44fe24 superseded them while they were running - that was never a failure."
+  "durability_note": "A concluded run is durable evidence. Branch concurrency cancellation only affects runs still in progress, so later checkpoint pushes cannot retract this verdict. Earlier 3215e08 runs read 'cancelled' purely because d44fe24 superseded them while they were running - that was never a failure.",
+  "durability_verified_empirically": "Tested 2026-11-27 (run 54), not assumed: after pushing 4c48847 and 48230e0, a re-poll of 57f50d1 still returned 4/4 completed/success while the newer head was still in_progress. Concurrency cancellation therefore demonstrably does not reach concluded runs, so NEX-052's evidence anchor survives later checkpoint pushes.",
+  "head_after_run": "48230e0",
+  "head_after_run_result": "4/4 completed/success (polled this run)"
  },
  "verified_tasks": [
   "NEX-052",
@@ -211,5 +214,6 @@
   "ci_evidence_commit": "57f50d1",
   "note": "NEX-052 verification is anchored to the CI evidence commit, which is a concluded run and therefore permanent. It is not anchored to the moving head."
  },
- "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work."
+ "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
+ "last_run": "NEX-2026-11-27-54"
 }

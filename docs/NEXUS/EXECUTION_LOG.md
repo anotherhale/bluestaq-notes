@@ -6576,3 +6576,82 @@ allows the call but attaches required actions, so the decision must carry them b
 caller and into the audit trail. Read the obligation contract in
 `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
 return type has to change shape.
+
+## NEX-2026-11-27-54 - resolve pending issues, and fix the checkpoint's self-reference
+
+- **Run ID:** NEX-2026-11-27-54
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `57f50d1`
+- **Ending commit:** `48230e0`
+- **Project phase:** Phase 1 - security foundation (governance enforcement)
+
+### Tasks completed
+
+- NEX-052 promoted to **VERIFIED** and committed (`4c48847`). Status string now reads
+  IMPLEMENTED + TESTED + COMMITTED + PUSHED + CI GREEN, anchored to concluded run
+  `57f50d1`.
+- Checkpoint self-reference defect fixed (`48230e0`). See decision below.
+
+### Evidence gathered, not assumed
+
+The prior run ended with NEX-052 CI unverified. This run closed it with API evidence:
+`57f50d1` returned **4/4 completed/success** (Backend: ruff, mypy, pytest, migrations;
+Frontend: typecheck, lint, test, build) on both push and pull_request events.
+
+The durability of that evidence was then *tested* rather than asserted. Two pushes
+(`4c48847`, `48230e0`) happened after the poll. A re-poll of `57f50d1` still read 4/4
+success while the new head read `in_progress`. Branch concurrency cancellation only
+touches runs still running, so a concluded verdict is permanent. This matters because
+every NEXUS run pushes checkpoint commits, and a verdict that later pushes could retract
+would be worthless as an anchor.
+
+Earlier `3215e08` runs reading `cancelled` were never failures - they were superseded
+mid-run by `d44fe24`.
+
+### Decision - a checkpoint must not name its own commit
+
+`CHECKPOINT.json` carried `head_at_checkpoint: 57f50d1`. That field cannot be correct:
+the file is committed, so whatever SHA it names is superseded by the commit that writes
+it. It was stale on arrival, and any verifier comparing it to `git rev-parse HEAD` fails
+by construction - which is exactly what the run's own consistency check did.
+
+Rather than rewrite the SHA each run (which only resets the staleness clock), the field
+was removed and replaced with `head_resolution`: a rule to derive the head
+(`git rev-parse HEAD`), plus the two SHAs that carry real meaning - `product_commit`
+`3215e08` and `ci_evidence_commit` `57f50d1`. Verification anchors to a concluded CI run,
+which is permanent, not to a moving head.
+
+A checkpoint that is stale the moment it is written trains the next run to distrust it.
+That is worse than the field never having existed.
+
+### Validation
+
+- `.venv/bin/ruff format --check`: 287 files already formatted.
+- `CHECKPOINT.json`: parses as valid JSON, written via temp file then atomic replace.
+- CI on `48230e0`: **4/4 completed/success**.
+- Consistency verifier: `CONSISTENT` - head equals remote, worktree clean,
+  `uncommitted_work: false`, no in-progress tasks, no self-referential head field.
+
+### Commits
+
+- `4c48847` docs(nexus): verify NEX-052 on concluded CI evidence
+- `48230e0` docs(nexus): stop the checkpoint naming its own commit
+
+### Push status
+
+Both pushed. `48230e0` verified on remote and green in CI.
+
+### PR / issue status
+
+- PR #5: draft, mergeable, head `48230e0`. Unmerged by design - human review required.
+- Issue #5: focused issue for gateway enforcement, still open (objective not yet met).
+- Issue #2: tracking issue, still open.
+
+### Next action
+
+Obligations - the third policy effect the architecture lists (deny, allow, obligations)
+and the only one the gateway does not model. Not another denial path: an obligation
+allows the call but attaches required actions, so the decision must carry them back to
+the caller and into the audit trail. Read the obligation contract in
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
+return type must change shape.
