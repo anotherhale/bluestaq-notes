@@ -1567,3 +1567,28 @@ commit message. Do **not** force-delete the ref by hand.
 
 This is now the highest-value process fix in the programme: it costs every run minutes of wall
 clock and, worse, it invites runs to write without the lease because the lease is unusable.
+
+## Next best actions (run `NEX-2026-11-27-48`, second invocation, superseding the lists above)
+
+1. **NEX-045 — a stored grant.** User, scope, granted-at, expires-at, granted-by behind a
+   repository port and adapter, so a grant can expire and an operator can read who holds
+   what. `OPS_OPERATOR_USER_IDS` becomes the seed path into it, not the only source. Keep
+   the `404`-not-`403` refusal and the record-on-grant behaviour; both are already right.
+   This is the residual the NEX-044 section above records as deliberately unclosed.
+2. **First command of every run stays** `git ls-remote origin
+   refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`. It has
+   been the only reliable way to start for six consecutive runs.
+3. **~~Verify the lease fix in the field~~ — CLOSED this run.** Acquire, status, renew and
+   release were each run as a separate process against the real `refs/locks/nexus/lease`:
+   `mine: true`, `holder_liveness: alive`, `renewed: true`, `released: true`, and the ref
+   free afterwards. The holder was `Andrews-Mac-mini.local-s32718`, a POSIX session id,
+   which is the shape `64759f4` introduced. The R39 defect is fixed in practice, not only
+   in test.
+
+## Correction (run `NEX-2026-11-27-48`) — the lease fix was shipped, not pending
+
+The R39 section below ends with "Fix (not attempted this run)". That was accurate for run
+`NEX-2026-11-27-45` and has been false since commit `64759f4`, which introduced the
+session-scoped holder and is in this branch's history. Recorded here rather than edited in
+place so the earlier entry keeps its own context. The field verification above is the
+evidence.

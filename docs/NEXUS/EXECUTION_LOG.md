@@ -5765,3 +5765,57 @@ expires-at, granted-by — with a repository port and adapter, so a grant can ex
 and an operator can read who currently holds what. `OPS_OPERATOR_USER_IDS` becomes
 the seed path for it. Keep the 404-not-403 refusal and the record-on-grant
 behaviour: those are the parts already right.
+
+## Run `NEX-2026-11-27-48` (second invocation) — verified the slice, then verified the lease
+
+**Starting commit** `8dadd24` (branch tip on entry, pushed by this run's first segment).
+**Ending commit** recorded by the commit that carries this entry.
+
+**What this segment did.** The first segment committed and pushed the NEX-044 governance
+slice and wrote the delivery prose, but left three things unfinished: an independent
+check of the security invariant, a CI verdict on the pushed head, and a closing report.
+All three are now done, and one backlog item was closed by field test rather than by
+reading code.
+
+**Invariant, executed not asserted.** `/tmp/nex048_invariant.py` runs the committed
+`OperatorGate` directly. A caller granted `withholding-report` is admitted to that
+operation and refused `404` on `audit-integrity` and `operator-access-report`; an id
+mapped to an empty scope set is not listed in `operator_ids` and is refused `404`; after
+one grant and three refusals the access log holds exactly one entry, which confirms the
+refusal happens before the log write. The first two attempts at this script failed on my
+own construction errors (`Principal` takes four required fields; `Email` is a `str`
+subclass with a validating `__new__` and no `.parse`) — script bugs, not product bugs,
+and both were fixed rather than worked around. All six assertions pass.
+
+**CI, with the ambiguity resolved rather than glossed.** At `16b0287` one of four check
+runs reads `completed/cancelled`: the docs commit `7e48857` superseded it in the
+concurrency group. Cancelled is not a pass, so that head is not cited as green. `7e48857`
+carries a tree that is `16b0287` plus coordination docs, and it ran **4/4
+`completed/success`**. That is the head now cited in PR #3 and in `CHECKPOINT.json`. The
+PR body was PATCHed a second time (88601 → 88789 chars) to replace the hedged 3/4 claim,
+read back, and asserted on three substrings.
+
+**R39 closed by field test.** The lease ref was free. The real repo then ran the full
+cycle across four separate processes: `acquire` (`holder
+Andrews-Mac-mini.local-s32718`, a session id, not a pid), `status` from a new process
+reporting `mine: true` and `holder_liveness: alive`, `renew` extending expiry, `release`
+returning `{"released": true}`, and `status` back to `{"held": false}`. This is the
+verification that item 3 of the previous run's action list asked for, and it settles
+that `64759f4` fixed the single-use-lease defect in practice and not only in test.
+
+**A stale claim corrected.** The R39 section below still says the fix was "not attempted
+this run". That was true of run `NEX-2026-11-27-45` and false from `64759f4` onward. Left
+in place because this log is append-only; corrected here.
+
+**Tests.** Targeted re-run this segment: `tests/application/test_operator_gate.py`,
+`tests/bootstrap/test_operator_grants.py`, the three ops API files, and
+`tests/architecture` — 55 passed, exit 0. The full suite was run on this same tree in
+the first segment: 1115 passed, 4 skipped, 0 failed.
+
+**No product code changed in this segment.** Only `docs/NEXUS/CHECKPOINT.json`, this log
+and `STATE.md`. That is the correct shape for a segment whose job was verification.
+
+**Next task.** R36's remaining half: a stored grant (user, scope, granted-at,
+expires-at, granted-by) behind a repository port and adapter, so a grant can expire and
+an operator can read who holds what. `OPS_OPERATOR_USER_IDS` becomes its seed path. Keep
+the `404`-not-`403` refusal and the record-on-grant behaviour.

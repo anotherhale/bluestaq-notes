@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-48",
-  "timestamp": "2026-11-27T11:50:00Z",
+  "timestamp": "2026-11-27T11:58:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "16b0287",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-044 VERIFIED. Run NEX-2026-11-27-48 closed R36's governance half: the operator allowlist was one flat set, so every grant bought every platform-wide view. Grants are now '<user-id>:<scope>' entries; a scope that is not named is not granted, '*' is the only way to say 'all operations', and nothing grants it by default. A listed id with an empty scope set admits nobody, so operator_ids reports only ids with at least one scope. A wrong-scope caller receives 404 exactly like an unlisted one: a 403 would confirm both that the endpoint exists and that the caller is some kind of operator. Allowlist expiry and holder visibility remain open; they need a stored grant, not a narrower env var.",
@@ -30,7 +30,21 @@
       "pytest targeted re-run this segment: 55 passed, exit 0"
     ],
     "independent_invariant_check": "Executed /tmp/nex048_invariant.py against the committed OperatorGate: a withholding-report operator is granted that operation and refused 404 on audit-integrity and operator-access-report; an id mapped to an empty scope set is not reported in operator_ids and is refused 404; after one grant and three refusals the access log holds exactly 1 entry, confirming refusals precede the write. All assertions passed.",
-    "status": "VERIFIED"
+    "status": "VERIFIED",
+    "lease_field_verification": {
+      "status": "VERIFIED",
+      "ref": "refs/locks/nexus/lease",
+      "holder": "Andrews-Mac-mini.local-s32718",
+      "holder_shape": "POSIX session id, not a pid (the shape introduced by 64759f4)",
+      "steps": [
+        "acquire -> acquired true, expires_at 1795782630",
+        "status in a NEW process -> mine true, holder_liveness alive",
+        "renew in a NEW process -> renewed true, expiry extended",
+        "release in a NEW process -> released true",
+        "status -> held false"
+      ],
+      "conclusion": "R39 is fixed in practice, not only in test. The single-use-lease defect cannot recur while the holder is session-scoped."
+    }
   },
   "uncommitted_work": "None. This checkpoint write is the final commit of the segment.",
   "pr_state": {
@@ -262,9 +276,16 @@
       "summary": "The coordination lease could be acquired but never released, so every successful acquire blocked the next run for the full TTL.",
       "detail": "`release` and `renew` compare the live lease's holder against the caller's holder to decide 'is this mine?'. The default holder was `host-pid`, and every nexus_coord invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call and both verbs failed with 'lease held by another agent'. The holder must be identical across every process of one run and different between two concurrent runs on one host; a pid satisfies the second and fails the first. The POSIX session id satisfies both. This also explains R38, which was recorded as a stale lease held by a dead process: that was the predictable output of a run that acquired and could not hand back, so the two entries were one defect.",
       "closure_evidence": "default_holder() resolves NEXUS_HOLDER, then host-s<sid>, then host-<pid> only where os.getsid is unavailable. Holder.parse accepts both shapes; a session id is the session leader's pid, so the liveness probe is unchanged. The decisive property is cross-process identity, which no single-process test can express, so test_the_holder_is_identical_across_separate_processes spawns two real subprocesses; reverting to host-pid turns exactly that test and the shape test red. A five-process CLI acceptance run confirmed the full cycle against a scratch repo with a bare origin. Residual, recorded rather than closed: the identity is only as stable as the session, so a harness that spawns each invocation under its own session reproduces the defect - that is what NEXUS_HOLDER is for. A recycled session-leader pid can make holder_liveness report 'alive' for a dead run; that is reporting inaccuracy only, because acquisition is gated on expiry, never on liveness."
-    }
+    },
+    "A cancelled CI run is not a pass. A commit superseded in the concurrency group reads completed/cancelled forever, so cite the newest green head whose tree is a docs-only superset of the slice, and state that it is."
   ],
-  "next_task": "R36-expiry-and-holders",
+  "next_task": {
+    "id": "NEX-045",
+    "title": "A stored operator grant: user, scope, granted-at, expires-at, granted-by",
+    "why": "The scoping string is narrower but still a static config value. Expiry and holder visibility need a record, not a parse. This is the residual NEX-044 deliberately left open.",
+    "scope": "Domain value object + repository port + adapter, with OPS_OPERATOR_USER_IDS as the seed path rather than the only source. Preserve the 404-not-403 refusal and the record-on-grant access log.",
+    "first_command": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform && git rev-parse HEAD"
+  },
   "next_action": "The allowlist is now scoped but still a static env var: a grant cannot expire and an operator cannot see who currently holds what. Both need a stored grant rather than a narrower string, so the next slice is a domain OperatorGrant (user, scope, granted_at, expires_at, granted_by) with a repository port and an adapter, and OPS_OPERATOR_USER_IDS becomes the seed path for it. Keep the gate's 404-not-403 refusal and its record-on-grant behaviour unchanged - those are the parts that are already right.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R36 is CLOSED in all three of its halves (read side, auditable half, governance half) - do not redo them. 5. Delivery debt outstanding: poll CI at 16b0287, then write the issue #2 comment and the PR #3 section for NEX-044.",
   "ci_status": {
@@ -373,5 +394,27 @@
     "at": "2026-11-27T09:31Z",
     "note": "POINT-IN-TIME, before this run's product commit ed641b0. Recorded to show the run started from the true remote head."
   },
-  "head_at_checkpoint_note": "This is the last head that received a CI verdict, not necessarily the newest commit. Docs-only commits made after it (such as the one that wrote this file) cannot change a verdict, so chasing HEAD here would recurse forever. Read the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; treat any commit after this one as docs-only unless its diff proves otherwise."
+  "head_at_checkpoint_note": "This is the last head that received a CI verdict, not necessarily the newest commit. Docs-only commits made after it (such as the one that wrote this file) cannot change a verdict, so chasing HEAD here would recurse forever. Read the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; treat any commit after this one as docs-only unless its diff proves otherwise.",
+  "last_completed_task": {
+    "id": "NEX-044",
+    "title": "Per-operation scoping of the operator allowlist (R36 governance half)",
+    "status": "VERIFIED",
+    "evidence": [
+      "pytest targeted: 55 passed exit 0 on the committed tree",
+      "pytest full suite: 1115 passed, 4 skipped, 0 failed",
+      "ruff format --check, ruff check, mypy: clean",
+      "independent OperatorGate invariant script: all 6 assertions hold",
+      "CI 4/4 completed/success at 7e48857 (docs-only superset of the 16b0287 product tree)",
+      "PR #3 updated and read back; issue #2 commented"
+    ]
+  },
+  "closed_items": [
+    {
+      "id": "R39",
+      "title": "Lease could be acquired but never released",
+      "fixed_in": "64759f4",
+      "verified_in_run": "NEX-2026-11-27-48",
+      "verified_by": "four-process acquire/status/renew/release cycle on the real ref"
+    }
+  ]
 }
