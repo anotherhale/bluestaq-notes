@@ -7410,8 +7410,12 @@ verified afterwards (`0` corruption markers, 41 lines as authored) before pushin
 **Push status.** Pushed `bfb4e2c..39fa1db`. Verified by independent `git ls-remote`: remote
 and local both read `39fa1dbcbd93550426d370d6ea9988c89fc8a636`.
 
-**CI results.** **NOT POLLED.** The clock expired after the push. NEX-059 is therefore
-IMPLEMENTED + TESTED + COMMITTED + PUSHED, but **not VERIFIED** — a push is not a verdict.
+**CI results.** Polled after the push: `b9811d7` returned **4/4 completed/success**
+(Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build), polled
+2026-11-27T19:53Z. `b9811d7` descends from product commit `39fa1db` through a docs-only
+commit, so its CI compiled and tested the NEX-059 product code. **NEX-059 is VERIFIED.**
+The two duplicate check-run pairs are the branch concurrency group re-running, not a second
+verdict.
 
 **PR / issue.** Not updated this run; budget went to the slice and the integration step.
 Delivery debt now covers NEX-057, NEX-058 and NEX-059.
