@@ -262,6 +262,73 @@ class TestMatchedDenyRuleIsEnforced:
         assert recorded[0].status is InvocationStatus.DENIED
 
 
+class TestEvaluationFailuresFailsClosed:
+    """The evaluation boundary refuses on *any* failure, not only anticipated ones.
+
+    The docstring above ``_check_policy`` promises that "the policy could not be
+    evaluated" never means "the action was permitted". Catching only
+    :class:`DomainError` did not deliver that: a ``TypeError``, an
+    ``AttributeError``, or any future defect in the evaluator would escape
+    *before* the denial was recorded, so the call would fail with an unhandled
+    exception and leave no audit row. Review of PR #5 flagged this as P1 and it
+    is pinned here, because the gap is invisible to tests that only exercise the
+    domain's own validation errors.
+    """
+
+    @pytest.mark.parametrize("exc_type", [TypeError, AttributeError, RuntimeError])
+    def test_an_unexpected_evaluation_failure_is_refused_and_audited(
+        self, h: Harness, monkeypatch: pytest.MonkeyPatch, exc_type: type[Exception]
+    ) -> None:
+        _publish(h, (PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        def boom(*_args: object, **_kwargs: object) -> None:
+            raise exc_type("internal evaluator detail that must not reach the caller")
+
+        monkeypatch.setattr("notes_service.application.use_cases.tools.evaluate", boom)
+
+        with pytest.raises(AccessDenied, match="could not be evaluated") as caught:
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "T", "content": "C"},
+                idempotency_key="k-unexpected",
+            )
+
+        # The caller learns only that evaluation failed - never the internal
+        # message, which could describe policy shape or attacker-influenced state.
+        assert "internal evaluator detail" not in str(caught.value)
+
+        recorded = h.invocations(agent)
+        assert len(recorded) == 1
+        assert recorded[0].status is InvocationStatus.DENIED
+        assert exc_type.__name__ in (recorded[0].outcome or "")
+
+    def test_the_original_exception_is_preserved_for_diagnostics(
+        self, h: Harness, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Re-raising ``from`` keeps the cause on the traceback: the audit row and
+        # the caller message are sanitised, but a developer debugging a failing
+        # deployment still needs to see what actually broke.
+        _publish(h, (PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None),))
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        def boom(*_args: object, **_kwargs: object) -> None:
+            raise TypeError("the real cause")
+
+        monkeypatch.setattr("notes_service.application.use_cases.tools.evaluate", boom)
+
+        with pytest.raises(AccessDenied) as caught:
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "T", "content": "C"},
+                idempotency_key="k-unexpected-cause",
+            )
+
+        assert isinstance(caught.value.__cause__, TypeError)
+
+
 class TestPolicyVersionCitation:
     """The attempt must name the policy versions that were in force (NEX-052).
 

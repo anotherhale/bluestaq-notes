@@ -423,7 +423,16 @@ class InvokeTool(UseCase):
         attributes = _policy_attributes(resolved=resolved, tool=tool, resource_ref=resource_ref)
         try:
             decision = evaluate(published, attributes)
-        except DomainError as exc:
+        except Exception as exc:
+            # Deliberately broad, and the only place in this module that catches
+            # bare Exception. "Fails closed" has to cover *every* way evaluation
+            # can fail, not only the failures the domain anticipates: a
+            # ``TypeError`` from comparing a number to a string, an
+            # ``AttributeError`` from a shape change, or any future defect in the
+            # evaluator would otherwise escape before the denial and its audit
+            # row are written. An unevaluable policy must read as a refusal, so
+            # the exception type is recorded for diagnostics while the caller
+            # only learns that evaluation failed - never the internal detail.
             self._record_policy_denial(
                 resolved=resolved,
                 tool=tool,
@@ -570,6 +579,15 @@ class InvokeTool(UseCase):
         parameters, so a rule says "a volume bound applies" and the operator sets
         the number. A per-rule bound would need a parameterised obligation, which
         is a vocabulary change and therefore an ADR, not a quiet widening here.
+
+        **The bound is only as global as the limiter adapter.** The shipped
+        adapter is :class:`InMemoryRateLimiter`, whose counters live in the
+        process, so with several workers or replicas an agent gets *up to* N per
+        window *per process* rather than N in total. The enforcement is correct;
+        the scope of the bound is a deployment property. A deployment that needs
+        a true global bound must wire a shared-store adapter implementing the
+        same port - no change is needed here. Until then this should be described
+        as a per-process bound, not a platform-wide quota.
         """
         if self._rate_limiter is None:  # pragma: no cover - guarded by the caller
             raise AccessDenied(
