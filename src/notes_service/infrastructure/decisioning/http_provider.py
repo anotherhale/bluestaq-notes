@@ -39,12 +39,17 @@ choice the caller never offered, a confidence that is not a finite number in
 ``[0.0, 1.0]``. The use case still guards the call, because an adapter is
 third-party code and can fail in a way it did not anticipate.
 
+**The body is read under a hard byte cap.** The response is streamed and reading
+stops the instant the cap is passed, so the bound applies to what is *held*, not
+only to what is parsed. A peer that declares an oversized ``Content-Length`` is
+refused before a byte of body is read, and a non-200 body is never read at all.
+
 Two honest limits, recorded rather than papered over:
 
-* The size bound is checked *after* httpx has read the body, so it bounds what is
-  parsed, not what is held in memory. A streaming read is later hardening. The
-  threat model here is a buggy or compromised *configured* vendor, not an
-  attacker who chooses the URL, which is why this is acceptable for now.
+* The cap bounds size, not duration. ``httpx`` timeouts apply per socket
+  operation, so a peer that drips one byte just inside each timeout can hold the
+  call open far longer than ``timeout_seconds``. Bounding total wall-clock needs a
+  deadline propagated from the caller, which is a larger change than this adapter.
 * The rationale is truncated rather than fatal. A verbose explanation is not a
   wrong answer, and discarding a legal answer because its explanation ran long
   would let vendor verbosity deny a decision. Truncation is marked so a reader of
@@ -53,6 +58,7 @@ Two honest limits, recorded rather than papered over:
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from typing import Any
@@ -71,10 +77,15 @@ from notes_service.domain.errors import ValidationError
 
 _DEFAULT_TIMEOUT_SECONDS = 5.0
 
-#: Refuse to parse a body larger than this. The vendor's answer is four short
+#: Refuse to read a body larger than this. The vendor's answer is four short
 #: fields; anything near this bound is a broken or hostile peer, not a verbose
-#: one. See the module docstring for why this does not bound memory.
+#: one. Enforced while reading, so it bounds what is held as well as what is
+#: parsed - see :func:`_read_bounded`.
 _MAX_RESPONSE_BYTES = 64 * 1024
+
+#: How much is read per stream chunk. Small enough that overshoot past the cap is
+#: trivial, large enough that a normal 4-field answer arrives in one read.
+_READ_CHUNK_BYTES = 8 * 1024
 
 _TRUNCATION_MARKER = "...[truncated]"
 
@@ -82,6 +93,41 @@ _TRUNCATION_MARKER = "...[truncated]"
 #: newline in it is a log-injection vector rather than a formatting nicety - the
 #: same argument that makes the provider *name* an identifier.
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _declared_length(response: httpx.Response) -> int | None:
+    """The ``Content-Length`` the peer announced, if it announced a usable one.
+
+    Returns ``None`` when the header is absent, unparseable or negative, so the
+    caller falls back to enforcing the cap while reading. A declared length is a
+    hint, not a guarantee - a peer can lie low and stream more - which is why it
+    is only ever used to refuse early, never to size a read.
+    """
+    raw = response.headers.get("content-length")
+    if raw is None:
+        return None
+    try:
+        declared = int(raw.strip())
+    except ValueError:
+        return None
+    return declared if declared >= 0 else None
+
+
+def _read_bounded(response: httpx.Response) -> bytes | None:
+    """Consume the body, or ``None`` the moment it passes the cap.
+
+    Reading in chunks is what makes this a bound on *memory* rather than on what
+    is parsed afterwards: a body of a gigabyte is refused after roughly
+    ``_MAX_RESPONSE_BYTES + _READ_CHUNK_BYTES`` have been held, and the stream is
+    abandoned rather than drained. The accumulator never exceeds the cap by more
+    than one chunk, so the overshoot is bounded and small.
+    """
+    buffer = bytearray()
+    for chunk in response.iter_bytes(_READ_CHUNK_BYTES):
+        buffer.extend(chunk)
+        if len(buffer) > _MAX_RESPONSE_BYTES:
+            return None
+    return bytes(buffer)
 
 
 def _bounded_confidence(payload: dict[str, Any]) -> float | None:
@@ -212,25 +258,39 @@ class HttpDecisionProvider:
 
     def decide(self, request: DecisionRequest) -> Decision:
         try:
-            response = self._http.post(
-                self._endpoint, json=_request_body(request), headers=self._headers()
-            )
+            # Streamed, so the byte cap below bounds what is *held*. A buffered
+            # ``post`` would read the whole body before any size check could run.
+            with self._http.stream(
+                "POST",
+                self._endpoint,
+                json=_request_body(request),
+                headers=self._headers(),
+            ) as response:
+                if response.status_code != 200:
+                    # The vendor's error body is deliberately discarded, and never
+                    # even read. It can echo the request, an internal id, or (in a
+                    # badly written vendor) the credential, and none of that may
+                    # reach our audit trail through a rationale.
+                    return Decision.abstain(request.kind, AbstentionReason.PROVIDER_ERROR)
+
+                declared = _declared_length(response)
+                if declared is not None and declared > _MAX_RESPONSE_BYTES:
+                    # Refuse before reading a single byte of body. A peer that
+                    # announces an oversized answer does not get to make us hold it.
+                    return Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT)
+
+                body = _read_bounded(response)
+                if body is None:
+                    return Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT)
         except httpx.HTTPError:
-            # Unreachable, timed out, or the connection failed mid-flight. Broad by
-            # necessity: httpx raises a family of errors and none of them may escape.
+            # Unreachable, timed out, or the connection failed mid-flight - including
+            # mid-read, because the cap is enforced while the stream is consumed.
+            # Broad by necessity: httpx raises a family of errors and none of them
+            # may escape.
             return Decision.abstain(request.kind, AbstentionReason.PROVIDER_ERROR)
-
-        if response.status_code != 200:
-            # The vendor's error body is deliberately discarded. It can echo the
-            # request, an internal id, or (in a badly written vendor) the credential,
-            # and none of that may reach our audit trail through a rationale.
-            return Decision.abstain(request.kind, AbstentionReason.PROVIDER_ERROR)
-
-        if len(response.content) > _MAX_RESPONSE_BYTES:
-            return Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT)
 
         try:
-            payload = response.json()
+            payload = json.loads(body)
         except ValueError:
             return Decision.abstain(request.kind, AbstentionReason.MALFORMED_OUTPUT)
         if not isinstance(payload, dict):

@@ -37,7 +37,10 @@ from notes_service.domain.agent.decisioning import (
     DecisionOutcome,
     DecisionRequest,
 )
-from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
+from notes_service.infrastructure.decisioning.http_provider import (
+    _MAX_RESPONSE_BYTES,
+    HttpDecisionProvider,
+)
 from tests.agent.test_decision_provider_conformance import assert_provider_conformance
 
 _ENDPOINT = "https://judge.example.test/v1/decide"
@@ -300,6 +303,110 @@ def test_an_oversized_body_is_malformed_output() -> None:
 
     decision = _provider(handler).decide(_choice_request())
     assert decision.reason is AbstentionReason.MALFORMED_OUTPUT
+
+
+class _CountingBody:
+    """A body that yields in chunks and records how many were handed out.
+
+    Used to prove the adapter *stops reading*, not merely stops parsing. A
+    buffered read would drain every chunk before any check could run, so the
+    yield count would always equal the chunk count.
+    """
+
+    def __init__(self, chunks: int, chunk: bytes) -> None:
+        self._chunks = chunks
+        self._chunk = chunk
+        self.yielded = 0
+
+    def __iter__(self) -> Any:
+        for _ in range(self._chunks):
+            self.yielded += 1
+            yield self._chunk
+
+
+def test_an_unbounded_stream_is_abandoned_rather_than_drained() -> None:
+    """The cap must bound what is held, so reading stops near it, not at the end."""
+    body = _CountingBody(chunks=1_000, chunk=b"a" * 8_192)  # 8 MiB on offer
+    provider = _provider(lambda request: httpx.Response(200, content=iter(body)))
+
+    decision = provider.decide(_choice_request())
+
+    assert decision.reason is AbstentionReason.MALFORMED_OUTPUT
+    # 64 KiB cap over 8 KiB chunks: at most nine chunks are needed to pass it.
+    assert body.yielded <= 10
+    assert body.yielded < 1_000, "the whole body was read before the cap was applied"
+
+
+def test_an_announced_oversized_body_is_refused_before_any_body_byte_is_read() -> None:
+    """A declared length over the cap is a refusal, not an invitation to read it."""
+    body = _CountingBody(chunks=1_000, chunk=b"a" * 8_192)
+    provider = _provider(
+        lambda request: httpx.Response(
+            200, content=iter(body), headers={"content-length": str(200_000_000)}
+        )
+    )
+
+    decision = provider.decide(_choice_request())
+
+    assert decision.reason is AbstentionReason.MALFORMED_OUTPUT
+    assert body.yielded == 0
+
+
+def test_a_body_exactly_at_the_cap_still_parses() -> None:
+    """The cap is a ceiling, not a target: a body that fits must not be refused."""
+    padding = _MAX_RESPONSE_BYTES - len(b'{"confidence": 0.9, "choice": "alpha", "p": ""}')
+    payload = b'{"confidence": 0.9, "choice": "alpha", "p": "' + b"a" * padding + b'"}'
+    assert len(payload) == _MAX_RESPONSE_BYTES
+
+    decision = _provider(lambda request: httpx.Response(200, content=payload)).decide(
+        _choice_request()
+    )
+
+    assert decision.outcome is DecisionOutcome.DECIDED
+    assert decision.choice == "alpha"
+
+
+def test_a_body_one_byte_over_the_cap_is_refused() -> None:
+    payload = (
+        b'{"confidence": 0.9, "choice": "alpha", "p": "'
+        + b"a" * (_MAX_RESPONSE_BYTES - len(b'{"confidence": 0.9, "choice": "alpha", "p": ""}') + 1)
+        + b'"}'
+    )
+    assert len(payload) == _MAX_RESPONSE_BYTES + 1
+
+    decision = _provider(lambda request: httpx.Response(200, content=payload)).decide(
+        _choice_request()
+    )
+
+    assert decision.reason is AbstentionReason.MALFORMED_OUTPUT
+
+
+def test_a_non_200_body_is_never_read() -> None:
+    """An error body may echo a request or a credential, so it is not even consumed."""
+    body = _CountingBody(chunks=10, chunk=b"a" * 8_192)
+    provider = _provider(lambda request: httpx.Response(500, content=iter(body)))
+
+    decision = provider.decide(_choice_request())
+
+    assert decision.reason is AbstentionReason.PROVIDER_ERROR
+    assert body.yielded == 0
+
+
+def test_a_transport_error_mid_read_is_a_provider_error() -> None:
+    """The cap is enforced while streaming, so a failure there must still be caught."""
+    body = _CountingBody(chunks=10, chunk=b"a" * 8_192)
+    stream = iter(body)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        def failing() -> Any:
+            yield next(stream)
+            raise httpx.ReadError("connection dropped")
+
+        return httpx.Response(200, content=failing())
+
+    decision = _provider(handler).decide(_choice_request())
+
+    assert decision.reason is AbstentionReason.PROVIDER_ERROR
 
 
 @pytest.mark.parametrize("confidence", [None, "0.9", True, False, -0.1, 1.1])
