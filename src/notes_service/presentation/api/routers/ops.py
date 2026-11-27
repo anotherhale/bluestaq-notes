@@ -25,6 +25,7 @@ from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, 
 from notes_service.presentation.schemas import (
     ChainAuditReportResponse,
     OperatorAccessReportResponse,
+    OperatorGrantReportResponse,
     WithholdingReportResponse,
 )
 
@@ -105,3 +106,28 @@ def get_operator_access_report(
     """
     snapshot = container.get_operator_access_report().run(principal, limit=limit)
     return OperatorAccessReportResponse.from_snapshot(snapshot)
+
+
+@router.get(
+    "/operator-grants",
+    response_model=OperatorGrantReportResponse,
+    summary="Every currently-active operator grant (operators only)",
+    dependencies=[RateLimitDep],
+)
+def list_operator_grants(
+    principal: PrincipalDep, container: ContainerDep
+) -> OperatorGrantReportResponse:
+    """Return who currently holds an operator grant, and until when.
+
+    This is the question the static allowlist structurally could not answer: it
+    held strings, not holders. Each row names a user, the scopes they hold right
+    now, and the nearest deadline among those grants (``null`` when they hold an
+    unbounded grant). Expired grants are absent — they confer nothing, so listing
+    them as holdings would overstate the allowlist.
+
+    Reading this view is itself a granted operator read and is recorded, exactly
+    like the access report. A non-operator gets ``404`` like every other ops
+    endpoint.
+    """
+    snapshot = container.list_operator_grants().run(principal)
+    return OperatorGrantReportResponse.from_snapshot(snapshot)

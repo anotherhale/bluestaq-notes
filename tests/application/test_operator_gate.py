@@ -30,6 +30,7 @@ from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.security.operator_access_log import (
     InMemoryOperatorAccessLog,
 )
+from tests.application.grant_helpers import grants_from_scopes
 
 ALICE = UserId.parse("11111111-1111-1111-1111-111111111111")
 BOB = UserId.parse("22222222-2222-2222-2222-222222222222")
@@ -67,7 +68,7 @@ def _gate(
     bug that widened a scope would be invisible to them.
     """
     return OperatorGate(
-        operator_scopes={user: frozenset({WILDCARD}) for user in operators},
+        grants=grants_from_scopes({user: frozenset({WILDCARD}) for user in operators}),
         access_log=access_log or InMemoryOperatorAccessLog(),
         clock=FixedClock(now or datetime(2026, 11, 27, 10, 0, tzinfo=UTC)),
     )
@@ -129,7 +130,7 @@ def test_recent_is_newest_first_and_capped() -> None:
 
     for offset, operation in enumerate(("a", "b", "c")):
         OperatorGate(
-            operator_scopes={ALICE: frozenset({WILDCARD})},
+            grants=grants_from_scopes({ALICE: frozenset({WILDCARD})}),
             access_log=access_log,
             clock=FixedClock(base + timedelta(minutes=offset)),
         ).authorize(_principal(ALICE), operation=operation)
@@ -169,7 +170,7 @@ def _scoped_gate(
 ) -> OperatorGate:
     """Build the gate from an explicit scope map, bypassing ``_gate``'s wildcard."""
     return OperatorGate(
-        operator_scopes=scopes,
+        grants=grants_from_scopes(scopes),
         access_log=access_log or InMemoryOperatorAccessLog(),
         clock=FixedClock(datetime(2026, 11, 27, 10, 0, tzinfo=UTC)),
     )

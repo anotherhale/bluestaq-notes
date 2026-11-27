@@ -18,6 +18,7 @@ from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
 from notes_service.application.use_cases.operator_access_report import OperatorAccessSnapshot
+from notes_service.application.use_cases.operator_grants import OperatorGrantSnapshot
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.audit_chain import ChainAuditReport, ChainVerdict
@@ -897,6 +898,52 @@ class OperatorAccessReportResponse(ResponseModel):
             log_name=snapshot.log_name,
             capacity=snapshot.capacity,
             truncated=snapshot.truncated,
+        )
+
+
+class OperatorHolderResponse(ResponseModel):
+    """One operator and the scopes they currently hold (NEX-045).
+
+    ``expires_at`` is ``null`` when the holder has at least one unbounded grant.
+    That is deliberate: an unbounded grant is the strongest thing the holder has,
+    so reporting a nearby deadline for someone who also holds a permanent grant
+    would understate how long they keep access. ``null`` therefore means "no
+    deadline on their strongest grant", never "missing".
+    """
+
+    user_id: str
+    scopes: list[str]
+    expires_at: datetime | None
+
+
+class OperatorGrantReportResponse(ResponseModel):
+    """Every currently-active operator grant, for operators (NEX-045).
+
+    ``source_name`` names the adapter that answered so a reader cannot mistake a
+    process-local demo store for a durable deployment-wide one. ``as_of`` is the
+    instant the answer describes, taken from the same clock that stamped the
+    access-log entry this request wrote.
+    """
+
+    holders: list[OperatorHolderResponse]
+    holder_count: int
+    as_of: datetime
+    source_name: str
+
+    @classmethod
+    def from_snapshot(cls, snapshot: OperatorGrantSnapshot) -> OperatorGrantReportResponse:
+        return cls(
+            holders=[
+                OperatorHolderResponse(
+                    user_id=str(holder.user_id),
+                    scopes=sorted(holder.scopes),
+                    expires_at=holder.expires_at,
+                )
+                for holder in snapshot.holders
+            ],
+            holder_count=snapshot.holder_count,
+            as_of=snapshot.as_of,
+            source_name=snapshot.source_name,
         )
 
 

@@ -28,6 +28,7 @@ from notes_service.infrastructure.security.operator_access_log import (
 from notes_service.infrastructure.security.withholding_recorder import (
     InMemoryWithholdingRecorder,
 )
+from tests.application.grant_helpers import grants_from_scopes
 
 ALICE = UserId.parse("11111111-1111-1111-1111-111111111111")
 BOB = UserId.parse("22222222-2222-2222-2222-222222222222")
@@ -58,7 +59,7 @@ def _use_case(
     return GetWithholdingReport(
         withholding_recorder=_recorder(),
         operator_gate=OperatorGate(
-            operator_scopes={user: frozenset({"*"}) for user in operators},
+            grants=grants_from_scopes({user: frozenset({"*"}) for user in operators}),
             access_log=access_log or InMemoryOperatorAccessLog(),
             clock=SystemClock(),
         ),

@@ -37,6 +37,7 @@ from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.operator_access_log import (
     InMemoryOperatorAccessLog,
 )
+from tests.application.grant_helpers import grants_from_scopes
 from tests.conftest import ALICE, BOB, auth_headers
 
 READ = "read_note"
@@ -64,7 +65,7 @@ def _use_case(
     return SweepAuditIntegrity(
         uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
         operator_gate=OperatorGate(
-            operator_scopes={UserId.parse(raw): frozenset({"*"}) for raw in operators},
+            grants=grants_from_scopes({UserId.parse(raw): frozenset({"*"}) for raw in operators}),
             access_log=InMemoryOperatorAccessLog(),
             clock=SystemClock(),
         ),

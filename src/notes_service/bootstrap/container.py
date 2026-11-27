@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TypeVar
 
 from sqlalchemy import Engine
@@ -91,6 +91,7 @@ from notes_service.application.use_cases.notes import (
 )
 from notes_service.application.use_cases.operator_access_report import GetOperatorAccessReport
 from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.operator_grants import ListOperatorGrants
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
     ChangeMemberRole,
@@ -124,6 +125,8 @@ from notes_service.application.use_cases.permissions import (
 from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
+from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
@@ -136,6 +139,9 @@ from notes_service.infrastructure.identity.session_provider import SessionIdenti
 from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.operator_access_log import (
     InMemoryOperatorAccessLog,
+)
+from notes_service.infrastructure.security.operator_grants import (
+    InMemoryOperatorGrantRepository,
 )
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from notes_service.infrastructure.security.withholding_recorder import (
@@ -279,6 +285,41 @@ class Container:
     # The read side of the operator access record, gated the same way. Without
     # this the record is write-only and R36's question stays unanswerable.
     get_operator_access_report: Callable[[], GetOperatorAccessReport]
+    # Who currently holds an operator grant, and until when (NEX-045). This is
+    # the question a static allowlist could not answer: it held strings, not
+    # holders.
+    list_operator_grants: Callable[[], ListOperatorGrants]
+
+
+def _seed_operator_grants(
+    grants: InMemoryOperatorGrantRepository,
+    configured: dict[UserId, frozenset[str]],
+    *,
+    now: datetime,
+) -> None:
+    """Turn the configured allowlist into stored, unbounded grants (NEX-045).
+
+    ``OPS_OPERATOR_USER_IDS`` still describes the deployment's *initial* operator
+    set, so nothing an operator already deployed relies on changes. What changes
+    is what the gate reads: it consults the store, so a grant can carry an
+    ``expires_at`` and an operator can enumerate holders. Configuration is now a
+    seed path, not the allowlist.
+
+    Seeded grants are unbounded and ``granted_by=None`` — no human issued them, and
+    a deployment that wants a grant to lapse should issue it through the store
+    rather than encode an expiry in an environment variable. Bounded grants exist
+    precisely so they can be given out for an incident and then be gone.
+    """
+    for user_id, scopes in configured.items():
+        for scope in sorted(scopes):
+            grants.add(
+                OperatorGrant(
+                    user_id=user_id,
+                    scope=scope,
+                    granted_at=now,
+                    granted_by=None,
+                )
+            )
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -382,6 +423,18 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     )
     withholding_recorder = InMemoryWithholdingRecorder()
     operator_access_log = InMemoryOperatorAccessLog()
+    # Stored grants (NEX-045). The environment variable is now a *seed path* into
+    # this store, not the allowlist itself: seeding at startup produces one
+    # unbounded grant per configured scope, and the gate then consults the store,
+    # so a grant can carry an expiry and an operator can enumerate holders. A
+    # durable adapter would be seeded the same way (or not at all) and the gate
+    # would not change.
+    operator_grants = InMemoryOperatorGrantRepository()
+    _seed_operator_grants(
+        operator_grants,
+        settings.operator_scopes,
+        now=clock.now(),
+    )
 
     # The stub is the default adapter: deterministic, offline, and it abstains
     # under any real threshold. A deployment opts into a real vendor by setting
@@ -426,7 +479,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     # access record. Scoping is NEX-044: each grant names the operations it
     # covers, so reading one operational view never implies reading another.
     operator_gate = OperatorGate(
-        operator_scopes=settings.operator_scopes,
+        grants=operator_grants,
         access_log=operator_access_log,
         clock=clock,
     )
@@ -450,6 +503,17 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         return GetOperatorAccessReport(
             access_log=operator_access_log,
             operator_gate=operator_gate,
+        )
+
+    # Who holds a grant right now, and until when. Same gate, so enumerating the
+    # holders is itself a recorded operator read. The clock is injected because
+    # the report states the instant it describes, and that instant must be the
+    # same one the gate stamped the access entry with (R29).
+    def make_list_operator_grants() -> ListOperatorGrants:
+        return ListOperatorGrants(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+            clock=clock,
         )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
@@ -603,4 +667,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         get_withholding_report=make_get_withholding_report,
         sweep_audit_integrity=make_sweep_audit_integrity,
         get_operator_access_report=make_get_operator_access_report,
+        list_operator_grants=make_list_operator_grants,
     )

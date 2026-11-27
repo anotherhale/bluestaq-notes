@@ -37,13 +37,26 @@ granted it can be found by reading configuration rather than by inferring it
 from an operator who happens to pass every check. Nothing grants ``"*"`` by
 default.
 
-What this still does *not* solve: the allowlist is a static environment variable
-with no expiry. Rotation belongs to the scoped-capability work. This slice makes
-each grant narrow and each use visible, which is the part that can be built
-correctly now without inventing a capability system inside a security gate.
+Stored grants (NEX-045)
+-----------------------
+
+Scoping narrowed each grant but left two holes, both structural: a grant could
+not **expire**, and nobody could **see who holds what**. Both need a record, so
+the gate now consults an
+:class:`~notes_service.application.ports.operator_grants.OperatorGrantRepository`
+of :class:`~notes_service.domain.identity.operator_grant.OperatorGrant` values
+rather than a static map. ``OPS_OPERATOR_USER_IDS`` is no longer the allowlist
+itself; it is the *seed path* that populates the repository at startup.
+
+The expiry check is the gate's own, evaluated against the gate's clock on every
+call, so a grant that lapses mid-process stops working without a redeploy — and,
+because the same ``Clock`` stamps both the check and the access-log entry, the
+two cannot disagree about "now" (R29).
 """
 
 from __future__ import annotations
+
+from datetime import datetime
 
 from notes_service.application.errors import ResourceNotFound
 from notes_service.application.ports.clock import Clock
@@ -51,6 +64,7 @@ from notes_service.application.ports.operator_access import (
     OperatorAccessEntry,
     OperatorAccessLog,
 )
+from notes_service.application.ports.operator_grants import OperatorGrantRepository
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import UserId
 
@@ -63,33 +77,34 @@ deliberate, visible decision, not the consequence of an omitted field.
 
 
 class OperatorGate:
-    """Authorise an operator read, within its scope, and record that it happened."""
+    """Authorise an operator read, within its scope and lifetime, and record it."""
 
     def __init__(
         self,
         *,
-        operator_scopes: dict[UserId, frozenset[str]],
+        grants: OperatorGrantRepository,
         access_log: OperatorAccessLog,
         clock: Clock,
     ) -> None:
-        self._operator_scopes = {
-            user_id: frozenset(scopes) for user_id, scopes in operator_scopes.items()
-        }
+        self._grants = grants
         self._access_log = access_log
         self._clock = clock
 
     @property
     def operator_ids(self) -> frozenset[UserId]:
-        """Every operator with at least one scope. Empty means nobody.
+        """Every operator with at least one *active* scope. Empty means nobody.
 
-        An id mapped to an empty scope set is not an operator: it may read
-        nothing, so reporting it as one would overstate the allowlist.
+        Evaluated at the gate's clock, so an expired grant does not appear here.
+        An id whose grants have all lapsed is not an operator: it may read
+        nothing, so reporting it as one would overstate the allowlist — the one
+        number an operator audit is supposed to be able to trust.
         """
-        return frozenset(user_id for user_id, scopes in self._operator_scopes.items() if scopes)
+        now = self._clock.now()
+        return frozenset(grant.user_id for grant in self._grants.active_grants(now=now))
 
     def scopes_for(self, user_id: UserId) -> frozenset[str]:
-        """The operations ``user_id`` may use. Empty when not an operator at all."""
-        return self._operator_scopes.get(user_id, frozenset())
+        """The operations ``user_id`` may use right now. Empty when none apply."""
+        return self._grants.active_for(user_id, now=self._clock.now())
 
     def authorize(self, principal: Principal, *, operation: str) -> None:
         """Allow an operator read of ``operation``, or raise ``ResourceNotFound``.
@@ -98,26 +113,27 @@ class OperatorGate:
         ``"withholding-report"``), never text a caller supplied, so the log
         cannot be written to with attacker-chosen strings.
 
-        A listed operator whose scope does not include ``operation`` is refused
-        exactly like an unlisted caller. A ``403`` here would confirm both that
-        the endpoint exists and that the caller is *some* kind of operator — two
-        facts an ordinary user has no need for.
+        A listed operator whose scope does not include ``operation`` — or whose
+        grant has lapsed — is refused exactly like an unlisted caller. A ``403``
+        here would confirm both that the endpoint exists and that the caller is
+        *some* kind of operator: two facts an ordinary user has no need for.
         """
+        now = self._clock.now()
         # Refuse before recording: a denied caller must leave no trace, or the
         # log would answer "who was refused" instead of "who read this".
-        if not self._permits(principal.user_id, operation):
+        if not self._permits(principal.user_id, operation, now=now):
             raise ResourceNotFound("not found")
 
         self._access_log.record(
             OperatorAccessEntry(
                 user_id=principal.user_id,
                 operation=operation,
-                at=self._clock.now(),
+                at=now,
             )
         )
 
-    def _permits(self, user_id: UserId, operation: str) -> bool:
-        scopes = self._operator_scopes.get(user_id)
+    def _permits(self, user_id: UserId, operation: str, *, now: datetime) -> bool:
+        scopes = self._grants.active_for(user_id, now=now)
         if not scopes:
             return False
         return WILDCARD in scopes or operation in scopes
