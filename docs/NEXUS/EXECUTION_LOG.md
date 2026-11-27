@@ -5492,3 +5492,89 @@ exclusion.
 - A recycled session-leader pid could make `holder_liveness` report `alive` for a dead run.
   That is a reporting inaccuracy only: acquisition is gated on expiry, never on liveness, so
   it cannot cause a false takeover.
+
+---
+
+## Run NEX-2026-11-27-47
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-27-47` |
+| Timestamp | 2026-11-27T10:30Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `de7db43` |
+| Ending commit | `1eb1d3b` + the docs commit that writes this entry |
+| Phase | 5 — durable runtime (security hardening) |
+
+### Tasks completed
+
+**R36 (auditable half) — one operator gate that records every granted privileged read.**
+
+IMPLEMENTED, TESTED, COMMITTED, PUSHED. CI not yet concluded at the time of writing; see
+`ci_status` in `CHECKPOINT.json` for the poll result.
+
+`GetWithholdingReport` (NEX-037) and `SweepAuditIntegrity` (NEX-042) each carried their own
+copy of the same four lines: compare the caller against `OPS_OPERATOR_USER_IDS`, raise
+`ResourceNotFound` if absent, proceed. Two copies of a security gate can drift, and neither
+recorded that it had been used, so "who read the platform-wide totals" was unanswerable from
+inside the system.
+
+Extracted into a single `OperatorGate` use case behind an `OperatorAccessLog` port, with one
+in-memory bounded adapter. `build_container` constructs **one** gate and **one** log and
+injects both use cases from it, so the two callers cannot diverge again.
+
+### Decisions
+
+- **Refuse before recording.** An entry in the log must be evidence of authorisation. Writing
+  denials into the same ring would make it answer "who was refused" while making "who read
+  this" noisier — the log would be answering a question nobody asked.
+- **The gate stamps the record with the request's `Clock`.** R29 already cost this programme
+  once for a bound written by one clock and read by another. A record timed by wall clock would
+  disagree with the request that produced it.
+- **Not an `AuthorizationProvider` decision.** That policy governs note content; platform-wide
+  integrity data must never be reachable as a side effect of content access. Documented in the
+  module docstring so the next reader does not fold it in.
+- **`OperatorAccessLog` is exposed on `Container`.** A test — or a future ops endpoint — can
+  then answer "who read this" without reaching into the gate's internals.
+
+### Honest limits
+
+- The allowlist is still a static environment variable: no expiry, no per-operation scoping, no
+  revocation. This slice makes *use* of a grant visible, which is the prerequisite for ever
+  rotating one. R36's governance gap is narrowed, not closed.
+- The adapter is process-local: entries are per-worker and lost on restart. It proves the port;
+  a production deployment swaps in an append-only store or exporter behind the same protocol.
+- The ring is bounded (1000) and drops the oldest entry. It answers "who read this recently" and
+  says so rather than pretending to be complete.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format --check` | clean |
+| `ruff check src/ tests/` | all checks passed |
+| `mypy` | no issues in 120 source files |
+| `pytest` (full) | 1092 passed, 4 skipped, 0 failed |
+| New tests | 9 in `test_operator_gate.py`, +2 ordering tests in `test_withholding_report.py` |
+
+The architecture layering test (`tests/architecture/test_layering.py`) is part of the full run
+and stayed green: the new port and use case import no FastAPI, SQLAlchemy or JWT.
+
+### Commits
+
+- `1eb1d3be842db46138c7b3ebf882df1b00ea7908` — `feat(security): one operator gate that records every granted
+  privileged read`. 9 files, +454/−43.
+
+The commit message was first written with a shell heredoc and the terminal duplicated its body;
+it was amended with `git commit --amend -F <file>` **before any push**, so `1eb1d3b` is the
+only version that ever reached the remote. Third occurrence of that terminal defect.
+
+### Push status
+
+Pushed to `feature/agentic-enterprise-platform`; `git ls-remote` returned `1eb1d3b` equal to
+local `HEAD`. `main` untouched at `d6f92d0`.
+
+### Next action
+
+Poll CI at `1eb1d3b`. If green, record it and then pick up R36's remaining governance half
+(rotation/scoping) or the next dependency-ready backlog item.

@@ -1,15 +1,16 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-46",
-  "timestamp": "2026-11-27T10:05:00Z",
+  "run_id": "NEX-2026-11-27-47",
+  "timestamp": "2026-11-27T10:52:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3534897",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-2026-11-27-46 closed R39, the coordination defect that has cost every recent run wall clock: the lease could be acquired but never released, because holder identity was `host-pid` and every nexus_coord invocation is a fresh process. The holder is now session-scoped (`host-s<sid>`), so release and renew recognise their own lease across processes. R38 was the same defect seen from the other side. Next slice: NEX-043.",
+  "commit": "1eb1d3b",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-2026-11-27-47 closed the auditable half of R36: the operator allowlist behind the platform-wide views was duplicated in GetWithholdingReport and SweepAuditIntegrity and recorded nothing, so a privileged read left no trace inside the system. It is now one OperatorGate shared by both use cases, and every granted read appends an OperatorAccessEntry stamped by the request's own clock. Refusal happens before recording, so an entry is evidence of authorisation. Rotation and per-operation scoping stay open with the scoped-capability-grant slice.",
   "active_task": null,
   "task_statuses": {
-    "R39": "VERIFIED"
+    "R36-auditable-half": "VERIFIED-LOCAL"
   },
   "completed_tasks": [
+    "R36-auditable-half",
     "R39",
     "NEX-042",
     "R37",
@@ -18,16 +19,16 @@
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "249 files already formatted (ruff format --check .).",
-    "ruff_check": "All checks passed.",
-    "mypy": "Success: no issues found in 117 source files.",
-    "pytest_full": "1068 passed, 4 skipped, 0 failed in 16.57s. Full suite, run against the exact tree that became 64759f4.",
-    "targeted": "tests/coordination/ = 62 passed.",
-    "acceptance": "Five separate `python -c` processes against a scratch repo with a bare origin: acquire (proc 1) -> status reporting mine=true (proc 2) -> renew (proc 3) -> release (proc 4) -> held=false (proc 5). A sixth process with a foreign identity was refused with 'lease held by another agent', so exclusion is unchanged.",
-    "negative_control": "Reverting default_holder() to host-pid turned exactly two tests red (cross-process identity and holder shape); the file was restored from a backup and re-verified before commit.",
-    "commit_message_note": "The first commit used a shell heredoc and the terminal corrupted the message body; it was amended with `git commit --amend -F <file>` before any push, so 64759f4 is the only version that ever reached the remote."
+    "ruff_format": "clean (ruff format src/ tests/)",
+    "ruff_check": "All checks passed (src/ and tests/).",
+    "mypy": "Success: no issues found in 120 source files.",
+    "pytest_full": "1092 passed, 4 skipped, 0 failed. Full suite on the committed tree.",
+    "targeted": "tests/application/test_operator_gate.py + test_withholding_report.py + test_audit_sweep.py = 19 passed.",
+    "architecture": "tests/architecture/test_layering.py green; the new port and use case import no FastAPI/SQLAlchemy/JWT.",
+    "ci": "PENDING at write time. Poll the workflow run for 1eb1d3b before treating this slice as CI-verified.",
+    "commit_message_note": "Heredoc corrupted the message body again (third occurrence); amended with `git commit --amend -F <file>` before any push, so 1eb1d3b is the only version that reached the remote."
   },
-  "uncommitted_work": "None. Working tree clean at 3534897; verified with `git status --porcelain` returning 0 lines.",
+  "uncommitted_work": "None at product commit; only the docs commit that writes these files follows it.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -127,8 +128,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -220,10 +221,8 @@
       "id": "R36",
       "severity": "low",
       "summary": "The ops allowlist is a per-user grant with no rotation story and no audit trail of who read the aggregate.",
-      "detail": [
-        "NEX-037 gates /api/v1/ops/withholding-report on OPS_OPERATOR_USER_IDS and refuses everyone else with 404. That is the right default-deny shape, but the grant is a static environment variable: there is no way to see who currently holds it from inside the system, no expiry, and no record of which operator read the totals and when. The response is counts-only, so the disclosure is small, but an operator allowlist that cannot be audited is a governance gap rather than a security hole. The wider fix is the same one the platform already needs for every privileged read - a scoped capability grant with an audit record - so this should be folded into that slice rather than solved ad hoc here. Until then, changing the variable requires a redeploy, which at least makes each change a reviewable event."
-      ],
-      "status": "open - accepted residual, to be folded into the scoped-capability work"
+      "detail": "GetWithholdingReport (NEX-037) and SweepAuditIntegrity (NEX-042) each carried their own copy of the same allowlist check, so the gate could drift and nothing would notice. Neither recorded a granted read, so 'who read the platform-wide totals' could not be answered from inside the system. AUDITABLE HALF CLOSED (NEX-2026-11-27-47): one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared by both callers. Every granted read appends one OperatorAccessEntry; refusal happens before recording, so an entry is evidence of authorisation; the entry is stamped by the request's own Clock because R29 already showed what two clocks cost. NOT an AuthorizationProvider decision, deliberately: note-content access must never unlock platform-wide integrity data. STILL OPEN: the allowlist has no expiry, no per-operation scoping and no revocation, and the adapter is process-local and bounded. Rotation belongs to the scoped-capability-grant slice.",
+      "status": "auditable half closed by NEX-2026-11-27-47 (commit 1eb1d3b); rotation/scoping open"
     },
     {
       "id": "R37",
@@ -357,38 +356,24 @@
   "branch_head_observed_at": "2026-11-27T09:45Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "64759f4"
+    "1eb1d3b"
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 64759f4f45658a5c0298c7bd5b80ddac52553909, equal to local git rev-parse HEAD",
-    "ci_verified": true,
-    "ci_verifying_sha": "64759f4",
-    "ci_result": "4/4 completed/success at 64759f4 (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 64759f4, so the result is attributable to the pushed slice and not to a superseded run.",
-    "tracking_issue_updated": true,
-    "pr_updated": "PR #3 body appended with an R39 section (72415 -> 77310 chars), verified by re-reading the body and asserting the heading and key facts are present. Still draft, still unmerged.",
-    "lease_state": "NOT acquired this run. The shared ref was held throughout by a prior run's legacy host-pid lease (Andrews-Mac-mini.local-95179, expiring 1795775517) which the old code cannot release. The fix was verified on a scratch repo instead of waiting ~17 minutes for that expiry.",
-    "delivery_debt": "None. Run report posted to issue #2 and PR #3 in this run.",
-    "docs_commit": {
-      "sha": "3534897",
-      "subject": "docs(nexus): record R39 closure - lease holder is session-scoped",
-      "files": [
-        "docs/NEXUS/BACKLOG.md",
-        "docs/NEXUS/CHECKPOINT.json",
-        "docs/NEXUS/DECISIONS.md",
-        "docs/NEXUS/EXECUTION_LOG.md",
-        "docs/NEXUS/STATE.md"
-      ],
-      "pushed": true,
-      "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform -> 35348975abfe38b795600531f948faf428fd732e"
-    },
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 1eb1d3be842db46138c7b3ebf882df1b00ea7908, equal to local git rev-parse HEAD",
+    "ci_verified": false,
+    "ci_verifying_sha": "1eb1d3b",
+    "ci_result": "Not polled to conclusion in this window. Poll before claiming CI-PASSED.",
+    "tracking_issue_updated": false,
+    "pr_updated": false,
+    "delivery_debt": "Two items carried to the next run: (1) poll CI for 1eb1d3b and record the result; (2) post the R36 report to issue #2 and append the R36 section to PR #3 body.",
     "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
-  "run_summary": "NEX-2026-11-27-46. Closed R39, the coordination lease defect that made every acquire a full-TTL block for the next run. Reconciled from the true remote head (git ls-remote), which equalled local HEAD at 7d03814, so no catch-up was needed. Changed 3 files and added one test module (218 insertions): holder identity is session-scoped instead of host-pid, so release and renew recognise their own lease across processes. All gates green on the committed tree (ruff format 249 files, ruff check clean, mypy 117 files, pytest 1068 passed / 4 skipped), negative control run on disk, and a five-process CLI acceptance run proved acquire -> mine=true -> renew -> release -> held=false while a foreign identity stayed refused. Committed 64759f4, pushed, verified by ls-remote, CI polled. One process defect was recorded rather than concealed: the shared lease was never acquired because a legacy host-pid lease held it, so the fix was verified on a scratch repo.",
+  "run_summary": "NEX-2026-11-27-47. Closed the auditable half of R36. Started from the true remote head de7db43 (git ls-remote; local HEAD after checking out the feature branch). Extracted the duplicated operator allowlist check from GetWithholdingReport and SweepAuditIntegrity into one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared. Every granted read appends one entry stamped by the request's own clock; refusals record nothing, so the log is evidence of authorisation rather than of attempts. 9 files, +454/-43. Gates green on the committed tree: ruff format clean, ruff check clean, mypy 120 files, pytest 1092 passed / 4 skipped / 0 failed. Committed 1eb1d3b, pushed, ls-remote-verified. Delivery debt: CI not polled, issue #2 and PR #3 not updated.",
   "head_observation": {
-    "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
-    "last_observed_sha": "ed641b07cfe7a283cc2cce090b8177efd67c9d02",
-    "last_observed_at": "2026-11-27T09:45Z",
+    "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit.",
+    "last_observed_sha": "1eb1d3be842db46138c7b3ebf882df1b00ea7908",
+    "last_observed_at": "2026-11-27T10:47Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 2d58e22. The docs commit that writes this file comes after it and is not implementation. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit and any head written here is stale by construction.",

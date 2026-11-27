@@ -2101,10 +2101,14 @@ None. No schema change, no new dependency (stdlib `uuid`, existing FastAPI/pydan
 
 ### Residual
 
-**R36** — the allowlist is a static environment variable with no expiry, no way to read the
-current holders from inside the system, and no record of who read the totals. The disclosure is
-small (counts only), so this is a governance gap rather than a hole. Fold it into the
-scoped-capability-grant slice rather than solving it ad hoc here.
+**R36** — PARTIALLY CLOSED (run `NEX-2026-11-27-47`, commit `1eb1d3b`). The *record* half is
+built: the duplicated per-use-case allowlist check is now one `OperatorGate`, and every granted
+read of an operational view appends an `OperatorAccessEntry` naming caller, operation and the
+gate's clock time. Refusal happens before recording, so an entry is evidence of authorisation.
+Still open, deliberately: the allowlist is a static environment variable with **no expiry, no
+per-operation scoping and no revocation**. Those belong to the scoped-capability-grant slice —
+this slice made the use of a grant visible, which is the prerequisite for rotating one. The
+adapter is process-local and bounded, so it answers "who read this recently", not "who ever did".
 
 ---
 
