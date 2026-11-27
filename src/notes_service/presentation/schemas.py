@@ -1321,6 +1321,7 @@ class PolicyRuleRequest(StrictModel):
     rule_id: str
     effect: str
     when: dict[str, object] | None = None
+    obligations: list[str] = Field(default_factory=list)
 
 
 class PolicyDraftRequest(StrictModel):
@@ -1347,6 +1348,7 @@ class PolicyRuleResponse(ResponseModel):
     rule_id: str
     effect: str
     when: dict[str, object] | None
+    obligations: list[str] = Field(default_factory=list)
 
 
 class PolicyVersionResponse(ResponseModel):
@@ -1379,6 +1381,7 @@ class PolicyVersionResponse(ResponseModel):
                     rule_id=rule.rule_id,
                     effect=rule.effect.value,
                     when=encode_condition(rule.when) if rule.when is not None else None,
+                    obligations=[obligation.value for obligation in rule.obligations],
                 )
                 for rule in version.rules
             ],

@@ -46,6 +46,7 @@ from notes_service.domain.governance.policy import (
     Condition,
     Not,
     PolicyEffect,
+    PolicyObligation,
     PolicyRule,
 )
 
@@ -124,17 +125,47 @@ def _decode_comparison(payload: dict[str, Any]) -> Comparison:
 def encode_rules(rules: tuple[PolicyRule, ...]) -> str:
     """Serialise a policy's rules to a JSON string for storage."""
     return json.dumps(
-        [
-            {
-                "rule_id": rule.rule_id,
-                "effect": rule.effect.value,
-                "when": encode_condition(rule.when) if rule.when is not None else None,
-            }
-            for rule in rules
-        ],
+        [_encode_rule(rule) for rule in rules],
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _encode_rule(rule: PolicyRule) -> dict[str, Any]:
+    """One rule as a JSON-ready mapping.
+
+    ``obligations`` is omitted entirely when empty, so a rule without obligations
+    encodes to exactly the bytes it did before obligations existed. Stored rows
+    therefore stay byte-identical and need no rewrite.
+    """
+    payload: dict[str, Any] = {
+        "rule_id": rule.rule_id,
+        "effect": rule.effect.value,
+        "when": encode_condition(rule.when) if rule.when is not None else None,
+    }
+    if rule.obligations:
+        payload["obligations"] = [obligation.value for obligation in rule.obligations]
+    return payload
+
+
+def _decode_obligations(raw: object, rule_id: object) -> tuple[PolicyObligation, ...]:
+    """Rebuild a rule's obligations, refusing any name outside the closed set.
+
+    An unrecognised obligation is an error, never ignored: dropping it would turn
+    a requirement into a no-op, which is the one failure mode this control exists
+    to prevent. ``PolicyRule`` re-validates the tuple afterwards.
+    """
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValidationError(f"obligations on rule {rule_id!r} must be a list")
+    obligations: list[PolicyObligation] = []
+    for name in raw:
+        try:
+            obligations.append(PolicyObligation(name))
+        except ValueError as error:
+            raise ValidationError(f"unknown obligation {name!r} on rule {rule_id!r}") from error
+    return tuple(obligations)
 
 
 def decode_rules(payload: str) -> tuple[PolicyRule, ...]:
@@ -156,6 +187,7 @@ def decode_rules(payload: str) -> tuple[PolicyRule, ...]:
                 rule_id=entry.get("rule_id"),  # type: ignore[arg-type]
                 effect=PolicyEffect(effect),  # type: ignore[arg-type]
                 when=decode_condition(when) if when is not None else None,
+                obligations=_decode_obligations(entry.get("obligations"), entry.get("rule_id")),
             )
         )
     return tuple(rules)

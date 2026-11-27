@@ -93,6 +93,36 @@ class PolicyStatus(StrEnum):
     RETIRED = "retired"
 
 
+class PolicyObligation(StrEnum):
+    """A condition an allowed action must still satisfy before it proceeds (M3.2).
+
+    The security architecture lists obligations alongside allow and deny
+    (section 5: "obligations ... must be satisfied before the operation
+    proceeds"; section 8: "obligations applied to allowed decisions"). An
+    obligation is *not* a third effect: it never changes the decision, it adds
+    work that must happen first. An allow with an unsatisfied obligation is not
+    an allow.
+
+    The vocabulary is closed, and each member is a requirement the platform can
+    either meet or refuse — never a free-text instruction, because free text in
+    an enforcement path is a suggestion. The names come from the architecture's
+    own list.
+    """
+
+    APPROVAL = "approval"
+    """A human must approve this specific action before it runs."""
+    SECOND_APPROVER = "second-approver"
+    """Two distinct humans must approve. One approval is not enough."""
+    STEP_UP = "step-up"
+    """The actor must re-authenticate to a higher assurance level first."""
+    REDACTION = "redaction"
+    """The result must have sensitive fields removed before the caller sees it."""
+    RATE_LIMIT = "rate-limit"
+    """A volume bound must be enforced over the caller's activity."""
+    ENHANCED_AUDIT = "enhanced-audit"
+    """The attempt must be recorded with more evidence than the default."""
+
+
 class AttributeType(StrEnum):
     """The declared type of an attribute a condition may reference.
     Declaring the type up front is what makes "implicit coercion is prohibited"
@@ -298,6 +328,7 @@ class PolicyRule:
     rule_id: str
     effect: PolicyEffect
     when: Condition | None = None
+    obligations: tuple[PolicyObligation, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rule_id", _validate_identifier(self.rule_id, what="rule id"))
@@ -307,6 +338,28 @@ class PolicyRule:
             if not isinstance(self.when, (Comparison, AllOf, AnyOf, Not)):
                 raise ValidationError("rule condition must be a condition node or None")
             _check_bounds(self.when)
+        if not isinstance(self.obligations, tuple):
+            raise ValidationError("rule obligations must be a tuple")
+        seen: set[PolicyObligation] = set()
+        for obligation in self.obligations:
+            if not isinstance(obligation, PolicyObligation):
+                raise ValidationError(
+                    f"unknown obligation {obligation!r}; obligations are a closed vocabulary"
+                )
+            if obligation in seen:
+                # A duplicate carries no extra meaning and makes the "how many
+                # obligations must be satisfied" count wrong.
+                raise ValidationError(f"duplicate obligation on rule {self.rule_id!r}")
+            seen.add(obligation)
+        if self.obligations and self.effect is not PolicyEffect.ALLOW:
+            # The architecture says "obligations applied to *allowed* decisions".
+            # On a deny the action never proceeds, so an obligation attached to it
+            # can never be satisfied and would be silently dropped. Refusing at
+            # construction is the only way an author finds out.
+            raise ValidationError(
+                f"rule {self.rule_id!r} is a deny and cannot carry obligations; "
+                "an obligation only has meaning on an allowed decision"
+            )
 
 
 def separation_of_duties(*, author: str | None, publisher: str, ref: str) -> None:
@@ -497,10 +550,23 @@ class PolicyDecision:
     effect: PolicyEffect
     matched_rules: tuple[str, ...] = field(default_factory=tuple)
     policy_versions: tuple[str, ...] = field(default_factory=tuple)
+    obligations: tuple[PolicyObligation, ...] = field(default_factory=tuple)
 
     @property
     def allowed(self) -> bool:
         return self.effect is PolicyEffect.ALLOW
+
+    @property
+    def is_satisfied(self) -> bool:
+        """True when the action may proceed with nothing further to do.
+
+        ``allowed`` alone is *not* permission to proceed. An allow that carries an
+        obligation is an allow *conditionally*, and the caller must satisfy every
+        obligation before acting. This property exists so a caller cannot read
+        ``allowed`` and stop reading — the mistake that turns an obligation into a
+        comment. It is deliberately stricter than ``allowed`` and never looser.
+        """
+        return self.allowed and not self.obligations
 
 
 def _attribute_value(ref: AttributeRef, attributes: dict[str, object]) -> object | None:
@@ -587,6 +653,7 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
     """
     matched: list[str] = []
     consulted: list[str] = []
+    obligations: list[PolicyObligation] = []
     denied = False
     allowed = False
     for version in versions:
@@ -603,19 +670,28 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
                 denied = True
             else:
                 allowed = True
+                for obligation in rule.obligations:
+                    if obligation not in obligations:
+                        obligations.append(obligation)
     if denied:
         # Deny wins even when an allow also matched: this is the ordering rule,
-        # not a tie-break.
+        # not a tie-break. The obligations of the allow rules that also matched are
+        # dropped rather than reported, because there is nothing to satisfy: the
+        # action is refused. Reporting them would suggest a way to proceed.
         return PolicyDecision(
             effect=PolicyEffect.DENY,
             matched_rules=tuple(matched),
             policy_versions=tuple(consulted),
         )
     if allowed:
+        # Every matching allow rule contributes its obligations, in evaluation
+        # order, deduplicated: an obligation is a requirement, so two rules asking
+        # for the same one require it once, and the caller satisfies all of them.
         return PolicyDecision(
             effect=PolicyEffect.ALLOW,
             matched_rules=tuple(matched),
             policy_versions=tuple(consulted),
+            obligations=tuple(obligations),
         )
     return PolicyDecision(
         effect=PolicyEffect.DENY,
@@ -674,6 +750,7 @@ __all__ = [
     "Not",
     "PolicyDecision",
     "PolicyEffect",
+    "PolicyObligation",
     "PolicyRule",
     "PolicyStatus",
     "PolicyVersion",

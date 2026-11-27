@@ -80,7 +80,7 @@ from notes_service.domain.agent.tools import (
 )
 from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
-from notes_service.domain.governance.policy import PolicyEffect, evaluate
+from notes_service.domain.governance.policy import PolicyEffect, PolicyObligation, evaluate
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
 from notes_service.domain.notes.value_objects import NoteId
@@ -181,7 +181,7 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
-        consulted = self._enforce_published_policy(
+        consulted, obligations = self._enforce_published_policy(
             resolved=resolved,
             tool=tool,
             cleaned=cleaned,
@@ -191,7 +191,41 @@ class InvokeTool(UseCase):
 
         principal = _actor_principal(resolved)
 
-        if tool.requires_approval:
+        # An allow that carries an obligation is not permission to proceed: the
+        # obligation must be met first (security architecture section 5). Only
+        # ``approval`` has a real enforcement adapter behind it in this gateway —
+        # the human approval flow — and even that only for a capability the domain
+        # already treats as sensitive: ``ApprovalRequest.open`` refuses to gate a
+        # non-sensitive capability, so an approval obligation cannot be invented by
+        # policy for a tool the platform does not consider human-gated. Whether a
+        # capability needs a human is a static decision in code, not something a
+        # policy version can widen.
+        #
+        # Every other obligation is refused here rather than ignored: an obligation
+        # with no enforcement adapter that was silently dropped would be worse than
+        # no policy at all, because the policy would read as enforced.
+        satisfiable = tool.requires_approval and obligations == (PolicyObligation.APPROVAL,)
+        if obligations and not satisfiable:
+            names = ", ".join(obligation.value for obligation in obligations)
+            reason = (
+                f"allowed only under obligation(s) {names} that this gateway cannot satisfy "
+                f"for capability {tool.capability.value}"
+            )
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=reason,
+                policy_versions=consulted,
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} is {reason}; refusing rather than proceeding "
+                "with an unmet obligation"
+            )
+
+        if tool.requires_approval or PolicyObligation.APPROVAL in obligations:
             return self._run_gated(
                 resolved=resolved,
                 tool=tool,
@@ -221,7 +255,7 @@ class InvokeTool(UseCase):
         cleaned: dict[str, object],
         resource_ref: str,
         idempotency_key: str,
-    ) -> tuple[str, ...]:
+    ) -> tuple[tuple[str, ...], tuple[PolicyObligation, ...]]:
         """Refuse the call when a published policy explicitly denies it (NEX-051).
 
         Until now the policy lifecycle could store and publish versions but
@@ -250,13 +284,14 @@ class InvokeTool(UseCase):
         invocation row is written before raising — so a policy-blocked attempt is
         as visible in the trail as a capability-blocked one.
 
-        Returns the versions that were in force, so the attempt the caller is
-        about to seal can cite them (NEX-052). An allowed call and a refused one
-        both record what governed the decision; the returned tuple is empty only
-        when no policy repository is wired at all.
+        Returns the versions that were in force and the obligations that the
+        matching allow rules impose, so the attempt the caller is about to seal
+        can cite them (NEX-052) and so the obligations are enforced rather than
+        merely reported (NEX-053). Both are empty only when no policy repository
+        is wired at all.
         """
         if self._policy_versions is None:
-            return ()
+            return (), ()
 
         published = self._policy_versions.all_published()
         consulted = tuple(version.ref for version in published)
@@ -291,7 +326,7 @@ class InvokeTool(UseCase):
                 f"tool {tool.name!r} refused by published policy "
                 f"({', '.join(decision.matched_rules)})"
             )
-        return consulted
+        return consulted, decision.obligations
 
     def _record_policy_denial(
         self,
