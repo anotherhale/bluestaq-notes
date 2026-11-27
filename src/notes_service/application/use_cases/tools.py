@@ -84,6 +84,7 @@ from notes_service.domain.governance.policy import PolicyEffect, PolicyObligatio
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
 from notes_service.domain.notes.value_objects import NoteId
+from notes_service.domain.redaction import redact
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,21 +193,37 @@ class InvokeTool(UseCase):
         principal = _actor_principal(resolved)
 
         # An allow that carries an obligation is not permission to proceed: the
-        # obligation must be met first (security architecture section 5). Only
-        # ``approval`` has a real enforcement adapter behind it in this gateway —
-        # the human approval flow — and even that only for a capability the domain
-        # already treats as sensitive: ``ApprovalRequest.open`` refuses to gate a
-        # non-sensitive capability, so an approval obligation cannot be invented by
-        # policy for a tool the platform does not consider human-gated. Whether a
-        # capability needs a human is a static decision in code, not something a
-        # policy version can widen.
+        # obligation must be met first (security architecture section 5). Two kinds
+        # have a real mechanism behind them in this gateway:
+        #
+        # * ``approval`` — the human approval flow, and only for a capability the
+        #   domain already treats as sensitive: ``ApprovalRequest.open`` refuses to
+        #   gate a non-sensitive capability, so policy cannot *invent* a human gate
+        #   for a tool the platform does not consider human-gated. Whether a
+        #   capability needs a human is a static decision in code, not something a
+        #   policy version can widen.
+        # * ``redaction`` — the response is filtered by the same shape-based
+        #   judgement the log formatter uses (``domain.redaction``), so a
+        #   credential-bearing field is withheld from the caller rather than
+        #   returned. It is applied to the output, never to the stored note, and
+        #   the audit row records that it happened.
         #
         # Every other obligation is refused here rather than ignored: an obligation
         # with no enforcement adapter that was silently dropped would be worse than
-        # no policy at all, because the policy would read as enforced.
-        satisfiable = tool.requires_approval and obligations == (PolicyObligation.APPROVAL,)
-        if obligations and not satisfiable:
-            names = ", ".join(obligation.value for obligation in obligations)
+        # no policy at all, because the policy would read as enforced. One
+        # unenforceable member refuses the whole call — a set is only satisfiable
+        # when every member is, so an author cannot smuggle an unenforceable
+        # requirement alongside a real one.
+        unsatisfiable = [
+            obligation
+            for obligation in obligations
+            if not (
+                (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
+                or obligation is PolicyObligation.REDACTION
+            )
+        ]
+        if unsatisfiable:
+            names = ", ".join(obligation.value for obligation in unsatisfiable)
             reason = (
                 f"allowed only under obligation(s) {names} that this gateway cannot satisfy "
                 f"for capability {tool.capability.value}"
@@ -225,6 +242,7 @@ class InvokeTool(UseCase):
                 "with an unmet obligation"
             )
 
+        redaction_required = PolicyObligation.REDACTION in obligations
         if tool.requires_approval or PolicyObligation.APPROVAL in obligations:
             return self._run_gated(
                 resolved=resolved,
@@ -234,6 +252,7 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 policy_versions=consulted,
+                redaction_required=redaction_required,
             )
         return self._run_direct(
             resolved=resolved,
@@ -243,6 +262,7 @@ class InvokeTool(UseCase):
             resource_ref=resource_ref,
             idempotency_key=idempotency_key,
             policy_versions=consulted,
+            redaction_required=redaction_required,
         )
 
     # -- published policy enforcement ------------------------------------
@@ -380,6 +400,7 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
+        redaction_required: bool = False,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -415,6 +436,15 @@ class InvokeTool(UseCase):
             self._finalise(invocation, failed=True, outcome=type(exc).__name__)
             raise InvalidInput(str(exc)) from exc
 
+        if redaction_required:
+            output, redacted = _redact_output(output)
+            self._finalise(
+                invocation,
+                failed=False,
+                outcome=_redacted_outcome(redacted),
+            )
+            return ToolResult(invocation=invocation, output=output)
+
         self._finalise(invocation, failed=False, outcome="ok")
         return ToolResult(invocation=invocation, output=output)
 
@@ -430,6 +460,7 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
+        redaction_required: bool = False,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -496,6 +527,11 @@ class InvokeTool(UseCase):
         except DomainError as exc:
             self._finalise(invocation, failed=True, outcome=type(exc).__name__)
             raise InvalidInput(str(exc)) from exc
+
+        if redaction_required:
+            output, redacted = _redact_output(output)
+            self._finalise(invocation, failed=False, outcome=_redacted_outcome(redacted))
+            return ToolResult(invocation=invocation, output=output)
 
         self._finalise(invocation, failed=False, outcome="ok")
         return ToolResult(invocation=invocation, output=output)
@@ -830,6 +866,48 @@ def _resource_ref(tool: ToolDefinition, arguments: dict[str, object]) -> str:
     if isinstance(note_id, str) and note_id:
         return f"note:{note_id}"
     return f"tool:{tool.name}"
+
+
+def _redact_output(output: dict[str, object]) -> tuple[dict[str, object], tuple[str, ...]]:
+    """Apply the ``redaction`` obligation to a tool result.
+
+    Returns the filtered output and the names of the top-level keys that were
+    replaced, so the audit row can say *that* redaction happened without
+    recording *what* was withheld — the field name is a hint an attacker should
+    not get for free, but an operator needs to know the obligation fired.
+
+    Filtering happens on the way out only: the note the handler read is untouched
+    in the store, because the obligation governs what this caller may see, not
+    what the platform may keep.
+    """
+    redacted = redact(output)
+    withheld = tuple(sorted(key for key in output if not _same(redacted.get(key), output[key])))
+    return redacted, withheld
+
+
+def _same(left: object, right: object) -> bool:
+    """Whether a redacted value equals the original, tolerating odd ``__eq__``.
+
+    A value whose comparison raises is treated as *changed*, so an unusual object
+    is reported as withheld rather than silently dropped from the count.
+    """
+    try:
+        return bool(left == right)
+    except Exception:
+        return False
+
+
+def _redacted_outcome(withheld: tuple[str, ...]) -> str:
+    """An audit outcome that records the obligation fired.
+
+    ``ok`` would be indistinguishable from an unredacted success, so an operator
+    auditing the trail could not tell that a policy had filtered a response. The
+    count, not the field names, is recorded: the trail is already readable by
+    more people than the response was.
+    """
+    if not withheld:
+        return "ok (redaction applied; nothing withheld)"
+    return f"ok (redaction applied; {len(withheld)} field(s) withheld)"
 
 
 def _note_summary(note: Any) -> dict[str, object]:

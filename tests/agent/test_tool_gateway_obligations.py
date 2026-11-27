@@ -12,10 +12,11 @@ These tests pin the three ways obligations can be got wrong:
   has to route the call through the real human-approval flow, so the handler does
   not run until a person has approved it.
 * **An obligation with no enforcement adapter must refuse, not be dropped.** The
-  gateway can satisfy ``approval``; it has no adapter for ``step-up``,
-  ``redaction``, ``second-approver``, ``rate-limit`` or ``enhanced-audit``.
-  Proceeding anyway would make the policy read as enforced when it is not, so the
-  call is refused and audited. This is the fail-closed half of the control.
+  gateway can satisfy ``approval`` (for a human-gated capability) and ``redaction``
+  (a real output filter, NEX-054); it has no adapter for ``step-up``,
+  ``second-approver``, ``rate-limit`` or ``enhanced-audit``. Proceeding anyway
+  would make the policy read as enforced when it is not, so the call is refused
+  and audited. This is the fail-closed half of the control.
 * **Deny still wins.** Obligations on an allow rule that also matched a deny rule
   are irrelevant: the action is refused, and no obligation is reported as a way
   to proceed.
@@ -39,6 +40,7 @@ from notes_service.domain.governance.policy import (
     PolicyObligation,
     PolicyRule,
 )
+from notes_service.domain.redaction import REDACTED
 from tests.agent.test_tool_gateway_policy import Harness, _publish
 from tests.agent.test_tool_gateway_policy import h as h
 
@@ -117,7 +119,6 @@ class TestUnsatisfiableObligationsFailClosed:
         [
             PolicyObligation.STEP_UP,
             PolicyObligation.SECOND_APPROVER,
-            PolicyObligation.REDACTION,
             PolicyObligation.RATE_LIMIT,
             PolicyObligation.ENHANCED_AUDIT,
         ],
@@ -157,14 +158,14 @@ class TestUnsatisfiableObligationsFailClosed:
                 _allow_tool(
                     "delete_note",
                     PolicyObligation.APPROVAL,
-                    PolicyObligation.REDACTION,
+                    PolicyObligation.STEP_UP,
                 ),
             ),
         )
         agent, secret = h.secret_for(Capability.DELETE_NOTE)
         note = h.create_note.run(h.principal, title="T", content="C")
 
-        with pytest.raises(AccessDenied, match="redaction"):
+        with pytest.raises(AccessDenied, match="step-up"):
             h.gateway.run(
                 secret=secret,
                 tool_name="delete_note",
@@ -174,6 +175,109 @@ class TestUnsatisfiableObligationsFailClosed:
 
         with h.uow() as uow:
             assert uow.approvals.list_pending_for_agent(agent.id) == []
+        assert h.list_notes.run(h.principal).total == 1
+
+
+class TestRedactionObligationIsEnforced:
+    """NEX-054: the ``redaction`` obligation has a real adapter, not carry-through."""
+
+    def test_a_redaction_obligation_filters_the_returned_note(self, h: Harness) -> None:
+        # The subject is the output, not the permission: the call is *allowed* and
+        # the handler runs, but the note body must not come back to the caller.
+        # Before NEX-054 this obligation was refused as unsatisfiable, which was
+        # honest but left the platform unable to express "allow, but withhold the
+        # body" — the common case for an agent that may summarise but not exfiltrate.
+        _publish(h, (_allow_tool("read_note", PolicyObligation.REDACTION),))
+        _agent, secret = h.secret_for(Capability.READ_NOTE)
+        note = h.create_note.run(h.principal, title="T", content="api_key=abc123")
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="read_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-redaction",
+        )
+
+        returned = result.output["note"]
+        assert isinstance(returned, dict)
+        assert returned["content"] == REDACTED
+        # The metadata an agent needs to work with the note is still there; only
+        # the subject material is withheld.
+        assert returned["id"] == str(note.id)
+        assert returned["title"] == "T"
+
+        # Redaction is a view for this caller, not a mutation of the record.
+        with h.uow() as uow:
+            stored = uow.notes.get(note.id)
+        assert stored is not None
+        assert str(stored.content) == "api_key=abc123"
+
+    def test_the_audit_row_records_that_redaction_fired(self, h: Harness) -> None:
+        # ``ok`` would be indistinguishable from an unredacted success, so an
+        # operator reading the trail could not tell a policy had filtered the
+        # response. The row must say so without recording the withheld field name.
+        _publish(h, (_allow_tool("read_note", PolicyObligation.REDACTION),))
+        agent, secret = h.secret_for(Capability.READ_NOTE)
+        note = h.create_note.run(h.principal, title="T", content="C")
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="read_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-redaction-audit",
+        )
+
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.SUCCEEDED]
+        outcome = recorded[0].outcome or ""
+        assert "redaction applied" in outcome
+        assert "1 field(s) withheld" in outcome
+        assert "content" not in outcome
+
+    def test_without_the_obligation_the_body_is_returned(self, h: Harness) -> None:
+        # The control: the same call, same caller, no obligation. If this also
+        # redacted, the previous tests would pass for the wrong reason.
+        _publish(h, (_allow_tool("read_note"),))
+        agent, secret = h.secret_for(Capability.READ_NOTE)
+        note = h.create_note.run(h.principal, title="T", content="C")
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="read_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-no-redaction",
+        )
+
+        assert result.output["note"]["content"] == "C"  # type: ignore[index]
+        assert (h.invocations(agent)[0].outcome or "") == "ok"
+
+    def test_redaction_composes_with_approval(self, h: Harness) -> None:
+        # Both obligations are satisfiable, so the call is not refused as tainted.
+        # It must still go through the human gate: satisfying ``redaction`` must
+        # not become a way to skip ``approval``.
+        _publish(
+            h,
+            (
+                _allow_tool(
+                    "delete_note",
+                    PolicyObligation.APPROVAL,
+                    PolicyObligation.REDACTION,
+                ),
+            ),
+        )
+        agent, secret = h.secret_for(Capability.DELETE_NOTE)
+        note = h.create_note.run(h.principal, title="T", content="C")
+
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-redaction-approval",
+            )
+
+        with h.uow() as uow:
+            assert len(uow.approvals.list_pending_for_agent(agent.id)) == 1
         assert h.list_notes.run(h.principal).total == 1
 
 
