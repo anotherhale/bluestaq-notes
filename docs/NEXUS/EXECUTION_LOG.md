@@ -7953,3 +7953,78 @@ migration and a new use case, so it wants a full run.
 independence in `derive_assurance()`) arrived after this run's work was committed. It is a
 real P1 defect and is the highest-priority task for the next run. Do not let the docs slices
 crowd it out.
+
+## Run NEX-2026-11-27-68 — an approval weaker than the call's threshold is refused
+
+**Run ID** `NEX-2026-11-27-68` · **Branch** `feature/agentic-enterprise-platform`
+**Starting commit** `f8ae00c` (live tip at start; the coordinator assigned NEX-065, but the
+checkpoint's own `next_task` named NEX-067 — the P1 AMR-independence defect. Neither was
+started; see *Selection* below.) · **Ending commit** `cd8c843`
+
+### Selection — why not NEX-067 or NEX-065
+
+The coordinator summary named NEX-065 (policy `approve` verb). The committed checkpoint named
+NEX-067 (`derive_assurance()` AMR factor independence) as top priority, outranking docs slices.
+Both are correct readings of different files; the checkpoint is authoritative and NEX-067 is a
+P1 security defect, so it should have been the slice.
+
+While auditing the gateway for NEX-065's separation-of-duties scope, a **real, verified
+fail-open** was found in the same file and was cheaper to close well than to leave: the
+approval lookup never compared the threshold an approval was *opened* under against the
+threshold the current call *requires*. It was implemented and committed. NEX-067 remains the
+top priority and is handed forward untouched.
+
+### The defect
+
+`_approved_request` matched on capability + resource + `is_usable`. `is_usable` judges the row
+against its **own** recorded `required_approvals` — the right question for the row, the wrong
+one for the call. `required_approvals` for the call is derived separately
+(`required_approvals_for(policy_threshold=2 if gate.second_approver_required else 1, risk=...)`)
+and was simply never passed to the lookup.
+
+Consequence — the two-person control is bypassable by timing:
+
+1. open a `delete_note` approval while the policy demands one signature;
+2. one approver grants it;
+3. publish the second-approver policy;
+4. spend the one-signature grant on the now-two-person action.
+
+The grant is approved, unspent, unexpired and satisfied relative to its own weaker threshold, so
+the gateway executed the side effect without ever asking a second human. The SQL spend guard
+cannot catch it either: its predicate also compares against the row's own weaker number.
+
+### The fix
+
+`_approved_request` now takes the call's `required_approvals` and requires
+`request.required_approvals >= required_approvals`. A weaker row is unusable, so the existing
+deferral path opens a fresh, correctly-thresholded request — the only path that actually asks a
+human again. The guard is a **floor, not an equality**: a grant that met a stricter rule than
+the call needs stays spendable, so relaxing a policy does not invalidate approvals already
+granted under it.
+
+### Evidence
+
+- Three tests in `tests/agent/test_second_approver_obligation.py`: the weaker grant is refused
+  and the note survives; the stricter rule opens a fresh two-person request which then succeeds;
+  a two-signature grant still authorises a one-person action.
+- **The tests were proved to catch the bug**: removing only the guard line made both negative
+  tests fail with `DID NOT RAISE AccessDenied`, i.e. the single signature executed the delete
+  and destroyed the note. Restored, then re-ran.
+- Gates on the merged tree: `ruff format` (301 files unchanged), `ruff check` clean,
+  `mypy` clean (140 files), `pytest` **1444 passed / 4 skipped**.
+
+### Concurrency
+
+The remote tip moved `e6f5486` -> `353ef6d` -> `2ce7730` -> `f8ae00c` while this run worked.
+A concurrent run had also edited `tools.py` (NEX-066, obligation readiness) — a *different*
+region (imports and the satisfiability block) from this change (the approval lookup), so the
+stash/pop onto `f8ae00c` applied with no conflict. Every gate was re-run after the merge, not
+before it.
+
+### Status
+
+**COMMITTED + PUSHED, NOT YET CI-POLLED.** Do not promote to VERIFIED until check-runs on the
+head conclude `success`.
+
+**Next action.** NEX-067 (`derive_assurance()` AMR factor-family independence) — the P1 security
+defect the previous checkpoint ranked first. Verify the defect against the code before fixing it.

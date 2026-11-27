@@ -7,16 +7,54 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 66) | `1c2377e` locally; the live tip was `e6f5486` (a concurrent run had advanced it). |
-| Head commit (measured) | Product commit `353ef6d` (NEX-066), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`7456a89` (NEX-064 docs head): 4/4 `completed/success`**, polled 2026-11-27T21:13Z — NEX-064 VERIFIED. **NEX-066 not yet polled.** |
+| Starting commit (run 68) | `f8ae00c` (live tip; concurrent runs advance it constantly). |
+| Head commit (measured) | Product commit `cd8c843` (NEX-068), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
+| Last CI result | **`2ce7730` (NEX-066 docs head): 4/4 `completed/success`**, polled 2026-11-27T22:55Z — NEX-066 VERIFIED. **NEX-068 (`cd8c843`) not yet polled.** |
 | Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open; NEX-064 and NEX-066 comments pending. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-064** evidence; NEX-066 pending. Thirteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). Not addressed. Top priority next run as **NEX-067**. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-064** evidence; NEX-066 and NEX-068 pending. Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). **Still not addressed** — run 68 fixed a different defect instead. Top priority next run as **NEX-067**. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-068 (run `NEX-2026-11-27-68`) — an approval weaker than the call's threshold is refused
+
+**Status: COMMITTED + PUSHED (`cd8c843`), NOT CI-POLLED.** Do not promote to VERIFIED until the
+check-runs conclude.
+
+**A real fail-open, found while auditing the gateway.** `_approved_request` matched an approval
+on capability, resource and `is_usable`, but never compared the threshold the row was *opened*
+under against the threshold the current call *requires*. `is_usable` judges the row against its
+**own** recorded `required_approvals` — the right question for the row, the wrong one for the
+call. The call's threshold is derived separately and was simply never passed in.
+
+So the two-person control was bypassable by timing: open a `delete_note` approval while the
+policy demands one signature, have one approver grant it, then publish the second-approver
+policy and spend the grant. The grant is approved, unspent, unexpired and satisfied relative to
+its own weaker threshold, so the side effect ran without a second human. The SQL spend guard
+cannot catch it either — its predicate also compares against the row's own weaker number
+(D-068c).
+
+**Fix.** The lookup takes the call's `required_approvals` and requires
+`request.required_approvals >= required_approvals`. A weaker row becomes unusable, so the
+existing deferral path opens a fresh, correctly-thresholded request — the only path that
+actually asks a human again. The guard is a **floor, not an equality** (D-068b): a grant that
+met a stricter rule than the call needs stays spendable, so relaxing a policy does not
+invalidate approvals already granted under it.
+
+**Evidence.** Three tests in `tests/agent/test_second_approver_obligation.py`: the weaker grant
+is refused and the note survives; the tightened rule opens a fresh two-person request which then
+succeeds; a two-signature grant still authorises a one-person action. Removing only the guard
+line made both negative tests fail `DID NOT RAISE AccessDenied` — the single signature executed
+the delete — so the tests are proved to catch the defect. Gates on the merged tree: ruff
+format/check clean, mypy clean (140 files), **1444 passed / 4 skipped**.
+
+**Honest note on selection.** The committed checkpoint ranked **NEX-067** (`derive_assurance()`
+AMR factor independence, P1) first; the run summary handed to this run named NEX-065 (policy
+`approve` verb). Neither was started. This slice is a different, verified defect in the file
+already being audited for NEX-065. **NEX-067 remains the top priority and is unstarted** — it
+should not be displaced again.
 
 ## NEX-066 (run `NEX-2026-11-27-66`) — an unenforceable obligation is refused when the policy is drafted
 
