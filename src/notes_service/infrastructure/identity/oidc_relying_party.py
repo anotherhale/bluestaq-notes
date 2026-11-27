@@ -199,30 +199,40 @@ class HttpOidcRelyingParty:
         )
 
 
-#: ``amr`` methods that count as a second, independent factor. Kept as a closed
-#: set so a provider cannot smuggle a weaker method in under a new spelling and
-#: have it read as multi-factor. A password/OIDC login is always one factor; a
-#: second entry from this set is what makes a token multi-factor (ADR-015).
-_MULTI_FACTOR_AMR: frozenset[str] = frozenset(
-    {
-        "mfa",
-        "otp",
-        "totp",
-        "hwk",
-        "swk",
-        "sms",
-        "tel",
-        "fpt",
-        "face",
-        "iris",
-        "vbm",
-        "pin",
-        "pwd-2fa",
-        "webauthn",
-        "fido",
-        "passkey",
-    }
-)
+#: Recognised ``amr`` methods, grouped by the *factor family* each one belongs to.
+#:
+#: Multi-factor means two independent factors, not two method names. ``otp`` and
+#: ``totp`` are both a one-time code, and ``sms`` and ``tel`` are both a text
+#: message to a phone, so counting distinct names read ``["otp", "totp"]`` as
+#: multi-factor when only one factor was used. Assurance is therefore derived
+#: from distinct families, never from the size of the method set (ADR-015).
+#:
+#: The vocabulary stays closed, so a provider cannot smuggle a weaker method in
+#: under a new spelling and have it count. An unrecognised method is ignored,
+#: which can only understate.
+_AMR_FAMILIES: dict[str, str] = {
+    "pwd": "knowledge",
+    "password": "knowledge",
+    "pin": "knowledge",
+    "otp": "one-time-code",
+    "totp": "one-time-code",
+    "hotp": "one-time-code",
+    "sms": "sms",
+    "tel": "sms",
+    "hwk": "hardware-key",
+    "swk": "hardware-key",
+    "fido": "hardware-key",
+    "webauthn": "hardware-key",
+    "passkey": "hardware-key",
+    "fpt": "biometric",
+    "face": "biometric",
+    "iris": "biometric",
+    "vbm": "biometric",
+    # Generic markers: the IdP asserts a second factor happened without naming
+    # its family, so each counts as one family of its own.
+    "mfa": "generic-mfa",
+    "pwd-2fa": "generic-mfa",
+}
 
 
 #: Tokens that separate the segments of an ``acr`` value. An ``acr`` is a class
@@ -304,11 +314,15 @@ def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
 
     Two independent signals, either of which is sufficient:
 
-    * ``amr`` lists a second factor from :data:`_MULTI_FACTOR_AMR` alongside a
-      first one, or
+    * ``amr`` reports methods from two or more distinct factor *families* (see
+      :data:`_AMR_FAMILIES`), or
     * ``acr`` names a recognised multi-factor level, matched by segment and
       refused when a neighbouring segment negates it (see
       :func:`_acr_names_multi_factor`).
+
+    The ``amr`` test counts families, not method names. Two methods from one
+    family — ``otp`` with ``totp``, or ``sms`` with ``tel`` — are one factor and
+    read as single-factor; only a second family makes the login multi-factor.
 
     Numeric NIST level conventions (``aal2``, ``loa3``, ``urn:okta:loa:2``) are
     deliberately **not** mapped. Several of them describe identity proofing rather
@@ -328,7 +342,8 @@ def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
         methods = {str(item).strip().lower() for item in amr if isinstance(item, str)}
     else:
         methods = set()
-    if len(methods) >= 2 and methods & _MULTI_FACTOR_AMR:
+    families = {_AMR_FAMILIES[method] for method in methods if method in _AMR_FAMILIES}
+    if len(families) >= 2:
         return AuthenticationAssurance.MULTI_FACTOR
 
     return AuthenticationAssurance.SINGLE_FACTOR

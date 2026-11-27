@@ -191,6 +191,51 @@ def test_amr_as_a_string_is_one_method_not_a_character_bag() -> None:
 
 
 # ---------------------------------------------------------------------------
+# ``amr`` counts factor *families*, not method names.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "amr",
+    [
+        pytest.param(["otp", "totp"], id="otp-and-totp"),
+        pytest.param(["sms", "tel"], id="sms-and-tel"),
+        pytest.param(["pwd", "pin"], id="password-and-pin"),
+        pytest.param(["hwk", "swk"], id="hardware-and-software-key"),
+        pytest.param(["webauthn", "passkey"], id="webauthn-and-passkey"),
+        pytest.param(["face", "iris"], id="face-and-iris"),
+        pytest.param(["otp", "totp", "hotp"], id="three-methods-one-family"),
+        pytest.param(["pwd", "password", "pin"], id="three-knowledge-spellings"),
+        pytest.param(["fpt", "face", "iris", "vbm"], id="four-biometric-spellings"),
+    ],
+)
+def test_amr_methods_from_one_factor_family_read_as_single(amr: list[str]) -> None:
+    # The defect this pins: counting distinct method names read two one-time
+    # codes, or two text messages, as two independent factors. A second factor
+    # has to come from a different family; anything else is one factor and must
+    # refuse a step-up rather than spend one.
+    assert derive_assurance({"amr": amr}) is SINGLE
+
+
+@pytest.mark.parametrize(
+    "amr",
+    [
+        pytest.param(["pwd", "otp"], id="knowledge-and-one-time-code"),
+        pytest.param(["pwd", "sms"], id="knowledge-and-sms"),
+        pytest.param(["pwd", "fpt"], id="knowledge-and-biometric"),
+        pytest.param(["pwd", "hwk"], id="knowledge-and-hardware-key"),
+        pytest.param(["otp", "fpt"], id="one-time-code-and-biometric"),
+        pytest.param(["pin", "hwk"], id="pin-and-hardware-key"),
+        pytest.param(["pwd", "mfa"], id="knowledge-and-generic-mfa"),
+    ],
+)
+def test_amr_methods_from_independent_families_read_as_multi_factor(amr: list[str]) -> None:
+    # The positive direction: distinct families still grant multi-factor, so the
+    # family rule narrows the defect without breaking a genuine second factor.
+    assert derive_assurance({"amr": amr}) is MULTI
+
+
+# ---------------------------------------------------------------------------
 # Both signals together, and one that must not rescue the other.
 # ---------------------------------------------------------------------------
 
