@@ -218,14 +218,17 @@
     }
   ],
   "next_task": "NEX-042",
-  "next_action": "1. Poll CI for 2d58e22 (GET /repos/anotherhale/bluestaq-notes/commits/2d58e22/check-runs) and record the result in ci_status; if red, fix it before any new slice. 2. Post the R37 run report to tracking issue #2 and add the R37 section to PR #3 (issue comments use lists, never markdown tables - a table body returns HTTP 500). 3. Then start NEX-042 from the top of docs/NEXUS/BACKLOG.md, holding the lease and claiming the task before writing.",
+  "next_action": "1. Post the R37 run report to tracking issue #2 and add an R37 section to PR #3's body (lists only in the issue comment - a markdown table returns HTTP 500). 2. Start NEX-042 from the top of docs/NEXUS/BACKLOG.md: acquire the lease, claim the task, then implement one vertical slice. CI at 6da559d is already green, so no CI work is outstanding.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD`; the local origin/* ref is stale-prone and is not evidence. 2. Read this file and docs/NEXUS/STATE.md whole; `tail -60` the execution log. 3. NEX-040 was verification-only: no product code changed and none was needed. Do not re-open it looking for a missing commit. 4. NEX-041 fixed a real `git push` defect in 497ab77 (missing remote argument); tests/coordination/test_gitref.py pins the argv shape. 5. CI is green 4/4 at 497ab77. Docs-only 042e2b6 does not need product CI. 6. Proceed to NEX-042 from the backlog.",
   "ci_status": {
     "product_slice_sha": "2d58e22",
-    "product_slice_result": "NOT YET POLLED. This run committed and pushed 2d58e22 but reached the deadline before the checks API could be read. The next run must poll it before claiming CI is green.",
-    "last_known_green_sha": "497ab77",
-    "last_known_green_result": "4/4 completed/success (Backend and Frontend, one pair per push and pull_request event).",
-    "standing_rule": "A docs commit reads completed/cancelled once superseded in the CI concurrency group - neither pass nor fail, and never evidence."
+    "product_slice_result": "VERIFIED GREEN via 6da559d. The 2d58e22 workflow run was superseded in the CI concurrency group by the docs commit that immediately followed it, so 2d58e22 itself has zero check-runs. That is not a gap in coverage: 6da559d's tree is a strict superset of 2d58e22's tree (docs only were added), so the Backend job at 6da559d ran ruff, mypy and pytest against the exact R37 implementation.",
+    "verifying_sha": "6da559d",
+    "verifying_sha_result": "4/4 completed/success - Backend (ruff, mypy, pytest, migrations) x2 and Frontend (typecheck, lint, test, build) x2, one pair per push and pull_request event.",
+    "polled_at": "2026-11-27T08:26Z",
+    "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/6da559d/check-runs",
+    "last_known_green_before_this_run": "497ab77 (4/4 completed/success)",
+    "standing_rule": "A commit whose workflow run is superseded in the concurrency group reads completed/cancelled or has no check-runs at all - neither pass nor fail, and never evidence on its own. Cite the SHA that actually ran."
   },
   "verified_tasks": [
     "NEX-001",
@@ -277,7 +280,7 @@
   "commit_scope": "6e7141e is the last commit carrying IMPLEMENTATION (tools/nexus_coord, tests/coordination, pyproject gate wiring, ADR-013). The docs commit that writes this file follows it and is not implementation.",
   "head_at_checkpoint": "Do not trust this field. Saving this file creates a commit, so any value written here is stale by construction. Read the true head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API.",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local gates green on the exact committed tree (2d58e22): ruff format --check 178 files already formatted, ruff check all passed, mypy no issues in 115 source files, pytest 1027 passed / 4 skipped. CI for 2d58e22 has not been polled yet - it is the next run's first delivery check. Do not record it as green until the checks API says so.",
+  "validation_status": "Local gates green on the exact committed tree (2d58e22): ruff format --check 178 files already formatted, ruff check all passed, mypy no issues in 115 source files, pytest 1027 passed / 4 skipped. CI green at 6da559d, whose tree is a docs-only superset of 2d58e22: 4/4 completed/success.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -295,10 +298,11 @@
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform, re-read after the push",
-    "delivery_debt": "none outstanding for the product commit. The run report for R37 has not yet been posted to issue #2 or PR #3 - the next run should post it (lists only, never tables in issue comments)."
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 6da559def058cc74e0ec50d5f4178250666dbe6e after the push",
+    "ci_verified": true,
+    "delivery_debt": "The R37 run report has NOT yet been posted to tracking issue #2 or PR #3. This run pushed and verified CI but reached the reporting boundary with the window spent on reconciliation, gates and CI polling. Posting the report is the next run's step 1 after it polls nothing new (CI is already known). Issue comments must use lists - a markdown table body returns HTTP 500 on this repository."
   },
-  "run_summary": "NEX-2026-11-27-44. Closed R37. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming, in three ordered rules, and pinned by six tests of which three fail against the old code. This run also rebased the working tree from 042e2b6 onto the remote head f92262a (a docs-only commit) after git ls-remote - not the stale local tracking ref - established the true head, and re-ran every gate on the rebased tree. No new slice beyond R37 was started: the window went to reconciliation and gate re-runs.",
+  "run_summary": "NEX-2026-11-27-44. Closed R37 and verified it end to end. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming, in three ordered rules, pinned by six tests of which three fail against the old code. The run rebased the tree from 042e2b6 onto the true remote head f92262a (read with git ls-remote, not the stale local tracking ref), re-ran every gate, committed 2d58e22 (implementation) and 6da559d (docs), pushed both, and polled CI to 4/4 green at 6da559d. Remaining debt: the R37 report is not yet posted to issue #2 or PR #3.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
