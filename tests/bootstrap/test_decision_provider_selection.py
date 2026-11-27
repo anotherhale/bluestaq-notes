@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import Engine
 
 from notes_service.bootstrap.config import DatabaseProvider, Environment, Settings
 
@@ -75,21 +76,23 @@ def test_the_provider_name_defaults_to_an_identifier() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_no_endpoint_selects_the_offline_stub_even_when_decisioning_is_enabled() -> None:
+def test_no_endpoint_selects_the_offline_stub_even_when_decisioning_is_enabled(
+    engine: Engine,
+) -> None:
     """Enabling judgment without a vendor must not produce outbound traffic."""
     from notes_service.bootstrap.container import build_container
 
     settings = _settings(decisioning_enabled=True, decisioning_http_endpoint=None)
-    container = build_container(settings)
+    container = build_container(settings, engine=engine)
     assert container.evaluate_decision().provider_name == "stub"
 
 
-def test_a_configured_endpoint_selects_the_http_adapter() -> None:
+def test_a_configured_endpoint_selects_the_http_adapter(engine: Engine) -> None:
     from notes_service.bootstrap.container import build_container
 
     settings = _settings(
         decisioning_http_endpoint="https://judge.example.test/v1",
         decisioning_http_provider_name="vendor",
     )
-    container = build_container(settings)
+    container = build_container(settings, engine=engine)
     assert container.evaluate_decision().provider_name == "vendor"

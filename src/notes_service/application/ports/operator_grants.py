@@ -24,6 +24,7 @@ clock to disagree with the request's own.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
@@ -45,6 +46,23 @@ class OperatorGrantRepository(Protocol):
         records — a seed that runs on every boot would otherwise accumulate a
         grant per restart, and an operator count would grow without anyone being
         granted anything new.
+        """
+        ...
+
+    def replace_configured(self, grants: Iterable[OperatorGrant]) -> None:
+        """Replace every grant the deployment configuration issued (NEX-046).
+
+        ``OPS_OPERATOR_USER_IDS`` is a seed path, not an allowlist (NEX-045). With
+        a process-local store, re-seeding on boot was harmless because the store
+        was empty; with a durable one it is not, because a seed stamping
+        ``granted_at`` from the boot clock is a *new* grant on every restart and
+        the operator count would grow by the whole configuration each time.
+
+        So the seed path reconciles rather than appends: grants that came from
+        configuration (``granted_by is None``) are replaced with ``grants``, and
+        grants a human issued are left exactly as they are. Configuration owns
+        what configuration issued, and nothing else — a bounded incident grant
+        must not be erased by a redeploy.
         """
         ...
 

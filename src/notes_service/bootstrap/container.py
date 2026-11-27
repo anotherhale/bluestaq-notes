@@ -25,6 +25,7 @@ from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.decisioning import DecisionProvider
 from notes_service.application.ports.identity import IdentityProvider
 from notes_service.application.ports.operator_access import OperatorAccessLog
+from notes_service.application.ports.operator_grants import OperatorGrantRepository
 from notes_service.application.ports.organization_authorization import (
     OrganizationAuthorizationProvider,
 )
@@ -128,6 +129,9 @@ from notes_service.bootstrap.config import Settings
 from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
+from notes_service.infrastructure.db.operator_grants import (
+    SqlAlchemyOperatorGrantRepository,
+)
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
@@ -139,9 +143,6 @@ from notes_service.infrastructure.identity.session_provider import SessionIdenti
 from notes_service.infrastructure.security.clock import SystemClock
 from notes_service.infrastructure.security.operator_access_log import (
     InMemoryOperatorAccessLog,
-)
-from notes_service.infrastructure.security.operator_grants import (
-    InMemoryOperatorGrantRepository,
 )
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from notes_service.infrastructure.security.withholding_recorder import (
@@ -292,12 +293,12 @@ class Container:
 
 
 def _seed_operator_grants(
-    grants: InMemoryOperatorGrantRepository,
+    grants: OperatorGrantRepository,
     configured: dict[UserId, frozenset[str]],
     *,
     now: datetime,
 ) -> None:
-    """Turn the configured allowlist into stored, unbounded grants (NEX-045).
+    """Turn the configured allowlist into stored, unbounded grants (NEX-045/046).
 
     ``OPS_OPERATOR_USER_IDS`` still describes the deployment's *initial* operator
     set, so nothing an operator already deployed relies on changes. What changes
@@ -309,17 +310,18 @@ def _seed_operator_grants(
     a deployment that wants a grant to lapse should issue it through the store
     rather than encode an expiry in an environment variable. Bounded grants exist
     precisely so they can be given out for an incident and then be gone.
+
+    NEX-046 makes this *reconcile* rather than append. The store is durable now, so
+    a seed that only appended would add the whole configuration again on every
+    restart — the operator count would grow forever while nobody was granted
+    anything new. ``replace_configured`` swaps out the configuration's own grants
+    and leaves human-issued ones alone.
     """
-    for user_id, scopes in configured.items():
-        for scope in sorted(scopes):
-            grants.add(
-                OperatorGrant(
-                    user_id=user_id,
-                    scope=scope,
-                    granted_at=now,
-                    granted_by=None,
-                )
-            )
+    grants.replace_configured(
+        OperatorGrant(user_id=user_id, scope=scope, granted_at=now, granted_by=None)
+        for user_id, scopes in configured.items()
+        for scope in sorted(scopes)
+    )
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -423,13 +425,19 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     )
     withholding_recorder = InMemoryWithholdingRecorder()
     operator_access_log = InMemoryOperatorAccessLog()
-    # Stored grants (NEX-045). The environment variable is now a *seed path* into
-    # this store, not the allowlist itself: seeding at startup produces one
-    # unbounded grant per configured scope, and the gate then consults the store,
-    # so a grant can carry an expiry and an operator can enumerate holders. A
-    # durable adapter would be seeded the same way (or not at all) and the gate
-    # would not change.
-    operator_grants = InMemoryOperatorGrantRepository()
+    # Stored grants (NEX-045), durable since NEX-046. The environment variable is
+    # a *seed path* into this store, not the allowlist itself: seeding at startup
+    # produces one unbounded grant per configured scope, and the gate then
+    # consults the store, so a grant can carry an expiry and an operator can
+    # enumerate holders.
+    #
+    # It is a table rather than a dict because R40 was a real defect, not a
+    # missing nicety: a process-local store forgot every bounded grant on restart
+    # and each worker held its own copy, so a grant issued on one worker was
+    # invisible to the others. It failed closed, so it was never a security hole —
+    # but an operator could not audit a grant they could not see. ``replace_configured``
+    # keeps the seed idempotent now that it survives a restart.
+    operator_grants: OperatorGrantRepository = SqlAlchemyOperatorGrantRepository(session_factory)
     _seed_operator_grants(
         operator_grants,
         settings.operator_scopes,

@@ -673,6 +673,46 @@ class AgentRunStepRow(Base):
     )
 
 
+class OperatorGrantRow(Base):
+    """One operator's permission to read one platform-wide operation (NEX-046).
+
+    Grants used to live in a process, so a restart forgot every bounded grant and
+    each worker held its own copy. This row is the durable form.
+
+    ``id`` is a surrogate key rather than a composite one for two reasons: the
+    port promises ``active_grants`` in *insertion order*, and an autoincrementing
+    integer is the only portable way to recover it; and ``granted_at`` is a
+    business field whose precision must not be load-bearing for identity. The
+    natural key the domain cares about is
+    ``(user_id, scope, granted_at)``, enforced by a unique constraint, so a seed
+    that runs twice cannot accumulate two grants for the same fact.
+
+    ``granted_by`` is nullable and that is meaningful: ``NULL`` marks a grant the
+    deployment configuration issued, which is what lets the seed path reconcile
+    its own grants without touching grants a human issued.
+    """
+
+    __tablename__ = "operator_grants"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    scope: Mapped[str] = mapped_column(String(64), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    not_before: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "scope", "granted_at", name="uq_operator_grants_identity"),
+        CheckConstraint("length(scope) > 0", name="scope_not_empty"),
+        Index("ix_operator_grants_user_scope", "user_id", "scope"),
+    )
+
+
 __all__ = [
     "AgentRow",
     "AgentRunRow",
@@ -686,6 +726,7 @@ __all__ = [
     "NotePermissionRow",
     "NoteRow",
     "NoteStarRow",
+    "OperatorGrantRow",
     "OrganizationMembershipRow",
     "OrganizationRow",
     "OrganizationUnitRow",

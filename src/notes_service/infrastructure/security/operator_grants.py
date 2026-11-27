@@ -20,6 +20,7 @@ would erase the history of when the current window opened.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterable
 from datetime import datetime
 
 from notes_service.domain.identity.operator_grant import OperatorGrant
@@ -46,6 +47,16 @@ class InMemoryOperatorGrantRepository:
         key = (grant.user_id, grant.scope, grant.granted_at)
         with self._lock:
             self._grants[key] = grant
+
+    def replace_configured(self, grants: Iterable[OperatorGrant]) -> None:
+        with self._lock:
+            self._grants = {
+                key: grant for key, grant in self._grants.items() if grant.granted_by is not None
+            }
+            for grant in grants:
+                if grant.granted_by is not None:
+                    raise ValueError("replace_configured only accepts configuration grants")
+                self._grants[(grant.user_id, grant.scope, grant.granted_at)] = grant
 
     def active_for(self, user_id: UserId, *, now: datetime) -> frozenset[str]:
         with self._lock:
