@@ -12,7 +12,7 @@ truth; this file records intent and reconciliation.
 | Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
 | Head commit (measured) | Product head `c01fde5` (NEX-067, CI-verified), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
 | Last CI result | **`c01fde5` (NEX-067 head): 4/4 `completed/success`**, polled 2026-11-27T22:47Z — **NEX-067 VERIFIED**. NEX-068 remains verified at `f63ac1b`. |
-| Tracking issue | #2 (open) — **comment `7228764536`** covers NEX-068; `7228642936` covers NEX-064/NEX-066, the corrected NEX-056 record and the open P1. Issue stays open. |
+| Tracking issue | #2 (open) — **comment `7229097083`** covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated this run**, carries NEX-052…**NEX-067** (42794 chars). Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | **Open P1** | None outstanding from the 21:18Z review — **NEX-067 closed it** (`c01fde5`). Next security work is the NEX-065 `approve` verb (see BACKLOG). |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
