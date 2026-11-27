@@ -29,6 +29,7 @@ from notes_service.application.ports.operator_grants import OperatorGrantReposit
 from notes_service.application.ports.organization_authorization import (
     OrganizationAuthorizationProvider,
 )
+from notes_service.application.ports.policy_versions import PolicyVersionRepository
 from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.ports.withholding import WithholdingRecorder
@@ -123,6 +124,12 @@ from notes_service.application.use_cases.permissions import (
     RevokePermission,
     ShareNote,
 )
+from notes_service.application.use_cases.policy_lifecycle import (
+    DraftPolicy,
+    GetPolicyHistory,
+    PublishDraft,
+    RollbackPolicy,
+)
 from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
@@ -135,6 +142,9 @@ from notes_service.infrastructure.db.operator_grants import (
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
 from notes_service.infrastructure.decisioning.stub import StubDecisionProvider
+from notes_service.infrastructure.governance.policy_versions_db import (
+    SqlAlchemyPolicyVersionRepository,
+)
 from notes_service.infrastructure.identity.demo_provider import DemoIdentityProvider
 from notes_service.infrastructure.identity.oidc_provider import OidcIdentityProvider
 from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRelyingParty
@@ -290,6 +300,12 @@ class Container:
     # the question a static allowlist could not answer: it held strings, not
     # holders.
     list_operator_grants: Callable[[], ListOperatorGrants]
+    # The policy lifecycle (NEX-047/NEX-048). Durable: a published version is
+    # what a past decision was made against, so it must survive a restart.
+    draft_policy: Callable[[], DraftPolicy]
+    publish_draft: Callable[[], PublishDraft]
+    rollback_policy: Callable[[], RollbackPolicy]
+    get_policy_history: Callable[[], GetPolicyHistory]
 
 
 def _seed_operator_grants(
@@ -524,6 +540,23 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             clock=clock,
         )
 
+    # Policy versions are stored, not held in memory: the published version in
+    # force is evidence for decisions already taken, so it must outlive the
+    # process that published it (NEX-048).
+    policy_versions: PolicyVersionRepository = SqlAlchemyPolicyVersionRepository(session_factory)
+
+    def make_draft_policy() -> DraftPolicy:
+        return DraftPolicy(store=policy_versions, clock=clock)
+
+    def make_publish_draft() -> PublishDraft:
+        return PublishDraft(store=policy_versions, clock=clock)
+
+    def make_rollback_policy() -> RollbackPolicy:
+        return RollbackPolicy(store=policy_versions, clock=clock)
+
+    def make_get_policy_history() -> GetPolicyHistory:
+        return GetPolicyHistory(store=policy_versions)
+
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:
             return use_case_type(
@@ -676,4 +709,8 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         sweep_audit_integrity=make_sweep_audit_integrity,
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
+        draft_policy=make_draft_policy,
+        publish_draft=make_publish_draft,
+        rollback_policy=make_rollback_policy,
+        get_policy_history=make_get_policy_history,
     )

@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -713,6 +714,71 @@ class OperatorGrantRow(Base):
     )
 
 
+class PolicyVersionRow(Base):
+    """One governance policy version, durably stored (NEX-048).
+
+    ``InMemoryPolicyVersionRepository`` proved the port but forgot every version on
+    restart, including published ones — so a restart emptied the policy set, and an
+    empty policy set denies everything. That is fail-closed, but it is an
+    operational gap rather than a design choice. This row is the durable form.
+
+    The two lifecycle invariants live in the schema, not only in the use case, so a
+    future caller that bypasses ``PublishDraft`` cannot corrupt history:
+
+    * ``UNIQUE (policy_id, version_number)`` — two authors cannot both claim v4.
+    * a **partial** unique index on ``(policy_id) WHERE status = 'PUBLISHED'`` — at
+      most one version of a policy is ever in force. The use case already retires
+      the predecessor before publishing; this makes the rule true regardless.
+
+    ``rules`` holds the policy AST serialised to JSON. It is re-validated through
+    the domain on read, because a stored policy is untrusted input on the way back
+    in: a row written by older code must not be able to reintroduce a node type the
+    current validator refuses.
+
+    ``id`` is a surrogate key so ``history`` can recover insertion order without
+    relying on ``created_at`` precision, and it is what makes an ``UPDATE ... WHERE
+    id = ?`` unambiguous when two rows share a version number across policy ids.
+    """
+
+    __tablename__ = "policy_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    policy_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    rationale: Mapped[str] = mapped_column(String(400), nullable=False)
+    rules: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    published_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("policy_id", "version_number", name="uq_policy_versions_policy_version"),
+        CheckConstraint(
+            "status IN ('draft','published','retired')", name="policy_versions_status_valid"
+        ),
+        CheckConstraint("version_number >= 1", name="policy_versions_version_positive"),
+        CheckConstraint("length(policy_id) > 0", name="policy_versions_policy_id_not_empty"),
+        # A published row must carry its publication data, and a draft must not.
+        # The domain enforces this on construction; the schema enforces it against
+        # a row that was written by something other than the domain.
+        CheckConstraint(
+            "(status = 'draft' AND published_at IS NULL AND published_by IS NULL)"
+            " OR (status IN ('published','retired')"
+            " AND published_at IS NOT NULL AND published_by IS NOT NULL)",
+            name="policy_versions_publication_data_consistent",
+        ),
+        Index("ix_policy_versions_policy_status", "policy_id", "status"),
+        Index(
+            "uq_policy_versions_one_published",
+            "policy_id",
+            unique=True,
+            sqlite_where=text("status = 'published'"),
+            postgresql_where=text("status = 'published'"),
+        ),
+    )
+
+
 __all__ = [
     "AgentRow",
     "AgentRunRow",
@@ -730,6 +796,7 @@ __all__ = [
     "OrganizationMembershipRow",
     "OrganizationRow",
     "OrganizationUnitRow",
+    "PolicyVersionRow",
     "TeamMembershipRow",
     "TeamRow",
     "ToolInvocationRow",
