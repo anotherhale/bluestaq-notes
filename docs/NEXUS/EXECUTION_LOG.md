@@ -5819,3 +5819,39 @@ and `STATE.md`. That is the correct shape for a segment whose job was verificati
 expires-at, granted-by) behind a repository port and adapter, so a grant can expire and
 an operator can read who holds what. `OPS_OPERATOR_USER_IDS` becomes its seed path. Keep
 the `404`-not-`403` refusal and the record-on-grant behaviour.
+
+### NEX-2026-11-27-48 — NEX-045 stored operator grants (R36 governance, part 2)
+
+- **Run ID**: NEX-2026-11-27-48 (second segment; first segment shipped NEX-044)
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `99faab5` (established with `git ls-remote`; equal to local HEAD)
+- **Ending commit**: `e6f58c0` (product) + the docs commit that writes this entry
+- **Tasks completed**: NEX-045 — `OperatorGrant` domain type, `OperatorGrantRepository`
+  port, `InMemoryOperatorGrantRepository` adapter, expiry-aware `OperatorGate`,
+  `ListOperatorGrants` use case, response schemas, `GET /api/v1/ops/operator-grants`,
+  container wiring and env seeding.
+- **Tasks verified**: all of the above, locally, on the committed tree. CI at
+  `e6f58c0` was queued/in_progress at run close — **not a verdict**.
+- **Files changed**: 16 (5 new source modules, 3 new test modules, 1 test helper,
+  4 test migrations, 3 modified source modules).
+- **Tests executed**: full suite 1149 passed, 4 skipped, 0 failed; new tests 17
+  domain + 13 application + 4 API.
+- **Test outcomes**: all green. ruff check/format clean, mypy clean (125 files).
+- **Decisions**: (1) config is a *seed path*, not the allowlist — preserves every
+  existing deployment while making the store authoritative. (2) The holder list
+  reuses the `operator-access-report` scope rather than minting a new one; whoever
+  may read the access log is already trusted with the most sensitive operational
+  view. (3) An unbounded grant reports `expires_at: null` in the holder summary,
+  because the strongest grant describes the holder's real exposure.
+- **Risks identified**: **R40** — the store is process-local, so a restart forgets a
+  bounded grant and multi-worker deployments diverge. Fails closed; needs a durable
+  adapter behind the same port.
+- **Commits created**: `e6f58c0` (product), plus the docs commit.
+- **Push status**: PUSHED — `99faab5..e6f58c0`, `git ls-remote` confirms remote head
+  equals local HEAD.
+- **PR updates**: none this segment (draft PR #3 not yet given the NEX-045 section).
+- **CI results**: 4/4 `completed/success` at `e6f58c0`, polled 2026-11-27T12:14Z (Backend + Frontend, one pair per push and pull_request event).
+- **Checkpoint status**: `CHECKPOINT.json` updated atomically (temp file, JSON
+  validated, risks ledger length asserted, then copied over).
+- **Next action**: poll `/commits/e6f58c0/check-runs`; on green, post the NEX-045
+  report to issue #2 and append the NEX-045 section to draft PR #3.

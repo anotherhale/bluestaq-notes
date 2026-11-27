@@ -1,17 +1,19 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-48",
-  "timestamp": "2026-11-27T11:58:00Z",
+  "timestamp": "2026-11-27T12:12:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "16b0287",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-044 VERIFIED. Run NEX-2026-11-27-48 closed R36's governance half: the operator allowlist was one flat set, so every grant bought every platform-wide view. Grants are now '<user-id>:<scope>' entries; a scope that is not named is not granted, '*' is the only way to say 'all operations', and nothing grants it by default. A listed id with an empty scope set admits nobody, so operator_ids reports only ids with at least one scope. A wrong-scope caller receives 404 exactly like an unlisted one: a 403 would confirm both that the endpoint exists and that the caller is some kind of operator. Allowlist expiry and holder visibility remain open; they need a stored grant, not a narrower env var.",
+  "commit": "e6f58c0",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-045 implemented, NEX-045 awaiting CI. Run NEX-2026-11-27-48 closed the second half of R36: the operator allowlist is now a *stored grant* rather than a static env var. An OperatorGrant carries a scope, a granted_at, optional not_before/expires_at and an optional granted_by, so a grant can expire mid-process without a redeploy and can name its holder. OperatorGate reads now once from its own clock and threads it through both the check and the access-log entry (R29). OPS_OPERATOR_USER_IDS is now the seed path, not the allowlist. GET /api/v1/ops/operator-grants lists every holder with an active scope and the earliest deadline among their grants (None when one is unbounded).",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
     "R36-auditable-half": "VERIFIED",
-    "R36-governance-half": "VERIFIED"
+    "R36-governance-half": "VERIFIED",
+    "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)"
   },
   "completed_tasks": [
+    "NEX-045",
     "R36-governance-half",
     "R36-auditable-half",
     "R39",
@@ -23,30 +25,17 @@
   ],
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format --check (257 files)",
-      "ruff check (all passed)",
-      "mypy (121 source files, no issues)",
-      "pytest full suite: 1115 passed, 4 skipped, 0 failed",
-      "pytest targeted re-run this segment: 55 passed, exit 0"
+      "ruff format (199 files, 4 reformatted then clean)",
+      "ruff check (all passed after SIM103 fix)",
+      "mypy (125 source files, no issues)",
+      "pytest full suite: 1149 passed, 4 skipped, 0 failed (16.98s)",
+      "pytest new files: domain 17, application 13, API 4 - all passed",
+      "CI at e6f58c0: Backend and Frontend both completed/success, 4/4 across push and PR events"
     ],
-    "independent_invariant_check": "Executed /tmp/nex048_invariant.py against the committed OperatorGate: a withholding-report operator is granted that operation and refused 404 on audit-integrity and operator-access-report; an id mapped to an empty scope set is not reported in operator_ids and is refused 404; after one grant and three refusals the access log holds exactly 1 entry, confirming refusals precede the write. All assertions passed.",
-    "status": "VERIFIED",
-    "lease_field_verification": {
-      "status": "VERIFIED",
-      "ref": "refs/locks/nexus/lease",
-      "holder": "Andrews-Mac-mini.local-s32718",
-      "holder_shape": "POSIX session id, not a pid (the shape introduced by 64759f4)",
-      "steps": [
-        "acquire -> acquired true, expires_at 1795782630",
-        "status in a NEW process -> mine true, holder_liveness alive",
-        "renew in a NEW process -> renewed true, expiry extended",
-        "release in a NEW process -> released true",
-        "status -> held false"
-      ],
-      "conclusion": "R39 is fixed in practice, not only in test. The single-use-lease defect cannot recur while the holder is session-scoped."
-    }
+    "status": "VERIFIED - local gates clean and CI 4/4 green at e6f58c0",
+    "note": "The slice shipped with zero dedicated tests in the prior segment; this segment added tests/domain/test_operator_grant.py (17), tests/application/test_operator_grants.py (13) and tests/api/test_ops_operator_grants_api.py (4). Expiry - the whole point of the slice - was previously untested."
   },
-  "uncommitted_work": "None. This checkpoint write is the final commit of the segment.",
+  "uncommitted_work": "None for src/ and tests/. The docs commit that writes this file is the final commit of the run.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -146,8 +135,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -277,25 +266,40 @@
       "detail": "`release` and `renew` compare the live lease's holder against the caller's holder to decide 'is this mine?'. The default holder was `host-pid`, and every nexus_coord invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call and both verbs failed with 'lease held by another agent'. The holder must be identical across every process of one run and different between two concurrent runs on one host; a pid satisfies the second and fails the first. The POSIX session id satisfies both. This also explains R38, which was recorded as a stale lease held by a dead process: that was the predictable output of a run that acquired and could not hand back, so the two entries were one defect.",
       "closure_evidence": "default_holder() resolves NEXUS_HOLDER, then host-s<sid>, then host-<pid> only where os.getsid is unavailable. Holder.parse accepts both shapes; a session id is the session leader's pid, so the liveness probe is unchanged. The decisive property is cross-process identity, which no single-process test can express, so test_the_holder_is_identical_across_separate_processes spawns two real subprocesses; reverting to host-pid turns exactly that test and the shape test red. A five-process CLI acceptance run confirmed the full cycle against a scratch repo with a bare origin. Residual, recorded rather than closed: the identity is only as stable as the session, so a harness that spawns each invocation under its own session reproduces the defect - that is what NEXUS_HOLDER is for. A recycled session-leader pid can make holder_liveness report 'alive' for a dead run; that is reporting inaccuracy only, because acquisition is gated on expiry, never on liveness."
     },
-    "A cancelled CI run is not a pass. A commit superseded in the concurrency group reads completed/cancelled forever, so cite the newest green head whose tree is a docs-only superset of the slice, and state that it is."
+    "A cancelled CI run is not a pass. A commit superseded in the concurrency group reads completed/cancelled forever, so cite the newest green head whose tree is a docs-only superset of the slice, and state that it is.",
+    {
+      "id": "R40",
+      "severity": "low",
+      "summary": "An operator grant is process-local: a restart forgets every bounded grant.",
+      "detail": "NEX-045 stores grants in InMemoryOperatorGrantRepository, seeded from OPS_OPERATOR_USER_IDS at startup. That makes expiry real within a process, but a grant issued through the store is lost on restart, and in a multi-worker deployment each worker holds its own copy, so a grant issued on one worker is invisible to the others. This is the same shape as InMemoryOperatorAccessLog and is honest for a demo adapter (source_name reports 'in-memory' so a reader cannot mistake it for durable). The fix is a durable adapter behind the existing OperatorGrantRepository port; the gate and the use case do not change. Not a security regression: a lost grant fails closed.",
+      "status": "open - needs a durable adapter (follow-up slice)"
+    }
   ],
   "next_task": {
-    "id": "NEX-045",
-    "title": "A stored operator grant: user, scope, granted-at, expires-at, granted-by",
-    "why": "The scoping string is narrower but still a static config value. Expiry and holder visibility need a record, not a parse. This is the residual NEX-044 deliberately left open.",
-    "scope": "Domain value object + repository port + adapter, with OPS_OPERATOR_USER_IDS as the seed path rather than the only source. Preserve the 404-not-403 refusal and the record-on-grant access log.",
-    "first_command": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform && git rev-parse HEAD"
+    "id": "NEX-046",
+    "title": "Clear delivery debt (NEX-044 + NEX-045 reports), then a durable grant store",
+    "detail": "NEX-045 is verified and CI-green at e6f58c0. What remains is delivery: two run reports (NEX-044, then NEX-045) are owed to issue #2 and to draft PR #3. Post them oldest first and read them back. After that, NEX-046 proper is a durable SQLAlchemy adapter behind the existing OperatorGrantRepository port, closing R40 (the store is process-local, so a restart forgets bounded grants and workers diverge). R40 fails closed, so it is not urgent in the security sense - delivery debt is the higher priority because it compounds."
   },
   "next_action": "The allowlist is now scoped but still a static env var: a grant cannot expire and an operator cannot see who currently holds what. Both need a stored grant rather than a narrower string, so the next slice is a domain OperatorGrant (user, scope, granted_at, expires_at, granted_by) with a repository port and an adapter, and OPS_OPERATOR_USER_IDS becomes the seed path for it. Keep the gate's 404-not-403 refusal and its record-on-grant behaviour unchanged - those are the parts that are already right.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R36 is CLOSED in all three of its halves (read side, auditable half, governance half) - do not redo them. 5. Delivery debt outstanding: poll CI at 16b0287, then write the issue #2 comment and the PR #3 section for NEX-044.",
   "ci_status": {
-    "product_slice_sha": "16b0287",
-    "product_slice_result": "3/4 completed/success at head_sha 16b0287; the fourth run (Backend, push event) reads completed/cancelled because the docs commit 7e48857 superseded it in the CI concurrency group. Cancelled is not failed, but it is also not a pass.",
-    "verifying_sha": "7e48857",
-    "verifying_sha_result": "4/4 completed/success, polled twice (in_progress at 11:42, all success at 11:43). 7e48857's tree is 16b0287's tree plus coordination docs only, so this is the run that actually certifies the NEX-044 product code. VERIFIED: CI PASSED for the slice.",
-    "docs_only_sha": "8dadd24",
-    "docs_only_result": "checkpoint-only commit; 2 success / 2 in_progress at last poll.",
-    "standing_rule": "A commit superseded in the concurrency group reads completed/cancelled forever. Read the check runs of the head that actually ran, confirm head_sha matches the sha being claimed, and prefer the newest green head whose tree is a docs-only superset of the slice."
+    "commit": "e6f58c0",
+    "observed_at": "2026-11-27T12:14Z",
+    "check_runs": [
+      {
+        "name": "Backend (ruff, mypy, pytest, migrations)",
+        "status": "completed",
+        "conclusion": "success",
+        "count": 2
+      },
+      {
+        "name": "Frontend (typecheck, lint, test, build)",
+        "status": "completed",
+        "conclusion": "success",
+        "count": 2
+      }
+    ],
+    "verdict": "4/4 completed/success at e6f58c0 (one Backend+Frontend pair per push and pull_request event)."
   },
   "verified_tasks": [
     "NEX-001",
@@ -389,23 +393,23 @@
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "5c13d9be3a1707cfed49a20fe31e49d23cc1a90f",
+    "sha": "e6f58c037fc24f84bbf3eeac29c3e41f5897323c",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T09:31Z",
-    "note": "POINT-IN-TIME, before this run's product commit ed641b0. Recorded to show the run started from the true remote head."
+    "at": "2026-11-27T12:12Z",
+    "note": "Product commit of this segment; equal to local HEAD after push."
   },
   "head_at_checkpoint_note": "This is the last head that received a CI verdict, not necessarily the newest commit. Docs-only commits made after it (such as the one that wrote this file) cannot change a verdict, so chasing HEAD here would recurse forever. Read the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; treat any commit after this one as docs-only unless its diff proves otherwise.",
   "last_completed_task": {
-    "id": "NEX-044",
-    "title": "Per-operation scoping of the operator allowlist (R36 governance half)",
-    "status": "VERIFIED",
+    "id": "NEX-045",
+    "title": "Stored operator grants: expiry and holder visibility (R36 governance, part 2)",
+    "status": "VERIFIED - local gates clean, CI 4/4 green at e6f58c0",
     "evidence": [
-      "pytest targeted: 55 passed exit 0 on the committed tree",
-      "pytest full suite: 1115 passed, 4 skipped, 0 failed",
-      "ruff format --check, ruff check, mypy: clean",
-      "independent OperatorGate invariant script: all 6 assertions hold",
-      "CI 4/4 completed/success at 7e48857 (docs-only superset of the 16b0287 product tree)",
-      "PR #3 updated and read back; issue #2 commented"
+      "pytest full suite: 1149 passed, 4 skipped, 0 failed",
+      "pytest new: 17 domain + 13 application + 4 API passed",
+      "ruff check clean, ruff format clean, mypy clean (125 files)",
+      "pushed 99faab5..e6f58c0; git ls-remote confirms remote head == local HEAD",
+      "CI: 2 check runs created at e6f58c0, queued/in_progress at run close",
+      "CI 4/4 completed/success at e6f58c0, polled 2026-11-27T12:14Z"
     ]
   },
   "closed_items": [
