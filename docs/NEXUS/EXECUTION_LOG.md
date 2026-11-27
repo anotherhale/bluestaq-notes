@@ -5035,3 +5035,88 @@ building on it.
 
 Secondary: post NEX-039 and NEX-041 to PR #3 and issue #2 to clear the delivery
 debt.
+
+---
+
+## Run `NEX-2026-11-25-42` — NEX-040 VERIFIED (verification only, no code change)
+
+- **Run ID:** `NEX-2026-11-25-42`
+- **Timestamp:** 2026-11-27T00:41Z start (wall clock), run window 1500 s
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `497ab77` (local HEAD == remote `refs/heads/feature/agentic-enterprise-platform`
+  == `refs/pull/3/head`, verified with `git ls-remote` and the GitHub commits API)
+- **Ending commit:** this docs commit (recorded in `CHECKPOINT.json`)
+- **Tasks completed:** NEX-040 — **VERIFIED**
+- **Tasks started:** none (verification-only run)
+- **Files changed:** `docs/NEXUS/BACKLOG.md`, `docs/NEXUS/STATE.md`,
+  `docs/NEXUS/EXECUTION_LOG.md`, `docs/NEXUS/CHECKPOINT.json`
+- **Migrations:** none
+- **Tests executed:** `tests/bootstrap/test_decision_provider_selection.py` (13 tests);
+  negative control on `container.py`; full-suite count from the prior run re-confirmed green in CI
+- **Test outcomes:** 13 passed. Negative control: `1 failed, 12 passed` when the endpoint guard was
+  neutralised, then restored → 13 passed, tree clean
+- **Security findings:** none new. The finding is a *confirmation*: the shipped configuration is
+  fail-closed with respect to third-party judgment
+- **CI status:** `497ab77` — **4/4 `completed/success`** (Backend + Frontend, one pair per push and
+  pull_request event). Polled this run.
+- **Commits:** this docs commit only
+- **Push status:** pushed and verified by `git ls-remote`
+- **PR status:** #3 open, draft, unmerged — human review required
+- **Tracking issue status:** #2 open; not updated this run (delivery debt persists)
+- **Checkpoint status:** updated
+- **Next prioritized task:** NEX-042
+- **Recommended next action:** clear the delivery debt (post NEX-039/040/041 to PR #3 and issue #2),
+  then start NEX-042
+
+### What NEX-040 asked, and what the evidence showed
+
+The question was whether any production route actually reaches a configured live vendor, and
+whether "nothing configures one by default" is true in the code rather than merely believed.
+The previous run's `next_action` asked for exactly this check because several earlier
+`next_action` fields had been wrong.
+
+Answer: **no default or production configuration in this repository can reach a vendor.** Four
+independent lines of evidence are recorded in `docs/NEXUS/BACKLOG.md` under the NEX-040
+section. In short: no `DECISIONING_*` variable appears in any deploy artifact; the measured
+defaults are `enabled=False`, `endpoint=None`, `min_confidence=0.5`; a `None` endpoint selects
+`StubDecisionProvider` even when the flag is on; the stub's `0.1` confidence falls below the
+`0.5` threshold so every answer abstains anyway; and the single production route into
+`EvaluateDecision` short-circuits to `AbstentionReason.DISABLED` before touching the provider.
+
+The claim was already pinned by 13 existing tests. Rather than assert that on inspection, this
+run ran a **negative control**: replacing `if settings.decisioning_http_endpoint is None:` with
+`if True:` in `Container._build_decision_provider` turned
+`test_a_configured_endpoint_selects_the_http_adapter` RED (`1 failed, 12 passed`). The file was
+restored from `/tmp/container.bak`, the guard re-grepped (1 match), the suite returned to
+`13 passed`, and `git status --porcelain` was empty. The pin is real, not vacuous.
+
+**No code change was made, deliberately.** The claim under test was already true and already
+tested; a redundant assertion would have been noise. The output of a verification task is
+sometimes a documented finding, and this run reports it as one rather than manufacturing a diff
+to look productive.
+
+### What this run does not establish
+
+- That `HttpDecisionProvider` behaves correctly when an operator *does* configure an endpoint.
+  That is NEX-039/R37 territory and was not re-examined here.
+- That a future default cannot change. The evidence is a property of commit `497ab77`, not of
+  the design. The tests are what keep it true.
+
+### Reconciliation note (an error this run made and corrected)
+
+The first `git status -sb` of this run reported `## main...origin/main` at `d6f92d0`, and the
+first `git ls-remote` appeared to show the feature branch ahead of local HEAD. That reading was
+wrong: it was a transient state of the freshly created clone. Re-checking established
+`git rev-parse --abbrev-ref HEAD` = `feature/agentic-enterprise-platform`, local HEAD = `497ab77`,
+`497ab77^` = `1e1020f`, and `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+= `497ab77`. The briefing was accurate; the first observation was not. Recorded because the
+lesson is that a single `git status` at clone time is not yet evidence, and the run nearly
+reported a phantom "unpushed work" discrepancy.
+
+### Next action
+
+**NEX-042** — the next decisioning slice, to be chosen at the start of the next run from the
+BACKLOG. Before starting it, clear the outstanding delivery debt: PR #3 body and issue #2 do not
+yet mention NEX-039, NEX-040 or NEX-041. Issue comments on this repository must use lists, never
+markdown tables (a table body returns HTTP 500).
+

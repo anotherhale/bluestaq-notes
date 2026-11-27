@@ -2186,18 +2186,69 @@ docstring so a future reader is not misled by the constant.
 
 ### Next
 
-**NEX-040:** verify whether any production route actually reaches a configured live vendor.
-The adapter exists and the container selects one, but "nothing configures one by default" is
-a claim to check in the code before building on it — the last several `next_action` fields
-each needed correcting.
+NEX-040 is now answered — see below. The next decisioning slice is NEX-042.
+
+## NEX-040 (run `NEX-2026-11-25-42`) — VERIFIED: no default path reaches a live vendor
+
+**Question.** The `DecisionProvider` port has two adapters and the container selects one.
+Does anything, in a default or production configuration, actually route a request to a real
+vendor? The previous run's `next_action` asked for this to be checked in the code rather than
+assumed, because several earlier `next_action` fields were wrong.
+
+**Answer: no.** Four independent lines of evidence, all read from this tree.
+
+1. **Nothing configures an endpoint.** `grep -rn DECISIONING` over every deploy artifact —
+   `docker-compose*.yml`, `Dockerfile`, `docker/`, `.env.example`, `.env.docker.example`,
+   `*.toml`, `*.sh` — returns zero matches. The variables are documented only in
+   `bootstrap/config.py`. There is no `.env` in the tree.
+
+2. **The defaults are inert, measured not assumed.** Constructing `Settings()` with no
+   environment yields `decisioning_enabled=False`, `decisioning_http_endpoint=None`,
+   `decisioning_min_confidence=0.5`.
+
+3. **No endpoint selects the stub, even if the flag were flipped on.**
+   `Container._build_decision_provider` returns `StubDecisionProvider()` when the endpoint is
+   `None`. The stub answers a choice question with the lexicographically first candidate and a
+   score question with `0.5`, both at confidence `0.1`. `0.1 < 0.5`, so the default threshold
+   downgrades every stub answer to an abstention. Two independent gates, either sufficient.
+
+4. **One production route reaches the judgment path at all.** `GET
+   /api/v1/agents/approvals/{id}/advisory` is the only route into `EvaluateDecision`; the
+   route's own docstring says so. `EvaluateDecision.evaluate` short-circuits to
+   `AbstentionReason.DISABLED` before touching the provider when `enabled` is false. So with
+   the shipped configuration the advisory route returns an abstention and never opens a socket.
+
+**This is already pinned by tests, and the pin is not vacuous.**
+`tests/bootstrap/test_decision_provider_selection.py` (13 tests) asserts the `None` default,
+the blank-endpoint handling, the https-only validation, stub selection with no endpoint even
+when `enabled=True`, and `provider_name == "vendor"` when an endpoint is set. Negative control
+run this session: replacing `if settings.decisioning_http_endpoint is None:` with `if True:`
+in the container turned `test_a_configured_endpoint_selects_the_http_adapter` RED
+(`1 failed, 12 passed`). `container.py` restored from `/tmp/container.bak`, guard re-grepped
+(1 match), suite back to `13 passed`, `git status --porcelain` empty.
+
+**What this does and does not establish.** It establishes that the shipped platform is
+fail-closed with respect to third-party judgment: no configuration in this repository can
+cause a vendor request, and the code path that would send one requires an operator to set an
+endpoint explicitly. It does **not** establish that the `HttpDecisionProvider` is correct when
+an operator does configure one — its transport, response-bound and timeout behaviour are
+NEX-039's subject (R37) and were not re-examined here. It also does not establish that a
+future default cannot change: the evidence is a property of this commit, not of the design.
+The tests are what keep it true; they are the reason this section can say "verified" instead
+of "appears to be".
+
+**No code change was warranted.** The claim under test was already true and already tested.
+Adding a redundant assertion would have been noise; the honest outcome of a verification task
+is sometimes a documented finding rather than a diff.
 
 ## NEX-041 (run `NEX-2026-11-25-41`) — the coordination substrate had no compare-and-swap
 
 ### Why this slice, ahead of NEX-040
 
-NEX-040 is the next decisioning slice and remains unstarted; nothing here changes it. This
-slice was taken first because it is a **hazard to every run**, including the one that would
-implement NEX-040.
+NEX-040 was the next decisioning slice and was unstarted when this work began; nothing here
+changed it. It was subsequently verified in run `NEX-2026-11-25-42` with no code change (see
+the section above). This slice was taken first because it is a **hazard to every run**,
+including the one that would implement NEX-040.
 
 NEXUS coordinates through plain files on one git branch. A git branch is last-writer-wins at
 file level. Two runs that both read `CHECKPOINT.json`, both edit it, and both push produce a

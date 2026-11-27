@@ -1,25 +1,24 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-41",
-  "timestamp": "2026-11-25T20:12Z",
+  "run_id": "NEX-2026-11-25-42",
+  "timestamp": "2026-11-27T00:55Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "6e7141e",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-039 VERIFIED. NEX-041 adds the missing coordination substrate: NEXUS coordinates through plain files on one git branch, which has no compare-and-swap, so two overlapping runs both read CHECKPOINT.json, both edit it, and one state update is silently lost with no error raised. tools/nexus_coord now supplies the atomic primitive using git refs (refs/locks/nexus/lease for a bounded single-writer lease, refs/claims/nexus/<task> for per-task claims), with every mutation enforced server-side by push rejection or --force-with-lease. NEX-040 (live vendor reachability) remains the next decisioning slice and is untouched by this work.",
+  "commit": "497ab77",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-041 VERIFIED. NEX-040 is VERIFIED as a verification-only slice with NO code change: no default or production configuration in this repository can reach a live decision vendor. Evidence: zero DECISIONING_* variables in any deploy artifact; measured defaults enabled=False, decisioning_http_endpoint=None, decisioning_min_confidence=0.5; a None endpoint selects StubDecisionProvider even when the flag is on; the stub answers at confidence 0.1, below the 0.5 threshold, so every answer is downgraded to an abstention; and the only production route into EvaluateDecision (GET /api/v1/agents/approvals/{id}/advisory) short-circuits to AbstentionReason.DISABLED before touching the provider. Already pinned by 13 tests in tests/bootstrap/test_decision_provider_selection.py, and the pin was proven non-vacuous this run by a mutation that turned one test RED.",
   "active_task": null,
   "task_statuses": {
-    "NEX-041": "VERIFIED",
-    "NEX-040": "PLANNED"
+    "NEX-040": "VERIFIED",
+    "NEX-041": "VERIFIED"
   },
   "completed_tasks": [
-    "NEX-041"
+    "NEX-041",
+    "NEX-040"
   ],
   "validation": {
-    "pytest_full": "1016 passed, 4 skipped, 0 failed. Baseline MEASURED this run, not inferred: 984 with tests/coordination ignored, plus exactly 32 collected from that directory = 1016. The 4 skips are the postgres-only tests, unchanged.",
-    "ruff_format": "clean (240 files already formatted)",
-    "ruff_check": "All checks passed",
-    "mypy": "Success: no issues found in 115 source files (was 109; tools/nexus_coord added to the packages list)",
-    "negative_control": "Replacing the live-lease guard in LeaseManager.acquire() with `if False:` turns test_second_agent_is_refused_while_the_first_holds_it RED (1 failed, 31 passed). lease.py restored from /tmp/lease.bak, guard re-grepped (1 match), then pytest 32 passed, ruff check clean, mypy 115 files clean. The tests detect a broken CAS.",
-    "gate_discipline_note": "All gates were run AFTER the last source edit and against the committed tree 6e7141e. The only edit after the first full-suite run was restoring lease.py from backup, after which the coordination tests, ruff and mypy were re-run."
+    "pytest_full": "Full suite green at 497ab77 as reported by CI (the Backend job runs pytest). This run ran the targeted file only; the CI result at 497ab77 is the authority for the full suite and is recorded in ci_status.",
+    "targeted": "tests/bootstrap/test_decision_provider_selection.py: 13 passed, 1 warning.",
+    "negative_control": "Replacing `if settings.decisioning_http_endpoint is None:` with `if True:` in Container._build_decision_provider turned test_a_configured_endpoint_selects_the_http_adapter RED (1 failed, 12 passed). container.py restored from /tmp/container.bak, guard re-grepped (1 match), suite back to 13 passed, git status --porcelain empty. The provider-selection pin detects a broken selector.",
+    "no_code_change": "This run changed documentation only. No product code was modified; the claim under test was already true and already tested."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -98,8 +97,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -209,16 +208,14 @@
       "opened_by": "NEX-039"
     }
   ],
-  "next_task": "NEX-040",
-  "next_action": "NEX-040: verify whether any production route actually reaches a configured live vendor. The adapter exists and the container selects one, but 'nothing configures one by default' is a claim to check in code before building on it. Start by grepping the container/settings wiring for the DecisionProvider selection and confirming the default is the stub.",
-  "recovery_instructions": "1. Read this file, then STATE.md. 2. Verify reality: git status -sb; git ls-remote origin refs/heads/feature/agentic-enterprise-platform (never the local origin/* ref). 3. If the remote head is ahead of local, fast-forward; do not reset or clean. 4. Re-run the gates before trusting any claim here: .venv/bin/python -m pytest, .venv/bin/ruff check, .venv/bin/mypy. 5. Resume at next_action (NEX-040). 6. Outstanding delivery debt: PR #3 body and issue #2 do not yet mention NEX-041.",
+  "next_task": "NEX-042",
+  "next_action": "NEX-042: choose the next decisioning slice from docs/NEXUS/BACKLOG.md. Before starting it, clear the outstanding delivery debt: PR #3 body and tracking issue #2 do not yet mention NEX-039, NEX-040 or NEX-041. Issue comments on this repository must use lists, never markdown tables (a table body returns HTTP 500 on POST /issues/{n}/comments).",
+  "recovery_instructions": "1. Read this file, then STATE.md. 2. Verify reality: git status -sb; git ls-remote origin refs/heads/feature/agentic-enterprise-platform (never the local origin/* ref). 3. If the remote head is ahead of local, fast-forward; do not reset or clean. 4. Re-run the gates before trusting any claim here: .venv/bin/python -m pytest, .venv/bin/ruff check, .venv/bin/mypy. 5. Resume at next_action (NEX-042), after clearing delivery debt. NOTE: a freshly created clone can briefly report the wrong branch in git status; confirm with git rev-parse --abbrev-ref HEAD before concluding anything.",
   "ci_status": {
-    "product_slice_sha": "6e7141e",
-    "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 6e7141e, every check run reporting head_sha 6e7141e (Backend and Frontend, one pair per push and pull_request event), polled 2026-11-25T20:0xZ. This is a plain 'green at this SHA' claim: the polled SHA is the head that CI built.",
-    "polled_at": "2026-11-25T20:05Z",
-    "docs_commit_sha": "736298b",
-    "docs_commit_result": "VERIFIED GREEN - 4/4 completed/success at 736298b (Backend and Frontend, one pair per push and pull_request event), every check run reporting head_sha 736298b, polled 2026-11-25T20:32Z. Docs-only change; the product slice it records is 6e7141e.",
-    "unobserved": "The commit that writes this line is itself a docs-only change and its CI has not been observed at write time. Do not read its absence as a failure. Product code last changed in 6e7141e, green at 4/4."
+    "product_slice_sha": "497ab77",
+    "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 497ab77 (Backend and Frontend, one pair per push and pull_request event). Polled this run via the GitHub check-runs API for commit 497ab77; all four check runs reported conclusion=success, status=completed.",
+    "polled_at": "2026-11-27T00:44Z",
+    "unobserved": "The docs-only commit that writes this line has not been observed in CI at write time. Do not read its absence as a failure. Product code last changed in 497ab77, green at 4/4."
   },
   "verified_tasks": [
     "NEX-001",
@@ -261,7 +258,9 @@
     "NEX-035",
     "NEX-036",
     "NEX-037",
-    "NEX-039"
+    "NEX-039",
+    "NEX-041",
+    "NEX-040"
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
@@ -281,18 +280,15 @@
   },
   "branch_head_observed_at": "2026-11-25T19:03Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-  "commits_this_run": [
-    "6e7141e"
-  ],
+  "commits_this_run": [],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 6e7141ee66f15ac26a182d465a52f9facf8ee945, identical to local HEAD. Verified with ls-remote, not the local origin/* tracking ref.",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 497ab7750110385b7733e013c6aa9b5b83109394 at run start, identical to local HEAD; refs/pull/3/head was the same SHA. Verified with ls-remote and the GitHub commits API, not the local origin/* tracking ref.",
     "pr_updated": false,
     "tracking_issue_updated": false,
-    "note": "PR #3 body and tracking issue #2 do not yet carry NEX-041; recorded as delivery debt.",
-    "head_pushed": "736298b (docs commit, verified via ls-remote)"
+    "note": "PR #3 body and tracking issue #2 do not yet carry NEX-039, NEX-040 or NEX-041; delivery debt."
   },
-  "run_summary": "NEX-2026-11-25-41. Reconciled a shallow local f4388fc against remote 49814cc (three NEX-039 commits never seen locally) and fast-forwarded with uncommitted tools/ work preserved. Delivered NEX-041: tools/nexus_coord with a git-ref lease and per-task claims, 32 tests, ADR-013. Caught a gate-wiring defect before shipping: the tests were at tools/tests, which testpaths=[\"tests\"] would never have collected, so CI would have run zero of them while reporting green. Relocated to tests/coordination and extended ruff/mypy scope to tools/. Committed 6e7141e, pushed, CI 4/4 green.",
+  "run_summary": "NEX-2026-11-25-42. Verification-only run. Answered NEX-040: no default or production configuration in this repository can reach a live decision vendor, established from four independent lines of evidence read from the tree (no DECISIONING_* in any deploy artifact; measured inert defaults; None endpoint -> stub even when enabled; single production route short-circuits to DISABLED before the provider). Confirmed the 13-test pin in tests/bootstrap/test_decision_provider_selection.py is non-vacuous via a negative control that turned one test RED, then restored the file and verified the tree clean. Also re-verified CI: 497ab77 is 4/4 completed/success. Deliberately made no code change - the claim was already true and already tested. Reconciliation note: this run's first git status misread the branch as main at d6f92d0 (transient clone state); corrected by re-checking, and recorded in the execution log.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
@@ -303,9 +299,9 @@
   "run_id_collision": "NEX-2026-11-25-35 was ALREADY used by at least four earlier entries in docs/NEXUS/EXECUTION_LOG.md (grep -c 'NEX-2026-11-25-35' returned 7). This run therefore uses NEX-2026-11-25-36. Run ids have been reused for at least 4 consecutive runs (-28..-35 all show 3-7 occurrences), so the id is NOT a unique key and must not be used to address a run. Address runs by commit SHA. The collision is recorded rather than silently renumbered so the log stays honest about what it already contains.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "736298b3c3575dc0dd8459e544a33e08aeb1ede9",
+    "sha": "497ab7750110385b7733e013c6aa9b5b83109394",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-25T20:31Z",
-    "note": "Equals local HEAD at the time of reading. The docs commit that writes this file advances the head past this value; re-read with ls-remote."
+    "at": "2026-11-27T00:44Z",
+    "note": "Equals local HEAD and refs/pull/3/head at the time of reading. The docs commit that writes this file advances the head past this value; re-read with ls-remote."
   }
 }
