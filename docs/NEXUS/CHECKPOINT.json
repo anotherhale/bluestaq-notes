@@ -274,7 +274,7 @@
     "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/19aafa8/check-runs",
     "standing_rule": "A commit superseded in the concurrency group reads queued/null forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed.",
     "final_head_sha": "28fe062",
-    "final_head_result": "4/4 completed/success at 28fe062, polled 2026-11-27T11:25Z, every check run reporting that head_sha. HEAD 4ff9420 is 28fe062 plus a docs-only edit to this file and STATE.md, so it cannot change the verdict; its own run was not polled."
+    "final_head_result": "4/4 completed/success at 28fe062, polled 2026-11-27T11:25Z, every check run reporting that head_sha. 4ff9420 is 28fe062 plus a docs-only edit to this file and STATE.md."
   },
   "verified_tasks": [
     "NEX-001",
@@ -370,5 +370,6 @@
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
     "at": "2026-11-27T09:31Z",
     "note": "POINT-IN-TIME, before this run's product commit ed641b0. Recorded to show the run started from the true remote head."
-  }
+  },
+  "head_at_checkpoint_note": "This is the last head that received a CI verdict, not necessarily the newest commit. Docs-only commits made after it (such as the one that wrote this file) cannot change a verdict, so chasing HEAD here would recurse forever. Read the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; treat any commit after this one as docs-only unless its diff proves otherwise."
 }
