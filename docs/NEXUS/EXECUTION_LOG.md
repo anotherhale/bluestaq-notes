@@ -5182,3 +5182,72 @@ Start **NEX-042**. First command of the run, before planning anything:
 `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare it to
 `git rev-parse HEAD`. The local `origin/*` ref is stale-prone and is not evidence — this has
 already caused one run to rebuild delivered work.
+
+---
+
+## Run `NEX-2026-11-27-44` — R37 closed: the response cap now bounds memory, not just parsing
+
+- **Run ID:** `NEX-2026-11-27-44`
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `f92262a` (verified against `git ls-remote`, not the local tracking ref)
+- **Ending commit:** the commit that carries this entry
+- **Project phase:** Phase 2 — Agent Platform (decisioning)
+- **Tasks completed:** **R37** — `HttpDecisionProvider` response-size hardening. VERIFIED.
+- **Tasks started:** none beyond R37. NEX-042 was deliberately not begun; see "Clock" below.
+- **Files changed:** `src/notes_service/infrastructure/decisioning/http_provider.py`,
+  `tests/agent/test_http_decision_provider.py`, `docs/NEXUS/{BACKLOG.md,EXECUTION_LOG.md,STATE.md,CHECKPOINT.json}`
+- **Migrations:** none
+- **Tests executed:** `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/mypy`,
+  `.venv/bin/python -m pytest`
+- **Test outcomes:** 178 files already formatted; ruff clean; mypy **Success: no issues found in
+  115 source files**; pytest **1027 passed, 4 skipped** in 16.15s.
+- **Security findings:** none new. R37 *was* the finding — a size bound that ran too late.
+
+### What R37 was, and what changed
+
+The 64 KiB cap existed but was applied to an already-buffered body: httpx read the whole
+response into memory, and only then did the adapter compare its length. A hostile or broken
+peer could therefore make the process hold an arbitrarily large body while the "bound"
+reported success. The bound described *parsing*, not *memory*.
+
+The adapter now opens the response as a stream and enforces three rules, in order:
+
+1. **Announced size is refused before any body byte is read.** A `Content-Length` above the cap
+   short-circuits to `MALFORMED_OUTPUT` without touching the stream.
+2. **An unannounced (chunked) body is abandoned, not drained.** `_read_bounded` accumulates at
+   most `_MAX_RESPONSE_BYTES + _READ_CHUNK_BYTES` and returns `None` the moment the cap is
+   passed; leaving the `with` block closes the stream rather than reading it to the end.
+3. **A non-200 body is never read at all.** The status check precedes any read, so a vendor's
+   error payload — which can echo the request, an internal id, or the credential — cannot reach
+   the audit trail.
+
+### How this was verified, not merely asserted
+
+Six tests were added. Three of them fail against the old implementation, which is the point:
+they assert that the adapter stops *reading*, not just stops *parsing*.
+
+- `test_an_unbounded_stream_is_abandoned_rather_than_drained` — a body object counts the chunks
+  handed out; the assertion is on the count, so a drain would fail it.
+- `test_an_announced_oversized_body_is_refused_before_any_body_byte_is_read` — a body that raises
+  if read at all; the call must still abstain cleanly.
+- `test_a_non_200_body_is_never_read` — same shape, for the error path.
+
+**Negative control performed:** reverting only the implementation turned exactly those three red
+and left the rest green, confirming the tests pin the gap and are not vacuous. Implementation
+then restored and the full suite re-run.
+
+### Clock
+
+The window went to recovery, reconciliation, and then re-running every gate against the rebased
+tree. R37 was already implemented and tested when this run began; the remaining work was to
+prove it still held after `f92262a` and to record it. That consumed the budget. Starting NEX-042
+with little time left would have produced an uncommitted tree for the next run to discard, which
+Section 15 names as a defect rather than diligence.
+
+### Next action
+
+Start **NEX-042**, chosen from `docs/NEXUS/BACKLOG.md` at the top of the next run. First command:
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` compared against
+`git rev-parse HEAD`. Claim the task (`nexus_coord claim claim --task-id NEX-042`) and hold the
+lease before any write. Issue comments on this repository must use lists, never markdown tables
+(a table body returns HTTP 500).

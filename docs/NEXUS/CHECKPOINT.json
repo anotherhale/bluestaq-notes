@@ -1,26 +1,31 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-25-43",
-  "timestamp": "2026-11-27T01:05:00Z",
+  "run_id": "NEX-2026-11-27-44",
+  "timestamp": "2026-11-27T08:20:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "042e2b6",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-041 VERIFIED. NEX-040 is VERIFIED as a verification-only slice with NO code change: no default or production configuration in this repository can reach a live decision vendor. Evidence: zero DECISIONING_* variables in any deploy artifact; measured defaults enabled=False, decisioning_http_endpoint=None, decisioning_min_confidence=0.5; a None endpoint selects StubDecisionProvider even when the flag is on; the stub answers at confidence 0.1, below the 0.5 threshold, so every answer is downgraded to an abstention; and the only production route into EvaluateDecision (GET /api/v1/agents/approvals/{id}/advisory) short-circuits to AbstentionReason.DISABLED before touching the provider. Already pinned by 13 tests in tests/bootstrap/test_decision_provider_selection.py, and the pin was proven non-vacuous this run by a mutation that turned one test RED.",
+  "commit": "2d58e22",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-041 VERIFIED, and R37 CLOSED. NEX-039 shipped the first real DecisionProvider adapter; NEX-040 verified no default or production configuration can reach a live vendor; NEX-041 fixed the seam its own audit exposed. R37 (run NEX-2026-11-27-44) closes the last known limit of that adapter: the 64 KiB response cap previously ran after httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming - announced-oversize refused before any body byte, unannounced bodies abandoned rather than drained, non-200 bodies never read. Six tests, three of which fail against the old implementation. Next slice: NEX-042.",
   "active_task": null,
   "task_statuses": {
+    "R37": "VERIFIED",
+    "NEX-039": "VERIFIED",
     "NEX-040": "VERIFIED",
-    "NEX-041": "VERIFIED",
-    "NEX-039": "VERIFIED"
+    "NEX-041": "VERIFIED"
   },
   "completed_tasks": [
+    "R37",
     "NEX-041",
-    "NEX-040"
+    "NEX-040",
+    "NEX-039"
   ],
   "validation": {
-    "pytest_full": "Full suite green at 497ab77 as reported by CI (the Backend job runs pytest). This run ran the targeted file only; the CI result at 497ab77 is the authority for the full suite and is recorded in ci_status.",
-    "targeted": "tests/bootstrap/test_decision_provider_selection.py: 13 passed, 1 warning.",
-    "negative_control": "Replacing `if settings.decisioning_http_endpoint is None:` with `if True:` in Container._build_decision_provider turned test_a_configured_endpoint_selects_the_http_adapter RED (1 failed, 12 passed). container.py restored from /tmp/container.bak, guard re-grepped (1 match), suite back to 13 passed, git status --porcelain empty. The provider-selection pin detects a broken selector.",
-    "no_code_change": "This run changed documentation only. No product code was modified; the claim under test was already true and already tested.",
-    "doc_only_commit": "042e2b6 is docs-only: docs/NEXUS/{STATE,EXECUTION_LOG,BACKLOG}.md and CHECKPOINT.json. No product code, no tests, no migrations."
+    "ruff_format": "178 files already formatted (ruff format --check src tests).",
+    "ruff_check": "All checks passed.",
+    "mypy": "Success: no issues found in 115 source files.",
+    "pytest_full": "1027 passed, 4 skipped in 16.15s (full suite, run against the exact tree that became commit 2d58e22).",
+    "targeted": "tests/agent/test_http_decision_provider.py: 57 passed (was 51 before this run's six new tests).",
+    "negative_control": "Reverting only the implementation turned exactly three tests red - test_an_unbounded_stream_is_abandoned_rather_than_drained, test_an_announced_oversized_body_is_refused_before_any_body_byte_is_read, and test_a_non_200_body_is_never_read - and left the remaining 54 green. The tests instrument the body object rather than the parsed result, so they detect a drain and not merely a refusal. Implementation restored and the full suite re-run green.",
+    "product_commit": "2d58e22 carries the implementation and the tests. The docs commit that writes this file is separate and carries no product code."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -206,18 +211,21 @@
         "This is judged acceptable for now and recorded rather than silently accepted, because the threat model is a buggy or compromised *configured* vendor, not an attacker who chooses the URL: the endpoint comes from operator configuration and must be https. A streaming read with a running byte budget is the fix when that threat model widens.",
         "The module docstring states the limit explicitly, so a future reader is not misled by the presence of a 64 KiB constant into believing memory is bounded."
       ],
-      "status": "open",
-      "opened_by": "NEX-039"
+      "status": "CLOSED - run NEX-2026-11-27-44",
+      "opened_by": "NEX-039",
+      "closed_by": "commit 2d58e22",
+      "closure_evidence": "The adapter now opens the response with httpx.stream and enforces the 64 KiB cap while reading: a declared oversized Content-Length returns MALFORMED_OUTPUT before any body byte is read, an unannounced body is abandoned the instant the running total passes the cap (leaving the context manager closes the stream rather than draining it), and a non-200 body is never read at all. Three tests fail against the previous implementation and they assert on chunk counts / a body that raises if read, so a drain would fail them. The residual limit - the cap bounds size, not duration - stays recorded in the module docstring as an open, honest limit."
     }
   ],
   "next_task": "NEX-042",
-  "next_action": "Start NEX-042: read the top dependency-ready item in docs/NEXUS/BACKLOG.md, confirm no blocker, implement one vertical slice, run the four gates, commit and push to feature/agentic-enterprise-platform. Re-verify the remote head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` first - the local origin/* ref is not evidence.",
+  "next_action": "1. Poll CI for 2d58e22 (GET /repos/anotherhale/bluestaq-notes/commits/2d58e22/check-runs) and record the result in ci_status; if red, fix it before any new slice. 2. Post the R37 run report to tracking issue #2 and add the R37 section to PR #3 (issue comments use lists, never markdown tables - a table body returns HTTP 500). 3. Then start NEX-042 from the top of docs/NEXUS/BACKLOG.md, holding the lease and claiming the task before writing.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD`; the local origin/* ref is stale-prone and is not evidence. 2. Read this file and docs/NEXUS/STATE.md whole; `tail -60` the execution log. 3. NEX-040 was verification-only: no product code changed and none was needed. Do not re-open it looking for a missing commit. 4. NEX-041 fixed a real `git push` defect in 497ab77 (missing remote argument); tests/coordination/test_gitref.py pins the argv shape. 5. CI is green 4/4 at 497ab77. Docs-only 042e2b6 does not need product CI. 6. Proceed to NEX-042 from the backlog.",
   "ci_status": {
-    "product_slice_sha": "497ab77",
-    "product_slice_result": "VERIFIED GREEN - 4/4 completed/success at 497ab77 (Backend and Frontend, one pair per push and pull_request event). Polled this run via the GitHub check-runs API for commit 497ab77; all four check runs reported conclusion=success, status=completed.",
-    "polled_at": "2026-11-27T00:44Z",
-    "unobserved": "The docs-only commit that writes this line has not been observed in CI at write time. Do not read its absence as a failure. Product code last changed in 497ab77, green at 4/4."
+    "product_slice_sha": "2d58e22",
+    "product_slice_result": "NOT YET POLLED. This run committed and pushed 2d58e22 but reached the deadline before the checks API could be read. The next run must poll it before claiming CI is green.",
+    "last_known_green_sha": "497ab77",
+    "last_known_green_result": "4/4 completed/success (Backend and Frontend, one pair per push and pull_request event).",
+    "standing_rule": "A docs commit reads completed/cancelled once superseded in the CI concurrency group - neither pass nor fail, and never evidence."
   },
   "verified_tasks": [
     "NEX-001",
@@ -267,9 +275,9 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "6e7141e is the last commit carrying IMPLEMENTATION (tools/nexus_coord, tests/coordination, pyproject gate wiring, ADR-013). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "Do not trust this field. Saving this file creates a commit, so any value written here is stale by construction. Read the true head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API. Observed during this run: 6e7141e matched local HEAD exactly.",
+  "head_at_checkpoint": "Do not trust this field. Saving this file creates a commit, so any value written here is stale by construction. Read the true head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API.",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local gates green on the exact committed tree: ruff format --check 172 files already formatted, ruff check all passed, mypy no issues in 110 source files, pytest 984 passed / 4 skipped (16.21s). CI 4/4 completed/success at 8e670a6, polled 2026-11-25T19:32Z, every check run reporting head_sha 8e670a6. NEX-039 is VERIFIED on direct CI evidence at its own product commit.",
+  "validation_status": "Local gates green on the exact committed tree (2d58e22): ruff format --check 178 files already formatted, ruff check all passed, mypy no issues in 115 source files, pytest 1027 passed / 4 skipped. CI for 2d58e22 has not been polled yet - it is the next run's first delivery check. Do not record it as green until the checks API says so.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -282,31 +290,28 @@
   },
   "branch_head_observed_at": "2026-11-25T19:03Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-  "commits_this_run": [],
+  "commits_this_run": [
+    "2d58e22"
+  ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 497ab7750110385b7733e013c6aa9b5b83109394 at run start, identical to local HEAD; refs/pull/3/head was the same SHA. Verified with ls-remote and the GitHub commits API, not the local origin/* tracking ref.",
-    "pr_updated": false,
-    "tracking_issue_updated": false,
-    "note": "PR #3 body and tracking issue #2 do not yet carry NEX-039, NEX-040 or NEX-041; delivery debt.",
-    "tracking_issue": "issue #2: comment 7213047814 posted for NEX-039/040/041, read back byte-identical (3705 chars, 12/12 substring assertions). Delivery debt from NEX-039 and NEX-041 cleared.",
-    "pr": "PR #3 body PATCHed with NEX-040 and NEX-041 sections (67105 chars). Remains draft=true, state=open, merged=false. Automated merge prohibited.",
-    "delivery_debt": "none outstanding"
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform, re-read after the push",
+    "delivery_debt": "none outstanding for the product commit. The run report for R37 has not yet been posted to issue #2 or PR #3 - the next run should post it (lists only, never tables in issue comments)."
   },
-  "run_summary": "NEX-2026-11-25-42. Verification-only run. Answered NEX-040: no default or production configuration in this repository can reach a live decision vendor, established from four independent lines of evidence read from the tree (no DECISIONING_* in any deploy artifact; measured inert defaults; None endpoint -> stub even when enabled; single production route short-circuits to DISABLED before the provider). Confirmed the 13-test pin in tests/bootstrap/test_decision_provider_selection.py is non-vacuous via a negative control that turned one test RED, then restored the file and verified the tree clean. Also re-verified CI: 497ab77 is 4/4 completed/success. Deliberately made no code change - the claim was already true and already tested. Reconciliation note: this run's first git status misread the branch as main at d6f92d0 (transient clone state); corrected by re-checking, and recorded in the execution log.",
+  "run_summary": "NEX-2026-11-27-44. Closed R37. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming, in three ordered rules, and pinned by six tests of which three fail against the old code. This run also rebased the working tree from 042e2b6 onto the remote head f92262a (a docs-only commit) after git ls-remote - not the stale local tracking ref - established the true head, and re-ran every gate on the rebased tree. No new slice beyond R37 was started: the window went to reconciliation and gate re-runs.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
     "last_observed_at": "2026-11-25T19:46Z",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform (agreed with git rev-parse HEAD before the docs promotion)"
   },
-  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. Everything after it this run is docs. This is deliberate: a recovery run needs to know where the code is, and pointing at a docs commit would be less useful, not more.",
-  "run_id_collision": "NEX-2026-11-25-35 was ALREADY used by at least four earlier entries in docs/NEXUS/EXECUTION_LOG.md (grep -c 'NEX-2026-11-25-35' returned 7). This run therefore uses NEX-2026-11-25-36. Run ids have been reused for at least 4 consecutive runs (-28..-35 all show 3-7 occurrences), so the id is NOT a unique key and must not be used to address a run. Address runs by commit SHA. The collision is recorded rather than silently renumbered so the log stays honest about what it already contains.",
+  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 2d58e22. The docs commit that writes this file comes after it and is not implementation. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit and any head written here is stale by construction.",
+  "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "497ab7750110385b7733e013c6aa9b5b83109394",
+    "sha": "f92262af610a374e6cd6db094e36241296776b50",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T00:44Z",
-    "note": "Equals local HEAD and refs/pull/3/head at the time of reading. The docs commit that writes this file advances the head past this value; re-read with ls-remote."
+    "at": "2026-11-27T08:12Z",
+    "note": "POINT-IN-TIME, before this run's product commit 2d58e22. Recorded only to show the run started from the true remote head and not a stale tracking ref."
   }
 }

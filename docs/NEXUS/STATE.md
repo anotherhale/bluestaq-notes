@@ -7,15 +7,49 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. **NEX-040 VERIFIED (verification only, no code change):** no default or production configuration in this repository can reach a live vendor — no `DECISIONING_*` variable appears in any deploy artifact, the measured defaults are `enabled=False`/`endpoint=None`/`min_confidence=0.5`, a `None` endpoint selects the stub even with the flag on, the stub's `0.1` confidence sits below the `0.5` threshold so every answer abstains, and the one production route short-circuits to `DISABLED` before touching a provider. Pinned by 13 tests whose pin was proven non-vacuous by mutation. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. **NEX-040 VERIFIED (verification only, no code change):** no default or production configuration in this repository can reach a live vendor — no `DECISIONING_*` variable appears in any deploy artifact, the measured defaults are `enabled=False`/`endpoint=None`/`min_confidence=0.5`, a `None` endpoint selects the stub even with the flag on, the stub's `0.1` confidence sits below the `0.5` threshold so every answer abstains, and the one production route short-circuits to `DISABLED` before touching a provider. Pinned by 13 tests whose pin was proven non-vacuous by mutation. **R37 CLOSED (run `NEX-2026-11-27-44`):** the `HttpDecisionProvider` 64 KiB cap previously ran *after* httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming — an announced oversized `Content-Length` is refused before any body byte is read, an unannounced body is abandoned rather than drained, and a non-200 body is never read. Six new tests, three of which fail against the old implementation. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `497ab77` — local HEAD, remote `refs/heads/feature/agentic-enterprise-platform` and `refs/pull/3/head` all agreed at this SHA (checked with `git ls-remote` and the GitHub commits API). The run's first `git status` misread the branch as `main` at `d6f92d0`; that was a transient clone state, corrected by re-checking `git rev-parse --abbrev-ref HEAD` and `497ab77^` = `1e1020f`. |
-| Head commit (run end) | See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (`497ab77`, NEX-041's fix). This run added docs only. The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
+| Base commit (run start) | `f92262a` — the run began on `main` at `d6f92d0` in a fresh clone, then fast-forwarded `feature/agentic-enterprise-platform` from `042e2b6` to `f92262a` after `git ls-remote` (not the local tracking ref) established the remote head. `f92262a` is docs-only: it posts NEX-039/040/041 to issue #2 and PR #3. |
+| Head commit (run end) | See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (this run's R37 fix). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
 | Last CI result | **`497ab77` (NEX-041 fix): 4/4 `completed/success`** (Backend + Frontend, one pair per push and pull_request event), polled this run 2026-11-27. Prior: `6e7141e` 4/4 green; `8e670a6` (NEX-039) 4/4 green at 19:32Z. See `ci_status` in `CHECKPOINT.json` for per-slice authority. |
 | Tracking issue | #2 (open) — **current, no delivery debt.** NEX-037 by comment 7171861451, NEX-038 by 7171956166, and NEX-039/040/041 by comment **7213047814** (posted run `NEX-2026-11-25-43`, read back byte-identical: 3705 chars, 12/12 substring assertions). |
 | Draft PR | #3 (draft, unmerged — human review required). Body PATCHed 2026-11-27T01:05Z with the NEX-040 and NEX-041 sections (67105 chars, draft=true). **No delivery debt outstanding.** |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## R37 (run `NEX-2026-11-27-44`) — the cap bounded parsing, not memory
+
+**The defect.** `HttpDecisionProvider` refused a response larger than 64 KiB, but it checked
+that bound against `response.content` — a body httpx had already read in full. The check was
+correct and useless: the memory had been spent before the question was asked. A peer could
+make the process hold an arbitrarily large body and the adapter would still call the answer
+"oversized" rather than "never read".
+
+**The fix, in three ordered rules.** The response is opened with `httpx.stream` rather than
+`post`, and:
+
+1. A declared `Content-Length` above the cap returns `MALFORMED_OUTPUT` before the body is
+   touched at all.
+2. `_read_bounded` consumes the stream in 8 KiB chunks, accumulating at most
+   `_MAX_RESPONSE_BYTES + _READ_CHUNK_BYTES`, and returns `None` the instant the cap is passed.
+   The `with` block then closes the stream instead of draining it.
+3. The non-200 branch returns before any read, so a vendor error body — which can echo the
+   request, an internal id, or the credential — never reaches the audit trail through a
+   rationale.
+
+**Why the tests are evidence and not decoration.** Three of the six new tests fail against the
+old implementation, and they fail for the right reason: they instrument the *body object*, not
+the parsed result. `test_an_unbounded_stream_is_abandoned_rather_than_drained` counts the
+chunks the body was asked for; a drain would raise that count and fail. The announced-oversize
+and non-200 tests use a body that raises if read at all. A test that only asserted
+"abstains with MALFORMED_OUTPUT" would have passed on the broken code.
+
+**What this does not fix.** The cap bounds size, not duration. That remains recorded in the
+module docstring as an honest limit, not a closed one.
+
+**Validation.** ruff format/check clean (178 files), mypy clean (115 source files),
+**1027 passed / 4 skipped**. Negative control: reverting only the implementation turned exactly
+the three streaming tests red and left the other 54 green.
 
 ## NEX-037 (run `NEX-2026-11-25-37`) — the count existed, the aggregate did not
 
@@ -1222,11 +1256,12 @@ Provider selection lives in the container, so there is one answer to "which prov
 process using". Setting `DECISIONING_HTTP_ENDPOINT` opts a deployment into a real vendor; it
 does **not** enable judgment, because `decisioning_enabled` still gates every call.
 
-Two limits are recorded in the module docstring rather than papered over: the response size
-bound is checked *after* httpx has read the body, so it bounds what is parsed and not what is
-held in memory (a streaming read is later hardening); and a rationale is truncated rather
+Two limits are recorded in the module docstring rather than papered over: the cap bounds
+*size*, not *duration* — httpx timeouts are per socket operation, so a peer that drips one
+byte inside each timeout can still hold the call open; and a rationale is truncated rather
 than fatal, because discarding a legal answer over a verbose explanation would let vendor
-verbosity deny a decision.
+verbosity deny a decision. The size bound itself now runs **while reading** (R37, run
+`NEX-2026-11-27-44`), so it bounds what is held as well as what is parsed.
 
 **Validation.** 51 adapter tests plus 13 config/wiring tests, and the NEX-035 conformance
 harness invoked at `tests/agent/test_http_decision_provider.py:404`. Full gates: ruff clean

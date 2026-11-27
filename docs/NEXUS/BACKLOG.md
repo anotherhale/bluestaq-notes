@@ -2180,9 +2180,15 @@ can exercise but never use.
 
 ### Recorded limits (R37)
 
-The 64 KiB response bound is enforced after httpx has read the body, so it bounds parsing and
-not memory. A rationale is truncated rather than treated as fatal. Both are in the module
-docstring so a future reader is not misled by the constant.
+**Closed in run `NEX-2026-11-27-43`.** The 64 KiB bound was enforced after httpx had
+already buffered the body, so it bounded parsing and not memory. It is now enforced *while
+reading*: the adapter streams the response and stops the instant the cap is passed, and a
+peer that declares an oversized `Content-Length` is refused before a single body byte is
+read. Pinned by `tests/agent/test_http_decision_provider.py` (six new tests, including a
+chunk-counting body that proves the stream is abandoned rather than drained). The rationale
+is still truncated rather than treated as fatal — that remains a deliberate choice, not a
+gap. The cap still bounds *size*, not *duration*; that limit stands and is recorded in the
+module docstring.
 
 ### Next
 
