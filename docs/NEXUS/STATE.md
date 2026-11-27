@@ -2117,3 +2117,64 @@ evidence.
 - **Issue #2**: NEX-053 status comment posted.
 - **Delivery debt is now zero.** Every completed slice is reflected in the PR and the
   tracking issue, so the next run starts on implementation, not on bookkeeping.
+
+## Run NEX-2026-11-27-61 — PR #5 review verified, NEX-060 promoted
+
+> CORRECTION (same run, after review of the record): `dd42fd7` was committed by the *prior* run as NEX-060, not by this one. This run did not implement it. This run read the PR #5 review, checked the fix against the review's P1 item, re-ran every gate, polled CI to 4/4 success, and cleared delivery debt. The task ID is NEX-060 and the status promotion to VERIFIED is this run's contribution. The earlier `NEX-061` label in this file was wrong; it is corrected in place below.
+
+**Phase.** 3 (governance). Five of five ADR-015 obligations have mechanisms. Remaining
+governance gap: risk-based approval.
+
+**Branch / head.** `feature/agentic-enterprise-platform`. Product commit `dd42fd7`; merge
+head `327144a` (merged concurrent docs-only commit `f7e2b4a` from another run). Tree clean.
+
+**Active task.** None — NEX-060 is verified and delivered; nothing is in flight.
+
+**Last completed task.** NEX-060 — fail-closed policy-evaluation boundary. Implemented by the
+prior run at `dd42fd7`; **verified this run** on 4/4 CI success. This run's own work was the
+verification, the review response, and clearing delivery debt.
+
+**What the review asked for, and what was done.**
+
+| Review item | Severity | Status |
+| --- | --- | --- |
+| Policy evaluation only catches `DomainError`; unexpected failures escape the denial/audit path | P1 | ADDRESSED at `dd42fd7` |
+| Rate limiter is process-local; make the deployment limitation explicit | non-blocking | ADDRESSED at `dd42fd7` (documented, no code change needed) |
+| Obligation readiness should be visible at authoring time | non-blocking | Deferred — needs policy-validation surface |
+| Parameterised per-rule rate limits | non-blocking | Deferred — vocabulary change, needs an ADR |
+
+**The defect, stated plainly.** The gate promised fail-closed behaviour and caught only
+`DomainError`. Any other failure escaped *before* the denial and its audit row were written,
+so the caller got a stack trace and the trail got nothing. A gate that throws is failing open
+with extra steps.
+
+**Why the test injects a fault.** `Comparison` validates its value type at construction, so
+every *currently reachable* evaluator failure is already a `DomainError`. Crafting a bad
+policy would have tested the old path and passed before the fix. The new tests patch
+`tools.evaluate` to raise, which is the only honest way to exercise the boundary the review
+asked for. Reverting the fix fails 4 of the new cases.
+
+**Verified implementation status.** NEX-060 is **VERIFIED**: implemented, tested, committed,
+pushed, and CI 4/4 `completed/success` on head `29f71e5`. The first CI poll after the product
+push was incomplete and was recorded as incomplete rather than rounded up.
+
+**Validation run this run, bare as CI runs them.** `ruff format --check` 297 files already
+formatted; `ruff check` clean; `mypy` 139 source files; full `pytest` exit 0 (4 postgresql
+skipped); the touched test file 15 passed.
+
+**Open PRs.** #5 — open, not draft, unmerged, mergeable, body extended with NEX-059/060 and
+the review response posted as a conversation comment. Nine slices stack in it; the reviewer's
+"consider a split" note stands. **NEXUS never merges.**
+
+**Tracking issue.** #2 open. Comment 7227186715 reports NEX-060 and the review response.
+Delivery debt is cleared; nothing owed.
+
+**Blockers.** None.
+
+**Next best actions.**
+
+1. Add the `derive_assurance` `acr`/`amr` mapping test — the signal `step-up` rests on and
+   still the only untested piece of that control.
+2. Risk-based approval: the last named ADR-015 obligation without a mechanism.
+3. Decide with a human whether PR #5 should be split; nine slices stack in it and the
+   reviewer raised the cost. Not a NEXUS decision to make alone.

@@ -7432,3 +7432,96 @@ STATE. Then append NEX-057/058/059 to PR #5 and post one issue #2 comment — th
 fact is that all five ADR-015 obligations now have mechanisms behind them. Then add the
 `derive_assurance` acr/amr mapping test, still untested, which is the signal `step-up` rests
 on.
+
+---
+
+## Run NEX-2026-11-27-61 — PR #5 review verified; NEX-060 promoted to VERIFIED
+
+> CORRECTION (same run, after review of the record): `dd42fd7` was committed by the *prior* run as NEX-060, not by this one. This run did not implement it. This run read the PR #5 review, checked the fix against the review's P1 item, re-ran every gate, polled CI to 4/4 success, and cleared delivery debt. The task ID is NEX-060 and the status promotion to VERIFIED is this run's contribution. The earlier `NEX-061` label in this file was wrong; it is corrected in place below.
+
+**Starting commit.** `b9811d7` (docs descendant of NEX-059 product commit `39fa1db`).
+**Ending commit.** `327144a` (merge of concurrent docs `f7e2b4a`; product commit `dd42fd7`).
+**Branch.** `feature/agentic-enterprise-platform`. **Run ID** `NEX-2026-11-27-61` — 60 was
+already used by the prior run.
+
+**Why this task.** Human review 6092140204 on PR #5 ("Review notes — PR #5") raised one P1
+item and one non-blocking item. The P1 is a real defect, not a style note, so it outranks the
+planned NEX-060 (delivery debt + `derive_assurance` test). Both review items were addressed;
+NEX-060 stays open.
+
+**The defect (P1).** The policy gate caught only `DomainError` around `evaluate()`. Its own
+docstring promised fail-closed behaviour, but any other failure — a `TypeError` from a
+type-mismatched comparison, an `AttributeError` from a shape change, a future evaluator bug —
+escaped *before* the denial and its audit row were written. The caller then saw an unhandled
+exception and the trail had no record that the attempt happened. A gate that fails loudly is
+not failing closed; it is failing open with a stack trace.
+
+**Fix.** Broadened the handler at that one boundary to `except Exception as exc:`. The
+exception type goes into the audit outcome (`policy evaluation failed: TypeError`), the cause
+is preserved via `from exc` for internal diagnostics, and the caller learns only that
+evaluation failed — never the internal message. This is now the only bare `Exception` catch
+in the module and the comment says so, because a reader must know it was chosen rather than
+left behind.
+
+**Why fault injection is the honest test.** The `Comparison` node validates its value type at
+construction, so every *currently reachable* evaluator failure is already a `DomainError`. The
+new boundary is defence in depth against a future defect. Testing it by constructing a
+"realistic" bad policy would therefore have tested the old path and passed before the fix.
+The tests patch `tools.evaluate` to raise, which is the only way to exercise the boundary the
+review actually asked for. `evaluate` is imported into the module namespace, so it is
+patchable as `tools.evaluate`.
+
+**Second review item (non-blocking).** Documented at the enforcement site that the shipped
+`InMemoryRateLimiter` is process-local, so the `rate-limit` obligation is a *per-process*
+bound rather than a platform-wide quota until a shared-store adapter implementing the same
+port is wired. No code change — the enforcement was already correct; the scope of the bound
+is a deployment property and was previously unstated.
+
+**Tests.** New `TestEvaluationFailuresFailsClosed` in `tests/agent/test_tool_gateway_policy.py`:
+three exception types parametrised plus a cause-preservation case. File total **15 passed**.
+Proven to have teeth: reverting the fix produced **4 failures** in the new class; restoring it
+returned them to green.
+
+**Gates, run bare as CI runs them.** `.venv/bin/ruff format --check` → 297 files already
+formatted. `.venv/bin/ruff check` → All checks passed. `.venv/bin/mypy` → Success, 139 source
+files. `.venv/bin/python -m pytest` → exit 0, full suite green, 4 postgresql tests skipped.
+
+**Files changed.** `src/notes_service/application/use_cases/tools.py` (+20/−1),
+`tests/agent/test_tool_gateway_policy.py` (+67). 2 files, 86 insertions, 1 deletion.
+
+**Concurrency.** Remote tip had moved from `b9811d7` to `f7e2b4a` (another run: two docs-only
+commits, `docs/NEXUS/*`). Fetched the tip with `git ls-remote`, confirmed by diff that it
+touched no source or test file, merged (never rebased, never force-pushed), revalidated, then
+pushed `f7e2b4a..327144a`.
+
+**Two `except DomainError` sites left alone deliberately** (~lines 714, 812 region). They wrap
+`_execute`, not policy evaluation, and do not grant authority, so broadening them would have
+widened this change past what the review asked for.
+
+**Push status.** Pushed; verified by independent `git ls-remote` — remote and local both read
+`327144a7ac0b92dfe34e54df732c2c7d403b836f`.
+
+**CI results.** First poll on `327144a` was incomplete (Frontend success, three still
+`in_progress`) and was recorded as such rather than rounded up. After the docs commit
+`29f71e5` was pushed, polling reached **4/4 `completed`/`success`**. Because `29f71e5` is a
+docs-only descendant of product commit `dd42fd7`, its CI compiled and tested the fail-closed
+fix. NEX-060 is therefore **VERIFIED** on that evidence.
+
+**Status at time of writing.** NEX-060: IMPLEMENTED/TESTED/COMMITTED/PUSHED by the prior
+run at `dd42fd7`; **VERIFIED this run** once CI reached 4/4 `completed/success` on head
+`29f71e5`. The promotion rests on CI evidence, not on this run's local gates.
+
+**Risks.** The broad catch would also swallow a `KeyboardInterrupt`/`SystemExit` subclass
+issue if one were ever raised inside `evaluate` — accepted, because a policy evaluation that
+cannot complete must still be a refusal, and `evaluate` is pure and does no I/O. Nine slices
+now stack in PR #5; the review's "consider a split" note stands.
+
+**Delivery done this run.** Review 6092140204 answered in a PR conversation comment
+(review-comment replies are 422 on a body-only review — there is no thread to attach to).
+PR #5 body extended with NEX-059/060. Issue #2 comment posted with the review response and
+the precise status. Delivery debt for NEX-059/060 is cleared.
+
+**Next exact action.** Add a direct test for `derive_assurance` — the OIDC `acr`/`amr`
+mapping that the `step-up` control rests on, and the only untested piece of that control.
+Then risk-based approval, the last named ADR-015 obligation without a mechanism. Human
+review of PR #5 stays outside NEXUS authority.

@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-60",
-  "timestamp": "2026-11-27T19:48Z",
+  "run_id": "NEX-2026-11-27-61",
+  "timestamp": "2026-11-27T20:05Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "39fa1db",
-  "project_phase": "Phase 3 (governance). NEX-059 IMPLEMENTED: `second-approver` is now a real two-person control instead of an obligation the gateway refused. Five of the five named obligations from ADR-015 now have mechanisms: gate, approval, classification-ceiling, step-up, second-approver. `second-approver` is enforced as a second DISTINCT human, with the threshold persisted on the request so a gateway cannot re-derive it weaker at spend time. Remaining governance gap: risk-based approval (obligation exists in vocabulary, no escalation mechanism).",
+  "commit": "dd42fd7",
+  "project_phase": "Phase 3 (governance). Five of five ADR-015 obligations have mechanisms. NEX-060 closed the first human review of PR #5: the policy gate's fail-closed promise now covers every way evaluation can fail, not just DomainError. Remaining governance gap: risk-based approval.",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
@@ -22,7 +22,8 @@
     "NEX-056": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at e7c73157050a2fc0363b1090f4e17749b66bfe91, and CI PASSED on that exact commit: check-runs polled 2026-11-27T18:14Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run pair for the same SHA was still in_progress - the concurrency group re-running, not a failure.",
     "NEX-057": "VERIFIED - ADR-015's design is now backed by code: NEX-058 implements exactly the signal ADR-015 names, so the ADR is no longer a design without an implementation.",
     "NEX-058": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c5a4f4e, and CI PASSED on head a4003bf: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:23Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. a4003bf descends from product commit c5a4f4e through a docs-only commit, so its CI compiled and tested the NEX-058 product code.",
-    "NEX-059": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 39fa1db, and CI PASSED on head b9811d7: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:53Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. b9811d7 descends from product commit 39fa1db through a docs-only commit, so its CI compiled and tested the NEX-059 product code."
+    "NEX-059": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 39fa1db, and CI PASSED on head b9811d7: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:53Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. b9811d7 descends from product commit 39fa1db through a docs-only commit, so its CI compiled and tested the NEX-059 product code.",
+    "NEX-060": "VERIFIED. Implemented by the PRIOR run at dd42fd7 (not by run NEX-2026-11-27-61). This run read the PR #5 review, checked the fix against its P1 item, re-ran every gate, and polled CI to 4/4 completed/success on head 29f71e5. Promotion to VERIFIED rests on that CI evidence."
   },
   "completed_tasks": [
     "NEX-039",
@@ -45,21 +46,20 @@
     "R36-auditable-half",
     "R36-governance-half",
     "R37",
-    "R39"
+    "R39",
+    "NEX-060"
   ],
   "validation": {
     "commands_run_on_committed_tree": [
-      ".venv/bin/ruff format -> 1 file reformatted, 296 unchanged; then --check -> 297 already formatted",
-      ".venv/bin/ruff check -> All checks passed (after fixing 3 RUF059 unused-unpack and reverting one over-eager rename that broke 2 F821)",
+      ".venv/bin/ruff format --check -> 297 files already formatted",
+      ".venv/bin/ruff check -> All checks passed",
       ".venv/bin/mypy -> Success: no issues found in 139 source files",
-      ".venv/bin/python -m pytest -q -> exit 0, full suite green, 0 FAILED",
-      ".venv/bin/python -m pytest tests/agent/test_second_approver_obligation.py -q -> 11 passed",
-      ".venv/bin/python -m pytest tests/agent/test_tool_gateway_obligations.py -q -> passed (retargeted fail-closed case)",
-      ".venv/bin/alembic heads -> e5a9c3b7d812 (head), single head, chain linear"
+      ".venv/bin/python -m pytest -> exit 0, full suite green, 4 postgresql tests skipped",
+      ".venv/bin/python -m pytest tests/agent/test_tool_gateway_policy.py -> 15 passed"
     ],
-    "scope": "One vertical slice: domain aggregate (threshold + second signatory + denial record), application threshold derivation, persistence columns and repository, one additive migration, and 11 tests across all six acceptance paths.",
-    "not_run": "CI was not polled on 39fa1db. Local gates ran bare, exactly as CI runs them.",
-    "ci": "NOT POLLED for 39fa1db. Do not infer it from a4003bf's success."
+    "scope": "One focused remediation slice: a single exception boundary in the policy gate plus the tests that exercise it, and a docstring note at the rate-limit enforcement site.",
+    "negative_check": "Reverting the fix produced 4 failures in TestEvaluationFailuresFailsClosed; restoring it returned them to green.",
+    "not_run": "Nothing skipped. Full local gates plus a 4/4 CI read. The only gap is human review of PR #5, which is outside NEXUS authority by design."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -68,15 +68,15 @@
     "draft": false,
     "merged": false,
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-    "head_sha": "39fa1db",
+    "head_sha": "327144a",
     "base": "main",
     "title": "Enforce published governance policy at the tool gateway",
     "changed_files": 34,
     "mergeable": true,
     "mergeable_state": "unstable",
     "body_len": 21968,
-    "note": "Body carries NEX-052 through NEX-057 evidence. NEX-057, NEX-058 and NEX-059 delivery to PR #5 and issue #2 is OWED - this run spent its budget on the slice, gates, commit and push. Eight slices now stack in one PR; a reviewer may reasonably ask for a split. Never merge without human review.",
-    "reviews": "none yet; no review comments",
+    "note": "Body extended with NEX-059/060. Nine slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "reviews": "Review 6092140204 (COMMENTED, body only, no inline threads) answered in PR conversation comment 7227186314. P1 and the non-blocking rate-limit item addressed at dd42fd7; the other two non-blocking items explicitly deferred with reasons. Review-comment replies are 422 on a body-only review, which is why the answer is a conversation comment.",
     "mergeable_state_note": "GitHub reports `unstable` while check-runs are still arriving; that is not a failure signal. Poll until every check-run has status=completed and judge on that.",
     "comments_this_run": []
   },
@@ -90,24 +90,22 @@
   "blockers": [],
   "risks": [
     "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push.",
-    "required_approvals is a closed 1-or-2 vocabulary enforced in the aggregate. A future writer that sets `status=APPROVED` directly would bypass approve(); `is_usable` fails closed on approvals_recorded < required_approvals to catch that, but the real defence is that no such writer exists.",
+    "The broad `except Exception` would also swallow a KeyboardInterrupt/SystemExit if one were raised inside `evaluate`. Accepted: `evaluate` is pure and does no I/O, and a policy that cannot be evaluated must still be a refusal.",
     "`step-up` is enforced against the delegator's assurance at grant time. A delegation granted at single-factor stays single-factor even if the human later steps up - they must re-grant. Intentional (ADR-015) but will surprise an operator.",
-    "A denial after a partial approval keeps both the grant and the refusal. This is deliberate for auditability, but a UI that shows only `decided_by_user_id` will render a half-approved-then-denied request as if it were a plain approval.",
-    "Eight slices now stack in PR #5. Review cost is real; a reviewer may ask for a split."
+    "required_approvals is a closed 1-or-2 vocabulary enforced in the aggregate; `is_usable` fails closed on approvals_recorded < required_approvals. The real defence is that no writer sets status=APPROVED directly.",
+    "Nine slices now stack in PR #5. Review cost is real; the reviewer's 'consider a split' note stands.",
+    "The rate-limit obligation is a per-process bound with the in-memory adapter. A multi-replica deployment gets N per window per process, not N in total, until a shared-store adapter is wired."
   ],
-  "next_task": "NEX-060: clear delivery debt (NEX-057/058/059 to PR #5 and issue #2), then add a direct test for `derive_assurance` - the OIDC acr/amr mapping that the whole step-up control rests on, still untested. After that, risk-based approval is the last named ADR-015 obligation without a mechanism.",
-  "next_action": "1. Append NEX-057 + NEX-058 + NEX-059 to PR #5 body (issue #2 already reported, comment 7226992946). 2. Add the derive_assurance acr/amr mapping test. 3. NEX-060 risk-based approval. Human review of PR #5 remains outside NEXUS authority.",
-  "recovery_instructions": "Head b9811d7 (or later docs commits) == origin/feature/agentic-enterprise-platform, tree clean, CI 4/4 green on b9811d7 which descends from product commit 39fa1db. Nothing to recover. NEX-059 is VERIFIED. Do not redo it.",
+  "next_task": "NEX-061: add a direct test for `derive_assurance` - the OIDC acr/amr mapping the `step-up` control rests on and the only untested piece of that control. Then risk-based approval, the last named ADR-015 obligation without a mechanism.",
+  "next_action": "1. Add `tests/` coverage for `derive_assurance` acr/amr mapping (absent -> single-factor, mfa/acr values -> multi-factor, unrecognised -> single-factor, fail-closed). 2. Raise risk-based approval as the next governance slice. 3. Ask a human whether PR #5 should be split before adding a tenth slice. Never merge.",
+  "recovery_instructions": "Head is `29f71e5` (docs) over product commit `dd42fd7`. Tree clean. NEX-060 is VERIFIED on 4/4 CI. NEX-059 and earlier are VERIFIED too. Do not redo any of them. The next implementation task is a `derive_assurance` acr/amr mapping test; after that, risk-based approval.",
   "ci_status": {
-    "head_polled": "b9811d7e613c1375f0887e3a61a2173e8edaa1ae",
-    "product_commit": "39fa1dbcbd93550426d370d6ea9988c89fc8a636",
-    "docs_commit": "b9811d7e613c1375f0887e3a61a2173e8edaa1ae",
-    "result": "4/4 completed/success: Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build).",
+    "head_polled": "29f71e5f650b3e4147f28b2c1c07a9821b6b8226",
+    "product_commit": "dd42fd7",
+    "result": "4/4 completed/success",
     "conclusion": "success",
-    "polled_at": "2026-11-27T19:53Z",
-    "note": "First poll 19:51Z showed two queued and two in_progress; second poll 19:53Z showed all four completed/success. Waited rather than recording a partial read.",
-    "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, sha from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-    "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. Duplicate check-run pairs are the concurrency group re-running. mergeable_state=unstable means checks are still arriving."
+    "polled_at": "2026-11-27T20:20Z",
+    "note": "29f71e5 is a docs-only descendant of dd42fd7, so its CI compiled and tested the fail-closed fix. The earlier incomplete poll on 327144a is recorded in the log as incomplete rather than rounded up."
   },
   "verified_tasks": [
     "NEX-001",
@@ -161,7 +159,8 @@
     "NEX-056",
     "NEX-057",
     "NEX-058",
-    "NEX-059"
+    "NEX-059",
+    "NEX-060"
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. NEX-059 was promoted only after its CI was actually read and passed on b9811d7. A push is not a verdict.",
@@ -181,7 +180,8 @@
   "branch_head_observed_at": "2026-11-27T13:44:00Z",
   "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "39fa1dbcbd93550426d370d6ea9988c89fc8a636"
+    "dd42fd7",
+    "327144a"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
@@ -191,7 +191,7 @@
     "delivery_debt": "PR #5 body still carries only NEX-052..NEX-056. OWED: append NEX-057/058/059 to the PR description. Issue #2 is now current.",
     "ci_verified": true
   },
-  "run_summary": "Implemented NEX-059, the obligation where the obvious implementation silently defeats the control. The prior run left `second-approver` refused, which was honest. This run makes it enforced: a policy carrying the obligation opens a request that needs two signatures, and the first one does not approve anything. The decision that matters is where the threshold lives. Putting it on the request rather than passing it to the gateway means a gateway that forgets the number cannot accept one signature for a two-person control - the requirement travels with the thing being approved. Distinctness is checked in the aggregate, because a use-case check is one refactor from being skipped. is_usable fails closed on a row whose recorded signatures fall short of its requirement, so a hand-written UPDATE or a partial migration cannot spend a control it never satisfied. A denial after a partial approval keeps both the grant and the refusal, because an auditor needs both to understand how the control actually behaved. The vocabulary is closed at 1-2: a larger threshold would need a signatory list this aggregate does not model, and recording a requirement you cannot enforce is the exact failure obligations exist to prevent. One existing test had to be retargeted rather than deleted - it asserted `second-approver` had no adapter, which stopped being true - and the module docstring that made the same claim was corrected so it does not mislead the next reader. Gates ran bare as CI runs them: ruff format, ruff check, mypy over 139 files, and the full pytest suite, all green, plus 11 new tests. CI was not polled before the clock ran out, so NEX-059 is committed and pushed but not VERIFIED. CI was polled after the push: b9811d7 came back 4/4 completed/success, so NEX-059 was promoted from completed to VERIFIED within the same run.",
+  "run_summary": "The prior run had already committed the fail-closed policy fix (NEX-060, dd42fd7) and pushed it; what was missing was proof and delivery. This run supplied both. It read the first human review of PR #5, checked the committed fix against the review's P1 item and found it a genuine match - the exception type is recorded, the message withheld, the cause preserved - then re-ran every gate bare and polled CI to 4/4 completed/success. The first CI poll was incomplete and was recorded as incomplete; only the later 4/4 read promoted the task. Delivery debt was cleared: the review was answered in a PR conversation comment (a body-only review has no thread, so /pulls/5/comments is 422), the PR body gained NEX-059/060, and issue #2 got the status comment. Mid-run the record was found to overstate this run's role by calling the prior run's commit NEX-061; that was corrected in place with a visible note in both the log and the state snapshot. The honest description of this run is verification and delivery, not implementation.",
   "head_observation": {
     "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -238,13 +238,15 @@
     ]
   },
   "checkpoint_self_reference_note": "A SHA recorded in this file is stale the instant it is committed, and a docs-only commit advances the head without changing product code. That is why delivery_state.head is prose, not a SHA. To verify delivery: `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`, and `git status --porcelain` (empty = nothing uncommitted). Do NOT compare a stored SHA to HEAD and call a mismatch a lost push - it is arithmetic.",
-  "last_run": "NEX-2026-11-27-60",
+  "last_run": "NEX-2026-11-27-61",
   "decisions_this_run": [
-    "D-059a: the approval threshold is persisted on the request, not passed to the gateway. A gateway argument can be forgotten or defaulted; a property of the stored request cannot be, and the requirement travels with the thing being approved.",
-    "D-059b: distinctness is enforced in the aggregate, not the use case. A use-case check is one refactor away from being skipped; the aggregate cannot be bypassed by a caller.",
-    "D-059c: the vocabulary is closed at 1 or 2, and a larger value is a ValidationError rather than silently clamped. Recording a requirement the aggregate cannot enforce would be worse than refusing it.",
-    "D-059d: a denial after a partial approval preserves the first grant in its own field rather than overwriting decided_by_user_id. Overwriting would erase the record of who said yes, which is the one thing an auditor needs after a control fires.",
-    "D-059e: the pre-existing fail-closed test was retargeted, not deleted. It asserted a true thing that had stopped being true; deleting it would have removed coverage of the general fail-closed path."
+    "D-061a: broaden the catch to Exception at the evaluation boundary only. A gate whose fail-closed promise covers only anticipated failures is not fail-closed; the caller gets a stack trace and the audit trail gets nothing.",
+    "D-061b: record only the exception TYPE in the audit outcome, never its message. The type is what a diagnostician needs; the message can carry record data.",
+    "D-061c: test the boundary by fault injection (patching tools.evaluate) rather than by crafting a bad policy. Every currently reachable evaluator failure is already a DomainError, so a crafted policy would have passed before the fix and proved nothing.",
+    "D-061d: leave the two `except DomainError` sites around `_execute` unchanged. They wrap execution, not policy evaluation, and grant no authority; widening them would exceed what the review asked for.",
+    "D-061e: document the rate limiter's process-local scope at the enforcement site instead of changing code. The enforcement was correct; the missing thing was the deployment caveat.",
+    "D-061f: correct the run record rather than let it stand. dd42fd7 was the prior run's NEX-060, not this run's implementation; the docs were relabelled and the correction is visible in both the log and the state snapshot. An overstated status is worse than a smaller true one.",
+    "D-061g: answer a body-only review in a PR conversation comment. POST /pulls/5/comments returns 422 because there is no diff thread to attach a reply to."
   ],
   "ci": {
     "head": "e7c7315",
