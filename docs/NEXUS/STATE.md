@@ -7,17 +7,17 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 63) | `997a6ac` locally (the clone sat on `main`); the feature-branch tip `65d6abe` was read from `git ls-remote` and the work committed on top of it. |
 | Head commit (measured) | Product commit `19836ad` (NEX-063), pushed and confirmed by `git ls-remote`. Read the live head with `git rev-parse HEAD`; never trust a SHA recorded in this file. |
-| Last CI result | **`0e2ca47` (NEX-062 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:16Z — NEX-062 VERIFIED. **NEX-063 CI is not yet polled**: it is PUSHED, not VERIFIED. |
-| Tracking issue | #2 (open) — last reported NEX-062 (comment `7227311410`). **NEX-063 delivery is owed.** Issue stays open. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…NEX-062 evidence; **NEX-063 is owed**. Eleven slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| Last CI result | **`934774e` (NEX-063 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:52Z — NEX-063 VERIFIED. |
+| Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-063** evidence. Eleven slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
-## NEX-063 PUSHED (run `NEX-2026-11-27-63`) — the approval gate follows the blast radius
+## NEX-063 VERIFIED (run `NEX-2026-11-27-63`) — the approval gate follows the blast radius
 
 **Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED — CI not yet polled.**
 

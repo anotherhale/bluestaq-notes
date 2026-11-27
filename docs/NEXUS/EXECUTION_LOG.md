@@ -7751,3 +7751,20 @@ Poll CI for the head of `feature/agentic-enterprise-platform` (take it from
 all four check-runs conclude `success`, promote NEX-063 to VERIFIED, then extend PR #5's body
 and comment on issue #2. If CI fails, fix forward on this branch; never force-push. Do not redo
 NEX-060 or NEX-062.
+
+<!-- run-63-ci-verified -->
+### Run 63 — CI verification of NEX-063
+
+- **Timestamp**: 2026-11-27T20:53Z
+- **Head polled**: `934774eb9aff59649531138947a44ee08d6c1af5` (docs head; descends from the
+  NEX-063 product commit `19836ad`)
+- **Result**: 4/4 check-runs `completed` / `success` — Backend (ruff, mypy, pytest, migrations)
+  and Frontend (typecheck, lint, test, build).
+- **Note**: two check-run pairs appear for the same SHA because the branch concurrency group
+  re-ran the workflow; both pairs concluded `success`.
+- **Status change**: NEX-063 PUSHED → **VERIFIED**.
+- **Delivery**: PR #5 body extended with the NEX-063 section (29082 → 32203 chars); issue #2
+  commented (`7227893354`). Delivery debt for this slice is cleared.
+- **Next action**: no named ADR-015 obligation remains. Re-read ROADMAP before choosing the
+  next slice; NEX-063's deferred items (approval preview, non-capability risk signals) are
+  documented decisions, not pending work.
