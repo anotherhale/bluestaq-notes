@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-70",
   "timestamp": "2026-11-27T23:49Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c107453",
+  "commit": "fb1cf68",
   "project_phase": "Phase 3 (governance). NEX-065 records a policy approval as an explicit lifecycle transition; NEX-069 makes that migration survive an upgrade of a database that had already published a policy.",
   "active_task": null,
   "task_statuses": {
@@ -192,7 +192,7 @@
     "issue_comment_covers_through": "NEX-069",
     "docs_head_ci_green": false
   },
-  "branch_head": "Docs head c107453 (NEX-070 checkpoint) over product head 04d52e1. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
+  "branch_head": "Docs head fb1cf68 (NEX-070 VERIFIED promotion) over product head 04d52e1. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {
