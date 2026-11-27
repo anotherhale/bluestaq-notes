@@ -2965,3 +2965,59 @@ a draft already failed, so existing audit behaviour is unchanged.
 PUBLISHED` is direct, so approval of a policy change is not itself recorded. That is the
 next governance slice.
 
+
+## NEX-067 — MFA requires independent factor families, not distinct method names
+
+| Field | Value |
+| --- | --- |
+| Task ID | NEX-067 |
+| Phase | 3 (governance / identity assurance) |
+| Priority | P1 — authorization correctness (a security control that overstates the login) |
+| Status | VERIFIED — CI 4/4 `completed/success` at `c01fde5`, polled 2026-11-27T22:47Z |
+| Dependencies | ADR-015 `step-up` obligation (NEX-058) — this is the fact that obligation enforces |
+
+**Objective.** Make `derive_assurance()` grant `MULTI_FACTOR` only on evidence of two
+*independent* authentication factor categories, not on two distinct strings in `amr`.
+
+**Scope.** `infrastructure/identity/oidc_relying_party.py` — one family table plus the
+predicate; `tests/authentication/test_derive_assurance.py` — negative and positive cases. No
+port, no adapter, no schema, no migration, no new module.
+
+**Architecture references.** ADR-015 (deterministic enforcement; obligations), ADR-008/ADR-016
+(authorization decisions come from deterministic application-layer controls), §10 of
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (fail-closed; AI never overrides policy).
+
+**Acceptance criteria.**
+- `otp + totp` and `sms + tel` read as `SINGLE_FACTOR` — the two combinations the review named.
+- Other same-family spellings behave the same: `hwk+swk`, `webauthn+passkey`, `face+iris`,
+  `pwd+password+pin`, `fpt+face+iris+vbm`.
+- Genuine independent pairs still read `MULTI_FACTOR`: `pwd+otp`, `pwd+fpt`, `pwd+hwk`,
+  `otp+fpt`, `pin+hwk`.
+- An unrecognised method is ignored, never counted, so the closed vocabulary can only
+  understate assurance.
+- Full suite, ruff format/check, and mypy stay green.
+
+**Required tests.** `test_amr_methods_from_one_factor_family_read_as_single` (parametrised, 8
+same-family cases) and `test_amr_methods_from_independent_families_read_as_multi`. Both pass;
+12 cases fail if the family guard is reverted, so they are proved to catch the defect.
+
+**Security considerations.** This closes a **fail-open**. The `step-up` obligation demanded two
+factors and one factor satisfied it, because the gateway trusted a derived value that counted
+spellings. The vulnerability was not reachable from an unauthenticated position — an attacker
+had to control the `amr` claim, which the IdP signs — but a permissive IdP or a confused
+deployment could mint it, and the control then enforced nothing.
+
+**Migration implications.** None.
+
+**Observability implications.** Assurance may now read lower for the same claim set. That is the
+intended direction and is visible in existing audit records, which already carry the derived
+assurance.
+
+**Rollback.** Revert the family table and predicate; no state to unwind.
+
+**Complexity.** Low.
+
+**Verified.** CI 4/4 `completed/success` at `c01fde5` (2026-11-27T22:47Z); PR #5 body and
+comment `7229055417` carry the evidence.
+**Named follow-up (not this task):** NEX-065 — the policy lifecycle has no `approve` verb, so a
+policy change is not itself recorded as approved.

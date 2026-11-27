@@ -157,3 +157,29 @@ Recorded as ADR-014 rather than implemented directly because it changes the shap
 decision type that every enforcement path consumes. That is an architecture decision, and
 the repository's rule is that architecture documents are contracts — a shape change gets an
 ADR before code.
+
+## D-069 — AMR factor independence (NEX-067)
+
+**D-069a — a closed factor-family vocabulary, not an open one.** Each AMR method maps to one of
+six families (`knowledge`, `one-time-code`, `sms`, `hardware-key`, `biometric`, `generic-mfa`)
+and assurance requires two distinct families. The table is closed on purpose: an open or
+prefix-matched scheme would let a new spelling (`otp-sms`, `webauthn-2`) be invented that reads
+as a second factor. An unrecognised method is **ignored**, which can only understate assurance.
+Understating costs a step-up prompt; overstating spends an obligation that exists to stop an
+action.
+
+**D-069b — `otp` and `sms` are separate families, deliberately.** A one-time code and an SMS
+message are different channels even though the code is often *delivered* by SMS, and the review
+named `sms + tel` as same-family while treating `otp + sms` as valid. Splitting them keeps
+`pwd+otp` and `otp+fpt` multi-factor without letting `sms+tel` (one channel, two names) through.
+
+**D-069c — did not use ACR values.** The review offered "factor category (or issuer-specific
+ACR semantics)". ACR is issuer-defined, so a relying party that trusts it for *strength* is
+trusting the issuer's policy rather than its own; a misconfigured issuer could assert a strong
+ACR for a weak login, and there is no local evidence to contradict it. `amr` names methods,
+which the relying party can classify itself. This keeps the decision inside our trust boundary.
+
+**D-069d — a failing test was fixed, not worked around.** A first draft asserted
+`["otp","totp","sms"]` was single-factor; it returned multi and failed. The test was wrong —
+one-time code and SMS are two families — so the case was replaced with three genuinely
+same-family spellings. The assertion was not loosened to fit.

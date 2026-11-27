@@ -7,16 +7,47 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 68) | `f8ae00c` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Docs head `f63ac1b` (NEX-068, CI-verified), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`f63ac1b` (NEX-068 head): 4/4 `completed/success`**, polled 2026-11-27T22:47Z — **NEX-068 VERIFIED**. NEX-066 remains verified at `2ce7730`. |
+| Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
+| Head commit (measured) | Product head `c01fde5` (NEX-067, CI-verified), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
+| Last CI result | **`c01fde5` (NEX-067 head): 4/4 `completed/success`**, polled 2026-11-27T22:47Z — **NEX-067 VERIFIED**. NEX-068 remains verified at `f63ac1b`. |
 | Tracking issue | #2 (open) — **comment `7228764536`** covers NEX-068; `7228642936` covers NEX-064/NEX-066, the corrected NEX-056 record and the open P1. Issue stays open. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated this run**, carries NEX-052…**NEX-068** (40653 chars). Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). **Still not addressed** — carried across three runs while enforcement gaps were closed instead. Top priority next run as **NEX-067**; this is now overdue. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated this run**, carries NEX-052…**NEX-067** (42794 chars). Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | None outstanding from the 21:18Z review — **NEX-067 closed it** (`c01fde5`). Next security work is the NEX-065 `approve` verb (see BACKLOG). |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-067 (run `NEX-2026-11-27-69`) — MFA requires independent factor families, not distinct method names
+
+**Status: VERIFIED.** Product `c01fde5`; CI 4/4 `completed/success` at `c01fde5` (polled
+2026-11-27T22:47Z). PR #5 body and comment `7229055417` carry the evidence.
+
+**The defect the review named, one layer under the obligations.** `derive_assurance()` read
+`amr` as a flat set: `len(methods) >= 2` plus any recognised second factor meant
+`MULTI_FACTOR`. Two *spellings of one factor* therefore counted as two — `["otp","totp"]` are
+both one-time codes, `["sms","tel"]` are both a text message. ADR-015 makes the `step-up`
+obligation enforceable by this single derived fact, so one factor was spending an obligation
+that demands two. Same fail-open class as NEX-060/NEX-062, one layer deeper: the control read a
+value that overstated the login.
+
+**Fix.** Methods map to a closed factor-family vocabulary and assurance requires **two distinct
+families**: `knowledge` (`pwd`/`password`/`pin`), `one-time-code` (`otp`/`totp`/`hotp`), `sms`
+(`sms`/`tel`), `hardware-key` (`hwk`/`swk`/`fido`/`webauthn`/`passkey`), `biometric`
+(`fpt`/`face`/`iris`/`vbm`), `generic-mfa` (`mfa`/`pwd-2fa`). Closed vocabulary is the point: a
+new spelling cannot smuggle a weaker method in, and an unrecognised method is ignored — which can
+only understate (D-069a). Genuine second factors are unaffected: `pwd+otp`, `pwd+fpt`, `pwd+hwk`,
+`otp+fpt`, `pin+hwk` all stay multi-factor.
+
+**Evidence.** Both combinations the review named, plus `hwk+swk`, `webauthn+passkey`, `face+iris`,
+three-spelling knowledge and four-spelling biometric, in
+`tests/authentication/test_derive_assurance.py`. Removing **only** the family guard failed
+**12** of them with `assert MULTI_FACTOR is SINGLE_FACTOR`; restoring it returned them to green,
+so the tests are proved to catch the defect. Gates: ruff format 301 files already formatted,
+ruff check clean, mypy clean (140 files), **1460 passed / 4 skipped** (up 16 from 1444).
+
+**Scope.** Two files, as the review asked — no restructuring, no new abstraction beyond the
+family table.
 
 ## NEX-068 (run `NEX-2026-11-27-68`) — an approval weaker than the call's threshold is refused
 

@@ -8139,3 +8139,80 @@ times is drift. The next run should start NEX-067 before any further governance 
 **Next action.** NEX-067 — read `oidc_relying_party.py`, prove the same-family AMR defect with
 a failing test first, then fix.
 
+
+## Run NEX-2026-11-27-69 — MFA requires independent factor families, not distinct method names
+
+**Run ID** `NEX-2026-11-27-69` · **Branch** `feature/agentic-enterprise-platform`
+**Starting commit** `ac0f6d0` · **Ending commit** `c01fde5` (product)
+**Window** RUN_START 1795816848 (22:00:48Z) · DEADLINE 1795818348 (22:25:48Z) · stopped 22:24Z
+
+### What was selected, and why
+
+The checkpoint named NEX-067 as `next_task` and the NEX-068 entry closed with "The next run
+should start NEX-067 before any further governance breadth." That is what this run did — a P1
+security defect the PR review (`6092140204`, follow-up `7228330292`) had already specified
+precisely, carried across three runs.
+
+### The defect
+
+`derive_assurance()` read the `amr` claim as a flat set of method names: `len(methods) >= 2`
+plus any recognised second factor returned `MULTI_FACTOR`. Two *spellings of one factor*
+therefore counted as two factors:
+
+- `["otp", "totp"]` — both are one-time codes
+- `["sms", "tel"]` — both are a text message
+
+ADR-015 makes the `step-up` obligation enforceable by this single derived fact, so one factor
+was spending an obligation that demands two. Same fail-open class as NEX-060 and NEX-062, one
+layer deeper: the control read a value that overstated the login rather than being missing.
+
+### The fix
+
+`_AMR_FACTOR_FAMILIES` maps each method to a closed factor-family vocabulary, and assurance
+requires **two distinct families**:
+
+| Family | Methods |
+| --- | --- |
+| `knowledge` | `pwd`, `password`, `pin` |
+| `one-time-code` | `otp`, `totp`, `hotp` |
+| `sms` | `sms`, `tel` |
+| `hardware-key` | `hwk`, `swk`, `fido`, `webauthn`, `passkey` |
+| `biometric` | `fpt`, `face`, `iris`, `vbm` |
+| `generic-mfa` | `mfa`, `pwd-2fa` |
+
+Two files changed, as the review asked — `oidc_relying_party.py` and its test module. No
+restructuring, no new abstraction beyond the family table.
+
+### Evidence
+
+- `tests/authentication/test_derive_assurance.py`: both combinations the review named
+  (`otp + totp`, `sms + tel`), plus `hwk + swk`, `webauthn + passkey`, `face + iris`,
+  three-spelling knowledge and four-spelling biometric as negatives; `pwd+otp`, `pwd+fpt`,
+  `pwd+hwk`, `otp+fpt`, `pin+hwk` as valid independent pairs.
+- **The tests were proved to catch the defect**: replacing only the family guard with the old
+  flat-set condition failed **12** cases with `assert MULTI_FACTOR is SINGLE_FACTOR`. Restored
+  from a saved copy, not retyped, then re-ran.
+- Gates on the committed tree: `ruff format --check` 301 files already formatted, `ruff check`
+  clean, `mypy` clean (140 files), `pytest` **1460 passed / 4 skipped** (up 16 from 1444).
+- CI on `c01fde5`: **4/4 `completed/success`** (both backend and frontend, both concurrency
+  pairs concluded), polled 22:47Z.
+
+### A note on the one test that failed mid-run
+
+An earlier draft of the negative case asserted `["otp","totp","sms"]` was single-factor. It
+returned `MULTI_FACTOR` and the test failed — **correctly**. One-time codes and SMS are two
+families, so multi-factor is the right answer; the test case was wrong, not the code. The case
+was replaced with three genuinely same-family spellings (`otp/totp/hotp`) rather than the
+assertion being loosened to accommodate it. Worth recording because "make the failing test
+pass" is the wrong instinct when the test itself is the thing that is wrong.
+
+### Delivery
+
+- PR #5 body extended with a NEX-067 section (40653 -> 42794 chars).
+- Reply posted to the review thread as issue comment `7229055417`, since a body-only review has
+  no inline thread to answer.
+- Checkpoint, STATE, BACKLOG, DECISIONS updated.
+
+**Commits.** `c01fde5` (product + tests), plus the state commit for this record.
+**Push status.** Pushed; remote head confirmed equal to local via `git ls-remote`.
+**Next action.** NEX-065 — the policy `approve` verb, the remaining item from the same review.
