@@ -53,7 +53,7 @@ variable with no expiry and no per-operation scoping. Rotation and scoping belon
 scoped-capability-grant slice; this slice makes the *use* of a grant visible, which is the
 prerequisite for ever rotating one. R36's governance gap is narrowed, not closed.
 
-**Why the tests are evidence.** Nine tests in `tests/application/test_operator_gate.py` pin the
+**Why the tests are evidence.** Fourteen tests pin this. Nine in `tests/application/test_operator_gate.py` pin the
 gate and the adapter: an empty allowlist admits nobody; a non-operator is refused as
 `ResourceNotFound` (so a probe cannot distinguish a forbidden endpoint from a missing path); a
 grant records caller, operation and the gate's clock time; a refusal records nothing; repeated
