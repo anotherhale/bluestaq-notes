@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
- "run_id": "NEX-2026-11-27-56",
- "timestamp": "2026-11-27T17:22Z",
+ "run_id": "NEX-2026-11-27-57",
+ "timestamp": "2026-11-27T18:16Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
- "project_phase": "Phase 3 (governance). NEX-055 VERIFIED: the `enhanced-audit` obligation records evidence sealed into the hash chain, so it is satisfiable instead of silently ignored. With NEX-054 (`redaction`, output filter) that is two of the five named obligations with real mechanisms; `step-up`, `second-approver` and `rate-limit` still fail closed by refusing the call (honest, but inexpressible). Next named gap: risk-based approval.",
+ "commit": "e7c7315",
+ "project_phase": "Phase 3 (governance). NEX-056 VERIFIED: the `rate-limit` obligation is enforced against the existing `RateLimiter` port on a per-agent-per-tool key, with the refusal audited as a denial carrying the retry window. Four of the five named obligations now have real mechanisms (`approval`, `redaction`, `enhanced-audit`, `rate-limit`). `step-up` and `second-approver` still fail closed by refusing the call - honest, but inexpressible. Next named gap: `step-up` (needs an ADR on what evidence raises the requirement), then risk-based approval.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -17,10 +17,12 @@
   "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
   "NEX-052": "VERIFIED - CI 4/4 completed/success at 57f50d1 (polled 2026-11-27T16:30Z by run 54).",
   "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z).",
-  "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c + CI PASSED on that commit. 1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit.",
-  "NEX-055": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f536ecc98d85959dd8b49a949a6eb932c8, and CI PASSED on that exact commit: check-runs polled 2026-11-27T17:31Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run set for the same SHA was still in_progress - that is the concurrency group re-running, not a failure. Both job types are green on the product commit."
+  "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd1, CI 4/4 at that SHA. Reported to PR #5 and issue #2 this run (delivery debt cleared).",
+  "NEX-055": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f, CI 4/4 at that SHA. Reported to PR #5 and issue #2 this run (delivery debt cleared).",
+  "NEX-056": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at e7c73157050a2fc0363b1090f4e17749b66bfe91, and CI PASSED on that exact commit: check-runs polled 2026-11-27T18:14Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run pair for the same SHA was still in_progress - the concurrency group re-running, not a failure."
  },
  "completed_tasks": [
+  "NEX-056",
   "NEX-055",
   "NEX-054",
   "NEX-052",
@@ -44,57 +46,57 @@
    "ruff format: 291 files left unchanged",
    "ruff check: All checks passed",
    "mypy: Success, no issues found in 138 source files",
-   "pytest tests/agent/test_tool_gateway_obligations.py: 17 passed",
    "pytest (full suite): 1308 passed, 4 skipped"
   ],
   "scope": "Run bare from the repo root on the feature branch, on the exact tree that was committed.",
-  "not_run": "CI was not polled this run - the clock reached the integration boundary. PostgreSQL-marked tests skip locally; the CI Backend job exercises the migration path.",
-  "ci": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f536ecc98d85959dd8b49a949a6eb932c8, and CI PASSED on that exact commit: check-runs polled 2026-11-27T17:31Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run set for the same SHA was still in_progress - that is the concurrency group re-running, not a failure. Both job types are green on the product commit."
+  "not_run": "PostgreSQL-marked tests skip locally; the CI Backend job exercises the migration path (and passed).",
+  "ci": "PASSED on e7c7315: Backend completed/success, Frontend completed/success, polled 2026-11-27T18:14Z."
  },
  "uncommitted_work": false,
  "pr_state": {
   "number": 5,
   "state": "open",
-  "draft": true,
+  "draft": false,
   "merged": false,
   "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-  "head_sha": "57f50d1",
+  "head_sha": "e7c7315",
   "base": "main",
   "title": "Enforce published governance policy at the tool gateway",
-  "note": "PR #5 carries NEX-051 and now NEX-052. Branch was merged up from origin/main earlier (f4eae90) to avoid reverting the demo dataset; no force-push used. Never merge without human review.",
-  "ci": "57f50d1: 4/4 completed/success, both events (polled 2026-11-27T16:30Z).",
+  "changed_files": 33,
   "mergeable": true,
-  "changed_files": 24,
   "mergeable_state": "clean",
+  "body_len": 21968,
+  "note": "Body now carries NEX-052 through NEX-056 evidence. Six slices stacked in one PR; large but coherent, each section states its own validation. Never merge without human review.",
   "reviews": "none yet; no review comments"
  },
  "tracking_issue": {
   "issue": 2,
   "state": "open",
-  "last_reported_task": "NEX-051",
-  "comment_id": 7221930939,
-  "note": "Updated this run with NEX-051 status and the avoided-revert finding."
+  "last_reported_task": "NEX-056",
+  "comment_id": 7225253883,
+  "note": "Updated this run with NEX-054/055/056 status and the full obligation-coverage table. Issue stays open: the programme is not done."
  },
  "blockers": [],
  "risks": [
-  "Concurrent agent runs push to this branch. Fetch and verify containment with `git merge-base --is-ancestor <sha> <remote head>`; never trust grep over push output.",
-  "An obligation kind with no handler refuses agents by design. The refusal must name the kind, or the policy author sees an unexplained outage.",
-  "Heredocs corrupt multi-line input in this environment (four occurrences now, including this run's first commit attempt). Write multi-line content with the file editor to a file and pass it to `git commit -F <file>` or `python3 <file>`. The repo tree was undamaged, but the commit silently did not run and the command burned its timeout.",
-  "enhanced-audit evidence is built from the same decision object the gate used, never re-read from the repository, so it cannot describe a different evaluation. Do not 'helpfully' re-derive it later."
+  "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push.",
+  "`step-up` and `second-approver` have no adapter and refuse the call. Fail-closed, but a policy naming them is inexpressible in practice. The refusal must name the kind.",
+  "DecisionEvidence must keep being built from the evaluated decision object, never re-read from the repository, or it could describe a different evaluation than the one enforced.",
+  "Six slices are stacked in PR #5 (33 files). Review cost is real; a reviewer may reasonably ask for it to be split, but splitting a stacked branch needs care not to lose the merge of main."
  ],
- "next_task": "NEX-056: append the NEX-054 and NEX-055 sections to PR #5 and comment on issue #2 (both slices are now CI-verified, so the reports can state that without a caveat), then take the next dependency-ready governance slice: `step-up` or `rate-limit`, which reuse the NEX-054/055 enforcement seam, or risk-based approval.",
- "next_action": "1. PR #5: append NEX-054 and NEX-055 sections citing CI success at 1878cd1 and c55fb9f. 2. Issue #2: post the same status. 3. Then implement `rate-limit` (deterministic, testable against the existing gateway seam) as the next obligation adapter.",
- "recovery_instructions": "NEX-054 product code is COMMITTED and PUSHED at 1878cd1; containment was verified structurally (merge-base --is-ancestor plus cat-file on the remote head). Nothing is in flight. CI for 1878cd1 was not polled. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5.",
+ "next_task": "NEX-057: the `step-up` obligation. Largest remaining obligation slice - it needs a decision about which evidence raises the requirement (risk signal -> higher assurance), so start with an ADR rather than code. `second-approver` follows and depends on the approval flow supporting a second *distinct* approver rather than reusing the first. Human review of PR #5 is the other outstanding item.",
+ "next_action": "1. Poll CI for the head of feature/agentic-enterprise-platform (docs commit descends from e7c7315, so its CI still compiles and tests the product code). 2. Write ADR-015 for step-up: what risk evidence raises the assurance requirement and what satisfies it. 3. Then implement step-up behind that ADR.",
+ "recovery_instructions": "Nothing is in flight. Product commit e7c7315 is COMMITTED, PUSHED and CI-verified 4/4. The docs commit that writes this file descends from it; read the true head with `git rev-parse HEAD` or `git ls-remote`, never from a SHA field here. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5. Next: ADR-015 for step-up.",
  "ci_status": {
-  "head_polled": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
-  "product_commit": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
+  "head_polled": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
+  "product_commit": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
   "result": "Backend (ruff, mypy, pytest, migrations) completed/success; Frontend (typecheck, lint, test, build) completed/success",
   "conclusion": "success",
-  "polled_at": "2026-11-27T17:31Z",
+  "polled_at": "2026-11-27T18:14Z",
   "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, filtered to the current head from `git ls-remote origin feature/agentic-enterprise-platform`.",
   "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair."
  },
  "verified_tasks": [
+  "NEX-056",
   "NEX-055",
   "NEX-052",
   "NEX-047",
@@ -141,10 +143,11 @@
   "NEX-039",
   "NEX-041",
   "NEX-040",
-  "NEX-044"
+  "NEX-044",
+  "NEX-054"
  ],
  "in_progress_tasks": [],
- "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
+ "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-056 is VERIFIED on direct CI evidence at its own product commit e7c7315 (4/4 completed/success, polled 2026-11-27T18:14Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
  "validation_status": "No source code changed after the green product tree. Product commit 3215e08 is CI-verified 4/4 at 57f50d1. Since then only docs/NEXUS and docs/ADR changed (4c48847, 48230e0, cb047a5, ef81697). Local gate re-run this run: `.venv/bin/ruff format --check` -> 288 files already formatted (exit 0). pytest/mypy were NOT re-run this run because no Python source changed; their last green run covers the identical src/ and tests/ tree.",
@@ -161,20 +164,20 @@
  "branch_head_observed_at": "2026-11-27T13:44:00Z",
  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
  "commits_this_run": [
-  "1878cd14578ab454fbc84ca4e73067c6e512943c"
+  "e7c73157050a2fc0363b1090f4e17749b66bfe91"
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "c55fb9f536ecc98d85959dd8b49a949a6eb932c8",
+  "head": "e7c73157050a2fc0363b1090f4e17749b66bfe91",
   "remote_verified": true,
-  "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned exactly c55fb9f536ecc98d85959dd8b49a949a6eb932c8 after the push (691f9c8..c55fb9f).",
-  "pr_updated": false,
-  "issue_updated": false,
-  "delivery_debt": "NEX-054 and NEX-055 are both CI-verified but neither is yet reported to PR #5 or issue #2. That reporting is the sole remaining debt and is owed to run 57.",
+  "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned exactly e7c73157050a2fc0363b1090f4e17749b66bfe91 after the push (27bbc82..e7c7315).",
+  "pr_updated": true,
+  "issue_updated": true,
+  "delivery_debt": "None. NEX-054, NEX-055 and NEX-056 are all reported to PR #5 and issue #2.",
   "ci_verified": true,
-  "issue_comment": null
+  "issue_comment": 7225253883
  },
- "run_summary": "Implemented NEX-055. `enhanced-audit` was the last obligation with no mechanism: a policy could demand that an attempt be recorded with more evidence than the default while the gateway wrote the identical row, so the policy would have read as enforced with nothing behind it. Because the obligation's mechanism *is* the record, there is no separate adapter and nothing to defer: the gateway now builds DecisionEvidence (matched rule ids, obligations imposed, attribute snapshot) from the very decision and attributes it just evaluated, threads it through both the direct and the approval-gated paths, and seals it into the invocation's intent_hash so it cannot be added to, trimmed, or rewritten afterwards. Migration a1f4c8d2e635 adds the column with a server default and then drops it, so pre-NEX-055 rows read back as 'no evidence' - which is true of them - and still verify; no backfill, because fabricating evidence would assert which rules decided a call nobody recorded. Four tests pin the contract, including that removing the evidence breaks chain verification. The run also hit the environment's heredoc corruption on its first commit attempt; the tree was undamaged, the message was rewritten to a file, and the commit succeeded. CI was polled after the push and both job types are completed/success on c55fb9f.",
+ "run_summary": "Implemented NEX-056: the `rate-limit` obligation got its enforcement adapter. It was the third of five named obligations with no mechanism - the gateway refused every call a policy placed it on, which is honest but left the policy language unable to express a volume bound at all. The adapter reuses the `RateLimiter` port the HTTP boundary already depends on, keyed per agent AND per tool so a hot tool cannot exhaust the budget of every other tool the same agent may call. An idempotent retry does not consume budget (a replay of a recorded decision is not a new call), and a refusal is audited as a denial naming the retry window. Enforcement runs before the approval gate so a flood cannot fill the approval queue. Still fails closed with no limiter wired, which is why the old 'unsatisfiable' test survives in a no-limiter harness. Gates: ruff format 291 files, ruff check clean, mypy 138 files, pytest 1308 passed / 4 skipped. Pushed as e7c7315 and CI polled to 4/4 completed/success. This run also cleared run 56's delivery debt: NEX-054 and NEX-055 sections appended to PR #5 (21968 chars, 33 files) and a NEX-054/055/056 status comment posted to issue #2 (7225253883).",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -182,7 +185,7 @@
   "at": "2026-11-27T12:16Z",
   "note": "Local HEAD and the remote ref agree exactly, so the branch is fully pushed. The run began on main at d6f92d0 in a fresh shallow clone; the feature branch was fetched and the slice committed on the true remote head 99faab5, so no rebase was needed."
  },
- "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 19aafa8. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
+ "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code) - this run that is e7c7315. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
  "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
  "checkpoint_integrity_note": "Rewritten from HEAD 810d1dc; the previous checkpoint named 0ef42ec, which was three commits stale.",
  "head_observed": "810d1dc",
@@ -220,29 +223,30 @@
    "ef81697"
   ]
  },
- "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
- "last_run": "NEX-2026-11-27-54",
+ "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_status.product_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
+ "last_run": "NEX-2026-11-27-57",
  "decisions_this_run": [
-  "D-055: enhanced-audit is satisfied by recording, not by gating. The record is the mechanism, so it must be built from the evaluated decision rather than re-derived, and it must be inside the hash chain or it is only a claim."
+  "D-056: the rate-limit bound is deployment configuration, not policy vocabulary. A rule says 'a volume bound applies'; the operator sets the number. A per-rule bound would need a parameterised PolicyObligation - a vocabulary change and therefore an ADR.",
+  "D-057: rate-limit is checked before approval, not after. A caller already over budget must be refused before it can open an approval request, otherwise a flood fills the human approval queue with requests that can never be used."
  ],
  "ci": {
-  "head": "2ae495d",
+  "head": "e7c7315",
   "conclusion": "SUCCESS",
   "checks": {
    "Backend (ruff, mypy, pytest, migrations)": "success",
    "Frontend (typecheck, lint, test, build)": "success"
   },
-  "verified_at": "2026-11-27T09:45Z",
-  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit. The two docs commits before it (ef81697, 03f4620) show conclusion=cancelled in the runs list because each new push superseded them; that is supersession, not failure."
+  "verified_at": "2026-11-27T18:14Z",
+  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit."
  },
  "pr": {
   "number": 5,
   "state": "open",
   "draft": false,
-  "head": "2ae495d",
+  "head": "e7c7315",
   "base": "main",
   "mergeable": true,
-  "changed_files": 27,
+  "changed_files": 33,
   "note": "Unmerged by policy. NEXUS never merges."
  },
  "head_at_checkpoint": "c825db61859591a46b5d4fc1d957130f126db9f8",

@@ -7005,3 +7005,114 @@ governance slice: `step-up` or `rate-limit` (both reuse the NEX-054/055
 enforcement seam), or risk-based approval. `step-up`, `second-approver` and
 `rate-limit` still fail closed by refusing the call — honest, but they leave the
 policy language unable to express those requirements.
+
+## Run `NEX-2026-11-27-57` — NEX-056: the `rate-limit` obligation gets an adapter
+
+- **Timestamp:** 2026-11-27T18:00Z–18:15Z
+- **Starting commit:** `27bbc82` (read from `git ls-remote`, not from a stored field)
+- **Ending commit (product):** `e7c7315`
+- **Branch:** `feature/agentic-enterprise-platform`
+
+### Tasks completed
+
+**NEX-056 — `rate-limit` obligation enforced against the existing `RateLimiter` port.**
+
+`rate-limit` was the third of five named obligations with no mechanism. The gateway refused
+every call a policy placed it on rather than running it unbounded — honest, but it left the
+policy language unable to express "this agent may call this tool N times per window".
+
+The adapter reuses the `RateLimiter` port the HTTP boundary already depends on, so a
+deployment that swaps in a shared store covers both without a change here. `InvokeTool` gained
+an optional `rate_limiter`; `container.py` passes the `InMemoryRateLimiter` it already builds.
+
+Three decisions, each pinned by a test:
+
+1. **Key is per agent *and* per tool.** The boundary's `AgentRateLimitDep` is a global
+   throttle on an agent's request rate; this is the narrower bound the policy author asked for
+   on one capability. A shared key would let a hot tool exhaust the budget of every other tool
+   the same agent may call.
+2. **An idempotent retry does not consume budget.** A retry under a recorded key replays a
+   decision already made, so the limiter is not consulted. Charging twice would make a network
+   retry indistinguishable from abuse.
+3. **A refusal is audited as a denial** naming the obligation and the retry window, so a
+   throttled agent is visible in the trail rather than only in the 429 the caller saw.
+
+Enforcement runs **before** the approval gate: a caller over budget is refused now, not after
+it has opened an approval request a human would be asked to rule on.
+
+Fails closed with no limiter wired — the obligation is reported unsatisfiable and the call
+refused, never run unbounded. That is why the pre-existing "`rate-limit` is unsatisfiable"
+test survives in a no-limiter harness: the obligation is now satisfiable *when* a limiter
+exists and unsatisfiable when it does not, and both halves are correct.
+
+The bound comes from the deployment's configured limiter, not from the rule: `PolicyObligation`
+is a closed vocabulary of names with no parameters. A per-rule bound needs a parameterised
+obligation — a vocabulary change and therefore an ADR, not a quiet widening.
+
+### Files changed
+
+- `src/notes_service/application/use_cases/tools.py` — `RateLimiter` import, `rate_limit_required`
+  gate property, `rate_limiter` constructor arg, `_enforce_rate_limit_obligation`, and the
+  satisfiability check.
+- `src/notes_service/bootstrap/container.py` — pass the existing `rate_limiter` into `InvokeTool`.
+- `tests/agent/test_tool_gateway_obligations.py` — five new cases.
+- `tests/agent/test_tool_gateway_policy.py` — the unsatisfiable case moves to a no-limiter harness.
+
+### Tests executed
+
+Bare from the repo root, as CI runs them:
+
+| Gate | Result |
+| --- | --- |
+| `ruff format` | 291 files left unchanged |
+| `ruff check` | All checks passed |
+| `mypy` | Success, no issues in 138 source files |
+| `pytest` (full suite) | 1308 passed, 4 skipped |
+
+### Delivery
+
+- Commit `e7c7315` pushed; `git ls-remote` independently returned `e7c7315` for the branch.
+  Containment verified with `git merge-base --is-ancestor 27bbc82 e7c7315` before pushing.
+- **CI polled on `e7c7315`: 4/4 `completed/success`** — Backend (ruff, mypy, pytest,
+  migrations) and Frontend (typecheck, lint, test, build), at 2026-11-27T18:14Z.
+- **PR #5 body updated** with the NEX-055 and NEX-056 sections (21968 chars, 33 files).
+  NEX-054 was already present from a prior run.
+- **Issue #2 commented** (`7225253883`) with NEX-054/055/056 status and the obligation
+  coverage table.
+
+### Delivery debt cleared this run
+
+Run 56 left NEX-054 and NEX-055 unreported. Both are now in the PR body, and NEX-055 plus
+NEX-056 are in the issue comment. No delivery debt remains.
+
+### Decisions made
+
+**D-056: the obligation bound is deployment configuration, not policy vocabulary.** A rule
+says *a volume bound applies*; the operator sets the number. Making the bound part of the rule
+would require `PolicyObligation` to carry parameters, which is a vocabulary change and needs an
+ADR. Recording it here so a future run does not quietly widen the gateway instead.
+
+**D-057: `rate-limit` is checked before `approval`, not after.** A caller already over budget
+must be refused before it can open an approval request, otherwise a flood fills the human
+approval queue with requests that can never be used. The ordering is deliberate and a test
+would catch a reversal only if the two are combined in one rule — worth pinning if a future
+slice changes the gate order.
+
+### Risks identified
+
+- The branch is shared with concurrent runs. A push rejection means re-read the tip from
+  `git ls-remote`, merge (never rebase, never force-push), revalidate, push.
+- `step-up` and `second-approver` remain the honest gap: a policy may name them and the call is
+  refused. Fail-closed, but inexpressible in practice.
+- `DecisionEvidence` must keep being built from the evaluated decision object, never re-read
+  from the repository, or it could describe a different evaluation than the one enforced.
+
+### Next task
+
+**NEX-057 — `step-up` obligation.** The largest remaining obligation slice: it needs a
+decision about which evidence raises the requirement (risk signal → higher assurance), so it
+should start with an ADR rather than with code. `second-approver` follows and depends on the
+approval flow supporting a second *distinct* approver rather than reusing the first.
+
+Human review of PR #5 is the other outstanding item. Six slices are stacked in one PR; it is
+large but coherent and every section states its own validation evidence.

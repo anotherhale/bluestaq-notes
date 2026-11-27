@@ -7,15 +7,63 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051 / NEX-052 / NEX-053 VERIFIED** in PR #5. **NEX-054 VERIFIED** (`1878cd1`): the `redaction` obligation has a real output-filtering adapter. **NEX-055 VERIFIED** (`c55fb9f`): the `enhanced-audit` obligation now records evidence sealed into the hash chain, so it is satisfiable rather than silently ignored. **Remaining gaps, named:** `step-up`, `second-approver` and `rate-limit` still fail closed by refusing the call (honest, but inexpressible), plus risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-055 VERIFIED** in PR #5. **NEX-056** (`e7c7315`): the `rate-limit` obligation is enforced against the existing `RateLimiter` port on a per-agent-per-tool key, with the refusal audited. Four of the five named obligations now have real mechanisms. **Remaining gaps, named:** `step-up` and `second-approver` still fail closed by refusing the call (honest, but inexpressible), plus risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 56) | `691f9c8` — read from `git ls-remote` at run start, not from a stored field. |
-| Head commit (measured) | Product commit `c55fb9f` (NEX-055), pushed and verified by an independent `git ls-remote` after the push. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
-| Last CI result | **`c55fb9f` (NEX-055): Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both `completed/success`**, polled 2026-11-27T17:31Z. Previous anchor `1878cd1` (NEX-054) also green. |
-| Tracking issue | #2 (open) — last reported NEX-053. **Delivery debt: NEX-054 and NEX-055 not yet reported.** The issue stays open: the programme is not done. |
-| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. Body carries NEX-052 and NEX-053 evidence. **Delivery debt: the NEX-054 and NEX-055 sections are not yet appended.** Automated merging is prohibited; a human reviewer decides. |
+| Starting commit (run 57) | `27bbc82` — read from `git ls-remote` at run start, not from a stored field. |
+| Head commit (measured) | Product commit `e7c7315` (NEX-056), pushed and verified by an independent `git ls-remote` after the push. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
+| Last CI result | **`e7c7315` (NEX-056): Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both `completed/success`**, polled 2026-11-27T18:14Z. Previous anchors `c55fb9f` (NEX-055) and `1878cd1` (NEX-054) also 4/4 green. |
+| Tracking issue | #2 (open) — **reported NEX-054/055/056 this run** (comment `7225253883`). The issue stays open: the programme is not done. |
+| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body now carries NEX-052…NEX-056 evidence** (appended this run, 21968 chars, 33 files). Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-056 PUSHED (run `NEX-2026-11-27-57`) — the `rate-limit` obligation gets an adapter
+
+`rate-limit` was the third of five named obligations with no mechanism. The gateway's
+behaviour was *honest*: it refused every call a policy placed the obligation on rather than
+running it unbounded. But it made the policy language unable to express the one bound an
+operator most often wants — "this agent may call this tool N times per window". A policy
+author could name a bound and get a total refusal instead.
+
+The adapter reuses the **existing** `RateLimiter` port that the HTTP boundary already
+depends on, so a deployment that swaps in a shared store gets both the boundary throttle and
+this obligation enforced against the same store with no change here. `InvokeTool` gained an
+optional `rate_limiter`; `container.py` passes the `InMemoryRateLimiter` it already builds
+from `rate_limit_requests` / `rate_limit_window_seconds`.
+
+Three decisions, each pinned by a test:
+
+1. **The key is per agent *and* per tool.** The boundary's `AgentRateLimitDep` is a global
+   throttle on an agent's request rate. This is the narrower bound the policy author asked
+   for on one capability. A single shared key would let a hot tool exhaust the budget of
+   every other tool the same agent may call — not what the rule says.
+2. **An idempotent retry does not consume budget.** A retry under a recorded key replays a
+   decision already made, so the limiter is not consulted and the replay path returns the
+   original outcome. Charging it again would make a network retry indistinguishable from
+   abuse.
+3. **A refusal is audited as a denial.** The same `denied` row a capability or policy
+   refusal writes, naming the obligation and the retry window, so a throttled agent is
+   visible in the trail rather than only in the 429 the caller saw.
+
+Enforcement runs **before** the approval gate. A caller over budget is refused now, not after
+it has opened an approval request a human would be asked to rule on — otherwise a flood could
+fill the approval queue with requests that can never be used.
+
+**Still fails closed with no limiter wired.** The obligation is then reported unsatisfiable by
+the caller's check and the call refused, never run unbounded. This is why the pre-existing
+"`rate-limit` is unsatisfiable" test survives: it moved to a no-limiter harness, because the
+obligation is now satisfiable *when* a limiter exists and unsatisfiable when it does not. Both
+halves are correct.
+
+**The bound comes from the deployment, not the rule.** `PolicyObligation` is a closed
+vocabulary of *names* with no parameters. A rule says "a volume bound applies" and the
+operator sets the number. A per-rule bound needs a parameterised obligation — a vocabulary
+change, and therefore an ADR, not a quiet widening in this gateway.
+
+Status: IMPLEMENTED, TESTED, COMMITTED (`e7c7315`), PUSHED (verified by `git ls-remote`),
+**CI PASSED** at that exact commit — Backend (ruff, mypy, pytest, migrations) and Frontend
+(typecheck, lint, test, build) both `completed/success`, polled 2026-11-27T18:14Z. PR #5
+updated, issue #2 commented (comment `7225253883`). **VERIFIED.**
 
 ## NEX-049 PUSHED (run `NEX-2026-11-27-52`) — the lifecycle, behind a gate the router cannot skip
 

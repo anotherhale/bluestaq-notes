@@ -2620,3 +2620,101 @@ ever adding an `approve` step to the lifecycle.
 **Delivery state.** NEX-046 and NEX-047 delivery debt is **CLEAR** as of run
 `NEX-2026-11-27-50`: CI 4/4 `completed/success` at `379a98a`, issue #2 comment
 `7219198697`, PR #3 section appended. NEX-048 starts with no debt outstanding.
+
+## NEX-056 (run `NEX-2026-11-27-57`) — the `rate-limit` obligation got an enforcement adapter
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **VERIFIED** — CI 4/4 `completed/success` at `e7c7315` (polled 2026-11-27T18:14Z) |
+| Dependencies | NEX-053 (obligations as a separate axis), NEX-054 (redaction adapter seam) |
+
+**Objective:** make the `rate-limit` obligation enforceable, so a policy can express a volume
+bound on one capability instead of refusing every call.
+
+**Architecture refs:** `ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` §5 (obligations),
+ADR-014 (obligations as a separate axis), `application/ports/rate_limit.py`.
+
+**Scope**
+
+- `InvokeTool` accepts an optional `RateLimiter`; the obligation is enforced on a
+  per-agent-per-tool key before the approval gate.
+- `container.py` passes the `InMemoryRateLimiter` it already builds from
+  `rate_limit_requests` / `rate_limit_window_seconds`.
+- No new port, no new dependency, no schema change.
+
+**Acceptance criteria**
+
+- A call within the bound succeeds.
+- A call over the bound raises `RateLimited` carrying the retry window (mapped to 429).
+- The refusal is written as a `denied` invocation naming the obligation and the window.
+- The bound is per tool, not per agent: exhausting one tool does not block another.
+- An idempotent replay under a recorded key does not consume budget.
+- With no limiter wired the obligation is unsatisfiable and the call is refused.
+
+**Required tests:** `tests/agent/test_tool_gateway_obligations.py` (five new cases),
+`tests/agent/test_tool_gateway_policy.py` (unsatisfiable case in a no-limiter harness).
+
+**Security considerations**
+
+- Fail closed with no limiter: never run unbounded because a dependency is missing.
+- Enforcement precedes approval so a flood cannot fill the human approval queue.
+- The refusal is audited, not merely returned: a throttled agent must be visible in the trail.
+
+**Migration implications:** none.
+
+**Observability:** the denial row is the signal; no new metric was added.
+
+**Rollback:** stop passing `rate_limiter` into `InvokeTool`. The obligation reverts to
+fail-closed refusal — no caller or port changes.
+
+**Known limit, recorded deliberately:** the bound is deployment configuration, not policy
+vocabulary. `PolicyObligation` is a closed set of names with no parameters, so a rule says "a
+volume bound applies" and the operator sets the number. A per-rule bound needs a parameterised
+obligation — an ADR, not a quiet widening (D-056).
+
+---
+
+## NEX-057 — the `step-up` obligation: what evidence raises the assurance requirement
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **TODO** |
+| Dependencies | NEX-053, NEX-054, NEX-055, NEX-056 (the four satisfied obligations) |
+
+**Objective:** give `step-up` a mechanism, or record an ADR explaining why it cannot have one
+in the current model. Today a policy that names it refuses every call.
+
+**Why this is the hardest of the five:** `approval`, `redaction`, `enhanced-audit` and
+`rate-limit` all have a *deterministic* mechanism that either fires or does not. `step-up`
+requires a judgement — that the current assurance level is insufficient for this attempt — and
+a judgement made by an AI model would be exactly the thing §10 of the directive forbids: a
+model raising its own requirement. So the decision is *what deterministic signal raises the
+requirement*, not *what model should decide*.
+
+**First deliverable is an ADR, not code.** Candidate deterministic signals to evaluate:
+
+- The capability's declared sensitivity (a static attribute on `ToolDefinition`).
+- The classification of the data the call would touch (already modelled).
+- Whether the delegating human's own session assurance is below the capability's floor.
+- Accumulated risk in the window (a count of denials, not a model score).
+
+The ADR must state what "stepped up" *means* — a fresh human confirmation, a re-authentication,
+a second credential — because an obligation whose satisfaction is undefined is not enforceable.
+
+**Acceptance criteria**
+
+- An ADR names the deterministic signal and what satisfies the requirement.
+- If a mechanism is feasible: the gateway enforces it and a test pins both the raise and the
+  satisfy paths.
+- If it is not feasible without a vocabulary change: the ADR says so and the backlog records the
+  prerequisite, rather than the gateway quietly accepting the obligation.
+
+**Security considerations:** a model must never raise its own assurance requirement. Any
+step-up trigger is a deterministic application-layer control.
+
+**Next:** `second-approver` follows and depends on the approval flow supporting a second
+*distinct* approver rather than reusing the first — separation of duties, not a repeat click.
