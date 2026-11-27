@@ -20,7 +20,8 @@ truth; this file records intent and reconciliation.
 
 ## NEX-066 (run `NEX-2026-11-27-66`) — an unenforceable obligation is refused when the policy is drafted
 
-**Status: COMMITTED + PUSHED at `353ef6d`. NOT VERIFIED — CI has not been polled on that head.**
+**Status: VERIFIED — CI 4/4 `completed/success` at `2ce7730`, polled 2026-11-27T22:55Z.** (The
+docs head descends from product commit `353ef6d`, so its CI compiles and tests it.)
 
 PR #5 review (6092140204) asked that authoring show whether each obligation is supported by the
 deployment. A prior run deferred this as *"no policy-validation surface exists"* — that was

@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-66",
   "timestamp": "2026-11-27T21:40Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "353ef6d859b3bc0fd65288ce236da31561255cf5",
+  "commit": "2ce7730",
   "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius (NEX-063); evaluate() fails closed on any version that is not published (NEX-064); and policy authoring now refuses an obligation this deployment cannot enforce (NEX-066), using the same domain judgement as the gateway. Remaining governance work is breadth: no approve verb, no preview, no non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
@@ -15,7 +15,7 @@
     "NEX-062": "VERIFIED - CI 4/4 at 0e2ca47 (polled 2026-11-27T20:16Z by run 62).",
     "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63.",
     "NEX-064": "VERIFIED - CI 4/4 completed/success at 7456a89 (the docs head descending from product commit 55e4436), polled 2026-11-27T21:13Z by run 64. Full suite 1434 passed / 4 skipped, ruff+mypy clean locally and in CI.",
-    "NEX-066": "COMMITTED + PUSHED at 353ef6d. NOT VERIFIED - CI not yet polled on that head. DraftPolicy refuses a draft naming an obligation with no enforcement adapter; the judgement lives in domain.governance.policy.deployment_obligation_gaps(), shared with the tool gateway so the two cannot drift. Local gates green on the rebased tree: ruff format/check clean, mypy 140 files, 1442 passed / 4 skipped."
+    "NEX-066": "VERIFIED. CI 4/4 completed/success at 2ce7730 (the docs head, which descends from product commit 353ef6d and therefore compiles and tests it), polled 2026-11-27T22:5xZ. DraftPolicy refuses a draft naming an obligation with no enforcement adapter; the judgement lives in domain.governance.policy.deployment_obligation_gaps(), shared with the tool gateway so the two cannot drift. Local gates green on the rebased tree: ruff format/check clean, mypy 140 files, 1442 passed / 4 skipped."
   },
   "completed_tasks": [
     "NEX-039",
@@ -101,7 +101,8 @@
     "NEX-060",
     "NEX-062",
     "NEX-063",
-    "NEX-064"
+    "NEX-064",
+    "NEX-066"
   ],
   "in_progress_tasks": [],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
@@ -113,8 +114,8 @@
       ".venv/bin/python -m pytest -> 1442 passed, 4 skipped, exit 0",
       ".venv/bin/python -m pytest tests/application/test_policy_lifecycle.py tests/agent/test_tool_gateway_policy.py -> green"
     ],
-    "not_run": "CI not polled on 353ef6d.",
-    "ci": "NOT POLLED for NEX-066. Last read signal is NEX-064 at 7456a89 (4/4 completed/success)."
+    "not_run": "none for NEX-066",
+    "ci": "NEX-066 VERIFIED: 4/4 completed/success at 2ce7730."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -148,19 +149,20 @@
     "Thirteen slices now stack in PR #5. Review cost is real.",
     "The policy lifecycle has no `approve` verb: DRAFT -> PUBLISHED is direct, so approving a policy change is not itself recorded (NEX-065)."
   ],
-  "next_task": "NEX-067 (P1 security): make `derive_assurance()` require AMR factors from distinct factor families before counting a session as multi-factor. Two claims from the same family must not satisfy an ACR that demands multi-factor.",
-  "next_action": "Poll CI for 353ef6d and promote NEX-066 if green. Then implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). The defect is a fail-open: a repeated same-family claim is currently read as a second factor.",
-  "recovery_instructions": "Tree is clean and 353ef6d is pushed. NEX-066 is PUSHED but unverified - poll CI before promoting it. Do NOT redo NEX-062/063/064/066. The P1 `derive_assurance()` AMR-independence defect is the top priority and outranks further docs slices. NEX-065 (policy approve verb) is reserved but unstarted.",
+  "next_task": "NEX-067 (P1 security): make `derive_assurance()` require AMR factors from distinct factor families before counting a session as multi-factor.",
+  "next_action": "Implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). Verify the defect against the code first; then pin it with a test that two same-family claims do not satisfy a multi-factor ACR. Update PR #5 body and issue #2 with NEX-064 and NEX-066.",
+  "recovery_instructions": "Tree is clean; 2ce7730 is pushed and CI-verified (4/4 success). NEX-066 is VERIFIED - do not redo NEX-062/063/064/066. The P1 `derive_assurance()` AMR-independence defect is the top priority and outranks further docs slices. NEX-065 (policy approve verb) is reserved but unstarted.",
   "ci_status": {
-    "head_polled": null,
+    "head_polled": "2ce7730",
     "product_commit": "353ef6d",
-    "result": "not polled",
-    "conclusion": "unknown",
-    "polled_at": null,
-    "note": "Poll GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs for the current branch head and require every check-run status == completed. Two pairs per SHA is the concurrency group re-running; the completed pair is the verdict. `cancelled` means superseded, not failed."
+    "result": "4/4 completed/success",
+    "conclusion": "success",
+    "polled_at": "2026-11-27T22:55Z",
+    "note": "Two check-run pairs per SHA is the concurrency group re-running; all four concluded success. The docs head descends from the product commit, so its CI still compiles and tests the product code. `cancelled` means superseded, not failed."
   },
   "commits_this_run": [
-    "353ef6d"
+    "353ef6d",
+    "2ce7730"
   ],
   "decisions_this_run": [
     "D-066a: share one function (`deployment_obligation_gaps`) between the gateway and DraftPolicy rather than copying the satisfiability table. Two copies drift; the authoring path would then promise something the call path refuses.",
@@ -168,18 +170,18 @@
     "D-066c: `rate_limiter_configured` defaults to True so existing call sites and tests are unchanged, and the container passes the real wiring (`rate_limiter is not None`) rather than an assumption. A default of False would have broken every existing draft.",
     "D-066d: corrected a prior record rather than preserving it - the NEX-056 table listed `second-approver` as refused, but the code enforces it (required_approvals=2, second_approver_user_id). Verified against code and recorded the correction."
   ],
-  "run_summary": "NEX-066 addresses the PR #5 review's 'Obligation readiness' item. A prior run deferred it as 'no policy-validation surface exists'; that was wrong, because DraftPolicy is that surface. A policy naming `rate-limit` in a deployment with no limiter used to publish cleanly and then deny every call it matched, with the reason only in the audit trail. The deployment-wide half of the satisfiability judgement now lives in one domain function, `deployment_obligation_gaps()`, called by both the tool gateway and DraftPolicy, so the two cannot drift. DraftPolicy refuses such a draft with the reason and writes no version. The gateway keeps the per-tool and per-caller conditions, which cannot be decided at draft time. The push was rejected non-fast-forward by a concurrent run (1c2377e -> e6f5486); the ancestor check proved it was a fast-forward race, not a rewrite, so the commit was rebased and every gate re-run on the rebased tree: ruff and mypy clean, 1442 passed / 4 skipped. Committed and pushed as 353ef6d. NOT VERIFIED - CI has not been polled on that head. The P1 AMR-independence defect from the 21:18Z review was not addressed and is handed to the next run as NEX-067.",
+  "run_summary": "NEX-066 addresses the PR #5 review's 'Obligation readiness' item. A prior run deferred it as 'no policy-validation surface exists'; that was wrong, because DraftPolicy is that surface. A policy naming `rate-limit` in a deployment with no limiter used to publish cleanly and then deny every call it matched, with the reason only in the audit trail. The deployment-wide half of the satisfiability judgement now lives in one domain function, `deployment_obligation_gaps()`, called by both the tool gateway and DraftPolicy, so the two cannot drift. DraftPolicy refuses such a draft with the reason and writes no version. The gateway keeps the per-tool and per-caller conditions, which cannot be decided at draft time. The push was rejected non-fast-forward by a concurrent run (1c2377e -> e6f5486); the ancestor check proved it was a fast-forward race, not a rewrite, so the commit was rebased and every gate re-run on the rebased tree: ruff and mypy clean, 1442 passed / 4 skipped. Committed and pushed as 353ef6d. NOT VERIFIED - CI has not been polled on that head. The P1 AMR-independence defect from the 21:18Z review was not addressed and is handed to the next run as NEX-067. CI polled after the docs push: 4/4 completed/success at 2ce7730, so NEX-066 is VERIFIED.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "353ef6d859b3bc0fd65288ce236da31561255cf5",
+    "head": "2ce7730",
     "pr_updated": false,
     "issue_updated": false,
     "delivery_debt": "PR #5 body and issue #2 need the NEX-066 section; deferred to the end of this run.",
-    "ci_verified": false,
-    "ci_verified_head": null,
+    "ci_verified": true,
+    "ci_verified_head": "2ce7730",
     "pr_body_updated": false
   },
-  "branch_head": "353ef6d859b3bc0fd65288ce236da31561255cf5",
+  "branch_head": "2ce7730",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436."
 }
