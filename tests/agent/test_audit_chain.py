@@ -20,7 +20,11 @@ from __future__ import annotations
 
 import uuid
 
-from notes_service.domain.agent.audit_chain import GENESIS_HASH, verify_chain
+from notes_service.domain.agent.audit_chain import (
+    GENESIS_HASH,
+    ChainAnchor,
+    verify_chain,
+)
 from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation, resolve_tool
 
 AGENT = uuid.uuid4()
@@ -120,3 +124,84 @@ class TestErasingTheSealIsDetected:
 
         assert verdict.verified is False
         assert verdict.reason == "outcome hash does not match the recorded verdict"
+
+
+def _anchor_for(entries: list[ToolInvocation]) -> ChainAnchor:
+    """The anchor a correct writer would have recorded for this trail."""
+    tail = entries[-1]
+    return ChainAnchor(sequence=tail.chain_sequence, intent_hash=tail.intent_hash)
+
+
+class TestTruncatingTheTailIsDetected:
+    """The chain must not be silent about rows that are no longer there.
+
+    Deleting the newest entries is the cheapest way to erase a record: the
+    survivors still link and still seal, so a chain-only verifier passes. The
+    anchor is what turns a shorter chain into a finding.
+    """
+
+    def test_a_chain_cut_back_still_verifies_without_an_anchor(self) -> None:
+        """Pins why the anchor exists: this is the hole, not the fix."""
+        denied, _second = _genuine_chain()
+
+        verdict = verify_chain([denied])
+
+        assert verdict.verified is True
+        assert verdict.checked == 1
+
+    def test_a_chain_cut_back_fails_against_the_anchor(self) -> None:
+        full = _genuine_chain()
+        denied = full[0]
+        verdict = verify_chain([denied], anchor=_anchor_for(full))
+
+        assert verdict.verified is False
+        assert verdict.reason is not None
+        assert "ends at sequence 1" in verdict.reason
+        assert "anchor records 2" in verdict.reason
+        assert verdict.first_break is not None
+        assert verdict.first_break.sequence == 2
+
+    def test_a_fully_erased_trail_fails_against_the_anchor(self) -> None:
+        full = _genuine_chain()
+
+        verdict = verify_chain([], anchor=_anchor_for(full))
+
+        assert verdict.verified is False
+        assert verdict.reason == ("the trail is empty but the anchor records entries that existed")
+        assert verdict.checked == 0
+
+    def test_the_anchored_tail_must_match_its_hash(self) -> None:
+        """Length alone is not enough: the newest row must be the anchored one.
+
+        A trail of the right length can still be the wrong trail. Every entry
+        links and seals, so only the anchor comparison notices the swap.
+        """
+        full = _genuine_chain()
+        other_trail_tail = ChainAnchor(sequence=2, intent_hash="f" * 64)
+
+        verdict = verify_chain(full, anchor=other_trail_tail)
+
+        assert verdict.verified is False
+        assert verdict.reason == "the newest entry does not match the anchored hash"
+
+    def test_an_untouched_chain_matches_its_anchor(self) -> None:
+        full = _genuine_chain()
+
+        verdict = verify_chain(full, anchor=_anchor_for(full))
+
+        assert verdict.verified is True
+        assert verdict.checked == 2
+
+    def test_an_agent_with_no_history_has_an_empty_anchor(self) -> None:
+        """``(0, GENESIS)`` means "nothing recorded", not "everything deleted"."""
+        verdict = verify_chain([], anchor=ChainAnchor(sequence=0, intent_hash=GENESIS_HASH))
+
+        assert verdict.verified is True
+        assert verdict.checked == 0
+
+    def test_no_anchor_is_not_a_claim_of_completeness(self) -> None:
+        """A caller without an anchor gets the weaker verdict, documented."""
+        verdict = verify_chain([], anchor=None)
+
+        assert verdict.verified is True
+        assert verdict.checked == 0

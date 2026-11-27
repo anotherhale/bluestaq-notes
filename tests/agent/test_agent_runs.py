@@ -263,6 +263,7 @@ def _crash_mid_step(h: Harness, agent, run) -> ToolInvocation:
             chain_sequence=sequence,
         )
         uow.tool_invocations.add(invocation)
+        uow.tool_invocations.advance_chain_anchor(AgentId.parse(agent.id), invocation)
         uow.commit()
     return invocation
 
@@ -490,6 +491,7 @@ def test_abort_leaves_a_settled_step_and_its_link_untouched(h: Harness) -> None:
         )
         settled.succeed(outcome="ok")
         uow.tool_invocations.add(settled)
+        uow.tool_invocations.advance_chain_anchor(AgentId.parse(agent.id), settled)
         uow.commit()
 
     aborted = h.abort.run(h.principal, run_id=str(run.id), reason="stop")

@@ -551,7 +551,10 @@ class VerifyToolInvocationChain(UseCase):
     def run(self, principal: Principal, *, agent_id: str) -> ChainVerdict:
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            return verify_chain(uow.tool_invocations.list_chain(agent.id))
+            return verify_chain(
+                uow.tool_invocations.list_chain(agent.id),
+                anchor=uow.tool_invocations.chain_anchor(agent.id),
+            )
 
 
 __all__ = [

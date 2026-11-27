@@ -438,6 +438,11 @@ class AgentRow(Base):
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow
     )
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # The high-water mark of this agent's audit chain, kept here rather than
+    # derived from ``tool_invocations`` so that deleting the newest invocation
+    # rows cannot make the chain look complete. See ``audit_chain.ChainAnchor``.
+    chain_anchor_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chain_anchor_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="0" * 64)
 
     __table_args__ = (
         CheckConstraint("status IN ('active','suspended','revoked')", name="status_valid"),

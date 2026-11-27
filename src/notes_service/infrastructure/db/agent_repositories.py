@@ -20,7 +20,7 @@ from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
-from notes_service.domain.agent.audit_chain import GENESIS_HASH
+from notes_service.domain.agent.audit_chain import GENESIS_HASH, ChainAnchor
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import (
@@ -627,15 +627,27 @@ class SqlAlchemyToolInvocationRepository:
         return [_invocation_to_domain(row) for row in rows]
 
     def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
+        anchor = self.chain_anchor(agent_id)
+        if anchor.is_empty:
+            return 1, GENESIS_HASH
+        return anchor.sequence + 1, anchor.intent_hash
+
+    def advance_chain_anchor(self, agent_id: AgentId, invocation: ToolInvocation) -> None:
+        row = self._session.get(AgentRow, _as_uuid(agent_id))
+        if row is None:
+            raise LookupError(f"agent {agent_id} has no row to anchor its chain on")
+        row.chain_anchor_sequence = invocation.chain_sequence
+        row.chain_anchor_hash = invocation.intent_hash
+
+    def chain_anchor(self, agent_id: AgentId) -> ChainAnchor:
         row = self._session.execute(
-            select(ToolInvocationRow.chain_sequence, ToolInvocationRow.intent_hash)
-            .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
-            .order_by(ToolInvocationRow.chain_sequence.desc())
-            .limit(1)
+            select(AgentRow.chain_anchor_sequence, AgentRow.chain_anchor_hash).where(
+                AgentRow.id == _as_uuid(agent_id)
+            )
         ).first()
         if row is None:
-            return 1, GENESIS_HASH
-        return row[0] + 1, row[1]
+            raise LookupError(f"agent {agent_id} has no row to read an anchor from")
+        return ChainAnchor(sequence=row[0], intent_hash=row[1])
 
     def list_chain(self, agent_id: AgentId) -> list[ToolInvocation]:
         """The agent's entire trail in chain order, for verification.

@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+from notes_service.domain.agent.audit_chain import ChainAnchor
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import AgentRun, AgentRunId
@@ -170,7 +171,27 @@ class ToolInvocationRepository(Protocol):
         the same transaction that inserts the entry, so two concurrent attempts
         cannot both claim one sequence number: the unique constraint on
         ``(agent_id, chain_sequence)`` rejects the loser and the caller retries.
+
+        The link is derived from the agent's *anchor*, not from the greatest
+        surviving row. If the newest rows were deleted, a row-derived link would
+        quietly re-anchor the chain on the truncated tail and the truncation
+        would never be noticed. An anchor-derived link points at a hash whose
+        entry no longer exists, so the tampering stays visible.
         """
+        ...
+
+    def advance_chain_anchor(self, agent_id: AgentId, invocation: ToolInvocation) -> None:
+        """Move the agent's anchor to ``invocation``, in the caller's transaction.
+
+        Called after the entry is inserted, so the anchor and the entry commit
+        together: an anchor that moved without its entry would report a
+        phantom deletion, and an entry inserted without moving the anchor would
+        let the next truncation go unnoticed.
+        """
+        ...
+
+    def chain_anchor(self, agent_id: AgentId) -> ChainAnchor:
+        """The agent's recorded high-water mark, for verification."""
         ...
 
     def list_chain(self, agent_id: AgentId) -> list[ToolInvocation]:

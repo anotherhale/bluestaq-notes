@@ -155,13 +155,41 @@ class ChainBreak:
 
 
 @dataclass(frozen=True, slots=True)
+class ChainAnchor:
+    """The high-water mark of an agent's chain, held outside the entries.
+
+    A hash chain alone can only prove that the entries it *contains* are intact
+    and contiguous. It says nothing about how many entries there should be, so
+    deleting the newest rows — the cheapest way to erase a record, since the
+    survivors still verify — leaves a shorter chain that passes.
+
+    The anchor closes that: it records the sequence and intent hash of the last
+    entry ever written for the agent, in a row the entries do not live in. A
+    verifier compares the trail's true tail against it, so a truncated tail is a
+    contradiction rather than a shorter valid chain. New entries are linked to
+    the *anchor*, not to the greatest surviving row, so a truncation cannot be
+    healed by the next write either: the new entry would link to a hash whose
+    entry no longer exists.
+    """
+
+    sequence: int
+    intent_hash: str
+
+    @property
+    def is_empty(self) -> bool:
+        return self.sequence == 0
+
+
+@dataclass(frozen=True, slots=True)
 class ChainVerdict:
     """The result of verifying one agent's trail.
 
     ``checked`` counts entries that were actually recomputed, so a caller can
     distinguish "verified 40 entries" from "verified nothing". An empty trail
     is a *passing* verdict with ``checked == 0``: there is nothing to contradict,
-    and reporting it as a failure would make a new agent look compromised.
+    and reporting it as a failure would make a new agent look compromised —
+    unless an anchor says entries once existed, in which case an empty trail is
+    the loudest possible finding.
     """
 
     verified: bool
@@ -228,7 +256,9 @@ class VerifiableEntry(Protocol):
     def outcome_hash(self) -> str | None: ...
 
 
-def verify_chain(entries: Sequence[VerifiableEntry]) -> ChainVerdict:
+def verify_chain(
+    entries: Sequence[VerifiableEntry], *, anchor: ChainAnchor | None = None
+) -> ChainVerdict:
     """Recompute the chain over ``entries`` and report the first contradiction.
 
     ``entries`` must be in ``chain_sequence`` order. Each entry is checked twice:
@@ -240,6 +270,14 @@ def verify_chain(entries: Sequence[VerifiableEntry]) -> ChainVerdict:
     is deliberate: it localises the damage. A forged entry fails its own check
     and is reported as the break, instead of cascading a failure through every
     later entry and hiding which one was actually altered.
+
+    ``anchor`` is what makes *deletion from the end* detectable. Without it the
+    verdict describes the trail that is present and is silent about the rows that
+    are not: a chain cut back to its first three entries verifies as a valid
+    three-entry chain. With an anchor, the last entry must be the anchored one,
+    so a shorter trail is reported as a break at the point the trail runs out.
+    ``anchor=None`` means the caller had no anchor to compare against; it does
+    not assert that the trail is complete.
     """
     previous = GENESIS_HASH
     expected_sequence = 1
@@ -340,11 +378,51 @@ def verify_chain(entries: Sequence[VerifiableEntry]) -> ChainVerdict:
         previous = entry.intent_hash
         expected_sequence += 1
 
+    if anchor is not None and not anchor.is_empty:
+        # Every present entry verified, but the trail must also end where the
+        # anchor says it ends. A shorter trail means the newest rows were
+        # deleted; an empty one means all of them were.
+        if not entries:
+            return ChainVerdict(
+                verified=False,
+                checked=0,
+                first_break=ChainBreak(
+                    sequence=anchor.sequence,
+                    invocation_id="",
+                    reason="the trail is empty but the anchor records entries that existed",
+                ),
+            )
+        tail = entries[-1]
+        if tail.chain_sequence != anchor.sequence:
+            return ChainVerdict(
+                verified=False,
+                checked=len(entries),
+                first_break=ChainBreak(
+                    sequence=tail.chain_sequence + 1,
+                    invocation_id="",
+                    reason=(
+                        "trail ends at sequence "
+                        f"{tail.chain_sequence} but the anchor records {anchor.sequence}"
+                    )[:_MAX_REASON],
+                ),
+            )
+        if tail.intent_hash != anchor.intent_hash:
+            return ChainVerdict(
+                verified=False,
+                checked=len(entries),
+                first_break=ChainBreak(
+                    sequence=tail.chain_sequence,
+                    invocation_id=str(tail.id),
+                    reason="the newest entry does not match the anchored hash",
+                ),
+            )
+
     return ChainVerdict(verified=True, checked=len(entries), first_break=None)
 
 
 __all__ = [
     "GENESIS_HASH",
+    "ChainAnchor",
     "ChainBreak",
     "ChainVerdict",
     "VerifiableEntry",

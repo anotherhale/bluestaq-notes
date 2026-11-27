@@ -443,7 +443,7 @@ class InvokeTool(UseCase):
         forking the chain.
         """
         sequence, previous = uow.tool_invocations.next_chain_link(resolved.agent.id)
-        return ToolInvocation.begin(
+        invocation = ToolInvocation.begin(
             agent_id=resolved.agent.id,
             token_id=resolved.token.id,
             tool=tool,
@@ -454,6 +454,11 @@ class InvokeTool(UseCase):
             previous_hash=previous,
             chain_sequence=sequence,
         )
+        # Move the anchor in the same transaction that will insert the entry, so
+        # the two cannot disagree. Doing it here rather than at each call site
+        # means no insert path can forget it.
+        uow.tool_invocations.advance_chain_anchor(resolved.agent.id, invocation)
+        return invocation
 
     def _finalise(self, invocation: ToolInvocation, *, failed: bool, outcome: str | None) -> None:
         if not invocation.is_terminal:
