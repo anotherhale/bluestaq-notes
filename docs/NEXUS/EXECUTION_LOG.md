@@ -5251,3 +5251,58 @@ Start **NEX-042**, chosen from `docs/NEXUS/BACKLOG.md` at the top of the next ru
 `git rev-parse HEAD`. Claim the task (`nexus_coord claim claim --task-id NEX-042`) and hold the
 lease before any write. Issue comments on this repository must use lists, never markdown tables
 (a table body returns HTTP 500).
+
+---
+
+## Run `NEX-2026-11-27-44` (second segment) — delivery and a lease collision
+
+**Run ID** NEX-2026-11-27-44 (second segment) · **Branch** `feature/agentic-enterprise-platform`
+· **Starting commit** `6da559d` · **Ending commit** `5ecb5c7`
+
+### What this segment did
+
+The first segment had already implemented, verified and committed R37 (`2d58e22`), recorded it
+in the coordination files (`6da559d`), and pushed. This segment closed the *delivery* half:
+
+- Polled CI and recorded **4/4 `completed/success` at `6da559d`**. The `2d58e22` workflow run
+  was superseded in the concurrency group and has no check-runs of its own; `6da559d`'s tree is
+  a docs-only superset, so its Backend job ran the exact R37 code. Recorded as green at
+  `6da559d`, not at `2d58e22` — cite the SHA that ran (`606805f`).
+- Posted the R37 run report to tracking issue #2 as comment **`7213326000`** (3495 chars). Lists
+  only, no tables. Read back from the API: byte-for-byte equal, 8/8 substring assertions (`5ecb5c7`).
+- Inserted the R37 section into PR #3 and refreshed its delivery state. Body now 69961 chars,
+  `draft=true`, `merged=false`, read back byte-for-byte equal.
+- Recorded the delivery in `STATE.md` and `CHECKPOINT.json`.
+
+### The collision — R38
+
+Reading `git status` at the start showed `main` at `d6f92d0`, which contradicted a checkpoint
+that named `2d58e22`. Rather than assume, the reflog was read. It shows the clone at 01:00:28,
+a checkout to the feature branch at 01:01:01, and commits `2d58e22`/`6da559d` at 01:12–01:16 by
+holder `Andrews-Mac-mini.local-56084` — **while this segment was already running commands in the
+same workspace**. Two segments shared one workspace.
+
+`lease acquire` then returned **exit 2**: the lease is held by `…-56084` and has not expired.
+`ps` confirms PID 56084 is dead, but expiry — not liveness — is what the lease checks. This
+segment had already written `606805f` and `5ecb5c7` by that point. That is a protocol violation:
+writes require the lease. It is recorded as R38 rather than concealed, and no further
+coordination writes will be made after this entry until the lease is free.
+
+No state damage resulted. The branch is linear (`042e2b6 → f92262a → 2d58e22 → 6da559d →
+606805f → 5ecb5c7`), the tree is clean, `main` is untouched at `d6f92d0` on the remote, and CI
+on the head is 4/4 success. The risk is procedural.
+
+### Why no new slice was started
+
+364 seconds remained at the reporting boundary. Section 15 forbids starting a slice with under
+10 minutes left; doing so would leave an uncommitted tree for the next run to discard. R37 was
+already complete, so the correct use of the window was delivery, verification and this record.
+
+### Next action
+
+Wait for the lease to expire (`1795769694`, 2026-11-27T09:34:54Z) or acquire it if free, then
+claim **NEX-042** from the top of `BACKLOG.md`. First command is always
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`.
+Consider R38's follow-up: a liveness-aware lease takeover so a crashed holder does not block
+writes for the full 45-minute TTL.
+

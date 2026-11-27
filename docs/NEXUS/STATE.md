@@ -1021,7 +1021,17 @@ The organization slice is implemented across all layers:
 
 ## Blockers
 
-None currently. The following are known open items, not blockers:
+**R38 — stale lease blocks coordination writes until 2026-11-27T09:34:54Z (`1795769694`).**
+`refs/locks/nexus/lease` is held by `Andrews-Mac-mini.local-56084` (run `NEX-2026-11-27-43`).
+That process is dead, but the lease is unexpired, so `lease acquire` exits 2 and refuses the
+write. A second segment of this run wrote `606805f` and `5ecb5c7` without holding the lease —
+a protocol violation, recorded rather than concealed. No state damage: the branch is linear,
+the tree is clean, `main` is untouched, and CI on the head is 4/4 success. Product work is
+unaffected; only coordination-file writes are blocked. Do **not** force-delete the lease ref;
+it expires on its own. See R38 in `CHECKPOINT.json` for the evidence and the follow-up
+(a liveness-aware takeover, so a crashed holder stops blocking writes for the full 45-minute TTL).
+
+The following are known open items, not blockers:
 
 - Tool gateway, Jev integration, and the admin console UI are **not yet
   implemented** — they are sequenced in `ROADMAP.md`, not regressions.

@@ -47,7 +47,15 @@
     "prior_comment_id": 7213047814,
     "prior_comment_scope": "NEX-039/040/041"
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "id": "R38",
+      "class": "BLOCKER-C (environmental) / BLOCKER-D (process)",
+      "summary": "Stale unexpired lease held by a dead process blocks coordination writes until 1795769694. Lease acquire exits 2.",
+      "affects": "Any coordination write in this workspace before the lease expires.",
+      "can_other_work_continue": "Yes - product work on the branch is unaffected; only coordination-file writes are blocked. The slice for this run (R37) was already complete and pushed before the blocker was detected."
+    }
+  ],
   "risks": [
     {
       "id": "R35",
@@ -212,11 +220,20 @@
       "opened_by": "NEX-039",
       "closed_by": "commit 2d58e22",
       "closure_evidence": "The adapter now opens the response with httpx.stream and enforces the 64 KiB cap while reading: a declared oversized Content-Length returns MALFORMED_OUTPUT before any body byte is read, an unannounced body is abandoned the instant the running total passes the cap (leaving the context manager closes the stream rather than draining it), and a non-200 body is never read at all. Three tests fail against the previous implementation and they assert on chunk counts / a body that raises if read, so a drain would fail them. The residual limit - the cap bounds size, not duration - stays recorded in the module docstring as an open, honest limit."
+    },
+    {
+      "id": "R38",
+      "severity": "high",
+      "status": "OPEN",
+      "summary": "Two NEXUS segments ran concurrently in the same workspace and the single-writer lease did not prevent it. Evidence: this clone was created at 01:00:28 -0700 and checked out to feature/agentic-enterprise-platform at 01:01:01; lease holder Andrews-Mac-mini.local-56084 (run NEX-2026-11-27-43) committed 2d58e22/6da559d between 01:12 and 01:16 while a second segment (this one, host-pid ...-48657) was already issuing git commands. The 56084 process is now dead but its lease is unexpired, so lease acquire returns exit 2 and refuses to write. This segment went on to write coordination files and commit 606805f/5ecb5c7 without holding the lease - a protocol violation, recorded here rather than concealed.",
+      "impact": "No corruption resulted: the branch is linear (042e2b6 -> f92262a -> 2d58e22 -> 6da559d -> 606805f -> 5ecb5c7), the tree is clean, main is untouched at d6f92d0, and CI on the head is 4/4 success. The risk is procedural, not state damage.",
+      "recommended_resolution": "The next run must call `lease acquire` first and treat exit 2 as a hard stop - do not write coordination state without the lease, even if the holder looks dead. The stale lease expires at 1795769694 (2026-11-27T09:34:54Z); after that acquire succeeds normally. Do not force-delete refs/locks/nexus/lease. Consider a liveness-aware takeover (compare holder pid to a running process) as a follow-up task, since a crashed holder currently blocks writes for the full 45-minute TTL.",
+      "opened_by": "NEX-2026-11-27-44 (second segment)"
     }
   ],
   "next_task": "NEX-042",
   "next_action": "Start NEX-042 from the top of docs/NEXUS/BACKLOG.md. First acquire the lease (refs/locks/nexus/lease) and claim the task, then implement one vertical slice, run the four gates (ruff format, ruff check, mypy, pytest), commit, push, poll CI on the SHA that actually runs, and update issue #2 plus PR #3. Nothing is outstanding for R37.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD`; the local origin/* ref is stale-prone and is not evidence. 2. Read this file and docs/NEXUS/STATE.md whole; `tail -60` the execution log. 3. NEX-040 was verification-only: no product code changed and none was needed. Do not re-open it looking for a missing commit. 4. NEX-041 fixed a real `git push` defect in 497ab77 (missing remote argument); tests/coordination/test_gitref.py pins the argv shape. 5. CI is green 4/4 at 497ab77. Docs-only 042e2b6 does not need product CI. 6. Proceed to NEX-042 from the backlog.",
+  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run `python -m tools.nexus_coord.cli lease acquire` BEFORE writing anything; exit 2 means a live-or-stale lease is held, so stop and re-read this file. The R38 stale lease expires at 1795769694. 3. If acquire succeeds, claim NEX-042 and start it. 4. R37 is CLOSED and delivered (issue #2 comment 7213326000, PR #3 body 69961 chars) - do not redo it.",
   "ci_status": {
     "product_slice_sha": "2d58e22",
     "product_slice_result": "VERIFIED GREEN via 6da559d. The 2d58e22 workflow run was superseded in the CI concurrency group by the docs commit that immediately followed it, so 2d58e22 itself has zero check-runs. That is not a gap in coverage: 6da559d's tree is a strict superset of 2d58e22's tree (docs only were added), so the Backend job at 6da559d ran ruff, mypy and pytest against the exact R37 implementation.",
