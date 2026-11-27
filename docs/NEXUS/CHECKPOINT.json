@@ -11,7 +11,7 @@
     "R36-auditable-half": "VERIFIED",
     "R36-governance-half": "VERIFIED",
     "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)",
-    "NEX-046": "TESTED (local gates) + PUSHED at 0e86304; CI not yet polled"
+    "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed"
   },
   "completed_tasks": [
     "NEX-046",
@@ -46,13 +46,15 @@
     "body_len": 96880,
     "body_updated_at": "2026-11-27T12:16Z",
     "body_update_scope": "NEX-044 and NEX-045 report sections appended (oldest first) after the prior body. The AI-disclosure footer was stripped from both sections because it belongs on the issue comment. Read back at 96880 chars and asserted on short substrings, since GitHub re-wraps lines and long phrases fail spuriously.",
-    "note": "Draft and unmerged. The NEX-046 section is NOT yet appended - delivery debt carried to the next run. Automated merging is prohibited; a human reviewer decides."
+    "note": "Draft and unmerged. The NEX-046 section is NOT yet appended - the only outstanding delivery item for this slice, carried to the next run. Automated merging is prohibited; a human reviewer decides."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "reports_posted_this_segment": [],
-    "note": "NEX-046 is NOT yet reported. Outstanding delivery debt carried to the next run. The issue stays open: the program is not done."
+    "reports_posted_this_segment": [
+      7218689144
+    ],
+    "note": "NEX-046 reported by comment 7218689144 (4734 chars, read back byte-identical, HTTP 201). The issue stays open: the program is not done."
   },
   "blockers": [
     {
@@ -270,22 +272,27 @@
       "severity": "low",
       "summary": "An operator grant is process-local: a restart forgets every bounded grant.",
       "detail": "NEX-045 stores grants in InMemoryOperatorGrantRepository, seeded from OPS_OPERATOR_USER_IDS at startup. That makes expiry real within a process, but a grant issued through the store is lost on restart, and in a multi-worker deployment each worker holds its own copy, so a grant issued on one worker is invisible to the others. This is the same shape as InMemoryOperatorAccessLog and is honest for a demo adapter (source_name reports 'in-memory' so a reader cannot mistake it for durable). The fix is a durable adapter behind the existing OperatorGrantRepository port; the gate and the use case do not change. Not a security regression: a lost grant fails closed.",
-      "status": "closed by NEX-046 (run NEX-2026-11-27-49) at 0e86304 - local gates green, CI not yet polled when the window closed",
+      "status": "closed by NEX-046 (run NEX-2026-11-27-49) at 0e86304 - CI 4/4 green",
       "closure_evidence": "SqlAlchemyOperatorGrantRepository behind the unchanged OperatorGrantRepository port, plus migration f7b3c0d95a12. Two properties the port promises now survive a table: active_grants ordering is by a surrogate autoincrement id rather than granted_at, because two grants in one seed share a timestamp; and add() is idempotent on the unique (user_id, scope, granted_at) key, so a re-issued grant extends its deadline instead of duplicating. Expiry is still evaluated by OperatorGrant.is_active in exactly one place rather than filtered in SQL, so the two adapters cannot drift. 23 persistence tests cover restart (a second adapter over the same file sees the grant), cross-adapter visibility, insertion order, both expiry boundaries, the empty-scope CHECK, the user FK and cascade delete."
     }
   ],
   "next_task": {
     "id": "NEX-047",
-    "title": "Poll CI for NEX-046 and report it, or fix CI if it fails",
-    "detail": "0e86304 is pushed but its CI has not been polled. Poll the check runs and record the verdict, then write the NEX-046 section to draft PR #3 and the comment to issue #2 (lists, never tables - tables make POST /issues/2/comments return HTTP 500 on this repository). If CI fails, fix it on the branch: the slice is a migration plus a new adapter, so the likely failure is a dialect difference in the CHECK constraint (length(scope) > 0) or the UTCDateTime round trip on PostgreSQL, which the local suite skips 4 PostgreSQL-marked tests for."
+    "title": "Append the NEX-046 section to draft PR #3, then select the next slice",
+    "detail": "The NEX-046 section is the only delivery item still owed; the issue #2 comment is posted. Append the section to the PR body (it was 96880 chars at the end of the NEX-045 segment) and read it back, asserting on short substrings because GitHub re-wraps lines and long phrases straddle the wrap. Keep the PR draft. Then pick the next dependency-ready task: R40 was the last open risk that a stored grant could close, so the next slice should come from the roadmap's Phase 5 remainder rather than from the risk ledger."
   },
-  "next_action": "Poll CI at 0e86304, then post the NEX-046 report to issue #2 and append its section to draft PR #3. Delivery debt for NEX-046 is open until both are done.",
+  "next_action": "Append the NEX-046 section to draft PR #3 and read it back. Then select the next dependency-ready slice from the Phase 5 roadmap.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. NEX-046 is DONE and PUSHED at 0e86304 - do not redo it. 3. Its CI has not been polled: poll it first, and if it failed read the note in next_task.detail about the CHECK constraint and UTCDateTime round trip on PostgreSQL. 4. Delivery debt: the issue #2 comment and the PR #3 section for NEX-046 are both unwritten. Use lists, not tables, for issue comments on this repository. 5. The lease CLI is `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools.",
   "ci_status": {
     "commit": "0e86304",
-    "observed_at": null,
-    "check_runs": [],
-    "verdict": "NOT POLLED. The slice was committed, pushed and ls-remote-verified with about nine minutes left, and the window went to the checkpoint rather than to a poll. Do not read this as a pass."
+    "observed_at": "2026-11-27T12:48Z",
+    "check_runs": [
+      "Backend (ruff, mypy, pytest, migrations) - completed/success - head_sha 0e86304",
+      "Frontend (typecheck, lint, test, build) - completed/success - head_sha 0e86304",
+      "Backend (ruff, mypy, pytest, migrations) - completed/success - head_sha 0e86304",
+      "Frontend (typecheck, lint, test, build) - completed/success - head_sha 0e86304"
+    ],
+    "verdict": "PASS - 4/4 completed/success at 0e86304, polled 2026-11-27T12:48Z, every check run reporting head_sha 0e86304. Two pairs because CI runs on both push and pull_request. The Backend job runs ruff, mypy, pytest and migrations, so the migration this slice adds is exercised by CI as well as locally."
   },
   "verified_tasks": [
     "NEX-001",
@@ -338,7 +345,7 @@
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
   "head_at_checkpoint": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local gates green on the exact committed tree 0e86304: ruff format --check 268 files already formatted, ruff check all passed, mypy no issues in 126 source files, pytest 1172 passed / 4 skipped / 0 failed. CI at 0e86304: not polled.",
+  "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -361,8 +368,10 @@
     "remote_verified_by": "git ls-remote returned 0e863043634109e934d1ef5dc67236875f72197e == git rev-parse HEAD",
     "product_commit": "0e86304",
     "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "OPEN for NEX-046: neither the issue #2 comment nor the PR #3 section is written."
+    "issue_updated": true,
+    "delivery_debt": "PARTIAL: the issue #2 comment is posted (id 7218689144, 4734 chars stored == 4734 sent, HTTP 201). The PR #3 section for NEX-046 is still unwritten and is the next run's first action.",
+    "issue_comment_id": 7218689144,
+    "issue_comment_chars": 4734
   },
   "run_summary": "NEX-046 delivered as a vertical slice and pushed at 0e86304: a durable OperatorGrantRepository behind the unchanged port, with migration f7b3c0d95a12 and 23 persistence tests. R40 is closed in the risk ledger. Local gates green. CI not polled and delivery debt (issue #2 comment, PR #3 section) is open - both are the next run's first actions.",
   "head_observation": {
@@ -385,7 +394,7 @@
   "last_completed_task": {
     "id": "NEX-046",
     "title": "A durable OperatorGrantRepository (closes R40)",
-    "status": "IMPLEMENTED + TESTED locally; PUSHED at 0e86304; CI pending",
+    "status": "VERIFIED - local gates green and CI 4/4 at 0e86304",
     "evidence": [
       "ruff format clean (268 files already formatted)",
       "ruff check clean",
