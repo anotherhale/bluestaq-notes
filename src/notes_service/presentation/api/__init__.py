@@ -15,6 +15,7 @@ from notes_service.presentation.api.routers import (
     ops,
     organizations,
     permissions,
+    policies,
     tools,
     users,
 )
@@ -32,5 +33,6 @@ api_router.include_router(agents.router)
 api_router.include_router(tools.router)
 api_router.include_router(agent_runs.router)
 api_router.include_router(ops.router)
+api_router.include_router(policies.router)
 
 __all__ = ["api_router"]

@@ -546,16 +546,16 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     policy_versions: PolicyVersionRepository = SqlAlchemyPolicyVersionRepository(session_factory)
 
     def make_draft_policy() -> DraftPolicy:
-        return DraftPolicy(store=policy_versions, clock=clock)
+        return DraftPolicy(store=policy_versions, clock=clock, operator_gate=operator_gate)
 
     def make_publish_draft() -> PublishDraft:
-        return PublishDraft(store=policy_versions, clock=clock)
+        return PublishDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)
 
     def make_rollback_policy() -> RollbackPolicy:
-        return RollbackPolicy(store=policy_versions, clock=clock)
+        return RollbackPolicy(store=policy_versions, clock=clock, operator_gate=operator_gate)
 
     def make_get_policy_history() -> GetPolicyHistory:
-        return GetPolicyHistory(store=policy_versions)
+        return GetPolicyHistory(store=policy_versions, operator_gate=operator_gate)
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:

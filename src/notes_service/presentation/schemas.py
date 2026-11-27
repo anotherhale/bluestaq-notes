@@ -20,6 +20,7 @@ from notes_service.application.use_cases.approval_advisory import ApprovalAdviso
 from notes_service.application.use_cases.operator_access_report import OperatorAccessSnapshot
 from notes_service.application.use_cases.operator_grants import OperatorGrantSnapshot
 from notes_service.application.use_cases.organization import OrganizationView
+from notes_service.application.use_cases.policy_lifecycle import PolicyHistory
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.audit_chain import ChainAuditReport, ChainVerdict
 from notes_service.domain.agent.decisioning import AbstentionReason
@@ -34,6 +35,7 @@ from notes_service.domain.agent.value_objects import (
     DelegationStatus,
     TokenAudience,
 )
+from notes_service.domain.governance.policy import PolicyVersion
 from notes_service.domain.identity.entities import User
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
@@ -63,6 +65,7 @@ from notes_service.domain.organization.value_objects import (
     TeamStatus,
     UnitStatus,
 )
+from notes_service.infrastructure.governance.policy_codec import encode_condition
 
 MAX_ORGANIZATION_NAME_LENGTH = MAX_NAME_LENGTH
 
@@ -1301,6 +1304,105 @@ class ChainVerdictResponse(BaseModel):
                 if first is not None
                 else None
             ),
+        )
+
+
+# -- governance policy lifecycle -----------------------------------------
+
+
+class PolicyRuleRequest(StrictModel):
+    """One conditional rule, using the same wire shape as the stored codec.
+
+    The condition is *not* validated here. ``when`` is passed through to
+    ``decode_condition``, so the domain AST remains the only authority on what a
+    valid policy is; a schema that duplicated those rules could drift from it.
+    """
+
+    rule_id: str
+    effect: str
+    when: dict[str, object] | None = None
+
+
+class PolicyDraftRequest(StrictModel):
+    """Draft the next version of ``policy_id``."""
+
+    rules: list[PolicyRuleRequest] = Field(min_length=1)
+    rationale: str
+
+
+class PolicyPublishRequest(StrictModel):
+    """Publish a specific stored draft. The publisher is the caller, never a field."""
+
+    version: int = Field(ge=1)
+
+
+class PolicyRollbackRequest(StrictModel):
+    """Restore an earlier version's rules as a new release."""
+
+    to_version: int = Field(ge=1)
+    rationale: str
+
+
+class PolicyRuleResponse(ResponseModel):
+    rule_id: str
+    effect: str
+    when: dict[str, object] | None
+
+
+class PolicyVersionResponse(ResponseModel):
+    """One policy version. ``published_by`` is ``None`` while the version is a draft."""
+
+    policy_id: str
+    version: int
+    status: str
+    rules: list[PolicyRuleResponse]
+    rationale: str
+    created_at: datetime | None
+    published_at: datetime | None
+    published_by: str | None
+    ref: str
+
+    @classmethod
+    def from_domain(cls, version: PolicyVersion) -> PolicyVersionResponse:
+        return cls(
+            policy_id=version.policy_id,
+            version=version.version,
+            status=version.status.value,
+            rules=[
+                PolicyRuleResponse(
+                    rule_id=rule.rule_id,
+                    effect=rule.effect.value,
+                    when=encode_condition(rule.when) if rule.when is not None else None,
+                )
+                for rule in version.rules
+            ],
+            rationale=version.rationale,
+            created_at=version.created_at,
+            published_at=version.published_at,
+            published_by=version.published_by,
+            ref=version.ref,
+        )
+
+
+class PolicyHistoryResponse(ResponseModel):
+    """Every stored version of one policy, oldest first.
+
+    ``published`` is the single version currently in force, or ``None`` when a
+    policy has only drafts — stated explicitly so a reader does not have to scan
+    the list and guess.
+    """
+
+    policy_id: str
+    versions: list[PolicyVersionResponse]
+    published_version: int | None
+
+    @classmethod
+    def from_domain(cls, history: PolicyHistory) -> PolicyHistoryResponse:
+        published = history.published
+        return cls(
+            policy_id=history.policy_id,
+            versions=[PolicyVersionResponse.from_domain(v) for v in history.versions],
+            published_version=published.version if published is not None else None,
         )
 
 

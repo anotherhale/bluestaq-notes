@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.policy_versions import PolicyVersionRepository
+from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.domain.errors import ValidationError
 from notes_service.domain.governance.policy import (
     PolicyRule,
@@ -50,6 +51,16 @@ from notes_service.domain.governance.policy import (
     PolicyVersion,
     new_policy_version,
 )
+from notes_service.domain.identity.principal import Principal
+
+DRAFT_OPERATION = "policy-draft"
+"""Operator scope for drafting a policy version. Names the operation, not a role."""
+PUBLISH_OPERATION = "policy-publish"
+"""Operator scope for publishing a policy version, which puts it in force."""
+ROLLBACK_OPERATION = "policy-rollback"
+"""Operator scope for rolling a policy back to an earlier release."""
+HISTORY_OPERATION = "policy-history"
+"""Operator scope for reading a policy's version history."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +74,12 @@ class DraftPolicyVersion:
 
 @dataclass(frozen=True, slots=True)
 class PublishPolicyVersion:
-    """A request to publish a specific draft."""
+    """A request to publish a specific draft.
+
+    ``published_by`` is stamped from the authenticated caller at the HTTP
+    boundary, never read from a request body: a caller-chosen publisher would let
+    anyone attribute a policy in force to someone else.
+    """
 
     policy_id: str
     version: int
@@ -88,11 +104,17 @@ class RollbackPolicyVersion:
 class DraftPolicy:
     """Create a draft version of a policy, or of a new policy."""
 
-    def __init__(self, *, store: PolicyVersionRepository, clock: Clock) -> None:
+    def __init__(
+        self, *, store: PolicyVersionRepository, clock: Clock, operator_gate: OperatorGate
+    ) -> None:
         self._store = store
         self._clock = clock
+        self._operator_gate = operator_gate
 
-    def execute(self, request: DraftPolicyVersion) -> PolicyVersion:
+    def execute(self, principal: Principal, request: DraftPolicyVersion) -> PolicyVersion:
+        # Gate first, mutate second: a refused caller must not reach the store,
+        # and the gate records the granted attempt before anything is written.
+        self._operator_gate.authorize(principal, operation=DRAFT_OPERATION)
         if not request.rules:
             # A policy with no rules can only ever deny, which is a valid but
             # almost always unintended shape. Refusing here turns a silent
@@ -113,11 +135,15 @@ class DraftPolicy:
 class PublishDraft:
     """Publish a stored draft, retiring whatever was in force before it."""
 
-    def __init__(self, *, store: PolicyVersionRepository, clock: Clock) -> None:
+    def __init__(
+        self, *, store: PolicyVersionRepository, clock: Clock, operator_gate: OperatorGate
+    ) -> None:
         self._store = store
         self._clock = clock
+        self._operator_gate = operator_gate
 
-    def execute(self, request: PublishPolicyVersion) -> PolicyVersion:
+    def execute(self, principal: Principal, request: PublishPolicyVersion) -> PolicyVersion:
+        self._operator_gate.authorize(principal, operation=PUBLISH_OPERATION)
         draft = self._store.get(request.policy_id, request.version)
         if draft is None:
             raise ResourceNotFound(
@@ -145,11 +171,15 @@ class PublishDraft:
 class RollbackPolicy:
     """Restore an earlier version's rules as a new, higher version number."""
 
-    def __init__(self, *, store: PolicyVersionRepository, clock: Clock) -> None:
+    def __init__(
+        self, *, store: PolicyVersionRepository, clock: Clock, operator_gate: OperatorGate
+    ) -> None:
         self._store = store
         self._clock = clock
+        self._operator_gate = operator_gate
 
-    def execute(self, request: RollbackPolicyVersion) -> PolicyVersion:
+    def execute(self, principal: Principal, request: RollbackPolicyVersion) -> PolicyVersion:
+        self._operator_gate.authorize(principal, operation=ROLLBACK_OPERATION)
         source = self._store.get(request.policy_id, request.to_version)
         if source is None:
             raise ResourceNotFound(
@@ -193,10 +223,14 @@ class PolicyHistory:
 class GetPolicyHistory:
     """Read a policy's version history, including drafts and retired versions."""
 
-    def __init__(self, *, store: PolicyVersionRepository) -> None:
+    def __init__(self, *, store: PolicyVersionRepository, operator_gate: OperatorGate) -> None:
         self._store = store
+        self._operator_gate = operator_gate
 
-    def execute(self, policy_id: str) -> PolicyHistory:
+    def execute(self, principal: Principal, policy_id: str) -> PolicyHistory:
+        # Even the read is gated: a history contains drafts whose rules are not
+        # yet in force, so an ungated read would disclose policy under review.
+        self._operator_gate.authorize(principal, operation=HISTORY_OPERATION)
         versions = self._store.history(policy_id)
         if not versions:
             raise ResourceNotFound(f"policy {policy_id!r} has no versions")
