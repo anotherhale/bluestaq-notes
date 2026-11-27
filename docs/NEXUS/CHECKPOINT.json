@@ -54,6 +54,16 @@
       "affects": "Coordination-file writes only. Product delivery (commit, push, CI) is unaffected by design.",
       "can_other_work_continue": "Yes, and it did: the slice was committed, pushed and CI-verified before the lease was free.",
       "recurrence": "Second consecutive run. The liveness-aware takeover is still unbuilt and cost about 4 minutes of waiting here."
+    },
+    {
+      "id": "R39",
+      "class": "BLOCKER-C (environmental) / BLOCKER-D (process)",
+      "summary": "`lease release` is unusable, so a lease can never be handed back. This run acquired refs/locks/nexus/lease at 1795772820 (holder Andrews-Mac-mini.local-95179, expires 1795775517) and then could not release it: release exited with 'lease held by another agent' because holder identity is `host-pid` and every CLI invocation is a new process, so `mine` is false on the very next call. The ref is still held by this run's identity.",
+      "consequence": "Every successful acquire becomes a full-TTL (45 min) block for the next run. R38 was not a one-off dead process: it is the predictable result of a run that acquired and could not release. Expect a third recurrence at the start of the next run, expiring 1795775517 (2026-11-27T10:31:57Z).",
+      "why_writes_were_still_made": "The lease ref is held by this run's own identity, so the lease is in fact held; only the tool's `mine` comparison is broken. Coordination writes were made on that basis and are recorded here rather than concealed. This is the same judgement the prior run recorded for its second segment.",
+      "recommended_fix": "Give the holder a stable per-run identity (run id, or a pid that persists for the run's lifetime) instead of `host-pid`, so release and renew can recognise their own lease. Failing that, `release --force` guarded by the run id recorded in the lease commit message. Do NOT force-delete the ref by hand.",
+      "affects": "Coordination-file writes only. Product delivery is unaffected by design.",
+      "can_other_work_continue": "Yes."
     }
   ],
   "risks": [
@@ -320,7 +330,8 @@
     "pr_updated": true,
     "delivery_debt": "One follow-up remains, and it is product work rather than delivery: NEX-042 has no route-level test proving the ops route reads the operator allowlist from settings - the API tests exercise the use case directly. Run report for this run was posted to issue #2 and PR #3 during the same run, so no reporting debt carries forward.",
     "tracking_issue_ref": "issue #2 comment 7215122677 (NEX-042 run report, lists only, no markdown tables)",
-    "pr_ref": "PR #3 body 69961 -> 72415 chars; NEX-042 section appended and read back verified. Still draft, still unmerged."
+    "pr_ref": "PR #3 body 69961 -> 72415 chars; NEX-042 section appended and read back verified. Still draft, still unmerged.",
+    "lease_state": "ACQUIRED at 1795772820 (holder ...-95179) and NOT released: `lease release` refuses because the pid-based holder identity cannot match across processes. Expires 1795775517."
   },
   "run_summary": "NEX-2026-11-27-45. Shipped NEX-042, the audit-chain platform-wide sweep. Reconciled from the true remote head (git ls-remote, not the local tracking ref), which was 5c13d9b - one docs commit ahead of what the prior run's next_action implied. Implemented SweepAuditIntegrity plus its port methods, domain report types, repository queries and an operator-gated ops endpoint: 562 insertions across 9 files. All gates green on the committed tree (ruff format 248 files, ruff check clean, mypy 117 files, pytest 1060 passed / 4 skipped). Committed ed641b0, pushed, verified by ls-remote, CI 4/4 success at that exact SHA. Product delivery finished before the lease was free, so R38's stale lease blocked only the coordination writes that followed it. Delivery was closed out in the same run: the run report was posted to tracking issue #2 (comment 7215122677) and appended to PR #3 (69961 -> 72415 chars, read back and asserted), so no reporting debt carries into the next run.",
   "head_observation": {

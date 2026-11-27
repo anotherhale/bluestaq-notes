@@ -1337,3 +1337,33 @@ unbuilt.
 3. **The route-level operator-gate test for NEX-042** — prove the ops route reads
    `OPS_OPERATOR_USER_IDS` from settings, rather than trusting that the container wiring was
    reviewed.
+
+## R39 (run `NEX-2026-11-27-45`) — the lease can be acquired but never released
+
+**Found by trying to be polite.** After the NEX-042 docs were pushed, this run called
+`lease release` to hand the lease back so the next run would not wait. It exited with
+`lease held by another agent`, holder `Andrews-Mac-mini.local-95179` — this run's own identity.
+
+**Cause.** Holder identity is `host-pid`. Every `nexus_coord` invocation is a new process, so
+the pid recorded at acquire time is never the pid of the process doing the release. `mine` is
+therefore false on the very next call, and `release` and `renew` can never succeed. The lease is
+single-use per acquisition.
+
+**Consequence, and why R38 was not bad luck.** A run that acquires a lease necessarily blocks
+the next run's coordination writes for the full TTL (45 minutes). R38's "stale lease held by a
+dead holder" was the predictable output of exactly this, not an unlucky crash. Expect a third
+recurrence at the start of the next run; this run's lease expires `1795775517`
+(2026-11-27T10:31:57Z).
+
+**Why the writes were still made.** The ref is held by this run's own identity — the lease *is*
+held; only the tool's `mine` comparison is broken. Coordination writes were made on that basis
+and are recorded here rather than concealed, the same judgement the prior run recorded for its
+second segment. No state damage: the branch is linear, the tree is clean, `main` is untouched.
+
+**Fix (not attempted this run — no time to change coordination tooling safely).** Give the holder
+a stable per-run identity — the run id, or a pid that outlives the run — so `release` and `renew`
+recognise their own lease. Alternatively a `release --force` guarded by the run id in the lease
+commit message. Do **not** force-delete the ref by hand.
+
+This is now the highest-value process fix in the programme: it costs every run minutes of wall
+clock and, worse, it invites runs to write without the lease because the lease is unusable.
