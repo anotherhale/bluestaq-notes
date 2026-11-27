@@ -84,14 +84,16 @@
  ],
  "next_task": "Phase 3 governance, next dependency-ready slice: obligations carried on a policy decision (an allow that still requires an action), which the security architecture lists alongside deny and which NEX-051/052 do not yet model.",
  "next_action": "1. Poll CI for d44fe24 (the docs-only child carrying the NEX-052 product code) and record the conclusion; only then mark NEX-052 VERIFIED. 2. Start the obligations slice: the third policy effect the architecture lists, the only one the gateway does not model.",
- "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for f4eae90 (PR #5). Nothing is uncommitted: HEAD = f4eae90 = origin/feature/agentic-enterprise-platform. If the branch has moved on, re-merge origin/main rather than rebasing (force-push is prohibited). Never merge PR #5.",
+ "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for the current branch head obtained from `git ls-remote origin feature/agentic-enterprise-platform`. Do not poll a SHA quoted in this file: writing this file creates a commit, which supersedes and cancels the runs for any SHA named in it. HEAD is pushed and the tree is clean. If the branch is behind origin/main, merge origin/main rather than rebasing (force-push is prohibited). Never merge PR #5.",
  "ci_status": {
-  "product_commit": "3215e08",
+  "product_commit": "3215e08 (NEX-052 product code)",
   "product_commit_conclusion": "CANCELLED (not failed)",
   "explanation": "The 3215e08 workflow runs were cancelled because the docs checkpoint push d44fe24 superseded them (branch concurrency cancellation). A cancelled run carries no verdict; it must not be read as a failure or a pass.",
   "branch_head": "d44fe24",
   "branch_head_status": "in_progress",
-  "note": "d44fe24 is a docs-only child of 3215e08, so its Backend job compiles and tests the NEX-052 product code. The next run must poll d44fe24 and only then promote NEX-052 to VERIFIED."
+  "note": "d44fe24 is a docs-only child of 3215e08, so its Backend job compiles and tests the NEX-052 product code. The next run must poll d44fe24 and only then promote NEX-052 to VERIFIED.",
+  "how_to_poll": "Poll the CURRENT branch head from `git ls-remote origin feature/agentic-enterprise-platform`, not the SHA written here. Every NEXUS checkpoint is itself a commit on this branch, and the branch's CI concurrency cancels superseded runs, so the SHA in this file is always cancelled by the very commit that writes it. Because each checkpoint commit is docs-only and descends from 3215e08, the head's Backend job still compiles and tests the NEX-052 product code - that head is the correct CI evidence for NEX-052.",
+  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. Never promote a task on a cancelled run, and never report it as a failure either."
  },
  "verified_tasks": [
   "NEX-047",
