@@ -5999,6 +5999,8 @@ section to draft PR #3. Delivery debt is open until both are done.
 
 ## Run `NEX-2026-11-27-50` — 2026-11-27T13:00Z
 
+_This entry was written mid-run, before CI was polled and before delivery. Its `Ending commit` of `379a98a` is the product commit, not the run's end. The authoritative entry for this run is the second `NEX-2026-11-27-50` section below, at ending commit `8b6cb15`._
+
 | | |
 | --- | --- |
 | Branch | `feature/agentic-enterprise-platform` |
@@ -6052,3 +6054,120 @@ in the backlog entry, and the durable adapter is the next slice.
 **Environment note.** Two prior runs lost time to this terminal mangling multi-line
 heredocs and inline `python3 -c` blocks. This run wrote every multi-line body with
 `file_editor` and appended with `cat <file> >>`, and hit no corruption.
+
+## Run `NEX-2026-11-27-50` — NEX-047 / M3.1 delivered, verified and reported
+
+- **Started:** 2026-11-27T13:00:52Z (epoch 1795784452), deadline 1795785952 (25 min, 5 min reserve)
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `80114ca` (established with `git ls-remote origin refs/heads/...`; the run began
+  on `main` at `d6f92d0` in a fresh shallow clone and fetched the feature branch, so no rebase was needed)
+- **Ending commit:** `8b6cb15` (docs) over `379a98a` (NEX-047 product slice)
+- **Project phase:** Phase 2 complete; Phase 3 (governance) opened by this run
+
+### Tasks
+
+- **NEX-047 / M3.1 — governance policy model + versioning: VERIFIED.**
+  IMPLEMENTED + TESTED + COMMITTED + PUSHED at `379a98a`, CI 4/4 `completed/success`, reported
+  to issue #2 (comment `7219198697`) and PR #3.
+- **NEX-046 delivery debt: CLEARED** (was already pushed; its issue comment and PR section had
+  been posted in the prior segment and were confirmed present).
+
+### Recovered rather than restarted
+
+The prior segment left the slice uncommitted and red: 56 tests passing, three mypy errors and
+one unused import. The mypy errors were **one root cause** — the AST child annotations named
+`_Node` (the base class) while the validator and `node_count()` expect `Condition` (the union)
+— so they were widened to the union, and the `Self` return types on `publish`/`retire` became
+`PolicyVersion`, which is what they return once the value is a frozen dataclass. No test was
+weakened and nothing was rewritten.
+
+### Files changed
+
+- Product (committed at `379a98a`): `domain/governance/{__init__,policy}.py`,
+  `application/ports/policy_versions.py`, `application/use_cases/policy_lifecycle.py`,
+  `infrastructure/governance/policy_versions.py`,
+  `tests/domain/test_governance_policy.py` (34), `tests/application/test_policy_lifecycle.py` (22)
+- State (committed at `8b6cb15`, then this entry): `docs/NEXUS/{ROADMAP,BACKLOG,STATE,
+  EXECUTION_LOG,DECISIONS,CHECKPOINT}`
+
+### Migrations
+
+None. The adapter is in-memory; NEX-048 adds the durable store and its migration.
+
+### Tests and gates
+
+- `ruff format` — clean, 275 files
+- `ruff check` — clean
+- `mypy` — clean, 132 source files
+- `pytest` — **1228 passed, 4 skipped, 0 failed** (16.84s)
+- architecture layering test — green; `domain/governance` imports no framework, ORM or JWT library
+- **CI at `379a98a`: 4/4 `completed/success`** (Frontend and Backend, one pair per `push` and
+  `pull_request` event, every check run reporting that `head_sha`)
+
+### Security findings
+
+The slice is itself a security control, so its semantics were chosen explicitly and recorded in
+`DECISIONS.md`:
+
+- The AST is **closed**: four node types over a fixed operator vocabulary, no `eval`, no
+  inventable fifth node. A policy cannot become code because there is nowhere to put code.
+- **A missing attribute never satisfies a condition, under any operator including `!=`.** The
+  obvious reading of `!=` is a privilege escalation: `classification != secret` would pass an
+  unclassified resource. Absence is not evidence, so absence denies. Pinned across all four
+  operators.
+- **A wrong-typed value raises; a missing one denies.** Denying quietly would report a data
+  defect as "not permitted" in the one place an auditor would believe it.
+- **Explicit deny overrides allow; empty or non-matching denies.** Tested in both rule orders.
+- **Retire-before-publish** makes a crash between the writes leave *nothing* published (deny)
+  rather than two versions in force. Fail-closed by write ordering, not by a transaction the
+  in-memory adapter does not have.
+- **The store assigns version numbers**, never the caller — the same rule that keeps owner id
+  out of request bodies.
+- **`approve` is deliberately absent**, because it needs separation of duties (M3.3) and a gate
+  that always passes is a governed-looking surface that governs nothing.
+
+### Commits
+
+- `379a98a` `feat(governance): typed policy AST with immutable published versions`
+- `8b6cb15` `docs(nexus): record NEX-047 / M3.1 and hand off NEX-048`
+
+### Push status
+
+Pushed `80114ca..379a98a`, then `379a98a..8b6cb15`. Both fast-forwards, no force. Verified with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` returning
+`8b6cb154beef3b8b72e4ef3c1b8cbe2129984cd5` == `git rev-parse HEAD`. The local `origin/*` ref was
+never trusted.
+
+### PR and issue
+
+- **PR #3** (draft, unmerged): NEX-047 section appended, body 102516 → 108589 chars, read back
+  with eight substring assertions and exactly one NEX-047 heading. Still `draft=true`. Not marked
+  ready — a human decides.
+- **Issue #2** (open): NEX-047 comment `7219198697`, 4744 chars, read back byte-identical,
+  HTTP 201, no tables.
+
+### Environment note
+
+The first `STATE.md` update attempt aborted on `AssertionError: STATE.md shrank`, because the
+script replaced long run-on rows with shorter ones and asserted growth. The assertion was the
+right instinct — it caught the case it was written for — but wrong for a deliberate prune. It
+was replaced with a plausibility floor plus structural checks (each row prefix present exactly
+once, each new heading present exactly once), and the file was backed up first. Second attempt
+landed cleanly at 124666 chars, and a later pass restored 125119.
+
+One probe failed on the PR body read-back for a phrase that straddled a line wrap — a known
+false negative, not truncation. Character counts matched exactly (108588 sent, 108588 stored).
+
+### Checkpoint
+
+`CHECKPOINT.json` written atomically (temp file, JSON revalidated, then replace). All 26
+risk-ledger entries preserved verbatim, asserted by id list before and after. NEX-047 moved
+from `in_progress_tasks` to `verified_tasks` only after CI returned 4/4 green.
+
+### Next action
+
+**NEX-048** — a durable `PolicyVersionRepository` behind the unchanged port, so no caller moves.
+It must keep two invariants true at the *storage* layer, not only in the use case: a unique
+constraint on `(policy_id, version_number)`, and a guard so two rows cannot both be `PUBLISHED`
+for one policy id. Reimplementing the lifecycle in SQL is not the goal; enforcing its two
+invariants is. No delivery debt is outstanding, so the run starts on product work immediately.

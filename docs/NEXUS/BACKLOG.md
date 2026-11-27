@@ -2524,7 +2524,94 @@ retirement, rollback-as-new-release, rollback-to-draft refusal, deterministic
   domain + application slice; the API and the M4.3 policy UI come later, and neither
   should reimplement the lifecycle.
 
-**Next.** NEX-048 — a durable `PolicyVersionRepository` (SQLAlchemy + migration)
-behind the unchanged port, which turns "a restart forgets the policy" into a
-historical fact rather than a live gap. Then poll CI at `379a98a` and clear delivery
-debt for NEX-046 and NEX-047.
+## NEX-048 — a durable `PolicyVersionRepository` behind the unchanged port
+
+**Phase** 3 — governance, audit, Jev integration · **Priority** P1 (foundational) ·
+**Status** READY (not started) · **Complexity** medium · **Depends on** NEX-047
+(VERIFIED at `379a98a`)
+
+### Objective
+
+Make published policy versions survive a restart. Today `InMemoryPolicyVersionRepository`
+reports `name == "in-memory"` and forgets every version on restart, including published
+ones — so a restart silently empties the policy set, and an empty policy set denies
+everything. That is fail-closed, which is the right failure, but it is a live operational
+gap rather than a design choice. NEX-048 replaces the adapter, **not** the lifecycle.
+
+### Scope
+
+- `infrastructure/governance/policy_versions.py` — a SQLAlchemy adapter implementing the
+  existing `PolicyVersionRepository` port. **The port does not change**, so
+  `PolicyLifecycle` and every caller stay untouched. If the port has to change to make
+  storage work, stop and record why: that is a design signal, not a detail.
+- A model plus one Alembic migration. Serialise the AST to JSON, and **re-validate it on
+  read** — a stored policy is untrusted input on the way back in, and a row written by an
+  older version of the code must not be able to reintroduce a node type the current
+  validator refuses.
+- Two storage-level invariants, enforced in the schema and not only in the use case:
+  - `UNIQUE (policy_id, version_number)` — two authors cannot both claim v4 even if a
+    future caller bypasses the store's numbering.
+  - **At most one `PUBLISHED` row per `policy_id`** — a partial unique index on
+    `(policy_id) WHERE status = 'PUBLISHED'`. The use case already retires the predecessor
+    before publishing; this makes the invariant true even if a future caller forgets.
+- Keep retire-before-publish ordering in the adapter, so a crash between the two writes
+  still leaves nothing published rather than two versions in force.
+
+### Acceptance criteria
+
+- Every existing `tests/application/test_policy_lifecycle.py` test passes against the
+  durable adapter with no change to the use case or the port.
+- A new conformance suite runs the *same* contract tests against both adapters, so the
+  in-memory adapter stays a legitimate fast double and cannot drift from the real one.
+  This mirrors the adapter conformance approach NEX-035 established.
+- Migration is idempotent under `alembic upgrade head` run twice, and downgrades cleanly.
+- Two concurrent publishes of the same policy leave exactly one `PUBLISHED` row. This must
+  be a real concurrency test against the database, not a mock.
+- A row whose stored AST JSON is corrupt or names an unknown node type is refused on read
+  with a clear error, never silently skipped and never returned as valid.
+- `policy_versions.name` reports the storage backend truthfully, as the in-memory adapter
+  does.
+
+### Required tests
+
+Adapter conformance (shared contract, both adapters), unique-version-constraint violation,
+partial-unique-index violation on double publish, corrupt/unknown-AST-on-read refusal,
+migration upgrade/downgrade idempotency, and the full existing lifecycle suite re-run
+against the durable adapter.
+
+### Security considerations
+
+- The partial unique index is the enforcement; the use case is the caller. Do not rely on
+  application ordering alone for an invariant an auditor will ask about.
+- Re-validate stored ASTs on read: persistence is a trust boundary, and this one holds
+  attacker-influenced data if a policy author is ever compromised.
+- Fail closed on a read error. A policy that cannot be parsed must not become "no
+  restriction" — it must deny.
+- Do not add a write path that lets a caller set `status = 'PUBLISHED'` directly; publish
+  stays a use-case operation.
+
+### Migration implications
+
+One new table. No existing table changes, so no data backfill and no destructive step. The
+in-memory adapter remains available for tests.
+
+### Observability
+
+Log a warning, with the policy id and version, when a stored AST fails re-validation —
+that is a data-integrity event an operator needs to see, and it should not be a silent deny.
+
+### Rollback
+
+Revert the adapter wiring to the in-memory implementation. No caller changes, because the
+port is unchanged.
+
+### Next
+
+**NEX-049** — the HTTP surface for drafting and publishing a policy version, gated on an
+operator scope, which is the first point at which this governance model becomes usable
+outside tests. **NEX-050** — separation of duties (M3.3), which is the precondition for
+ever adding an `approve` step to the lifecycle.
+
+**Delivery state.** NEX-046 and NEX-047 delivery debt is **CLEAR** as of run
+`NEX-2026-11-27-50`: CI 4/4 `completed/success` at `379a98a`, issue #2 comment
+`7219198697`, PR #3 section appended. NEX-048 starts with no debt outstanding.
