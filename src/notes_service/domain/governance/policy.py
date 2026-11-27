@@ -123,6 +123,59 @@ class PolicyObligation(StrEnum):
     """The attempt must be recorded with more evidence than the default."""
 
 
+_NO_ADAPTER_NEEDED: frozenset[PolicyObligation] = frozenset(
+    {
+        PolicyObligation.APPROVAL,
+        PolicyObligation.SECOND_APPROVER,
+        PolicyObligation.STEP_UP,
+        PolicyObligation.REDACTION,
+        PolicyObligation.ENHANCED_AUDIT,
+    }
+)
+"""Obligations the gateway can always enforce, given the tool it is applied to.
+
+"Always" is about the *adapter*, not about any particular call: ``approval`` and
+``second-approver`` still need a tool the platform treats as human-gated, and
+``step-up`` still needs a delegation granted at or above the floor. Those are
+per-call conditions the gateway decides with the tool in hand. What this set
+records is narrower and deployment-wide: no extra component has to be wired for
+these to be enforceable at all. ``rate-limit`` is deliberately absent, because it
+needs a :class:`RateLimiter` the deployment may not have configured.
+"""
+
+
+def deployment_obligation_gaps(
+    obligations: tuple[PolicyObligation, ...], *, rate_limiter_configured: bool
+) -> dict[PolicyObligation, str]:
+    """Obligations this *deployment* has no enforcement adapter for, with the reason.
+
+    The gateway refuses a call whose allow rule carries an obligation it cannot
+    satisfy, which is the right runtime behaviour but a poor authoring experience:
+    a policy naming ``rate-limit`` in a deployment with no limiter publishes
+    cleanly and then denies every call it matches, with the reason only visible in
+    the audit trail. This function lets the authoring path ask the same question
+    *before* publication, so the gap is reported to the author instead of to every
+    caller the policy later blocks.
+
+    This is the single source of the deployment-wide half of that judgement. The
+    gateway consults it too, so "the deployment cannot enforce this" cannot drift
+    between the two call sites. The gateway layers the per-tool conditions
+    (human-gated capability, delegation assurance) on top; those cannot be decided
+    here because they depend on the tool and the caller.
+    """
+    gaps: dict[PolicyObligation, str] = {}
+    for obligation in obligations:
+        if obligation in _NO_ADAPTER_NEEDED:
+            continue
+        if obligation is PolicyObligation.RATE_LIMIT and rate_limiter_configured:
+            continue
+        if obligation is PolicyObligation.RATE_LIMIT:
+            gaps[obligation] = "no rate limiter is configured, so a volume bound cannot be enforced"
+        else:  # pragma: no cover - defensive: a new member must declare its adapter
+            gaps[obligation] = "this deployment has no enforcement adapter for it"
+    return gaps
+
+
 class AttributeType(StrEnum):
     """The declared type of an attribute a condition may reference.
     Declaring the type up front is what makes "implicit coercion is prohibited"
@@ -764,6 +817,7 @@ __all__ = [
     "PolicyRule",
     "PolicyStatus",
     "PolicyVersion",
+    "deployment_obligation_gaps",
     "evaluate",
     "new_policy_version",
     "new_policy_version_id",

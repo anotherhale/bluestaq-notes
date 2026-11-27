@@ -546,7 +546,15 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     policy_versions: PolicyVersionRepository = SqlAlchemyPolicyVersionRepository(session_factory)
 
     def make_draft_policy() -> DraftPolicy:
-        return DraftPolicy(store=policy_versions, clock=clock, operator_gate=operator_gate)
+        return DraftPolicy(
+            store=policy_versions,
+            clock=clock,
+            operator_gate=operator_gate,
+            # Pass the real wiring, not an assumption: the authoring path refuses a
+            # rule naming ``rate-limit`` exactly when the gateway would have no
+            # limiter to enforce it with.
+            rate_limiter_configured=rate_limiter is not None,
+        )
 
     def make_publish_draft() -> PublishDraft:
         return PublishDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)

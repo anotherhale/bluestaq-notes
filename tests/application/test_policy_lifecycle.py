@@ -39,6 +39,7 @@ from notes_service.domain.governance.policy import (
     AttributeType,
     Comparison,
     PolicyEffect,
+    PolicyObligation,
     PolicyRule,
     PolicyStatus,
     evaluate,
@@ -228,6 +229,82 @@ def test_a_policy_must_have_at_least_one_rule(
         DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
             AUTHOR, DraftPolicyVersion(policy_id="p", rules=(), rationale="x")
         )
+
+
+# --------------------------------------------------------------------------- #
+# Obligation readiness at draft time
+#
+# The gateway refuses a call whose allow rule carries an obligation it cannot
+# enforce. That refusal is the security control and it stays. These prove the
+# *authoring* path catches the same gap one step earlier, so an author is told
+# their policy would deny everything instead of discovering it from denials.
+# --------------------------------------------------------------------------- #
+
+
+def test_draft_refuses_rate_limit_when_no_limiter_is_configured(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    rule = PolicyRule(
+        rule_id="allow",
+        effect=PolicyEffect.ALLOW,
+        obligations=(PolicyObligation.RATE_LIMIT,),
+    )
+    draft_policy = DraftPolicy(
+        store=store, clock=clock, operator_gate=gate, rate_limiter_configured=False
+    )
+    with pytest.raises(ValidationError, match="rate-limit"):
+        draft_policy.execute(
+            AUTHOR, DraftPolicyVersion(policy_id="p", rules=(rule,), rationale="x")
+        )
+    # Refused before anything was written: a rejected draft leaves no version.
+    assert store.history("p") == ()
+
+
+def test_draft_accepts_rate_limit_when_a_limiter_is_configured(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    rule = PolicyRule(
+        rule_id="allow",
+        effect=PolicyEffect.ALLOW,
+        obligations=(PolicyObligation.RATE_LIMIT,),
+    )
+    draft = DraftPolicy(
+        store=store, clock=clock, operator_gate=gate, rate_limiter_configured=True
+    ).execute(AUTHOR, DraftPolicyVersion(policy_id="p", rules=(rule,), rationale="x"))
+    assert draft.rules[0].obligations == (PolicyObligation.RATE_LIMIT,)
+
+
+@pytest.mark.parametrize(
+    "obligation",
+    [
+        PolicyObligation.APPROVAL,
+        PolicyObligation.SECOND_APPROVER,
+        PolicyObligation.STEP_UP,
+        PolicyObligation.REDACTION,
+        PolicyObligation.ENHANCED_AUDIT,
+    ],
+)
+def test_draft_accepts_obligations_with_a_built_in_adapter(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    obligation: PolicyObligation,
+) -> None:
+    """These need no deployment component, so a draft naming one is never refused here.
+
+    Whether a *given call* can satisfy ``approval``/``step-up`` depends on the tool
+    and the delegation, and stays a call-time decision — refusing at draft time
+    would block policies that are perfectly enforceable for the tools they target.
+    """
+    rule = PolicyRule(rule_id="allow", effect=PolicyEffect.ALLOW, obligations=(obligation,))
+    draft = DraftPolicy(
+        store=store, clock=clock, operator_gate=gate, rate_limiter_configured=False
+    ).execute(AUTHOR, DraftPolicyVersion(policy_id="p", rules=(rule,), rationale="x"))
+    assert draft.rules[0].obligations == (obligation,)
 
 
 # --------------------------------------------------------------------------- #

@@ -51,6 +51,7 @@ from notes_service.domain.governance.policy import (
     PolicyRule,
     PolicyStatus,
     PolicyVersion,
+    deployment_obligation_gaps,
     new_policy_version,
     separation_of_duties,
 )
@@ -118,11 +119,17 @@ class DraftPolicy:
     """Create a draft version of a policy, or of a new policy."""
 
     def __init__(
-        self, *, store: PolicyVersionRepository, clock: Clock, operator_gate: OperatorGate
+        self,
+        *,
+        store: PolicyVersionRepository,
+        clock: Clock,
+        operator_gate: OperatorGate,
+        rate_limiter_configured: bool = True,
     ) -> None:
         self._store = store
         self._clock = clock
         self._operator_gate = operator_gate
+        self._rate_limiter_configured = rate_limiter_configured
 
     def execute(self, principal: Principal, request: DraftPolicyVersion) -> PolicyVersion:
         # Gate first, mutate second: a refused caller must not reach the store,
@@ -133,6 +140,9 @@ class DraftPolicy:
             # almost always unintended shape. Refusing here turns a silent
             # deny-everything into a loud request error.
             raise ValidationError("a policy version must have at least one rule")
+        _require_enforceable_obligations(
+            request.rules, rate_limiter_configured=self._rate_limiter_configured
+        )
         version_number = self._store.next_version_number(request.policy_id)
         draft = new_policy_version(
             policy_id=request.policy_id,
@@ -144,6 +154,40 @@ class DraftPolicy:
         )
         self._store.add_draft(draft)
         return draft
+
+
+def _require_enforceable_obligations(
+    rules: tuple[PolicyRule, ...], *, rate_limiter_configured: bool
+) -> None:
+    """Refuse to draft a rule whose obligation this deployment cannot enforce.
+
+    The gateway already refuses at *call* time when an allow rule carries an
+    obligation it cannot satisfy, and that refusal is the real control — a policy
+    can never widen authority by naming an obligation nobody enforces. But a
+    policy that publishes cleanly and then denies every call it matches is a trap
+    for its author: the failure surfaces as unexplained denials in the audit trail
+    long after the version went into force.
+
+    Catching it here does not weaken anything. It is the same judgement, asked one
+    step earlier, against the same function the gateway uses, so the two cannot
+    disagree about what the deployment supports. A draft is still unpublished and
+    mutable, so refusing it costs the author nothing but a correction.
+
+    Only deployment-wide gaps are decidable at this point. Whether a particular
+    tool is human-gated, or whether a delegation meets a ``step-up`` floor,
+    depends on the tool and the caller, and stays a call-time refusal.
+    """
+    obligations = tuple(
+        dict.fromkeys(obligation for rule in rules for obligation in rule.obligations)
+    )
+    gaps = deployment_obligation_gaps(obligations, rate_limiter_configured=rate_limiter_configured)
+    if not gaps:
+        return
+    detail = "; ".join(f"{obligation.value}: {reason}" for obligation, reason in gaps.items())
+    raise ValidationError(
+        f"policy version names obligation(s) this deployment cannot enforce ({detail}); "
+        "publishing it would deny every call it matches"
+    )
 
 
 def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:

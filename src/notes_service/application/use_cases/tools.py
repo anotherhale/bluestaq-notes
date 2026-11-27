@@ -84,7 +84,12 @@ from notes_service.domain.agent.tools import (
 )
 from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
-from notes_service.domain.governance.policy import PolicyEffect, PolicyObligation, evaluate
+from notes_service.domain.governance.policy import (
+    PolicyEffect,
+    PolicyObligation,
+    deployment_obligation_gaps,
+    evaluate,
+)
 from notes_service.domain.identity.assurance import STEP_UP_FLOOR
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
@@ -282,16 +287,25 @@ class InvokeTool(UseCase):
         # unenforceable member refuses the whole call — a set is only satisfiable
         # when every member is, so an author cannot smuggle an unenforceable
         # requirement alongside a real one.
+        #
+        # The deployment-wide half of that judgement (does a limiter exist at all?)
+        # comes from the domain, shared with the authoring path, so a policy that
+        # would deny everything is caught when it is drafted as well as when it is
+        # called. What is left here is what only the tool and the caller can decide.
+        deployment_gaps = deployment_obligation_gaps(
+            obligations, rate_limiter_configured=self._rate_limiter is not None
+        )
         unsatisfiable = [
             obligation
             for obligation in obligations
-            if not (
+            if obligation in deployment_gaps
+            or not (
                 (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
                 or (obligation is PolicyObligation.SECOND_APPROVER and tool.requires_approval)
                 or obligation is PolicyObligation.REDACTION
                 or obligation is PolicyObligation.ENHANCED_AUDIT
                 or obligation is PolicyObligation.STEP_UP
-                or (obligation is PolicyObligation.RATE_LIMIT and self._rate_limiter is not None)
+                or obligation is PolicyObligation.RATE_LIMIT
             )
         ]
         if unsatisfiable:
