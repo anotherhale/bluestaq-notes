@@ -89,6 +89,7 @@ from notes_service.application.use_cases.notes import (
     UnstarNote,
     UpdateNote,
 )
+from notes_service.application.use_cases.operator_access_report import GetOperatorAccessReport
 from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
@@ -276,6 +277,9 @@ class Container:
     get_withholding_report: Callable[[], GetWithholdingReport]
     # Platform-wide audit-chain verification, gated on ``ops_operator_user_ids``.
     sweep_audit_integrity: Callable[[], SweepAuditIntegrity]
+    # The read side of the operator access record, gated the same way. Without
+    # this the record is write-only and R36's question stays unanswerable.
+    get_operator_access_report: Callable[[], GetOperatorAccessReport]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -438,6 +442,15 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             operator_gate=operator_gate,
         )
 
+    # The record every granted operator read appends to is only useful if it can
+    # be read. Same gate, so reading the trail is itself recorded and an operator
+    # cannot inspect the log without adding to it.
+    def make_get_operator_access_report() -> GetOperatorAccessReport:
+        return GetOperatorAccessReport(
+            access_log=operator_access_log,
+            operator_gate=operator_gate,
+        )
+
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:
             return use_case_type(
@@ -588,4 +601,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         recommend_approval_decision=make_recommend_approval_decision,
         get_withholding_report=make_get_withholding_report,
         sweep_audit_integrity=make_sweep_audit_integrity,
+        get_operator_access_report=make_get_operator_access_report,
     )

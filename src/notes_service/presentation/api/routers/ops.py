@@ -13,11 +13,18 @@ the API surface.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
 
+from fastapi import APIRouter, Query
+
+from notes_service.application.use_cases.operator_access_report import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+)
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     ChainAuditReportResponse,
+    OperatorAccessReportResponse,
     WithholdingReportResponse,
 )
 
@@ -62,3 +69,39 @@ def sweep_audit_integrity(
     """
     report = container.sweep_audit_integrity().run(principal)
     return ChainAuditReportResponse.from_report(report)
+
+
+@router.get(
+    "/access-report",
+    response_model=OperatorAccessReportResponse,
+    summary="Recent granted operational reads (operators only)",
+    dependencies=[RateLimitDep],
+)
+def get_operator_access_report(
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_LIMIT,
+            description=(
+                "Maximum entries to return, newest first. Values above the "
+                "ceiling are rejected rather than silently clamped, so a caller "
+                "cannot believe it read more than the cap allows."
+            ),
+        ),
+    ] = DEFAULT_LIMIT,
+) -> OperatorAccessReportResponse:
+    """Return who has used an operator grant, newest first.
+
+    This is the read side of the record R36 added. Without it the log answered
+    nothing: every granted platform-wide read was written and never read back, so
+    "who read the totals" was unanswerable from inside the system.
+
+    Reading this view is itself a granted operator read, so it appends an entry
+    of its own — the trail cannot be inspected without being extended. A
+    non-operator gets ``404`` like every other ops endpoint.
+    """
+    snapshot = container.get_operator_access_report().run(principal, limit=limit)
+    return OperatorAccessReportResponse.from_snapshot(snapshot)

@@ -17,6 +17,7 @@ from notes_service.application.ports.withholding import WithholdingSnapshot
 from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
+from notes_service.application.use_cases.operator_access_report import OperatorAccessSnapshot
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.audit_chain import ChainAuditReport, ChainVerdict
@@ -848,6 +849,54 @@ class WithholdingReportResponse(ResponseModel):
             over_cap_advisories_total=snapshot.over_cap_advisories_total,
             over_cap_fields_total=snapshot.over_cap_fields_total,
             over_cap_rate=snapshot.over_cap_rate,
+        )
+
+
+class OperatorAccessEntryResponse(ResponseModel):
+    """One granted read of a platform-wide operational view.
+
+    Names the caller, the operation and the moment because that is the whole
+    point of the record: an audit entry that omitted the actor would answer
+    "something was read" rather than "who read it". ``operation`` is a fixed
+    identifier each use case chooses, never caller-supplied text.
+    """
+
+    user_id: str
+    operation: str
+    at: datetime
+
+
+class OperatorAccessReportResponse(ResponseModel):
+    """Recent granted operational reads, for operators (R36 read side).
+
+    ``log_name`` and ``capacity`` describe the adapter that answered, so a
+    reader cannot mistake a bounded, process-local window for a durable
+    deployment-wide history. ``capacity`` of ``0`` means the adapter does not
+    advertise a fixed ring (e.g. an append-only store), not that it is empty.
+    ``truncated`` is true when more entries exist than this window returned.
+    """
+
+    entries: list[OperatorAccessEntryResponse]
+    limit: int
+    log_name: str
+    capacity: int
+    truncated: bool
+
+    @classmethod
+    def from_snapshot(cls, snapshot: OperatorAccessSnapshot) -> OperatorAccessReportResponse:
+        return cls(
+            entries=[
+                OperatorAccessEntryResponse(
+                    user_id=str(entry.user_id),
+                    operation=entry.operation,
+                    at=entry.at,
+                )
+                for entry in snapshot.entries
+            ],
+            limit=snapshot.limit,
+            log_name=snapshot.log_name,
+            capacity=snapshot.capacity,
+            truncated=snapshot.truncated,
         )
 
 
