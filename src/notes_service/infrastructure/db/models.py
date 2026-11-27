@@ -738,6 +738,13 @@ class PolicyVersionRow(Base):
     ``id`` is a surrogate key so ``history`` can recover insertion order without
     relying on ``created_at`` precision, and it is what makes an ``UPDATE ... WHERE
     id = ?`` unambiguous when two rows share a version number across policy ids.
+
+    ``drafted_by`` records the author, and a third schema rule enforces separation of
+    duties (NEX-050) against a row written by something other than the use cases: a
+    published or retired row must name an author *different* from its publisher. The
+    column is nullable only so a pre-NEX-050 row remains readable; the constraint
+    makes that leniency irrelevant to anything in force, because a row that cannot
+    satisfy it cannot be published at all.
     """
 
     __tablename__ = "policy_versions"
@@ -751,6 +758,7 @@ class PolicyVersionRow(Base):
     created_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     published_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    drafted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("policy_id", "version_number", name="uq_policy_versions_policy_version"),
@@ -767,6 +775,14 @@ class PolicyVersionRow(Base):
             " OR (status IN ('published','retired')"
             " AND published_at IS NOT NULL AND published_by IS NOT NULL)",
             name="policy_versions_publication_data_consistent",
+        ),
+        # Separation of duties (NEX-050): anything in force names an author, and
+        # that author is not the publisher. Checked in the schema so a row written
+        # by a future caller that skips the use cases cannot put a self-published
+        # policy in force. The domain refuses the same pair on construction.
+        CheckConstraint(
+            "status = 'draft' OR (drafted_by IS NOT NULL AND drafted_by <> published_by)",
+            name="policy_versions_separation_of_duties",
         ),
         Index("ix_policy_versions_policy_status", "policy_id", "status"),
         Index(

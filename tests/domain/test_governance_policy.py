@@ -56,7 +56,13 @@ def _rule(rule_id: str = "r1", effect: PolicyEffect = PolicyEffect.ALLOW, when=N
 
 
 def _published(rules: tuple[PolicyRule, ...], *, policy_id: str = "test-policy") -> PolicyVersion:
-    draft = new_policy_version(policy_id=policy_id, version=1, rules=rules, rationale="test policy")
+    draft = new_policy_version(
+        policy_id=policy_id,
+        version=1,
+        rules=rules,
+        rationale="test policy",
+        drafted_by="dana",
+    )
     return draft.publish(now=NOW, published_by="alice")
 
 
@@ -254,7 +260,9 @@ def test_a_draft_carries_no_publication_data() -> None:
 
 
 def test_publish_returns_a_new_immutable_value() -> None:
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
     published = draft.publish(now=NOW, published_by="alice")
     assert published.status is PolicyStatus.PUBLISHED
     assert published.published_at == NOW
@@ -266,7 +274,9 @@ def test_publish_returns_a_new_immutable_value() -> None:
 
 
 def test_publishing_twice_is_an_invariant_violation() -> None:
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
     published = draft.publish(now=NOW, published_by="alice")
     with pytest.raises(InvariantViolation, match="already published"):
         published.publish(now=NOW, published_by="alice")
@@ -280,7 +290,9 @@ def test_only_a_published_version_can_be_retired() -> None:
 
 def test_retire_preserves_publication_provenance() -> None:
     """Retiring supersedes; it does not erase who published what, or when."""
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
     published = draft.publish(now=NOW, published_by="alice")
     retired = published.retire()
     assert retired.status is PolicyStatus.RETIRED

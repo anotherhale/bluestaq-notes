@@ -1350,7 +1350,12 @@ class PolicyRuleResponse(ResponseModel):
 
 
 class PolicyVersionResponse(ResponseModel):
-    """One policy version. ``published_by`` is ``None`` while the version is a draft."""
+    """One policy version.
+
+    ``published_by`` is ``None`` while the version is a draft. ``drafted_by`` is
+    the author, and it is how a client learns which operator may *not* publish
+    this version: separation of duties requires a different principal (NEX-050).
+    """
 
     policy_id: str
     version: int
@@ -1360,6 +1365,7 @@ class PolicyVersionResponse(ResponseModel):
     created_at: datetime | None
     published_at: datetime | None
     published_by: str | None
+    drafted_by: str | None
     ref: str
 
     @classmethod
@@ -1380,6 +1386,7 @@ class PolicyVersionResponse(ResponseModel):
             created_at=version.created_at,
             published_at=version.published_at,
             published_by=version.published_by,
+            drafted_by=version.drafted_by,
             ref=version.ref,
         )
 

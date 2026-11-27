@@ -18,13 +18,14 @@ Approve is not here yet, and that is honest
 -------------------------------------------
 
 The full lifecycle includes an approval step. This slice ships draft → publish →
-retire because those are the transitions the *store* must support, and approval
-is a governance decision that depends on M3.3 (separation of duties), which is not
-built. Rather than fake an approval gate that always passes — which would be a
-policy surface that looks governed and is not — this use case records the
-publisher and leaves the approval requirement to the slice that can enforce it.
-That is a deliberate, stated gap, not an oversight: see the BACKLOG entry's
-"Residual" section.
+retire because those are the transitions the *store* must support. The approval
+*decision* — a separate reviewer signing off before publication — is still not
+built. What is built, from NEX-050, is the control that approval depends on:
+**separation of duties**. The principal that authored a version cannot be the
+principal that publishes it, enforced in the domain and again here. That is a
+real, tested restriction on who can put a policy in force, not a placeholder gate
+that always passes. A distinct approval *record* on top of it (an approve verb
+with its own scope, obligations and audit entry) remains the follow-on slice.
 
 Why a use case and not a repository method
 ------------------------------------------
@@ -40,16 +41,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from notes_service.application.actor_label import actor_label
 from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.policy_versions import PolicyVersionRepository
 from notes_service.application.use_cases.operator_gate import OperatorGate
-from notes_service.domain.errors import ValidationError
+from notes_service.domain.errors import InvariantViolation, ValidationError
 from notes_service.domain.governance.policy import (
     PolicyRule,
     PolicyStatus,
     PolicyVersion,
     new_policy_version,
+    separation_of_duties,
 )
 from notes_service.domain.identity.principal import Principal
 
@@ -65,7 +68,12 @@ HISTORY_OPERATION = "policy-history"
 
 @dataclass(frozen=True, slots=True)
 class DraftPolicyVersion:
-    """A request to draft the next version of a policy."""
+    """A request to draft the next version of a policy.
+
+    It carries no author: the author is stamped from the authenticated principal
+    inside :class:`DraftPolicy`, so a request body cannot attribute a draft to
+    someone else — the same rule the publisher follows, for the same reason.
+    """
 
     policy_id: str
     rules: tuple[PolicyRule, ...]
@@ -76,14 +84,15 @@ class DraftPolicyVersion:
 class PublishPolicyVersion:
     """A request to publish a specific draft.
 
-    ``published_by`` is stamped from the authenticated caller at the HTTP
-    boundary, never read from a request body: a caller-chosen publisher would let
-    anyone attribute a policy in force to someone else.
+    It carries no publisher. ``published_by`` is stamped from the authenticated
+    principal inside :class:`PublishDraft`, never read from a request body: a
+    caller-chosen publisher would let anyone attribute a policy in force to
+    someone else, and separation of duties is only meaningful if both identities
+    are authoritative.
     """
 
     policy_id: str
     version: int
-    published_by: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,11 +102,15 @@ class RollbackPolicyVersion:
     Rollback is not a mutation of history: it reads the named version's rules and
     drafts them under the next version number, so the fact that a rollback
     happened is itself recorded.
+
+    No publisher is carried, for the same reason :class:`PublishPolicyVersion`
+    carries none. A rollback is a publish, so the caller who rolls back is the
+    publisher, and separation of duties applies to it: the principal that drafts
+    the rolled-back version must not be the one who puts it in force.
     """
 
     policy_id: str
     to_version: int
-    published_by: str
     rationale: str
 
 
@@ -126,10 +139,31 @@ class DraftPolicy:
             version=version_number,
             rules=request.rules,
             rationale=request.rationale,
+            drafted_by=actor_label(principal),
             created_at=self._clock.now(),
         )
         self._store.add_draft(draft)
         return draft
+
+
+def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:
+    """Turn the domain separation-of-duties rule into an application ``Conflict``.
+
+    The domain raises :class:`InvariantViolation`, which the transport maps to a
+    generic 422 "the operation would break an invariant". For a caller who tried to
+    publish their own draft the honest answer is a 409 with the reason, so they can
+    ask a second operator to publish it. The domain check stays as the backstop for
+    callers that bypass this use case; this function only re-expresses the same rule
+    with a more useful status.
+
+    A ``None`` author is a conflict too, not a pass: the domain refuses it, and
+    translating that into "go ahead" here would undo the control for exactly the
+    drafts that never recorded an author.
+    """
+    try:
+        separation_of_duties(author=draft.drafted_by, publisher=publisher, ref=draft.ref)
+    except InvariantViolation as exc:
+        raise Conflict(str(exc)) from exc
 
 
 class PublishDraft:
@@ -155,8 +189,10 @@ class PublishDraft:
             raise Conflict(
                 f"policy version {draft.ref} is {draft.status.value} and cannot be published"
             )
+        publisher = actor_label(principal)
+        _require_two_principals(draft, publisher=publisher)
         current = self._store.published_for(request.policy_id)
-        published = draft.publish(now=self._clock.now(), published_by=request.published_by)
+        published = draft.publish(now=self._clock.now(), published_by=publisher)
         # Retire the outgoing version *before* publishing the new one. If the
         # process dies between the two writes, the store is briefly left with the
         # old version retired and nothing published — deny, not a wrong allow —
@@ -190,16 +226,28 @@ class RollbackPolicy:
             raise Conflict(
                 f"cannot roll back to {source.ref}: it is a draft, not a released version"
             )
+        # A rollback authors nothing: it restores rules that already went through
+        # review, so the version's *author* stays the person who wrote those rules
+        # and the caller performing the rollback is the *publisher*. Separation of
+        # duties therefore reads the same way it does everywhere else — the author
+        # of the rules must not be the principal putting them back in force — and
+        # an author cannot silently re-force their own retired rules. Both
+        # identities are still recorded, so the history names who restored what.
+        publisher = actor_label(principal)
+        _require_two_principals(source, publisher=publisher)
+        author = source.drafted_by
+        assert author is not None  # guaranteed by _require_two_principals
         version_number = self._store.next_version_number(request.policy_id)
         draft = new_policy_version(
             policy_id=request.policy_id,
             version=version_number,
             rules=source.rules,
             rationale=request.rationale,
+            drafted_by=author,
             created_at=self._clock.now(),
         )
         self._store.add_draft(draft)
-        published = draft.publish(now=self._clock.now(), published_by=request.published_by)
+        published = draft.publish(now=self._clock.now(), published_by=publisher)
         current = self._store.published_for(request.policy_id)
         if current is not None:
             self._store.retire(current.retire())

@@ -28,7 +28,6 @@ from notes_service.application.use_cases.policy_lifecycle import (
 )
 from notes_service.domain.errors import ValidationError
 from notes_service.domain.governance.policy import PolicyEffect, PolicyRule
-from notes_service.domain.identity.principal import Principal
 from notes_service.infrastructure.governance.policy_codec import decode_condition
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
@@ -41,19 +40,6 @@ from notes_service.presentation.schemas import (
 )
 
 router = APIRouter(prefix="/ops/policies", tags=["ops"])
-
-
-def _publisher_label(principal: Principal) -> str:
-    """The actor string stamped on a published version.
-
-    The domain requires a lowercase identifier (policy ids land in audit records
-    and log fields), while the authoritative identity is a UUID that begins with a
-    digit. The prefix makes it a legal identifier and keeps it recognisable as a
-    user rather than a policy id. Attribution uses ``user_id`` and never
-    ``provider``/``subject``: those record how the caller authenticated and are
-    not an identity source.
-    """
-    return f"user-{principal.user_id}"
 
 
 def _to_rules(requests: list[PolicyRuleRequest]) -> tuple[PolicyRule, ...]:
@@ -119,11 +105,7 @@ def publish_policy_version(
     """
     version = container.publish_draft().execute(
         principal,
-        PublishPolicyVersion(
-            policy_id=policy_id,
-            version=body.version,
-            published_by=_publisher_label(principal),
-        ),
+        PublishPolicyVersion(policy_id=policy_id, version=body.version),
     )
     return PolicyVersionResponse.from_domain(version)
 
@@ -149,10 +131,7 @@ def rollback_policy(
     version = container.rollback_policy().execute(
         principal,
         RollbackPolicyVersion(
-            policy_id=policy_id,
-            to_version=body.to_version,
-            published_by=_publisher_label(principal),
-            rationale=body.rationale,
+            policy_id=policy_id, to_version=body.to_version, rationale=body.rationale
         ),
     )
     return PolicyVersionResponse.from_domain(version)

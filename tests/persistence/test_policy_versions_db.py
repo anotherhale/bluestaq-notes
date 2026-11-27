@@ -83,6 +83,7 @@ def _draft(policy_id: str = "content.access", version: int = 1):
         version=version,
         rules=_rules(),
         rationale="initial release",
+        drafted_by="dana",
         created_at=NOW,
     )
 

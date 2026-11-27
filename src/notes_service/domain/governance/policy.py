@@ -309,6 +309,45 @@ class PolicyRule:
             _check_bounds(self.when)
 
 
+def separation_of_duties(*, author: str | None, publisher: str, ref: str) -> None:
+    """Refuse to let the principal that drafted a version publish it (M3.3).
+
+    The security architecture is explicit that sensitive actions need separation
+    of duties, and the authorization model says the actor requesting a sensitive
+    action cannot approve their own. A policy version is the most sensitive object
+    in the platform — publishing one puts rules in force for every agent — so the
+    author and the publisher must be two principals.
+
+    Two things are deliberate:
+
+    * **An unknown author fails closed.** A version whose author is not recorded
+      cannot be checked, and "cannot be checked" must not mean "allowed", or the
+      control is bypassed by omitting a field. ``None`` is therefore a refusal,
+      not a pass. The message says so, because the fix (re-draft under an
+      identified author) is different from the fix for a self-publish.
+    * **The comparison is on the recorded identifiers**, not on a session, an
+      email or a provider subject. ``published_by`` and ``drafted_by`` are both
+      stamped from the authenticated principal at the boundary, so comparing them
+      is comparing two authoritative identities rather than two claims.
+
+    This is a *domain* rule because it must hold for every caller. It is checked
+    again in :class:`~notes_service.application.use_cases.policy_lifecycle.
+    PublishDraft` so the refusal is an application ``Conflict`` (a 409 that names
+    the reason) rather than a domain invariant error; the domain check is the
+    backstop for a caller that builds a published value without the use case.
+    """
+    if author is None:
+        raise InvariantViolation(
+            f"cannot publish {ref}: the drafting principal is not recorded, so "
+            "separation of duties cannot be satisfied"
+        )
+    if author == publisher:
+        raise InvariantViolation(
+            f"cannot publish {ref}: {publisher} drafted it, and separation of duties "
+            "requires a different principal to publish"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PolicyVersion:
     """One immutable snapshot of a policy's rules.
@@ -319,6 +358,14 @@ class PolicyVersion:
     is an honest "not yet published" rather than a placeholder date.
     The version number is monotonic per policy id and assigned by the store, not
     by the caller: a caller-chosen version number is a caller-chosen history.
+
+    ``drafted_by`` is the author, stamped by the application from the
+    authenticated caller for exactly the same reason ``published_by`` is: a
+    caller-chosen author would let anyone attribute a policy to someone else, and
+    separation of duties (M3.3) is only checkable if the author is trustworthy.
+    It is ``None`` only for a version that predates the field; a version that has
+    been published always names both its author and its publisher, and
+    :func:`separation_of_duties` refuses the pair being the same principal.
     """
 
     policy_id: str
@@ -329,6 +376,7 @@ class PolicyVersion:
     created_at: datetime | None = None
     published_at: datetime | None = None
     published_by: str | None = None
+    drafted_by: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -390,12 +438,17 @@ class PolicyVersion:
         holds cannot be mistaken for the published one. Publishing an already
         published or retired version is a programming error, not a user error, so
         it raises :class:`InvariantViolation`.
+
+        The publisher must not be the author: separation of duties is checked
+        here as well as in the use case, so a caller that builds the published
+        value directly cannot bypass it.
         """
         if self.status is not PolicyStatus.DRAFT:
             raise InvariantViolation(
                 f"policy version {self.policy_id}@v{self.version} is already {self.status.value}"
             )
         publisher = _validate_identifier(published_by, what="published_by")
+        separation_of_duties(author=self.drafted_by, publisher=publisher, ref=self.ref)
         return PolicyVersion(
             policy_id=self.policy_id,
             version=self.version,
@@ -405,6 +458,7 @@ class PolicyVersion:
             created_at=self.created_at,
             published_at=now,
             published_by=publisher,
+            drafted_by=self.drafted_by,
         )
 
     def retire(self) -> PolicyVersion:
@@ -426,6 +480,7 @@ class PolicyVersion:
             created_at=self.created_at,
             published_at=self.published_at,
             published_by=self.published_by,
+            drafted_by=self.drafted_by,
         )
 
 
@@ -575,13 +630,20 @@ def new_policy_version(
     version: int,
     rules: tuple[PolicyRule, ...],
     rationale: str,
+    drafted_by: str | None = None,
     created_at: datetime | None = None,
 ) -> PolicyVersion:
     """Construct a ``DRAFT`` version. The only way to make a draft.
     A small factory rather than a bare constructor call at each site, so the
     "drafts start unpublished and carry no publication data" rule has one
     implementation.
+
+    ``drafted_by`` is the author, stamped by the application from the authenticated
+    caller. It is validated through the same identifier rule as ``published_by`` so
+    the two are directly comparable by :func:`separation_of_duties`; a value that is
+    not a legal identifier would make the comparison meaningless.
     """
+    author = _validate_identifier(drafted_by, what="drafted_by") if drafted_by is not None else None
     return PolicyVersion(
         policy_id=policy_id,
         version=version,
@@ -589,6 +651,7 @@ def new_policy_version(
         rationale=rationale,
         status=PolicyStatus.DRAFT,
         created_at=created_at,
+        drafted_by=author,
     )
 
 
@@ -617,4 +680,5 @@ __all__ = [
     "evaluate",
     "new_policy_version",
     "new_policy_version_id",
+    "separation_of_duties",
 ]

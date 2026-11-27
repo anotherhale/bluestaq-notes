@@ -62,6 +62,9 @@ def operator_client(app: FastAPI) -> TestClient:
             operator_grant(ALICE, "policy-publish"),
             operator_grant(ALICE, "policy-rollback"),
             operator_grant(ALICE, "policy-history"),
+            operator_grant(BOB, "policy-publish"),
+            operator_grant(BOB, "policy-rollback"),
+            operator_grant(BOB, "policy-history"),
         ],
     )
 
@@ -83,13 +86,13 @@ def test_operator_drafts_then_publishes(operator_client: TestClient) -> None:
     published = operator_client.post(
         f"{BASE}/risk-gate/publish",
         json={"version": 1},
-        headers=auth_headers(ALICE),
+        headers=auth_headers(BOB),
     )
     assert published.status_code == 200, published.text
     in_force = published.json()
     assert in_force["status"] == "published"
     # The publisher is the caller, stamped at the boundary.
-    assert in_force["published_by"] == f"user-{ALICE}"
+    assert in_force["published_by"] == f"user-{BOB}"
 
 
 def test_publisher_cannot_be_chosen_by_the_request(operator_client: TestClient) -> None:
@@ -103,9 +106,30 @@ def test_publisher_cannot_be_chosen_by_the_request(operator_client: TestClient) 
     assert response.status_code == 422, response.text
 
 
+def test_a_drafting_operator_cannot_publish_their_own_version(
+    operator_client: TestClient,
+) -> None:
+    """Separation of duties is enforced at the boundary, as a 409 (NEX-050)."""
+    operator_client.post(f"{BASE}/p5/versions", json=DRAFT, headers=auth_headers(ALICE))
+    response = operator_client.post(
+        f"{BASE}/p5/publish", json={"version": 1}, headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 409, response.text
+    assert "separation of duties" in response.json()["error"]["message"]
+
+
+def test_an_operator_who_is_not_the_author_can_publish(operator_client: TestClient) -> None:
+    operator_client.post(f"{BASE}/p6/versions", json=DRAFT, headers=auth_headers(ALICE))
+    response = operator_client.post(
+        f"{BASE}/p6/publish", json={"version": 1}, headers=auth_headers(BOB)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["published_by"] == f"user-{BOB}"
+
+
 def test_history_reports_the_version_in_force(operator_client: TestClient) -> None:
     operator_client.post(f"{BASE}/p3/versions", json=DRAFT, headers=auth_headers(ALICE))
-    operator_client.post(f"{BASE}/p3/publish", json={"version": 1}, headers=auth_headers(ALICE))
+    operator_client.post(f"{BASE}/p3/publish", json={"version": 1}, headers=auth_headers(BOB))
 
     response = operator_client.get(f"{BASE}/p3/versions", headers=auth_headers(ALICE))
     assert response.status_code == 200, response.text
@@ -117,12 +141,12 @@ def test_history_reports_the_version_in_force(operator_client: TestClient) -> No
 
 def test_rollback_keeps_the_history(operator_client: TestClient) -> None:
     operator_client.post(f"{BASE}/p4/versions", json=DRAFT, headers=auth_headers(ALICE))
-    operator_client.post(f"{BASE}/p4/publish", json={"version": 1}, headers=auth_headers(ALICE))
+    operator_client.post(f"{BASE}/p4/publish", json={"version": 1}, headers=auth_headers(BOB))
 
     rolled_back = operator_client.post(
         f"{BASE}/p4/rollback",
         json={"to_version": 1, "rationale": "restore"},
-        headers=auth_headers(ALICE),
+        headers=auth_headers(BOB),
     )
     assert rolled_back.status_code == 200, rolled_back.text
     assert rolled_back.json()["version"] == 2
