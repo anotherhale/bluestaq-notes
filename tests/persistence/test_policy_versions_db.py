@@ -29,6 +29,12 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from notes_service.application.errors import Conflict
+from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.policy_lifecycle import (
+    RollbackPolicy,
+    RollbackPolicyVersion,
+)
 from notes_service.domain.errors import InvariantViolation, ValidationError
 from notes_service.domain.governance.policy import (
     AllOf,
@@ -41,14 +47,48 @@ from notes_service.domain.governance.policy import (
     PolicyRule,
     PolicyStatus,
     PolicyVersion,
+    evaluate,
     new_policy_version,
 )
+from notes_service.domain.identity.principal import Principal
+from notes_service.domain.identity.value_objects import Email, UserId
+from notes_service.infrastructure.governance.policy_codec import encode_rules
 from notes_service.infrastructure.governance.policy_versions_db import (
     SqlAlchemyPolicyVersionRepository,
 )
+from notes_service.infrastructure.security.operator_access_log import (
+    InMemoryOperatorAccessLog,
+)
+from tests.application.grant_helpers import grants_from_scopes
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 RISK = AttributeRef("risk", AttributeType.STRING)
+
+_OPERATOR = Principal(
+    user_id=UserId("11111111-1111-1111-1111-111111111111"),
+    email=Email("operator@example.com"),
+    display_name="Operator",
+    provider="demo",
+    subject="11111111-1111-1111-1111-111111111111",
+)
+
+
+class _FixedClock:
+    def now(self) -> datetime:
+        return NOW
+
+
+def _permissive_gate() -> OperatorGate:
+    """A gate granting the operator every scope, so a refusal is about approval.
+
+    These tests assert why a rollback is refused; a scope failure would be a
+    different refusal and must not be mistaken for the one under test.
+    """
+    return OperatorGate(
+        grants=grants_from_scopes({_OPERATOR.user_id: frozenset({"*"})}),
+        access_log=InMemoryOperatorAccessLog(),
+        clock=_FixedClock(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -391,3 +431,85 @@ def test_rules_survive_a_round_trip_unchanged(
 
     assert reread is not None
     assert reread.rules == rich
+
+
+# --------------------------------------------------------------------------- #
+# A version in force from before approval was recorded (NEX-066)
+# --------------------------------------------------------------------------- #
+
+
+def _insert_legacy_published(
+    session_factory: sessionmaker[Session], *, policy_id: str = "content.access"
+) -> None:
+    """Write a row the way pre-NEX-065 code did: in force, no approval columns.
+
+    Raw SQL is the point. No use case can produce this row any more, which is
+    exactly why it can only arrive from a deployment that predates the column.
+    """
+    with session_factory() as session:
+        session.execute(
+            text(
+                "INSERT INTO policy_versions"
+                " (policy_id, version_number, status, rationale, rules,"
+                "  created_at, published_at, published_by, drafted_by)"
+                " VALUES (:pid, 1, 'published', 'published before approval existed',"
+                " :rules, :at, :at, 'operator-1', 'dana')"
+            ),
+            {"pid": policy_id, "rules": encode_rules(_rules()), "at": NOW},
+        )
+        session.commit()
+
+
+def test_a_legacy_published_row_stays_readable(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The migration tolerates the row; the reader must still return it.
+
+    ``_to_domain`` used to raise for a version in force with no approval, so
+    ``published_for`` and ``history`` — and therefore every policy decision —
+    failed on a database that had been running before NEX-065. Reading it as "no
+    approval on record" keeps the live policy in force.
+    """
+    _insert_legacy_published(session_factory)
+
+    live = _restart(session_factory).published_for("content.access")
+
+    assert live is not None
+    assert live.status is PolicyStatus.PUBLISHED
+    assert live.has_approval_record is False
+    assert live.approved_at is None and live.approved_by is None
+
+
+def test_a_legacy_version_still_decides(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Withdrawing it would deny everything it permitted — a fail-closed outage."""
+    _insert_legacy_published(session_factory)
+
+    in_force = _restart(session_factory).all_published()
+
+    assert [v.version for v in in_force] == [1]
+    assert evaluate(in_force, {"risk": "low"}).allowed
+
+
+def test_rollback_refuses_a_legacy_version_and_leaves_no_draft(
+    store: SqlAlchemyPolicyVersionRepository,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A rollback copies the source's approval record; a legacy row has none.
+
+    Stamping a fresh approval would put rules back in force under a review that
+    never happened, so the rollback is refused. The refusal must land before the
+    draft is written, or a failed rollback would still consume a version number.
+    """
+    _insert_legacy_published(session_factory)
+
+    with pytest.raises(Conflict, match="no review to inherit"):
+        RollbackPolicy(store=store, clock=_FixedClock(), operator_gate=_permissive_gate()).execute(
+            _OPERATOR,
+            RollbackPolicyVersion(policy_id="content.access", to_version=1, rationale="restore"),
+        )
+
+    assert [v.version for v in store.history("content.access")] == [1], (
+        "a refused rollback must not leave a draft behind"
+    )

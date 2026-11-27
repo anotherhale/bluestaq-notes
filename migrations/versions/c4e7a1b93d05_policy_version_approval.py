@@ -16,12 +16,20 @@ the author of a version may not be the principal that approved it.
 No backfill, and deliberately so. A pre-existing *published* row has no approver
 to record; inventing one (the publisher, or a placeholder) would manufacture a
 review that never happened, and the whole point of this change is that the audit
-trail must not claim a review it cannot evidence. Such rows would now fail the
-new constraint, so the migration does not apply it to them: the constraint is
-added only for rows written from here on, and the migration report calls out
-that existing published rows must be re-drafted with an approver to be rewritten
-under the new rules. This mirrors the choice made in 9c4d1e8a7b23 for
-``drafted_by``.
+trail must not claim a review it cannot evidence. A CHECK constraint is table-wide,
+so it cannot be "applied only to new rows": it is evaluated against every existing
+row when the table is rebuilt. The constraint therefore has to *tolerate* the one
+state legacy data can be in - a version in force carrying no approval at all - while
+still refusing a half-written record, which no legitimate writer produces. A version
+in force with both columns NULL reads as "no approval on record"
+(``PolicyVersion.has_approval_record``); re-publishing it under the new rules
+requires re-drafting it with a named approver, which is the correct remediation.
+This mirrors the choice made in 9c4d1e8a7b23 for ``drafted_by``.
+
+This revision is edited in place rather than superseded by a follow-up: it has
+never been applied to a durable database (it is unreleased on an unmerged branch),
+and a later revision could not repair the failure because ``upgrade head`` would
+still stop at this one.
 
 Revision ID: c4e7a1b93d05
 Revises: e5a9c3b7d812
@@ -72,9 +80,15 @@ def upgrade() -> None:
             " OR (status = 'approved'"
             " AND approved_at IS NOT NULL AND approved_by IS NOT NULL"
             " AND published_at IS NULL AND published_by IS NULL)"
+            # A version in force records its publication always, and records an
+            # approval when it was published under these rules. The approval is
+            # optional *only* so a row that predates this revision can survive the
+            # table rebuild; a half-written approval (one column set, the other
+            # null) is refused, because no writer produces that.
             " OR (status IN ('published','retired')"
             " AND published_at IS NOT NULL AND published_by IS NOT NULL"
-            " AND approved_at IS NOT NULL AND approved_by IS NOT NULL)",
+            " AND ((approved_at IS NULL AND approved_by IS NULL)"
+            " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
         )
         batch.create_check_constraint(
             "policy_versions_separation_of_duties",

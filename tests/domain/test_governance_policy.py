@@ -391,3 +391,63 @@ def test_rationale_is_bounded() -> None:
 def test_version_number_must_be_positive() -> None:
     with pytest.raises(ValidationError, match="at least 1"):
         new_policy_version(policy_id="p", version=0, rules=(_rule(),), rationale="x")
+
+
+# --------------------------------------------------------------------------- #
+# A version in force from before approval was recorded (NEX-066)
+# --------------------------------------------------------------------------- #
+
+
+def _legacy_published() -> PolicyVersion:
+    """A row as it existed before NEX-065: in force, with no approval columns."""
+    return PolicyVersion(
+        policy_id="legacy",
+        version=1,
+        rules=(_rule("allow-all", PolicyEffect.ALLOW),),
+        rationale="published before approval became a recorded transition",
+        status=PolicyStatus.PUBLISHED,
+        created_at=NOW,
+        published_at=NOW,
+        published_by="alice",
+        drafted_by="dana",
+    )
+
+
+def test_a_legacy_published_version_still_loads() -> None:
+    """Refusing to hydrate it would withdraw a live policy and deny everything it allowed."""
+    legacy = _legacy_published()
+    assert legacy.status is PolicyStatus.PUBLISHED
+    assert legacy.has_approval_record is False
+
+
+def test_a_legacy_version_still_applies_its_rules() -> None:
+    legacy = _legacy_published()
+    assert evaluate((legacy,), {}).allowed
+
+
+def test_a_legacy_version_never_claims_an_approval() -> None:
+    """``has_approval_record`` is how a caller asks "was this reviewed?" - status is not."""
+    assert _legacy_published().has_approval_record is False
+
+
+def test_an_approved_version_reports_its_approval() -> None:
+    published = _published((_rule(),))
+    assert published.has_approval_record is True
+    assert published.approved_by == "reviewer-1"
+
+
+def test_a_half_written_approval_is_refused_at_construction() -> None:
+    """Tolerating "no approval" must not tolerate a corrupt record."""
+    with pytest.raises(ValidationError, match="completely or not at all"):
+        PolicyVersion(
+            policy_id="corrupt",
+            version=1,
+            rules=(_rule(),),
+            rationale="r",
+            status=PolicyStatus.PUBLISHED,
+            created_at=NOW,
+            published_at=NOW,
+            published_by="alice",
+            drafted_by="dana",
+            approved_at=NOW,
+        )

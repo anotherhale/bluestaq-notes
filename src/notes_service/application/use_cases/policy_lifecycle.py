@@ -359,6 +359,17 @@ class RollbackPolicy:
             raise Conflict(
                 f"cannot roll back to {source.ref}: it is a draft, not a released version"
             )
+        # A version in force from before NEX-065 has no approval to inherit. There is
+        # nothing honest to copy, and inventing one would put rules back in force
+        # under a review that never happened, so the rollback is refused before any
+        # draft is written and the caller is told the one thing that will work:
+        # re-draft with a named approver.
+        if not source.has_approval_record:
+            raise Conflict(
+                f"cannot roll back to {source.ref}: it is in force without a recorded"
+                " approval, so there is no review to inherit. Re-draft its rules with a"
+                " named approver instead."
+            )
         # A rollback authors nothing: it restores rules that already went through
         # review, so the version's *author* stays the person who wrote those rules
         # and the caller performing the rollback is the *publisher*. Separation of
@@ -387,7 +398,7 @@ class RollbackPolicy:
         # review or, worse, stamping a new approval nobody gave. ``approve`` still
         # re-checks separation of duties, so a source version that somehow recorded
         # a self-approval cannot be laundered through a rollback.
-        assert source.approved_at is not None  # a released version always records one
+        assert source.approved_at is not None  # narrowed by has_approval_record
         assert source.approved_by is not None
         approved = draft.approve(now=source.approved_at, approved_by=source.approved_by)
         self._store.approve(approved)

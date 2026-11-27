@@ -289,3 +289,83 @@ class TestPolicyVersionsColumnBackfill:
 
         assert "policy_versions" not in columns
         assert surviving == ("succeeded",), "downgrade must not drop the invocation itself"
+
+
+class TestPolicyApprovalMigrationKeepsLegacyRows:
+    """c4e7a1b93d05 must not strand a database that already holds a live policy.
+
+    The revision's docstring promises that a version published before NEX-065 is
+    left readable, but a CHECK constraint is table-wide and is evaluated against
+    every existing row when SQLite rebuilds the table. The first draft of the
+    constraint required an approval on any version in force, so ``upgrade head``
+    failed with ``CHECK constraint failed`` on any deployment that had published a
+    policy - a deployment that could not then be upgraded at all. These tests pin
+    the behaviour the docstring claims.
+    """
+
+    PREVIOUS_REVISION = "e5a9c3b7d812"
+
+    def _seed_published_version_without_approval(self, db_path: Path) -> None:
+        # ``id`` is an INTEGER primary key: let it autoincrement rather than
+        # inserting a text id, which SQLite rejects as a datatype mismatch.
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO policy_versions"
+                " (policy_id, version_number, status, rationale, rules,"
+                "  created_at, published_at, published_by, drafted_by)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "notes.default",
+                    1,
+                    "published",
+                    "published before approval was a recorded step",
+                    "[]",
+                    "2026-11-01 00:00:00.000000",
+                    "2026-11-01 00:00:00.000000",
+                    "publisher-1",
+                    "author-1",
+                ),
+            )
+
+    def test_upgrade_succeeds_with_a_legacy_published_row(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "legacy-published.db"
+        assert _alembic(db_path, "upgrade", self.PREVIOUS_REVISION).returncode == 0
+        self._seed_published_version_without_approval(db_path)
+
+        result = _alembic(db_path, "upgrade", "head")
+        assert result.returncode == 0, (
+            "a database holding a pre-NEX-065 published policy must still upgrade:\n"
+            f"{result.stderr}"
+        )
+
+    def test_the_legacy_row_survives_with_no_invented_approval(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "legacy-survives.db"
+        assert _alembic(db_path, "upgrade", self.PREVIOUS_REVISION).returncode == 0
+        self._seed_published_version_without_approval(db_path)
+        assert _alembic(db_path, "upgrade", "head").returncode == 0
+
+        with sqlite3.connect(db_path) as connection:
+            stored = connection.execute(
+                "SELECT status, published_by, approved_at, approved_by"
+                " FROM policy_versions WHERE policy_id='notes.default'"
+            ).fetchone()
+
+        assert stored == ("published", "publisher-1", None, None), (
+            f"the row must stay in force and must not gain an approval nobody gave, got {stored}"
+        )
+
+    def test_a_half_written_approval_is_still_refused(self, tmp_path: Path) -> None:
+        """Tolerating "no approval" must not tolerate a corrupt record."""
+        db_path = tmp_path / "half-written.db"
+        assert _alembic(db_path, "upgrade", "head").returncode == 0
+
+        with sqlite3.connect(db_path) as connection, pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO policy_versions"
+                " (policy_id, version_number, status, rationale, rules,"
+                "  created_at, published_at, published_by, drafted_by,"
+                "  approved_at, approved_by)"
+                " VALUES ('notes.default', 1, 'published', 'r', '[]',"
+                " '2026-11-01 00:00:00.000000', '2026-11-01 00:00:00.000000',"
+                " 'publisher-1', 'author-1', '2026-11-01 00:00:00.000000', NULL)"
+            )

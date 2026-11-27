@@ -813,9 +813,12 @@ class PolicyVersionRow(Base):
         CheckConstraint("length(policy_id) > 0", name="policy_versions_policy_id_not_empty"),
         # Each lifecycle state carries exactly the record it is entitled to: a draft
         # has none, an approved version has an approval and no publication, and a
-        # version in force has both. The domain enforces this on construction; the
-        # schema enforces it against a row written by something other than the
-        # domain, so an approval cannot be invented after the fact.
+        # version in force has a publication and - unless it predates NEX-065 - an
+        # approval too. The domain enforces this on construction; the schema
+        # enforces it against a row written by something other than the domain, so
+        # an approval cannot be invented after the fact. The approval is optional
+        # for a version in force only because c4e7a1b93d05 must rebuild a table that
+        # may already hold such a row; a half-written approval is still refused.
         CheckConstraint(
             "(status = 'draft'"
             " AND published_at IS NULL AND published_by IS NULL"
@@ -825,7 +828,8 @@ class PolicyVersionRow(Base):
             " AND published_at IS NULL AND published_by IS NULL)"
             " OR (status IN ('published','retired')"
             " AND published_at IS NOT NULL AND published_by IS NOT NULL"
-            " AND approved_at IS NOT NULL AND approved_by IS NOT NULL)",
+            " AND ((approved_at IS NULL AND approved_by IS NULL)"
+            " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
             name="policy_versions_publication_data_consistent",
         ),
         # Separation of duties (NEX-050, extended by NEX-065): anything past draft

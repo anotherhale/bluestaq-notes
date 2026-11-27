@@ -510,14 +510,21 @@ class PolicyVersion:
 
     ``approved_at``/``approved_by`` are the approval record (NEX-065). They are
     stamped only by :meth:`approve`, and :meth:`publish` refuses a version that
-    lacks them, so "a policy in force was approved by a named second principal at a
-    known time" is a property the type enforces rather than a convention a caller
-    is trusted to follow. ``approved_by`` must differ from ``drafted_by`` for the
-    same reason the publisher must: an author approving their own policy is not a
-    review. The publisher need not be the approver — publishing is the mechanical
-    act of putting an already-approved version in force, and requiring the approver
-    to also be the publisher would make a two-person control impossible with only
-    two operators.
+    lacks them, so a policy *published under these rules* was approved by a named
+    second principal at a known time — a property the type enforces rather than a
+    convention a caller is trusted to follow. ``approved_by`` must differ from
+    ``drafted_by`` for the same reason the publisher must: an author approving their
+    own policy is not a review. The publisher need not be the approver — publishing
+    is the mechanical act of putting an already-approved version in force, and
+    requiring the approver to also be the publisher would make a two-person control
+    impossible with only two operators.
+
+    The one exception is a version that was already in force before NEX-065: it has
+    no approval to record and inventing one would forge the very audit trail this
+    field exists to provide. Such a row keeps both columns ``None`` and reads as
+    "no approval on record" (:attr:`has_approval_record`); it stays in force,
+    because refusing to load it would silently withdraw a live policy and deny
+    everything it permitted.
     """
 
     policy_id: str
@@ -586,15 +593,28 @@ class PolicyVersion:
                 "a published policy version must record when and by whom it was published"
             )
         if self.status in (PolicyStatus.PUBLISHED, PolicyStatus.RETIRED) and (
-            self.approved_at is None or self.approved_by is None
-        ):
-            # A version in force that never recorded an approval predates NEX-065.
-            # Refusing it here rather than defaulting an approval keeps the record
-            # honest: an invented approval is worse than a missing one, because it
-            # cannot be told apart from a real review afterwards.
+            self.approved_at is None
+        ) != (self.approved_by is None):
+            # A half-written approval is not a legacy record: it is a bug in
+            # whatever wrote the row, because no legitimate writer sets one column
+            # and not the other. Refusing it keeps "no approval on record" (both
+            # NULL) distinguishable from "the record is corrupt".
             raise ValidationError(
-                "a policy version in force must record when and by whom it was approved"
+                "a policy version must record an approval completely or not at all"
             )
+
+    @property
+    def has_approval_record(self) -> bool:
+        """True when a named principal is on record as having approved this version.
+
+        ``False`` for a draft, for a version awaiting approval, and for a version
+        that was already in force before approval became a recorded transition
+        (NEX-065). Those legacy rows are readable and remain in force - refusing
+        them would take a live policy away and deny everything it permitted - but
+        they must never be reported as reviewed. Anything that needs to claim "a
+        human approved these rules" must ask this, not ``status``.
+        """
+        return self.approved_at is not None and self.approved_by is not None
 
     @property
     def is_immutable(self) -> bool:
