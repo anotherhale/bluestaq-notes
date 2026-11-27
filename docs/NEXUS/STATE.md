@@ -7,15 +7,50 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051…NEX-056 VERIFIED** in PR #5. **NEX-057** (run 58): `step-up` got its ADR — [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md). **NEX-058** (run 59): assurance is persisted and `step-up` is **enforced** from evidence, not refused. **NEX-059** (run 60): `second-approver` is a real **two-person** control — all five named obligations now have mechanisms. **Remaining gap, named:** risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 60) | `bfb4e2c` — read from `git ls-remote` at run start, not from a stored field. |
-| Head commit (measured) | Product commit `39fa1db` (NEX-059), pushed and verified by an independent `git ls-remote` after the push (remote and local both read `39fa1db`). The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
-| Last CI result | **`b9811d7` (NEX-059 docs head): all four check-runs `completed/success`**, polled 2026-11-27T19:53Z. `b9811d7` descends from product commit `39fa1db`, so its CI compiled and tested the NEX-059 code — **NEX-059 is VERIFIED**. Previous anchor `a4003bf` (NEX-058) also 4/4 green. |
-| Tracking issue | #2 (open) — last reported NEX-056 (comment `7225253883`). **NEX-057/058/059 delivery is owed.** The issue stays open: the programme is not done. |
-| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. **Body carries NEX-052…NEX-056 evidence**; NEX-057/058/059 are owed. Eight slices now stack in one PR — a reviewer may reasonably ask for a split. Automated merging is prohibited; a human reviewer decides. |
+| Starting commit (run 63) | `997a6ac` locally (the clone sat on `main`); the feature-branch tip `65d6abe` was read from `git ls-remote` and the work committed on top of it. |
+| Head commit (measured) | Product commit `19836ad` (NEX-063), pushed and confirmed by `git ls-remote`. Read the live head with `git rev-parse HEAD`; never trust a SHA recorded in this file. |
+| Last CI result | **`0e2ca47` (NEX-062 docs head): 4/4 `completed/success`**, polled 2026-11-27T20:16Z — NEX-062 VERIFIED. **NEX-063 CI is not yet polled**: it is PUSHED, not VERIFIED. |
+| Tracking issue | #2 (open) — last reported NEX-062 (comment `7227311410`). **NEX-063 delivery is owed.** Issue stays open. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…NEX-062 evidence; **NEX-063 is owed**. Eleven slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-063 PUSHED (run `NEX-2026-11-27-63`) — the approval gate follows the blast radius
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. Not VERIFIED — CI not yet polled.**
+
+Approval strength now follows how dangerous an action is, not only what a policy author wrote.
+`domain/agent/risk.py` classifies every `Capability` into a closed ordered tier
+(`low` < `elevated` < `high`): `org_search` is high (it is the only capability that reaches
+past the acting owner's boundary), delete/share/revoke are elevated (destructive or
+visibility-changing, but owner-scoped), reads and creates are low.
+`required_approvals_for()` raises the signature count to the max of the policy's threshold and
+the tier floor, clamped to the closed 1–2 vocabulary — so a **silent policy cannot reduce a
+high-risk action to one signature**, while a policy may still raise a low-risk one to two. The
+decision record now carries `risk`, so a policy can require a control at or above a tier and
+the evidence shows why the gate looked as it did.
+
+The design decision that mattered: **risk is code, not a model score.** A risk figure that
+sets an approval threshold *is* authority, and §10 forbids a model from widening its own. The
+derivation is a pure, total, deterministic function over facts the enforcement path can attest
+to, so any tier is reproducible by reading one file — the same move ADR-015 made for `step-up`.
+Full reasoning: [ADR-016](../ADR/ADR-016-risk-based-approval.md).
+
+**Honest limit.** `org_search` is the only `high` capability *and* it is non-delegable, so no
+agent token reaches it and the two-signature floor has **no production caller yet**. It is kept
+because it is the right answer the day a future ADR permits delegated org-wide search. Since
+that branch cannot be exercised end to end, the threshold logic is tested **directly as a pure
+function**; every other tier is exercised through the real gateway. Preview, and non-capability
+risk signals (bulk volume, unusual patterns, export size), are deferred with reasons in ADR-016.
+
+**Validation on the committed tree:** `ruff format` (1 reformatted, 299 unchanged), `ruff check`
+clean, `mypy` clean (140 files), **1432 passed / 4 skipped**, and the new
+`tests/agent/test_risk_based_approval.py` **25/25**. The 4 skips are the pre-existing
+PostgreSQL-only tests.
+
+**Delivery debt:** PR #5 body and issue #2 do **not** yet mention NEX-063.
 
 ## NEX-059 (run `NEX-2026-11-27-60`) — one signature must not authorise a two-person control
 

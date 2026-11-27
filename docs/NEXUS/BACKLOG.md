@@ -2855,3 +2855,59 @@ defaults to 1, which is the behaviour every existing row already had.
 
 **Next:** commit, push, poll CI, then report NEX-057/058/059 together to PR #5 and issue #2
 — the interesting fact is that ADR-015 now has two of its three named obligations enforced.
+
+## NEX-063 — risk-based approval: the gate follows the blast radius, not only the policy
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 — foundational |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** (CI not yet polled) |
+| Dependencies | NEX-059 (`required_approvals`, closed 1–2 vocabulary), ADR-015 |
+| Blocks | the "risk-based approval" clause of `ENTERPRISE_SECURITY_ARCHITECTURE_V1` L147 and L212 |
+
+**Objective.** Make approval strength follow how dangerous the action is, not only what a
+policy author happened to write, and put that risk on the decision record.
+
+**Why it was the right next task.** It is the last named ADR-015 obligation without a
+mechanism, and it is the one the security architecture calls out twice (L147 "risk-based
+approval", L212 "Tier 2 risk-based durable"). It also unlocks a later slice: once the record
+carries a tier, a policy can require a control *at or above* it.
+
+**Design.** `domain/agent/risk.py` — a pure, total, deterministic classifier from `Capability`
+to a closed ordered tier (`low` < `elevated` < `high`). Code, not a model score: a risk figure
+that sets an approval threshold is authority, and §10 forbids a model from widening its own.
+`required_approvals_for()` returns the max of what the policy asked and the tier floor, clamped
+to 1–2. `_policy_attributes()` emits `risk` so the gate's reasoning is on `DecisionEvidence`.
+Full reasoning in `docs/ADR/ADR-016-risk-based-approval.md`.
+
+**Acceptance criteria**
+
+- A silent policy does **not** reduce a `HIGH` action below two signatures. *(pure test)*
+- A policy **may** raise a `LOW` action to two. *(pure test)*
+- The threshold result is always in the closed 1–2 vocabulary, for every capability and any
+  input threshold including 0 and 99. *(pure test, parametrised)*
+- Every capability is classed; `ORG_SEARCH` is the only `HIGH`; every sensitive capability is
+  at least `ELEVATED`. *(pure tests)*
+- The recorded decision evidence carries `risk`. *(gateway path, existing evidence assertions
+  still green)*
+- `assess_action_risk` refuses a bare string rather than coercing. *(pure test)*
+
+**Required tests:** `tests/agent/test_risk_based_approval.py` — 25 tests. **All 25 pass.**
+
+**Security considerations.** The tier is computed in the enforcement path from the capability
+and is never read from a policy or a request body, so no caller can lower it. The approval
+vocabulary stays closed at 1–2; widening it needs an ADR.
+
+**Migration implications:** none — no schema change. `required_approvals` already defaults to 1.
+
+**Honest limit.** `ORG_SEARCH` is `HIGH` *and* non-delegable, so no agent token reaches it and
+the two-signature floor has no production caller yet. It is kept for the day a future ADR
+permits delegated org-wide search. Because that branch cannot be exercised end to end, the
+threshold logic is tested as a pure function; every other tier is exercised through the gateway.
+
+**Deferred, with reasons in the ADR:** approval *preview* (no proposal surface to render), and
+non-capability risk signals — bulk volume, unusual patterns, export size — which need
+request-level facts the gateway does not collect.
+
+**Next:** poll CI on the pushed head; if green, promote to VERIFIED and extend PR #5.

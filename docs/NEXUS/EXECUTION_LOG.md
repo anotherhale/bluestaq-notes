@@ -7674,3 +7674,80 @@ take unilaterally. PR #5 stays unmerged for human review, as required.
 **Next exact action.** NEX-063, risk-based approval — the last named ADR-015 obligation without a
 mechanism. Read ADR-015's risk-based approval section, then the existing approval aggregate,
 before designing. Do not redo NEX-060 or NEX-062.
+
+## Run NEX-2026-11-27-63 — 2026-11-27T20:30Z–20:56Z
+
+**Task:** NEX-063, risk-based approval — the last named ADR-015 obligation without a mechanism.
+**Branch:** `feature/agentic-enterprise-platform`. **Starting commit:** `997a6ac` (the clone
+was on `main`; the feature branch tip `65d6abe` was fetched and the work committed on top of
+it). **Ending commit:** see `git log`; product commit `19836ad`, docs follow.
+
+### What was built
+
+Approval strength now follows the blast radius of the action, not only what a policy author
+wrote. Three pieces, all additive:
+
+1. `domain/agent/risk.py` — a pure, total, deterministic classifier from `Capability` to a
+   closed ordered tier. `high` = `org_search` (the only capability that reaches past the acting
+   owner's boundary); `elevated` = delete/share/revoke (destructive or visibility-changing, but
+   owner-scoped); `low` = reads and creates.
+2. `required_approvals_for()` in the same module, wired into the tool gateway — returns the max
+   of the policy's threshold and the tier floor, clamped to the closed 1–2 vocabulary. A silent
+   policy can no longer reduce a high-risk action to one signature; a policy may still raise a
+   low-risk one to two.
+3. `_policy_attributes()` emits `risk`, so a policy can require a control at or above a tier and
+   the decision record shows why the gate looked as it did.
+
+### The decision that shaped the slice
+
+Risk is **code, not a model score**. §10 forbids a model from widening or narrowing its own
+authority, and a risk figure that sets an approval threshold is authority. The derivation is
+therefore a pure function over facts the enforcement path can attest to, and a reviewer can
+reproduce any tier by reading one file. This mirrors ADR-015's resolution of `step-up`: replace
+a judgement with a deterministic, already-recorded fact.
+
+Risk is also deliberately **not** a rename of `SENSITIVE_CAPABILITIES`. It separates those four
+by what they can destroy or expose, and the tests assert the two sets agree (every sensitive
+capability is at least elevated) so they cannot drift into disagreement about danger.
+
+### Honest limit, recorded rather than papered over
+
+`ORG_SEARCH` is the only `high` capability **and** it is non-delegable, so no agent token
+reaches it today and the two-signature floor has no production caller. It is kept because it is
+the correct answer the day a future ADR permits delegated org-wide search — the control exists
+before the capability that needs it. Because that branch cannot be exercised end to end, the
+threshold logic is tested **directly as a pure function** rather than through a path that cannot
+exist. Every other tier is exercised through the real gateway. Preview and non-capability risk
+signals (bulk volume, unusual patterns, export size) are deferred with reasons in ADR-016.
+
+### Validation (on the committed tree)
+
+| Gate | Result |
+| --- | --- |
+| `.venv/bin/ruff format` | 1 file reformatted, 299 unchanged |
+| `.venv/bin/ruff check` | All checks passed |
+| `.venv/bin/mypy` | Success: no issues found in 140 source files |
+| `.venv/bin/python -m pytest` | **1432 passed, 4 skipped**, exit 0 |
+| `tests/agent/test_risk_based_approval.py` | 25 passed |
+
+The 4 skips are the pre-existing PostgreSQL-only tests, unchanged.
+
+### Delivery
+
+Product commit `19836ad` pushed to the feature branch (`65d6abe..19836ad`). ADR-016, the
+backlog entry, this log and the checkpoint follow in a docs-only commit. PR #5 body and issue
+#2 are **not** yet updated for NEX-063 — that is delivery debt, recorded in the checkpoint so
+the next run clears it.
+
+### Status, precisely
+
+NEX-063 is **IMPLEMENTED, TESTED, COMMITTED, PUSHED**. It is **not VERIFIED**: CI has not been
+polled for the pushed head. Per this project's semantics, pushed is not verified.
+
+### Next exact action
+
+Poll CI for the head of `feature/agentic-enterprise-platform` (take it from
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, not from this file). If
+all four check-runs conclude `success`, promote NEX-063 to VERIFIED, then extend PR #5's body
+and comment on issue #2. If CI fails, fix forward on this branch; never force-push. Do not redo
+NEX-060 or NEX-062.
