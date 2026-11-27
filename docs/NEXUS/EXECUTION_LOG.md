@@ -5681,3 +5681,41 @@ observed result, and no claim here depends on an unfinished check.
 Backend CI result at `19aafa8`, then R36's remaining governance half: allowlist expiry,
 per-operation scoping, and a way to read the current holders. It starts from `git ls-remote`,
 never from these files.
+
+### Run `NEX-2026-11-27-48` (continued) — delivery closed, CI green at the final head
+
+The R36 read-side product slice and its first docs commit landed earlier in this
+run. This entry closes the run: the delivery debt was still described as
+outstanding in `CHECKPOINT.json`, and CI had only been polled at the product
+commit.
+
+**What was corrected.** `delivery_state` said `tracking_issue_updated: false`
+and `delivery_debt: "issue #2 comment, PR #3 body"` after both had in fact been
+written. The checkpoint was lying about the run's own delivery — the exact
+failure mode the truthful-status rule exists to prevent. Issue #2 and PR #3 are
+now recorded as updated, with the evidence attached (comment id, stored length,
+body length before and after).
+
+**CI, at the head that actually ran.** `19aafa8` was 4/4 `completed/success` at
+11:04Z. The final head `d178de6` was 4/4 `completed/success` at 11:15Z, every
+check run reporting `head_sha` `d178de6`. Both polls recorded with timestamps
+rather than a bare "green", because "CI passed" without a SHA and a time is not
+evidence.
+
+**Delivery state re-verified against the API, not the memory of it.** PR #3:
+`draft=true`, `state=open`, `merged=false`, `base=main`, body 84930 chars
+containing all four expected substrings. Issue #2: `state=open`, 31 comments,
+latest `7216799351` (3266 chars stored) mentioning the R36 read side. A local
+file claiming delivery is not delivery; the API answer is.
+
+**Commits.** `b7078c8` and `d178de6` (delivery state) and `c0885ad` (CI at the
+final head). Each pushed and verified with `git ls-remote`, never assumed from a
+successful push exit code. Working tree clean at run end.
+
+**Not done, deliberately.** R36's governance half — allowlist expiry,
+per-operation scoping, reading current holders — was not started. Under 10
+minutes remained at the decision point, and starting a slice that cannot be
+integrated is worse than not starting it. It is the next run's first task, and
+that run must establish the branch head with `git ls-remote` before planning:
+this run began on `main` in a fresh clone and had to fast-forward the feature
+branch to reach `7ac7230`.
