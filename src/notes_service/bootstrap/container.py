@@ -601,6 +601,12 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             # action passes through (NEX-051). Until this was wired the lifecycle
             # could publish rules nothing consulted.
             policy_versions=policy_versions,
+            # A policy's ``rate-limit`` obligation is enforced against this limiter
+            # (NEX-056). It is the same port the HTTP boundary uses, so swapping in
+            # a shared store covers both. Omitting it would not silently disable the
+            # obligation: the gateway reports ``rate-limit`` as unsatisfiable and
+            # refuses the call.
+            rate_limiter=rate_limiter,
         )
 
     def make_plan_agent_run() -> PlanAgentRun:

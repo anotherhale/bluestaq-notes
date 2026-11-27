@@ -31,7 +31,8 @@ import dataclasses
 
 import pytest
 
-from notes_service.application.errors import AccessDenied
+from notes_service.application.errors import AccessDenied, RateLimited
+from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.domain.agent.tools import InvocationStatus
 from notes_service.domain.agent.value_objects import Capability
 from notes_service.domain.governance.policy import (
@@ -43,7 +44,8 @@ from notes_service.domain.governance.policy import (
     PolicyRule,
 )
 from notes_service.domain.redaction import REDACTED
-from tests.agent.test_tool_gateway_policy import Harness, _publish
+from notes_service.infrastructure.security.clock import SystemClock
+from tests.agent.test_tool_gateway_policy import RATE_LIMIT_BOUND, Harness, _publish
 from tests.agent.test_tool_gateway_policy import h as h
 
 pytestmark = pytest.mark.usefixtures("seeded")
@@ -115,13 +117,159 @@ class TestApprovalObligationIsEnforced:
         assert "approval" in (recorded[0].outcome or "")
 
 
+class TestRateLimitObligationIsEnforced:
+    """NEX-056: ``rate-limit`` has a real adapter, not just a refusal path."""
+
+    def test_calls_within_the_bound_are_allowed(self, h: Harness) -> None:
+        # The bound is 3 per window in the harness. Two calls must pass: an adapter
+        # that refused the *first* call would satisfy the fail-closed tests while
+        # making the obligation unusable, so the permitted path is asserted
+        # explicitly rather than inferred from a refusal elsewhere.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.RATE_LIMIT),))
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        for index in range(2):
+            result = h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": f"T{index}", "content": "C"},
+                idempotency_key=f"k-ok-{index}",
+            )
+            assert result.invocation.status is InvocationStatus.SUCCEEDED
+
+        assert h.list_notes.run(h.principal).total == 2
+
+    def test_exceeding_the_bound_refuses_the_call(self, h: Harness) -> None:
+        # The refusal must be a ``RateLimited`` carrying the retry window, so the
+        # boundary can render a 429 with ``Retry-After`` rather than a generic
+        # denial the caller cannot act on. The note is not created.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.RATE_LIMIT),))
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        for index in range(RATE_LIMIT_BOUND):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": f"T{index}", "content": "C"},
+                idempotency_key=f"k-fill-{index}",
+            )
+
+        with pytest.raises(RateLimited) as excinfo:
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "over", "content": "C"},
+                idempotency_key="k-over",
+            )
+
+        assert excinfo.value.retry_after >= 1
+        assert "rate-limit" in str(excinfo.value)
+        assert h.list_notes.run(h.principal).total == RATE_LIMIT_BOUND
+
+    def test_a_throttled_call_is_audited_as_denied(self, h: Harness) -> None:
+        # A throttled agent must be visible in the trail, not only in the 429 the
+        # caller saw. The row names the obligation so an auditor can tell a policy
+        # bound apart from a capability denial.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.RATE_LIMIT),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        for index in range(RATE_LIMIT_BOUND):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": f"T{index}", "content": "C"},
+                idempotency_key=f"k-fill-{index}",
+            )
+        with pytest.raises(RateLimited):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "over", "content": "C"},
+                idempotency_key="k-over",
+            )
+
+        denied = [r for r in h.invocations(agent) if r.status is InvocationStatus.DENIED]
+        assert len(denied) == 1
+        assert "rate-limit" in (denied[0].outcome or "")
+
+    def test_the_bound_is_per_tool_not_per_agent(self, h: Harness) -> None:
+        # Two capabilities on one agent must not share a counter. If they did, a
+        # hot tool would exhaust the budget of every other tool the same agent may
+        # call, which is a different (and much broader) rule than the policy states.
+        _publish(
+            h,
+            (
+                _allow_tool("create_note", PolicyObligation.RATE_LIMIT, rule_id="rl-create"),
+                _allow_tool("list_shared_notes", PolicyObligation.RATE_LIMIT, rule_id="rl-list"),
+            ),
+        )
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE, Capability.LIST_SHARED_NOTES)
+
+        for index in range(RATE_LIMIT_BOUND):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": f"T{index}", "content": "C"},
+                idempotency_key=f"k-create-{index}",
+            )
+
+        # ``create_note`` is exhausted; ``list_shared_notes`` has its own budget.
+        with pytest.raises(RateLimited):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "over", "content": "C"},
+                idempotency_key="k-create-over",
+            )
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="list_shared_notes",
+            arguments={},
+            idempotency_key="k-list-0",
+        )
+        assert result.invocation.status is InvocationStatus.SUCCEEDED
+
+    def test_an_idempotent_retry_does_not_consume_the_bound(self, h: Harness) -> None:
+        # A retry under a recorded key replays a decision already made. Charging it
+        # again would make a network retry indistinguishable from abuse, and a
+        # caller that retried its last permitted call would be throttled for it.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.RATE_LIMIT),))
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE)
+        arguments = {"title": "T", "content": "C"}
+
+        for index in range(RATE_LIMIT_BOUND - 1):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": f"T{index}", "content": "C"},
+                idempotency_key=f"k-fill-{index}",
+            )
+
+        first = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments=arguments,
+            idempotency_key="k-last",
+        )
+        replay = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments=arguments,
+            idempotency_key="k-last",
+        )
+
+        assert first.invocation.status is InvocationStatus.SUCCEEDED
+        assert replay.replayed is True
+        assert h.list_notes.run(h.principal).total == RATE_LIMIT_BOUND
+
+
 class TestUnsatisfiableObligationsFailClosed:
     @pytest.mark.parametrize(
         "obligation",
         [
             PolicyObligation.STEP_UP,
             PolicyObligation.SECOND_APPROVER,
-            PolicyObligation.RATE_LIMIT,
         ],
     )
     def test_an_obligation_with_no_adapter_refuses_the_call(
@@ -146,6 +294,51 @@ class TestUnsatisfiableObligationsFailClosed:
         assert len(recorded) == 1
         assert recorded[0].status is InvocationStatus.DENIED
         assert obligation.value in (recorded[0].outcome or "")
+
+    def test_rate_limit_is_unsatisfiable_without_a_limiter(self, h: Harness) -> None:
+        # ``rate-limit`` has an adapter (NEX-056), but only when one is wired. A
+        # gateway built without a limiter must still refuse the call rather than
+        # treat the obligation as met — otherwise removing a constructor argument
+        # would silently disable a published policy's bound. This is the fail-closed
+        # half of the wiring, and it is why the obligation's satisfiability is
+        # conditioned on ``rate_limiter is not None`` rather than on the kind alone.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.RATE_LIMIT),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        from notes_service.application.use_cases.agents import ResolveAgentToken
+        from notes_service.application.use_cases.authorization_policy import (
+            DefaultAuthorizationProvider,
+        )
+        from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
+
+        auth = DefaultAuthorizationProvider()
+        clock = SystemClock()
+
+        def uow_factory() -> SqlAlchemyUnitOfWork:
+            return SqlAlchemyUnitOfWork(h.session_factory)
+
+        bare_gateway = InvokeTool(
+            uow_factory=uow_factory,
+            authorization=auth,
+            clock=clock,
+            resolve_token=ResolveAgentToken(
+                uow_factory=uow_factory, authorization=auth, clock=clock
+            ),
+            policy_versions=h.policies,
+        )
+
+        with pytest.raises(AccessDenied, match="rate-limit"):
+            bare_gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "T", "content": "C"},
+                idempotency_key="k-rate-limit-unwired",
+            )
+
+        assert h.list_notes.run(h.principal).total == 0
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.DENIED]
+        assert "rate-limit" in (recorded[0].outcome or "")
 
     def test_one_unsatisfiable_obligation_taints_the_whole_allow(self, h: Harness) -> None:
         # ``approval`` is satisfiable for a sensitive tool on its own, but the call

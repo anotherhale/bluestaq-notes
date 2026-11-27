@@ -55,10 +55,12 @@ from notes_service.application.errors import (
     ApprovalRequired,
     Conflict,
     InvalidInput,
+    RateLimited,
 )
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.policy_versions import PolicyVersionRepository
+from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.agents import ResolveAgentToken, ResolvedToken
 from notes_service.application.use_cases.base import UseCase
@@ -124,6 +126,10 @@ class _PolicyGate:
     def approval_required(self) -> bool:
         return PolicyObligation.APPROVAL in self.obligations
 
+    @property
+    def rate_limit_required(self) -> bool:
+        return PolicyObligation.RATE_LIMIT in self.obligations
+
 
 def _actor_principal(resolved: ResolvedToken) -> Principal:
     """The principal a tool handler acts as: the human who delegated.
@@ -159,10 +165,12 @@ class InvokeTool(UseCase):
         clock: Clock,
         resolve_token: ResolveAgentToken,
         policy_versions: PolicyVersionRepository | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         super().__init__(uow_factory=uow_factory, authorization=authorization, clock=clock)
         self._resolve_token = resolve_token
         self._policy_versions = policy_versions
+        self._rate_limiter = rate_limiter
 
     def run(
         self,
@@ -219,7 +227,7 @@ class InvokeTool(UseCase):
         principal = _actor_principal(resolved)
 
         # An allow that carries an obligation is not permission to proceed: the
-        # obligation must be met first (security architecture section 5). Two kinds
+        # obligation must be met first (security architecture section 5). Four kinds
         # have a real mechanism behind them in this gateway:
         #
         # * ``approval`` — the human approval flow, and only for a capability the
@@ -233,6 +241,10 @@ class InvokeTool(UseCase):
         #   credential-bearing field is withheld from the caller rather than
         #   returned. It is applied to the output, never to the stored note, and
         #   the audit row records that it happened.
+        # * ``rate-limit`` — a volume bound, enforced against the configured
+        #   :class:`RateLimiter` on a per-tool key (NEX-056). It is checked before
+        #   the approval gate so a flood cannot open approval requests it will
+        #   never use.
         #
         # Every other obligation is refused here rather than ignored: an obligation
         # with no enforcement adapter that was silently dropped would be worse than
@@ -247,6 +259,7 @@ class InvokeTool(UseCase):
                 (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
                 or obligation is PolicyObligation.REDACTION
                 or obligation is PolicyObligation.ENHANCED_AUDIT
+                or (obligation is PolicyObligation.RATE_LIMIT and self._rate_limiter is not None)
             )
         ]
         if unsatisfiable:
@@ -270,6 +283,22 @@ class InvokeTool(UseCase):
             )
 
         redaction_required = gate.redaction_required
+        if gate.rate_limit_required:
+            # ``rate-limit`` is enforced here rather than deferred, and before the
+            # approval gate: a caller over its budget must be refused *now*, not
+            # after it has opened an approval request a human will be asked to rule
+            # on. The key is per agent and per tool, so one hot tool cannot exhaust
+            # the budget for every other tool the same agent may call — a bound the
+            # policy author asked for on *this* capability, not a global throttle
+            # (the boundary's own ``AgentRateLimitDep`` already does that).
+            self._enforce_rate_limit_obligation(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                policy_versions=consulted,
+            )
         if tool.requires_approval or gate.approval_required:
             return self._run_gated(
                 resolved=resolved,
@@ -398,6 +427,89 @@ class InvokeTool(UseCase):
             consulted=consulted,
             obligations=decision.obligations,
             evidence=evidence,
+        )
+
+    def _enforce_rate_limit_obligation(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        policy_versions: tuple[str, ...],
+    ) -> None:
+        """Enforce a policy's ``rate-limit`` obligation against the configured limiter (NEX-056).
+
+        The obligation previously had no adapter, so the gateway refused any call
+        a policy placed it on: honest, but it left the policy language unable to
+        express the one bound an operator most often wants ("this agent may call
+        this tool N times per window"). The mechanism now exists and reuses the
+        same :class:`RateLimiter` port the HTTP boundary already depends on, so a
+        deployment that swaps in a shared store gets the obligation enforced
+        against that store without any change here.
+
+        Three deliberate choices:
+
+        * **The key is per agent *and* per tool.** The boundary's
+          ``AgentRateLimitDep`` is a global throttle on an agent's request rate;
+          this is the narrower bound a policy author asked for on one capability.
+          Sharing one key would let a hot tool exhaust the budget of every other
+          tool the agent may call, which is not what the rule says.
+        * **An idempotent retry does not consume budget.** A retry under a
+          recorded key is a replay of a decision already made, so the limiter is
+          not consulted and the replay path returns the original outcome. Charging
+          twice would make a network retry indistinguishable from abuse.
+        * **A refusal is audited as a denial.** The row is the same ``denied``
+          invocation a capability or policy refusal writes, naming the obligation
+          and the retry window, so a throttled agent is visible in the trail
+          rather than only in a 429 the caller saw.
+
+        Fails closed when no limiter is wired: the obligation is then reported as
+        unsatisfiable by the caller's check and the call is refused, never run
+        unbounded.
+
+        The bound itself comes from the deployment's configured limiter
+        (``rate_limit_requests`` / ``rate_limit_window_seconds``), not from the
+        rule: ``PolicyObligation`` is a closed vocabulary of *names* with no
+        parameters, so a rule says "a volume bound applies" and the operator sets
+        the number. A per-rule bound would need a parameterised obligation, which
+        is a vocabulary change and therefore an ADR, not a quiet widening here.
+        """
+        if self._rate_limiter is None:  # pragma: no cover - guarded by the caller
+            raise AccessDenied(
+                f"tool {tool.name!r} is allowed only under obligation rate-limit, "
+                "which this gateway has no limiter for"
+            )
+        prior = self._find_prior(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            idempotency_key=idempotency_key,
+            resource_ref=resource_ref,
+        )
+        if prior is not None:
+            return
+        decision = self._rate_limiter.check(f"agent-tool:{resolved.agent.id}:{tool.name}")
+        if decision.allowed:
+            return
+        reason = (
+            f"allowed only under obligation rate-limit: {decision.limit} calls per window "
+            f"exhausted for {tool.capability.value}; retry after {decision.retry_after}s"
+        )
+        self._record_policy_denial(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+            outcome=reason,
+            policy_versions=policy_versions,
+        )
+        raise RateLimited(
+            f"tool {tool.name!r} refused: published policy imposes rate-limit "
+            f"({decision.limit} calls per window); retry after {decision.retry_after}s",
+            retry_after=decision.retry_after,
         )
 
     def _record_policy_denial(

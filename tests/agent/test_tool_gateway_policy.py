@@ -54,12 +54,16 @@ from notes_service.infrastructure.governance.policy_versions import (
     InMemoryPolicyVersionRepository,
 )
 from notes_service.infrastructure.security.clock import SystemClock
+from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from tests.agent.test_tool_gateway import principal_for
 
 pytestmark = pytest.mark.usefixtures("seeded")
 
 ALICE = UserId(DEMO_USERS[0].id)
 TOOL_GATEWAY = TokenAudience.TOOL_GATEWAY.value
+# The bound the harness limiter is built with. Exposed so a test can fill the
+# window exactly without reaching into the adapter's private state.
+RATE_LIMIT_BOUND = 3
 
 
 @dataclass
@@ -67,6 +71,7 @@ class Harness:
     session_factory: sessionmaker[Session]
     gateway: InvokeTool
     policies: InMemoryPolicyVersionRepository
+    limiter: InMemoryRateLimiter
     register: RegisterAgent
     delegate: GrantDelegation
     issue: IssueAgentToken
@@ -121,10 +126,21 @@ def h(session_factory: sessionmaker[Session]) -> Harness:
         return cls(uow_factory=uow_factory, authorization=auth, clock=clock, **extra)
 
     resolve = make(ResolveAgentToken)
+    # A small, deterministic bound so a test can exhaust it in a handful of calls
+    # without patching time. The gateway is given the limiter explicitly, because
+    # "no limiter" is a distinct (and tested) state: the obligation is then refused
+    # as unsatisfiable rather than silently unenforced.
+    limiter = InMemoryRateLimiter(limit=RATE_LIMIT_BOUND, window_seconds=60)
     return Harness(
         session_factory=session_factory,
-        gateway=make(InvokeTool, resolve_token=resolve, policy_versions=policies),
+        gateway=make(
+            InvokeTool,
+            resolve_token=resolve,
+            policy_versions=policies,
+            rate_limiter=limiter,
+        ),
         policies=policies,
+        limiter=limiter,
         register=make(RegisterAgent),
         delegate=make(GrantDelegation),
         issue=make(IssueAgentToken),
