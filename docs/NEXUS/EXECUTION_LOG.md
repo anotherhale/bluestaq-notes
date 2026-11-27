@@ -7843,6 +7843,9 @@ SHA is the branch concurrency group re-running; both pairs completed/success.
 **Delivery cleared.** PR #5 body extended with the NEX-064 section; issue #2 received a
 NEX-064 comment. Both state that the slice is unmerged pending human review.
 
+**Final head.** `974d03f` (docs-only: this promotion). The checkpoint's `commit` field is set
+to the true head, not `7456a89`, so the next run's reconciliation sees no phantom mismatch.
+
 **Next action.** Start NEX-065: an explicit policy `approve` lifecycle transition
 (`DRAFT -> APPROVED -> PUBLISHED`) with the approver identity persisted and separation of duties
 enforced. It needs a migration and a new use case, so it wants a full run — this run closed with
