@@ -7953,3 +7953,79 @@ migration and a new use case, so it wants a full run.
 independence in `derive_assurance()`) arrived after this run's work was committed. It is a
 real P1 defect and is the highest-priority task for the next run. Do not let the docs slices
 crowd it out.
+
+### NEX-2026-11-27-66 — NEX-066 obligation readiness at authoring; CI verified
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `1c2377e` local; the live tip was `e6f5486` (a concurrent run advanced it).
+- **Ending commit:** `f8ae00c`
+- **Phase:** 3 (governance)
+
+**Tasks completed.** NEX-066 — `DraftPolicy` now refuses a draft naming an obligation the
+deployment cannot enforce. The deployment-wide half of the satisfiability judgement lives in one
+domain function, `deployment_obligation_gaps()`, called from both the tool gateway and
+`DraftPolicy`, so authoring cannot promise what the call path refuses. The gateway keeps the
+per-tool and per-caller conditions (`approval`, `second-approver`, `step-up`) that cannot be
+decided at draft time.
+
+**Tasks verified.** NEX-066. CI 4/4 `completed/success` at `2ce7730` (docs head descending from
+product commit `353ef6d`), polled 2026-11-27T22:55Z.
+
+**Tasks started, not finished.** None.
+
+**Blocked.** None.
+
+**Files changed.** `domain/governance/policy.py`, `application/use_cases/tools.py`,
+`application/use_cases/policy_lifecycle.py`, `bootstrap/container.py`, tests, and the three
+NEXUS state files.
+
+**Migrations.** None.
+
+**Tests executed.** `ruff format --check` (301 files), `ruff check` (clean), `mypy` (140 files
+clean), `pytest` (1442 passed / 4 skipped), plus GitHub CI on the pushed head.
+
+**Test outcomes.** All green. The push was rejected non-fast-forward by a concurrent run
+(`1c2377e` → `e6f5486`); the ancestor check proved a fast-forward race, not a rewrite, so the
+commit was rebased and every gate re-run on the rebased tree before pushing.
+
+**Security findings.** Closed an authoring-time fail-open (an unenforceable obligation could be
+published and then deny every matched call). Corrected a stale record: `second-approver` **is**
+enforced, contrary to the NEX-056 table. An **open P1** remains — `derive_assurance()` reads AMR
+factors as independent without checking factor-family distinctness; tracked as NEX-067.
+
+**Commits.** `353ef6d` (feat), `2ce7730` (docs: record NEX-066), `f8ae00c` (docs: promote to
+VERIFIED).
+
+**Push status.** Pushed fast-forward to `feature/agentic-enterprise-platform`.
+
+**PR updates.** PR #5 body extended with a NEX-066 section (34833 → 38530 chars). PR stays open
+and unmerged.
+
+**Issue updates.** Issue #2 comment `7228642936` covers NEX-064, NEX-066, the corrected NEX-056
+record, and the open P1.
+
+**CI results.** 4/4 `completed/success` at `2ce7730`. Two check-run pairs per SHA is the
+concurrency group re-running; all four concluded success.
+
+**Checkpoint status.** `CHECKPOINT.json` rewritten atomically (temp file, JSON validated, then
+replaced) — run_id `NEX-2026-11-27-66`, head `f8ae00c`.
+
+**Decisions.** D-066a: share one function between gateway and `DraftPolicy` rather than copy the
+table. D-066b: refuse at draft time only obligations with no deployment-wide adapter. D-066c:
+`rate_limiter_configured` defaults to `True` so existing call sites are unchanged, with the
+container passing the real wiring. D-066d: corrected the NEX-056 record against the code rather
+than preserving it.
+
+**Risks.** Concurrent runs push to this branch — take the tip from `git ls-remote`, merge,
+revalidate, push. Run IDs collide across concurrent runs (this run's assigned ID was already
+used; renumbered to match its task ID). The heredoc in this environment echoes its own body and
+can corrupt multi-KB writes — this run hit it twice; every multi-line write went through a file
+instead. Thirteen slices now stack in PR #5; the split decision is human. `derive_assurance()`
+AMR independence is an open P1.
+
+**Next prioritized task.** NEX-067 — make `derive_assurance()` require AMR factors from distinct
+factor families before counting a session as multi-factor.
+
+**Recommended next action.** Verify the AMR defect against
+`src/notes_service/infrastructure/identity/oidc_relying_party.py`, fix it, and pin it with a test
+that two same-family claims do not satisfy a multi-factor ACR.

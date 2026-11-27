@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-66",
   "timestamp": "2026-11-27T21:40Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "2ce7730",
+  "commit": "f8ae00c",
   "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius (NEX-063); evaluate() fails closed on any version that is not published (NEX-064); and policy authoring now refuses an obligation this deployment cannot enforce (NEX-066), using the same domain judgement as the gateway. Remaining governance work is breadth: no approve verb, no preview, no non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
@@ -126,15 +126,16 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "base": "main",
     "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body carries NEX-052..NEX-066. Thirteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
-    "body_covers_through": "NEX-066"
+    "note": "Body now carries NEX-052..NEX-066 (38530 chars) and was updated this run. Thirteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "body_covers_through": "NEX-066",
+    "body_updated_this_run": true
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
     "last_reported_task": "NEX-066",
-    "note": "Issue #2 stays open. NEX-066 comment is posted by this run.",
-    "comment_id": null
+    "note": "Issue #2 open. Comment 7228642936 covers NEX-064 and NEX-066, the corrected NEX-056 second-approver record, and the open P1 (NEX-067).",
+    "comment_id": 7228642936
   },
   "blockers": [],
   "risks": [
@@ -173,15 +174,59 @@
   "run_summary": "NEX-066 addresses the PR #5 review's 'Obligation readiness' item. A prior run deferred it as 'no policy-validation surface exists'; that was wrong, because DraftPolicy is that surface. A policy naming `rate-limit` in a deployment with no limiter used to publish cleanly and then deny every call it matched, with the reason only in the audit trail. The deployment-wide half of the satisfiability judgement now lives in one domain function, `deployment_obligation_gaps()`, called by both the tool gateway and DraftPolicy, so the two cannot drift. DraftPolicy refuses such a draft with the reason and writes no version. The gateway keeps the per-tool and per-caller conditions, which cannot be decided at draft time. The push was rejected non-fast-forward by a concurrent run (1c2377e -> e6f5486); the ancestor check proved it was a fast-forward race, not a rewrite, so the commit was rebased and every gate re-run on the rebased tree: ruff and mypy clean, 1442 passed / 4 skipped. Committed and pushed as 353ef6d. NOT VERIFIED - CI has not been polled on that head. The P1 AMR-independence defect from the 21:18Z review was not addressed and is handed to the next run as NEX-067. CI polled after the docs push: 4/4 completed/success at 2ce7730, so NEX-066 is VERIFIED.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "2ce7730",
-    "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "PR #5 body and issue #2 need the NEX-066 section; deferred to the end of this run.",
+    "head": "f8ae00c",
+    "pr_updated": true,
+    "issue_updated": true,
+    "delivery_debt": "none - PR #5 body and issue #2 both carry NEX-066.",
     "ci_verified": true,
     "ci_verified_head": "2ce7730",
-    "pr_body_updated": false
+    "pr_body_updated": true
   },
-  "branch_head": "2ce7730",
+  "branch_head": "f8ae00c",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436."
+  "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436.",
+  "run_report": {
+    "run_id": "NEX-2026-11-27-66",
+    "branch": "feature/agentic-enterprise-platform",
+    "starting_commit": "1c2377e (local); live tip e6f5486",
+    "ending_commit": "f8ae00c",
+    "tasks_completed": [
+      "NEX-066"
+    ],
+    "tasks_verified": [
+      "NEX-066"
+    ],
+    "tasks_in_progress": [],
+    "tasks_blocked": [],
+    "files_changed": [
+      "src/notes_service/domain/governance/policy.py",
+      "src/notes_service/application/use_cases/tools.py",
+      "src/notes_service/application/use_cases/policy_lifecycle.py",
+      "src/notes_service/bootstrap/container.py",
+      "tests/ (policy + gateway coverage)",
+      "docs/NEXUS/STATE.md",
+      "docs/NEXUS/EXECUTION_LOG.md",
+      "docs/NEXUS/CHECKPOINT.json"
+    ],
+    "migrations": "none",
+    "tests_executed": "ruff format --check, ruff check, mypy, pytest (full suite), CI on GitHub",
+    "test_outcomes": "ruff 301 files formatted; ruff check clean; mypy 140 files clean; pytest 1442 passed / 4 skipped; CI 4/4 completed/success at 2ce7730",
+    "security_findings": [
+      "Closed an authoring-time fail-open: an unenforceable obligation could be published and then deny every matched call.",
+      "Corrected a stale security record: second-approver IS enforced.",
+      "OPEN P1: derive_assurance() AMR factor independence (NEX-067) - not addressed."
+    ],
+    "ci_status": "NEX-066 4/4 completed/success at 2ce7730",
+    "commits": [
+      "353ef6d",
+      "2ce7730",
+      "f8ae00c"
+    ],
+    "push_status": "pushed (fast-forward) to feature/agentic-enterprise-platform",
+    "pr_status": "PR #5 open, unmerged, body updated with NEX-066",
+    "tracking_issue_status": "issue #2 open, comment 7228642936 posted",
+    "checkpoint_status": "updated and validated",
+    "next_prioritized_task": "NEX-067 - AMR factor-family independence in derive_assurance()",
+    "recommended_next_action": "Verify the AMR defect against code, fix it, pin it with a test that two same-family claims do not satisfy a multi-factor ACR."
+  }
 }
