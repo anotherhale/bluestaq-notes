@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-46",
   "timestamp": "2026-11-27T10:05:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "64759f4",
+  "commit": "3534897",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-2026-11-27-46 closed R39, the coordination defect that has cost every recent run wall clock: the lease could be acquired but never released, because holder identity was `host-pid` and every nexus_coord invocation is a fresh process. The holder is now session-scoped (`host-s<sid>`), so release and renew recognise their own lease across processes. R38 was the same defect seen from the other side. Next slice: NEX-043.",
   "active_task": null,
   "task_statuses": {
@@ -27,7 +27,7 @@
     "negative_control": "Reverting default_holder() to host-pid turned exactly two tests red (cross-process identity and holder shape); the file was restored from a backup and re-verified before commit.",
     "commit_message_note": "The first commit used a shell heredoc and the terminal corrupted the message body; it was amended with `git commit --amend -F <file>` before any push, so 64759f4 is the only version that ever reached the remote."
   },
-  "uncommitted_work": false,
+  "uncommitted_work": "None. Working tree clean at 3534897; verified with `git status --porcelain` returning 0 lines.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -341,9 +341,9 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "6e7141e is the last commit carrying IMPLEMENTATION (tools/nexus_coord, tests/coordination, pyproject gate wiring, ADR-013). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "Do not trust this field. Saving this file creates a commit, so any value written here is stale by construction. Read the true head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` or the GitHub /branches API.",
+  "head_at_checkpoint": "3534897",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local gates green on the exact committed tree (2d58e22): ruff format --check 178 files already formatted, ruff check all passed, mypy no issues in 115 source files, pytest 1027 passed / 4 skipped. CI green at 6da559d, whose tree is a docs-only superset of 2d58e22: 4/4 completed/success.",
+  "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -366,9 +366,23 @@
     "ci_verifying_sha": "64759f4",
     "ci_result": "4/4 completed/success at 64759f4 (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 64759f4, so the result is attributable to the pushed slice and not to a superseded run.",
     "tracking_issue_updated": true,
-    "pr_updated": true,
+    "pr_updated": "PR #3 body appended with an R39 section (72415 -> 77310 chars), verified by re-reading the body and asserting the heading and key facts are present. Still draft, still unmerged.",
     "lease_state": "NOT acquired this run. The shared ref was held throughout by a prior run's legacy host-pid lease (Andrews-Mac-mini.local-95179, expiring 1795775517) which the old code cannot release. The fix was verified on a scratch repo instead of waiting ~17 minutes for that expiry.",
-    "delivery_debt": "None. Run report posted to issue #2 and PR #3 in this run."
+    "delivery_debt": "None. Run report posted to issue #2 and PR #3 in this run.",
+    "docs_commit": {
+      "sha": "3534897",
+      "subject": "docs(nexus): record R39 closure - lease holder is session-scoped",
+      "files": [
+        "docs/NEXUS/BACKLOG.md",
+        "docs/NEXUS/CHECKPOINT.json",
+        "docs/NEXUS/DECISIONS.md",
+        "docs/NEXUS/EXECUTION_LOG.md",
+        "docs/NEXUS/STATE.md"
+      ],
+      "pushed": true,
+      "remote_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform -> 35348975abfe38b795600531f948faf428fd732e"
+    },
+    "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
   "run_summary": "NEX-2026-11-27-46. Closed R39, the coordination lease defect that made every acquire a full-TTL block for the next run. Reconciled from the true remote head (git ls-remote), which equalled local HEAD at 7d03814, so no catch-up was needed. Changed 3 files and added one test module (218 insertions): holder identity is session-scoped instead of host-pid, so release and renew recognise their own lease across processes. All gates green on the committed tree (ruff format 249 files, ruff check clean, mypy 117 files, pytest 1068 passed / 4 skipped), negative control run on disk, and a five-process CLI acceptance run proved acquire -> mine=true -> renew -> release -> held=false while a foreign identity stayed refused. Committed 64759f4, pushed, verified by ls-remote, CI polled. One process defect was recorded rather than concealed: the shared lease was never acquired because a legacy host-pid lease held it, so the fix was verified on a scratch repo.",
   "head_observation": {
