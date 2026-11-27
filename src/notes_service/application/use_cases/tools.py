@@ -73,6 +73,7 @@ from notes_service.application.use_cases.notes import (
 )
 from notes_service.domain.agent.audit_chain import DecisionEvidence
 from notes_service.domain.agent.entities import ApprovalRequest
+from notes_service.domain.agent.risk import assess_action_risk, required_approvals_for
 from notes_service.domain.agent.tools import (
     _MAX_IDEMPOTENCY_KEY,
     InvocationStatus,
@@ -354,7 +355,13 @@ class InvokeTool(UseCase):
                 # The two-person requirement is stamped on the request itself, so
                 # the human queue shows what is being asked of them and the
                 # gateway cannot forget the threshold when it later spends it.
-                required_approvals=2 if gate.second_approver_required else 1,
+                # Risk (NEX-063) can only *raise* this number: a high-blast-radius
+                # capability needs two signatures even when no policy asked for
+                # them, and a policy that is silent must not weaken that floor.
+                required_approvals=required_approvals_for(
+                    policy_threshold=2 if gate.second_approver_required else 1,
+                    risk=assess_action_risk(tool.capability),
+                ),
             )
         return self._run_direct(
             resolved=resolved,
@@ -1159,12 +1166,19 @@ def _policy_attributes(
     an unknown attribute fails toward *not* matching a deny rather than granting.
     The vocabulary is what the enforcement path can attest to; widening it is a
     deliberate change, not an incidental one.
+
+    ``risk`` (NEX-063) is the derived blast-radius tier. It is exposed to policy
+    so a rule can *require* a control at or above a tier, but note what it can
+    not do: a policy cannot lower the tier, because the tier is computed here
+    from the capability, not read from the policy. Recording it also puts risk on
+    the decision record, which is where the architecture asks for it.
     """
     return {
         "capability": tool.capability.value,
         "tool": tool.name,
         "resource": resource_ref,
         "agent_owner": str(resolved.agent.owner_user_id),
+        "risk": assess_action_risk(tool.capability).tier.value,
     }
 
 
