@@ -5306,3 +5306,73 @@ claim **NEX-042** from the top of `BACKLOG.md`. First command is always
 Consider R38's follow-up: a liveness-aware lease takeover so a crashed holder does not block
 writes for the full 45-minute TTL.
 
+
+---
+
+## Run `NEX-2026-11-27-45` — NEX-042 SHIPPED (audit-chain platform-wide sweep)
+
+**Window.** Started `1795771840` (09:30:40Z), deadline `1795773340`. Product committed and
+pushed at `1795772544` — 11.7 minutes in, 13 minutes ahead of the deadline. Coordination
+writes then waited on R38's stale lease, which expired at `1795772807`; the lease was
+acquired cleanly at `1795772820` (holder `…-95179`, 30-minute window).
+
+**Starting commit.** `5c13d9b`, confirmed equal to
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` — not the local
+tracking ref. The previous run's last recorded `next_action` was stale by one docs commit.
+
+**The slice.** `VerifyToolInvocationChain` answers "is this one agent's trail intact" for the
+agent's *owner*. Nothing answered the platform question — *is any trail in this deployment
+broken* — so an integrity regression could sit undetected until the affected owner happened
+to open their own agent. Detection is not an owner's duty.
+
+`SweepAuditIntegrity` walks every agent, compares the tail against the out-of-band
+`ChainAnchor`, and emits a `ChainAuditFinding` per contradiction. Three properties carry the
+argument:
+
+1. **Coverage is falsifiable.** The report carries `agents_total` *and* `agents_checked`, so a
+   capped sweep cannot read as "all chains intact". `verified` is `False` whenever
+   `truncated` is true — the unexamined agents could each be broken.
+2. **`checked` counts only what passed.** `verify_chain` reports `checked=expected_sequence-1`
+   at a break, i.e. the entries that verified *before* the contradiction. A finding claiming
+   to have checked the broken entry would be lying. This run's one test failure was my
+   assertion (`== 1`), not the code — the implementation was right and the test was wrong.
+3. **The gate fails closed twice.** An empty operator allowlist admits nobody, not everybody;
+   a non-operator gets `404`, not `403`, so probing cannot confirm the surface exists. It is
+   deliberately *not* an `AuthorizationProvider` decision: that policy governs note content,
+   and platform-wide integrity data must never be reachable by content access alone. This is
+   the same shape as `GetWithholdingReport` (NEX-037), reused rather than reinvented.
+
+**Files.** `application/use_cases/audit_sweep.py` (new), plus `ports/agents.py`,
+`domain/agent/audit_chain.py`, `infrastructure/db/agent_repositories.py`,
+`presentation/api/routers/ops.py`, `presentation/schemas.py`, `bootstrap/container.py`.
+Two new test files. 562 insertions across 9 files.
+
+**Validation — all green on the exact tree that became `ed641b0`.**
+
+- `ruff format --check` — 248 files already formatted.
+- `ruff check` — all checks passed (2 findings fixed first: an unused import and one
+  E501 in my own test).
+- `mypy` — no issues in 117 source files.
+- `pytest` — **1060 passed, 4 skipped**, 0 failures (full suite).
+- Targeted: `tests/application/test_audit_sweep.py` + `tests/api/test_ops_audit_integrity_api.py`
+  = 9 passed.
+
+**Delivery.** Commit `ed641b0`, pushed; `git ls-remote` confirms the remote head equals local
+HEAD. **CI: 4/4 `completed/success` at `ed641b0`** (Backend + Frontend, both duplicate
+check-run sets), polled 2026-11-27T09:46Z.
+
+**Honest gaps.**
+
+- The sweep has no HTTP-level test proving the *route* is wired to a real operator allowlist
+  configured from settings; the API tests use the use case directly. Cheap to add next run.
+- `DEFAULT_MAX_AGENTS = 500` is a guess. It is honest about being one (`truncated`), which is
+  the property that matters, but the number has met no real deployment.
+- R38 (dead-holder lease) recurred exactly as predicted: 254 seconds of blocked coordination
+  writes. The liveness-aware takeover remains unbuilt, and it cost this run ~4 minutes of
+  waiting.
+
+**Next action.** NEX-043 from the top of `BACKLOG.md`. First command is always
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against
+`git rev-parse HEAD` — this run's start proved again that a recorded `next_action` describes
+the past. Candidate follow-ups: the route-level operator-gate test for NEX-042, and R38's
+liveness-aware lease takeover.

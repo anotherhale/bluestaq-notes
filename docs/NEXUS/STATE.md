@@ -1283,3 +1283,57 @@ proves the invariant is genuinely tested and not incidentally satisfied. The mut
 reverted byte-identically before commit. CI: 4/4 `completed/success` at `8e670a6`, polled
 2026-11-25T19:32Z.
 
+
+## NEX-042 (run `NEX-2026-11-27-45`) — the integrity check only worked for the owner who already suspected
+
+**The gap.** `VerifyToolInvocationChain` answers "is this one agent's trail intact" for that
+agent's **owner**. Nothing answered the platform question — *is any trail in this deployment
+broken* — so a cut tail or an edited verdict on any other agent stayed invisible until the
+affected owner happened to open their own agent. Detection is not an owner's duty; it is the
+platform's. This is the same class as R23 and R26: a control that is correct on every path
+someone enumerated, and absent on the path nobody enumerated.
+
+**The slice.** `SweepAuditIntegrity` walks every agent, compares each tail against the
+out-of-band `ChainAnchor`, and emits one `ChainAuditFinding` per contradiction. Three
+properties carry the argument:
+
+1. **Coverage is falsifiable.** The report carries `agents_total` *and* `agents_checked`, so a
+   capped sweep cannot be read as "all chains intact". `verified` is `False` whenever
+   `truncated` is true, because the unexamined agents could each be broken.
+2. **`checked` counts only what passed.** `verify_chain` reports `checked =
+   expected_sequence - 1` at a break — the entries that verified *before* the contradiction.
+   This run's single test failure was my assertion (`== 1`), not the code: the implementation
+   was right and the test was wrong. The corrected assertion records why in the test.
+3. **The gate fails closed twice.** An empty operator allowlist admits nobody, not everybody;
+   a non-operator gets `404`, not `403`, so probing cannot confirm the surface exists. It is
+   deliberately *not* an `AuthorizationProvider` decision — that policy governs note content,
+   and platform-wide integrity data must never be reachable by content access alone. Same
+   shape as `GetWithholdingReport` (NEX-037), reused rather than reinvented.
+
+**Validation on the exact committed tree.** `ruff format --check` 248 files; `ruff check` all
+passed; `mypy` no issues in 117 files; `pytest` **1060 passed, 4 skipped, 0 failed**. Targeted:
+9 passed across the two new test files. Commit `ed641b0`, pushed, `git ls-remote` confirms the
+remote head equals local HEAD, **CI 4/4 `completed/success` at `ed641b0`** (polled
+2026-11-27T09:46Z).
+
+**Honest gaps.** No route-level test yet proves the ops route reads the operator allowlist
+*from settings*; the API tests exercise the use case directly. `DEFAULT_MAX_AGENTS = 500` is a
+guess — it is honest about being one (`truncated`), which is the property that matters, but the
+number has met no real deployment.
+
+**R38 recurrence.** The stale lease blocked coordination writes for 254 seconds. It expired at
+`1795772807` and was acquired cleanly at `1795772820`. Product delivery finished first, so the
+lease blocked only the docs. Second consecutive run; the liveness-aware takeover is still
+unbuilt.
+
+## Next best actions (run `NEX-2026-11-27-45`, superseding the lists above)
+
+1. **NEX-043** from the top of `BACKLOG.md`. First command is always
+   `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against
+   `git rev-parse HEAD` — this run's own start proved again that a recorded `next_action`
+   describes the past (it was one docs commit behind).
+2. **Close NEX-042's deferred delivery debt:** post the run report to issue #2 and add the
+   NEX-042 section to PR #3.
+3. **The route-level operator-gate test for NEX-042** — prove the ops route reads
+   `OPS_OPERATOR_USER_IDS` from settings, rather than trusting that the container wiring was
+   reviewed.

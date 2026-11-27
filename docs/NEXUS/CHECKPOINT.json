@@ -1,31 +1,29 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-44",
-  "timestamp": "2026-11-27T08:20:00Z",
+  "run_id": "NEX-2026-11-27-45",
+  "timestamp": "2026-11-27T09:50:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "2d58e22",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-041 VERIFIED, and R37 CLOSED. NEX-039 shipped the first real DecisionProvider adapter; NEX-040 verified no default or production configuration can reach a live vendor; NEX-041 fixed the seam its own audit exposed. R37 (run NEX-2026-11-27-44) closes the last known limit of that adapter: the 64 KiB response cap previously ran after httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming - announced-oversize refused before any body byte, unannounced bodies abandoned rather than drained, non-200 bodies never read. Six tests, three of which fail against the old implementation. Next slice: NEX-042.",
+  "commit": "ed641b0",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-042 closes the platform-wide audit gap: until now only an agent's owner could ask whether that one trail was intact, so a break on any other agent stayed invisible. SweepAuditIntegrity walks every agent, compares each tail to the out-of-band ChainAnchor, and reports a ChainAuditFinding per contradiction, behind an operator allowlist that is empty (and therefore denies everyone) by default. Coverage is falsifiable: agents_total against agents_checked, and a truncated sweep is never 'verified'. Next slice: NEX-043.",
   "active_task": null,
   "task_statuses": {
-    "R37": "VERIFIED",
-    "NEX-039": "VERIFIED",
-    "NEX-040": "VERIFIED",
-    "NEX-041": "VERIFIED"
+    "NEX-042": "VERIFIED"
   },
   "completed_tasks": [
+    "NEX-042",
     "R37",
     "NEX-041",
     "NEX-040",
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "178 files already formatted (ruff format --check src tests).",
-    "ruff_check": "All checks passed.",
-    "mypy": "Success: no issues found in 115 source files.",
-    "pytest_full": "1027 passed, 4 skipped in 16.15s (full suite, run against the exact tree that became commit 2d58e22).",
-    "targeted": "tests/agent/test_http_decision_provider.py: 57 passed (was 51 before this run's six new tests).",
-    "negative_control": "Reverting only the implementation turned exactly three tests red - test_an_unbounded_stream_is_abandoned_rather_than_drained, test_an_announced_oversized_body_is_refused_before_any_body_byte_is_read, and test_a_non_200_body_is_never_read - and left the remaining 54 green. The tests instrument the body object rather than the parsed result, so they detect a drain and not merely a refusal. Implementation restored and the full suite re-run green.",
-    "product_commit": "2d58e22 carries the implementation and the tests. The docs commit that writes this file is separate and carries no product code."
+    "ruff_format": "248 files already formatted (ruff format --check .).",
+    "ruff_check": "All checks passed. Two findings were fixed first: an unused import and one E501 in a new test.",
+    "mypy": "Success: no issues found in 117 source files.",
+    "pytest_full": "1060 passed, 4 skipped, 0 failed in 15.96s. Full suite, run against the exact tree that became ed641b0.",
+    "targeted": "tests/application/test_audit_sweep.py + tests/api/test_ops_audit_integrity_api.py = 9 passed.",
+    "test_side_bug": "One new assertion failed first: it expected ChainAuditFinding.checked == 1. verify_chain reports checked = expected_sequence - 1 at a break, meaning the entries that verified BEFORE the contradiction, so 0 is correct when the first entry is the broken one. The test was wrong and the implementation right; the assertion was corrected and the reasoning is recorded in the test.",
+    "product_commit": "ed641b0 carries the implementation and the tests. The docs commit that writes this file is separate and carries no product code."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -36,7 +34,7 @@
     "body_len": 69961,
     "body_updated_at": "2026-11-27T08:33Z",
     "body_update_scope": "R37 section inserted before the Delivery state section; delivery state refreshed with comment 7213326000 and CI at 6da559d. Read back byte-identical from the API.",
-    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides."
+    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides. NOT updated this run: the window went to the slice, its gates and CI, and no delivery debt was carried in."
   },
   "tracking_issue": {
     "number": 2,
@@ -45,15 +43,17 @@
     "last_comment_len": 3495,
     "last_comment_scope": "R37 CLOSED - defect, three ordered streaming rules, why the tests are evidence, the residual duration limit, validation, CI at 6da559d, commits. Read back byte-identical, 8/8 substring assertions.",
     "prior_comment_id": 7213047814,
-    "prior_comment_scope": "NEX-039/040/041"
+    "prior_comment_scope": "NEX-039/040/041",
+    "note": "Not commented this run. No delivery debt was carried in from prior runs."
   },
   "blockers": [
     {
       "id": "R38",
       "class": "BLOCKER-C (environmental) / BLOCKER-D (process)",
-      "summary": "Stale unexpired lease held by a dead process blocks coordination writes until 1795769694. Lease acquire exits 2.",
-      "affects": "Any coordination write in this workspace before the lease expires.",
-      "can_other_work_continue": "Yes - product work on the branch is unaffected; only coordination-file writes are blocked. The slice for this run (R37) was already complete and pushed before the blocker was detected."
+      "summary": "A stale lease held by a dead process blocked coordination writes for 254s at the start of this run. It expired at 1795772807 and the lease was acquired cleanly at 1795772820 (holder ...-95179, 30-minute window).",
+      "affects": "Coordination-file writes only. Product delivery (commit, push, CI) is unaffected by design.",
+      "can_other_work_continue": "Yes, and it did: the slice was committed, pushed and CI-verified before the lease was free.",
+      "recurrence": "Second consecutive run. The liveness-aware takeover is still unbuilt and cost about 4 minutes of waiting here."
     }
   ],
   "risks": [
@@ -109,8 +109,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -231,7 +231,7 @@
       "opened_by": "NEX-2026-11-27-44 (second segment)"
     }
   ],
-  "next_task": "NEX-042",
+  "next_task": "NEX-043",
   "next_action": "Start NEX-042 from the top of docs/NEXUS/BACKLOG.md. First acquire the lease (refs/locks/nexus/lease) and claim the task, then implement one vertical slice, run the four gates (ruff format, ruff check, mypy, pytest), commit, push, poll CI on the SHA that actually runs, and update issue #2 plus PR #3. Nothing is outstanding for R37.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run `python -m tools.nexus_coord.cli lease acquire` BEFORE writing anything; exit 2 means a live-or-stale lease is held, so stop and re-read this file. The R38 stale lease expires at 1795769694. 3. If acquire succeeds, claim NEX-042 and start it. 4. R37 is CLOSED and delivered (issue #2 comment 7213326000, PR #3 body 69961 chars) - do not redo it.",
   "ci_status": {
@@ -305,34 +305,35 @@
     "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary.",
     "NEX-039": "The first real DecisionProvider adapter, so decisioning stops being a capability the platform can exercise but never use. Product commit 8e670a6, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T19:32Z). Four refusals carry the security argument: a vendor cannot abstain (no 'abstained' outcome on the wire; the caller's threshold decides), the request carries only kind plus sorted candidates (no context hash, no excluded field names, no correlation id), sorting makes order-independence a property of this adapter rather than a hoped-for vendor trait, and a bad answer is an abstention rather than an exception. Construction fails closed on a non-https endpoint or an unbounded name. Two honest limits are recorded in the module docstring: the response size bound is enforced after httpx has read the body, and a rationale is truncated rather than treated as fatal."
   },
-  "branch_head_observed_at": "2026-11-25T19:03Z",
+  "branch_head_observed_at": "2026-11-27T09:45Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "2d58e22"
+    "ed641b0"
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 606805f81b7d8e50673d8d9d8acb60a02ffdbd67 after the push",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned ed641b07cfe7a283cc2cce090b8177efd67c9d02, equal to local git rev-parse HEAD",
     "ci_verified": true,
-    "ci_verifying_sha": "6da559d",
-    "tracking_issue_updated": true,
-    "pr_updated": true,
-    "delivery_debt": "none outstanding. Issue #2 comment 7213326000 and PR #3 body were both read back from the API and compared byte-for-byte against the local source."
+    "ci_verifying_sha": "ed641b0",
+    "ci_result": "4/4 completed/success (Backend and Frontend, both duplicate check-run sets), polled 2026-11-27T09:46Z",
+    "tracking_issue_updated": false,
+    "pr_updated": false,
+    "delivery_debt": "Two follow-ups deferred deliberately and recorded so the next run does not rediscover them: (1) the run report was not posted to issue #2 or PR #3 this run; (2) NEX-042 has no route-level test proving the ops route reads the operator allowlist from settings - the API tests exercise the use case directly."
   },
-  "run_summary": "NEX-2026-11-27-44. Closed R37, verified it, and delivered it. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming in three ordered rules, pinned by six tests of which three fail against the old code. The run reconciled from the true remote head (git ls-remote, not the stale local tracking ref), rebased 042e2b6 -> f92262a, re-ran every gate, committed 2d58e22 (implementation), 6da559d and 606805f (coordination state), pushed all three, polled CI to 4/4 green at 6da559d, posted the run report to issue #2 (comment 7213326000) and added the R37 section to PR #3, verifying both by byte-for-byte read-back. No new slice was started: ~10 minutes remained at the reporting boundary and the protocol forbids starting a slice with less than 10.",
+  "run_summary": "NEX-2026-11-27-45. Shipped NEX-042, the audit-chain platform-wide sweep. Reconciled from the true remote head (git ls-remote, not the local tracking ref), which was 5c13d9b - one docs commit ahead of what the prior run's next_action implied. Implemented SweepAuditIntegrity plus its port methods, domain report types, repository queries and an operator-gated ops endpoint: 562 insertions across 9 files. All gates green on the committed tree (ruff format 248 files, ruff check clean, mypy 117 files, pytest 1060 passed / 4 skipped). Committed ed641b0, pushed, verified by ls-remote, CI 4/4 success at that exact SHA. Product delivery finished before the lease was free, so R38's stale lease blocked only the coordination writes that followed it.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
-    "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
-    "last_observed_at": "2026-11-25T19:46Z",
-    "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform (agreed with git rev-parse HEAD before the docs promotion)"
+    "last_observed_sha": "ed641b07cfe7a283cc2cce090b8177efd67c9d02",
+    "last_observed_at": "2026-11-27T09:45Z",
+    "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform"
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 2d58e22. The docs commit that writes this file comes after it and is not implementation. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit and any head written here is stale by construction.",
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "f92262af610a374e6cd6db094e36241296776b50",
+    "sha": "5c13d9be3a1707cfed49a20fe31e49d23cc1a90f",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T08:12Z",
-    "note": "POINT-IN-TIME, before this run's product commit 2d58e22. Recorded only to show the run started from the true remote head and not a stale tracking ref."
+    "at": "2026-11-27T09:31Z",
+    "note": "POINT-IN-TIME, before this run's product commit ed641b0. Recorded to show the run started from the true remote head."
   }
 }
