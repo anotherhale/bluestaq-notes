@@ -7241,3 +7241,27 @@ starting it would have left a dirty tree for the next run to discard - the one o
 directive calls a defect. It goes first next run.
 
 
+
+### Delivery debt cleared, final head verified (NEX-2026-11-27-58)
+
+The ADR was committed but not *reported*, and an unreported slice is invisible to a reviewer. So
+this run also closed the GitHub side: a status comment on Tracking Issue #2 explaining why
+`step-up` is the hard obligation (the other four are predicates over facts the gateway already
+holds; `step-up` asks a judgement, and section 10 forbids a model-made judgement from becoming
+authority), and a PR #5 body section pointing at ADR-015 with the signal table and the explicit
+statement that the gateway still refuses.
+
+Then the checkpoint was reconciled against reality rather than left as intent: its `commit` field
+still read `e7c7315` from an earlier run while the branch was four commits ahead. That is exactly
+the drift section 5 warns about - a coordinator file claiming a state Git does not have - so it
+was corrected to `bb1bce4`, and `ci_status` re-pointed at the polled head.
+
+Final head `bb1bce4`, four check-runs, all `completed/success` (Backend: ruff, mypy, pytest,
+migrations; Frontend: typecheck, lint, test, build). Polled twice: the first read showed one
+Backend pair `in_progress` while its duplicate pair was `success` - the concurrency group, not a
+failure. Waiting for all four to conclude before recording is the only way that signal stays
+trustworthy.
+
+`completed_tasks` now includes NEX-057. It stays out of the VERIFIED set, and that distinction is
+the point of the whole run: a green build on an ADR proves the ADR compiles, not that the
+obligation it designs is enforced.
