@@ -177,5 +177,7 @@
     "ci_verified_head": "7456a890ac13bbb8083e7db6d5689233168bfdf6",
     "pr_body_updated": true
   },
-  "branch_head": "974d03f817073b1678780b64472430766968e86c"
+  "branch_head": "974d03f817073b1678780b64472430766968e86c",
+  "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
+  "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436."
 }

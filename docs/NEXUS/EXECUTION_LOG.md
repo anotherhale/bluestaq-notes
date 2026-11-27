@@ -7843,8 +7843,17 @@ SHA is the branch concurrency group re-running; both pairs completed/success.
 **Delivery cleared.** PR #5 body extended with the NEX-064 section; issue #2 received a
 NEX-064 comment. Both state that the slice is unmerged pending human review.
 
-**Final head.** `974d03f` (docs-only: this promotion). The checkpoint's `commit` field is set
-to the true head, not `7456a89`, so the next run's reconciliation sees no phantom mismatch.
+**Final head.** `c49befe` (docs-only chain: `974d03f` promotion, `c49befe` policy note).
+Product code is unchanged since `55e4436`.
+
+**Correction — the head-chasing loop.** An earlier draft of this entry claimed the checkpoint's
+`commit` field was set "to the true head, so the next run sees no phantom mismatch". That is not
+achievable and the claim was wrong. Each checkpoint write is itself a docs-only commit, so setting
+`commit` to the tip creates a new tip: `7456a89` -> `974d03f` -> `c49befe`, one step per fix.
+Resolved by recording the invariant instead of the SHA: `commit` names the last head whose
+*product* code CI verified, and reconciliation compares `git diff <commit>..HEAD -- src/ tests/`
+(empty means `commit` still describes verified reality). See `head_drift_policy` in
+`CHECKPOINT.json`.
 
 **Next action.** Start NEX-065: an explicit policy `approve` lifecycle transition
 (`DRAFT -> APPROVED -> PUBLISHED`) with the approver identity persisted and separation of duties
