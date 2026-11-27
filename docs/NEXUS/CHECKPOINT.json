@@ -80,7 +80,7 @@
   "Heredocs corrupt multi-line input in this environment (three occurrences across two runs, one of them silently truncating a commit message). Write multi-line content with the file editor and pass it to `git commit -F <file>` or `python3 <file>`."
  ],
  "next_task": "NEX-055: report NEX-054 to PR #5 and issue #2 (the outstanding delivery debt), then take the next dependency-ready governance task - most likely the `enhanced-audit` obligation adapter, which reuses the same enforcement seam NEX-054 established.",
- "next_action": "1. Append the NEX-054 section to PR #5's body with the CI evidence above. 2. Comment the NEX-054 verification on issue #2. 3. Start NEX-055 (enhanced-audit obligation) in domain + application + tests.",
+ "next_action": "1. Start NEX-055: the enhanced-audit obligation adapter, reusing the enforcement seam NEX-054 established (resolve in the decision, apply on the way out, record that it fired). 2. Poll CI on the head. 3. Report NEX-055 to PR #5 and issue #2.",
  "recovery_instructions": "NEX-054 product code is COMMITTED and PUSHED at 1878cd1; containment was verified structurally (merge-base --is-ancestor plus cat-file on the remote head). Nothing is in flight. CI for 1878cd1 was not polled. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5.",
  "ci_status": {
   "head_polled": "c825db61859591a46b5d4fc1d957130f126db9f8",
@@ -164,10 +164,11 @@
   "head": "1878cd14578ab454fbc84ca4e73067c6e512943c",
   "remote_verified": true,
   "remote_verified_by": "git merge-base --is-ancestor 1878cd1 <remote head>, and git cat-file -e <remote head>:src/notes_service/domain/redaction.py",
-  "pr_updated": false,
-  "issue_updated": false,
-  "delivery_debt": "PR #5 and issue #2 do not yet carry NEX-054. Product and docs are pushed; only the GitHub narrative is owed.",
-  "ci_verified": true
+  "pr_updated": true,
+  "issue_updated": true,
+  "delivery_debt": "None. NEX-054 is in PR #5 (body 15204 -> 17344 chars, section verified present) and reported on issue #2 (comment 7224338413). PR #5 remains unmerged for human review.",
+  "ci_verified": true,
+  "issue_comment": "7224338413"
  },
  "run_summary": "Implemented NEX-054. The redaction obligation previously had no adapter, so a policy that said 'allow with redaction' was refused outright. The shape-based credential judgement moved from bootstrap/logging_config.py into domain/redaction.py so the log formatter and the tool gateway share one implementation instead of drifting copies; the formatter re-exports it so no importer changed. InvokeTool now filters the tool result when a redaction obligation is present, on both the direct and the approval-gated path, and records an audit outcome that says redaction fired without naming the withheld fields. Filtering happens on the way out only, so the stored note is untouched. Unenforceable obligations still refuse the whole call. The run also found and corrected a run-integrity problem: it began on main instead of the authorized branch, so the gates were re-run on the feature-branch tree before the commit was made.",
  "head_observation": {
