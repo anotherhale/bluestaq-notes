@@ -5855,3 +5855,53 @@ the `404`-not-`403` refusal and the record-on-grant behaviour.
   validated, risks ledger length asserted, then copied over).
 - **Next action**: poll `/commits/e6f58c0/check-runs`; on green, post the NEX-045
   report to issue #2 and append the NEX-045 section to draft PR #3.
+
+## NEX-2026-11-27-48 (NEX-045 segment) — delivery: reports posted, PR updated
+
+- **Run ID**: `NEX-2026-11-27-48` (NEX-045 segment, continued)
+- **Timestamp**: 2026-11-27T12:16Z
+- **Starting commit**: `99faab5` (verified equal to the remote with `git ls-remote` before any work)
+- **Ending commit**: `217ac7d` (docs) on top of product commit `e6f58c0`
+- **Branch**: `feature/agentic-enterprise-platform`
+
+### What this segment did
+
+The slice was already committed and pushed when this segment resumed. Its job was the
+integration half that the previous segment had no time for.
+
+1. **CI verdict, not a guess.** Polled `/commits/e6f58c0/check-runs`: **4/4
+   `completed/success`** — one Backend and one Frontend run per `push` and
+   `pull_request` event, every run reporting `head_sha` `e6f58c0`. Recorded in
+   `CHECKPOINT.json` under `ci_status` and in the STATE and log CI rows.
+2. **Cleared the delivery debt.** Two run reports were owed and both were posted to
+   issue #2, oldest first: NEX-044 (comment `7218021011`, 2917 chars) then NEX-045
+   (comment `7218022850`, 5369 chars). Both were stored byte-identical to what was
+   sent.
+3. **Updated draft PR #3.** Appended both report sections to the body, oldest first:
+   88789 → 96880 chars. Read back and asserted on short substrings, because GitHub
+   re-wraps lines and a long phrase fails spuriously. The PR remains **draft and
+   unmerged** — automated merging is prohibited.
+
+### Test and gate evidence
+
+- Local gates on the committed tree: **1149 passed, 4 skipped**, ruff clean, mypy clean
+  (125 source files).
+- CI at `e6f58c0`: **4/4 completed/success**.
+
+### Notes on method
+
+- The STATE.md position rows were edited with a prepend convention (new value first, old
+  value preserved after `Prior:`), and each replacement asserted exactly one anchor hit
+  and a growing file. Five replaced rows therefore lost no history; verified by grepping
+  for each `Prior:` fragment afterwards.
+- Two `python3 - <<'PY'` heredocs were corrupted by this terminal's input path (5th and
+  6th occurrences of that defect). Both failed at parse time before sending anything, so
+  no API state was affected. Scripts were then written with `file_editor` and executed
+  from disk.
+
+### Status
+
+- NEX-045: **VERIFIED** (local gates + CI 4/4 at `e6f58c0`), **PUSHED**, **PR UPDATED**,
+  **ISSUE UPDATED**.
+- Next task: **NEX-046** — a durable `OperatorGrantRepository` behind the existing port,
+  closing **R40**. The gate and use case do not change; that is what the port is for.
