@@ -263,7 +263,7 @@
     }
   ],
   "next_task": "R36-governance-half",
-  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything. Then clear the carried delivery debt: post the R36 read-side report to issue #2 (lists, never tables - tables 500 on this repo) and append the R36 read-side section to PR #3's body, reading both back with substring assertions. Then take R36's governance half: the operator allowlist has no expiry, no per-operation scoping, and no way to read the current holders.",
+  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything; confirm the docs head b7078c8's CI finished green and record it. Then take R36's governance half: the operator allowlist has no expiry, no per-operation scoping, and no way to read the current holders. Scope a grant with an operation and an expiry, add a way to read current holders, and keep the gate's record-on-grant behaviour.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R39 and R36's auditable half are CLOSED - do not redo them. 5. Delivery debt outstanding: issue #2 comment + PR #3 body for the R36 read side.",
   "ci_status": {
     "product_slice_sha": "19aafa8",
@@ -342,16 +342,17 @@
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 19aafa84f2d55619ebb6edbcb333dbe0de1e28b3, equal to local git rev-parse HEAD",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned b7078c85f90f23bbef929ff9105a68d6b4132f56, equal to local git rev-parse HEAD",
     "ci_verified": true,
     "ci_verifying_sha": "19aafa8",
     "ci_result": "4/4 completed/success at 19aafa8, polled 2026-11-27T11:04Z. Every check run reported head_sha 19aafa8.",
-    "tracking_issue_updated": false,
-    "pr_updated": "NOT updated this run.",
-    "delivery_debt": "CI polled and green in-run. Issue #2 comment and PR #3 body section NOT written this run - recorded as debt for the next run rather than left implicit.",
+    "tracking_issue_updated": true,
+    "tracking_issue_detail": "Issue #2 comment id 7216799351 posted (HTTP 201, 3266 chars stored vs 3274 local - GitHub line-ending normalisation, not truncation). Lists only, no tables.",
+    "pr_updated": "PR #3 body PATCHed from 82079 to 84930 chars with the R36 read-side section. Still draft, still open, still unmerged. Read back and asserted on 4 substrings.",
+    "delivery_debt": "None outstanding at the docs commit. CI for the docs head b7078c8 was still running when this file was written; a docs commit cannot change the product verdict at 19aafa8.",
     "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
-  "run_summary": "NEX-2026-11-27-48. Closed the read side of R36. Started from the true remote head 7ac7230 (git ls-remote; the run began on main at d6f92d0 in a fresh clone and fast-forwarded the feature branch). OperatorAccessLog had a writer and no reader, so privileged reads of platform-wide views were recorded and unreachable. GetOperatorAccessReport reads the log gate-first, the read is itself recorded as a granted operator read, and the snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. 6 files, +563/-1. Gates green on the committed tree: ruff format, ruff check, mypy 121 files, 32 targeted tests. Committed 19aafa8, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 19aafa8. Delivery debt recorded, not hidden: issue #2 and PR #3 were not updated this run.",
+  "run_summary": "NEX-2026-11-27-48. Closed the read side of R36 and cleared the run's delivery. Started from the true remote head 7ac7230 (git ls-remote; the run began on main at d6f92d0 in a fresh clone and fast-forwarded the feature branch). OperatorAccessLog had a writer and no reader, so privileged reads of platform-wide views were recorded and unreachable. GetOperatorAccessReport reads the log gate-first, the read is itself recorded as a granted operator read, and the snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. 6 files, +563/-1. Gates green on the committed tree: ruff format, ruff check, mypy 121 files, 32 targeted tests. Committed 19aafa8, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 19aafa8. Delivery completed in-run: issue #2 comment 7216799351 and PR #3 body extended to 84930 chars, still draft and unmerged. Docs commit b7078c8 pushed and ls-remote-verified.",
   "head_observation": {
     "sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
     "remote_sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
