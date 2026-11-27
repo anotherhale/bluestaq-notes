@@ -224,5 +224,25 @@
  "last_run": "NEX-2026-11-27-54",
  "decisions_this_run": [
   "D-054: obligations are a separate axis on PolicyDecision, not a third PolicyEffect (ADR-014). Unknown obligation denies. Satisfaction at the enforcement point, not in evaluate()."
- ]
+ ],
+ "ci": {
+  "head": "2ae495d",
+  "conclusion": "SUCCESS",
+  "checks": {
+   "Backend (ruff, mypy, pytest, migrations)": "success",
+   "Frontend (typecheck, lint, test, build)": "success"
+  },
+  "verified_at": "2026-11-27T09:45Z",
+  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit. The two docs commits before it (ef81697, 03f4620) show conclusion=cancelled in the runs list because each new push superseded them; that is supersession, not failure."
+ },
+ "pr": {
+  "number": 5,
+  "state": "open",
+  "draft": false,
+  "head": "2ae495d",
+  "base": "main",
+  "mergeable": true,
+  "changed_files": 27,
+  "note": "Unmerged by policy. NEXUS never merges."
+ }
 }
