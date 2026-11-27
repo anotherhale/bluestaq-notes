@@ -5120,3 +5120,65 @@ BACKLOG. Before starting it, clear the outstanding delivery debt: PR #3 body and
 yet mention NEX-039, NEX-040 or NEX-041. Issue comments on this repository must use lists, never
 markdown tables (a table body returns HTTP 500).
 
+
+---
+
+## Run `NEX-2026-11-25-43` — delivery debt cleared; NEX-040 read-back verified
+
+- **Run ID:** `NEX-2026-11-25-43`
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `042e2b6` (local HEAD; `git ls-remote` agreed)
+- **Ending commit:** the docs commit that carries this entry
+- **Tasks completed:** NEX-040 read-back verification (VERIFIED); NEX-039, NEX-040 and NEX-041
+  delivered to tracking issue #2 and PR #3.
+- **Tasks started:** none. This run was integration-only; no new slice was begun, because the
+  clock left under 5 minutes after recovery and the standing rule is never to start a slice
+  with less than 10 minutes remaining.
+- **Files changed:** `docs/NEXUS/{STATE.md,EXECUTION_LOG.md,CHECKPOINT.json}`
+- **Migrations:** none
+- **Tests executed:** no product code changed, so no product gate was re-run. The verification
+  performed was read-back integrity: `python3 /tmp/nex040_verify.py` asserted 16 properties of
+  the pushed docs (`git show HEAD:<path>`, not the working tree), all PASS; and
+  `/tmp/nex040_check_comment.py` asserted 12 properties of the posted issue comment against the
+  GitHub API, all PASS, with `local.strip() == body.strip()` true at 3705 chars.
+- **Test outcomes:** 16/16 and 12/12 PASS. CI re-confirmed **4/4 `completed/success` at
+  `497ab77`**.
+- **Security findings:** none new. The issue comment and PR body contain no credentials and no
+  internal identifiers beyond commit SHAs and public API routes.
+- **Commits:** one docs commit.
+- **Push status:** pushed to `feature/agentic-enterprise-platform`, verified with
+  `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.
+- **PR updates:** PR #3 body PATCHed with the NEX-040 and NEX-041 sections (67105 chars). The
+  PR remains `draft=true`, `state=open`, `merged=false`.
+- **Tracking issue status:** #2 updated with comment `7213047814`.
+- **Risks:** unchanged — the ledger still holds 22 entries, asserted before and after the
+  checkpoint rewrite.
+- **Checkpoint status:** rewritten atomically (temp file → `json.load` re-validation → 
+  `os.replace`), 36653 bytes, `run_id=NEX-2026-11-25-43`, `commit=042e2b6`, `next_task=NEX-042`.
+- **Next prioritized task:** **NEX-042**, from `docs/NEXUS/BACKLOG.md`.
+
+### What this run actually did, and what it did not
+
+The briefing said NEX-040 was VERIFIED and asked for read-back verification of the pushed prose
+before moving on. That is what happened, and the read-back was worth doing: it confirmed all
+fourteen substantive claims are present on the *remote* commit, not merely in a working tree
+that might have been lost. Two assertion failures in the PR check were my own grep strings
+matching line-wrapped text, not corruption — the source text is intact at lines 883 and 905.
+
+**No new engineering slice was started.** The honest reason is the clock: recovery, read-back,
+and the two GitHub writes consumed the window. Starting NEX-042 with under five minutes left
+would have produced an uncommitted tree for the next run to discard, which Section 15 names as
+a defect rather than diligence.
+
+### Delivery debt, cleared
+
+The previous run recorded that NEX-039 and NEX-041 were committed and pushed but not reflected
+on GitHub. Both are now posted, along with NEX-040. `CHECKPOINT.json.delivery_state` reads
+`"delivery_debt": "none outstanding"`.
+
+### Next action
+
+Start **NEX-042**. First command of the run, before planning anything:
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare it to
+`git rev-parse HEAD`. The local `origin/*` ref is stale-prone and is not evidence — this has
+already caused one run to rebuild delivered work.
