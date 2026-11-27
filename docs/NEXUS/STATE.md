@@ -1941,3 +1941,13 @@ evidence.
    extra fields. Do not add a handler for `step-up` or `second-approver` until the identity
    model can distinguish assurance levels and count distinct approvers — an obligation
    "satisfied" by a weaker check than its name promises is worse than a refusal.
+
+## Run NEX-2026-11-27-55 (continued) — NEX-053 VERIFIED
+
+- **CI evidence**: 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at head `c825db61859591a46b5d4fc1d957130f126db9f8` (polled 2026-11-27T17:07Z). `c825db61859591a46b5d4fc1d957130f126db9f8` is a
+  docs-only descendant of the product commit `9c31484`, so the Backend job compiled and
+  tested the obligations code, including the Postgres migration path.
+- **Promotion**: NEX-053 moves IMPLEMENTED/TESTED/COMMITTED/PUSHED → **VERIFIED**.
+  Evidence, not local gates, is what promoted it.
+- **Remaining delivery debt**: PR #5 description still has no NEX-053 section and issue #2
+  has no NEX-053 comment. That is the first task of the next run.

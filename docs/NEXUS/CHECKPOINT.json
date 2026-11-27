@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
  "run_id": "NEX-2026-11-27-55",
- "timestamp": "2026-11-27T16:56Z",
+ "timestamp": "2026-11-27T17:07Z",
  "branch": "feature/agentic-enterprise-platform",
  "commit": "9c31484",
- "project_phase": "Phase 3 (governance). NEX-053 (policy obligations carried on the decision and enforced at the tool gateway) is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI unpolled, so not VERIFIED.",
+ "project_phase": "Phase 3 (governance). NEX-053 (policy obligations carried on the decision and enforced at the tool gateway) is VERIFIED - CI green at c825db61859591a46b5d4fc1d957130f126db9f8.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -16,7 +16,7 @@
   "NEX-050": "VERIFIED - merged to main via PR #3 (merge commit 4d57f39, parent b0f9b56). Separation of duties on policy publication is in main.",
   "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
   "NEX-052": "VERIFIED - CI 4/4 completed/success at 57f50d1 (polled 2026-11-27T16:30Z by run 54).",
-  "NEX-053": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484 - local gates green (ruff format 289 unchanged, ruff check clean, mypy 137 files, pytest 1306/0 fail/4 skip). CI unpolled. NOT VERIFIED."
+  "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z)."
  },
  "completed_tasks": [
   "NEX-052",
@@ -32,7 +32,8 @@
   "R37",
   "NEX-041",
   "NEX-040",
-  "NEX-039"
+  "NEX-039",
+  "NEX-053"
  ],
  "validation": {
   "commands_run_on_committed_tree": [
@@ -43,7 +44,7 @@
   ],
   "scope": "Run bare from the repo root on the pushed tree 9521442 (product 9c31484).",
   "not_run": "PostgreSQL-marked tests skipped locally; CI Backend job runs the migration path.",
-  "ci": "Not polled this run - the head's runs had not concluded at run end."
+  "ci": "GREEN at c825db61859591a46b5d4fc1d957130f126db9f8: 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -85,14 +86,16 @@
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
  "next_task": "Phase 3 governance, next dependency-ready slice: an obligation satisfaction adapter for `redaction` (the second obligation kind with a real mechanism behind it), or `enhanced-audit` if the audit trail already carries the extra evidence.",
- "next_action": "1. Poll CI for the current branch head from `git ls-remote origin feature/agentic-enterprise-platform` (never a SHA written in this file) and only then promote NEX-053 to VERIFIED. 2. Append the NEX-053 section to PR #5 and comment on issue #2. 3. Start the redaction obligation adapter.",
- "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for the head from `git ls-remote origin feature/agentic-enterprise-platform`. Do not poll a SHA quoted in this file. If the branch is behind origin, MERGE origin rather than rebasing (force-push is prohibited). Never merge PR #5.",
+ "next_action": "1. Append the NEX-053 section to PR #5 and comment on issue #2 (delivery debt, owed first). 2. Start the redaction obligation satisfaction adapter.",
+ "recovery_instructions": "NEX-053 is VERIFIED and pushed; nothing is in flight. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing (force-push is prohibited). Next: pay the PR #5 / issue #2 delivery debt, then the redaction obligation adapter. Never merge PR #5.",
  "ci_status": {
-  "product_commit": "9c31484 (NEX-053 product code)",
-  "product_commit_conclusion": "UNPOLLED",
-  "explanation": "This run ended before the head's CI concluded. Do not infer a verdict. The head is a descendant of the product commit, so polling the head is valid evidence.",
-  "how_to_poll": "Poll the CURRENT head from `git ls-remote origin feature/agentic-enterprise-platform`. Every checkpoint is a commit on the branch and branch concurrency cancels superseded runs, so a SHA named in this file is always cancelled by the commit that writes it.",
-  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. Never promote on a cancelled run; never report it as a failure."
+  "head_polled": "c825db61859591a46b5d4fc1d957130f126db9f8",
+  "product_commit": "9c31484",
+  "result": "2 workflow run(s) (pull_request, push), 4 jobs, all completed/success",
+  "conclusion": "success",
+  "valid_evidence_because": "c825db61859591a46b5d4fc1d957130f126db9f8 is a docs-only descendant of the product commit 9c31484, so its CI compiled and tested the obligations code including the Postgres migration path.",
+  "how_to_poll": "Poll the CURRENT head from `git ls-remote origin feature/agentic-enterprise-platform`. Every checkpoint is a commit on the branch, so a SHA quoted in these files is always superseded by the commit that writes it.",
+  "interpretation_rule": "conclusion=cancelled means superseded, NOT failed; never promote on a cancelled run and never report it as a failure."
  },
  "verified_tasks": [
   "NEX-052",
@@ -142,9 +145,7 @@
   "NEX-040",
   "NEX-044"
  ],
- "in_progress_tasks": [
-  "NEX-053"
- ],
+ "in_progress_tasks": [],
  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
@@ -164,12 +165,12 @@
  "commits_this_run": [],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "9521442",
+  "head": "c825db61859591a46b5d4fc1d957130f126db9f8",
   "remote_verified": true,
   "remote_verified_by": "git merge-base --is-ancestor 9c31484 <remote head> and git cat-file -e <remote head>:tests/agent/test_tool_gateway_obligations.py",
   "pr_updated": false,
   "issue_updated": false,
-  "delivery_debt": "OWED: PR #5 description has no NEX-053 section; issue #2 has no NEX-053 comment. The slice is pushed but its delivery write-up is not."
+  "delivery_debt": "OWED: PR #5 description has no NEX-053 section; issue #2 has no NEX-053 comment."
  },
  "run_summary": "No new product code. This run resolved the verification debt left by NEX-2026-11-27-53: CI on the NEX-052 product commit concluded 4/4 completed/success, so NEX-052 moves from PUSHED to VERIFIED on real CI evidence rather than local gates alone. The earlier 'cancelled' reading was investigated to its cause (supersession by checkpoint pushes) and is now documented so a future run does not mistake it for a failing build.",
  "head_observation": {
@@ -242,6 +243,6 @@
   "changed_files": 27,
   "note": "Unmerged by policy. NEXUS never merges."
  },
- "head_at_checkpoint": "9521442",
+ "head_at_checkpoint": "c825db61859591a46b5d4fc1d957130f126db9f8",
  "concurrency_note": "Another run pushed to this branch twice during this run. Each rejection was resolved by fetching and MERGING (never rebasing, never force-pushing) and containment was verified with merge-base/cat-file. A grep of push output for a SHA gave one false positive - verify containment structurally, not by text."
 }

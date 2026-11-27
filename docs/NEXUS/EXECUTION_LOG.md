@@ -6759,3 +6759,13 @@ work it could not finish and verify.
 - **Checkpoint status**: updated.
 - **Next action**: poll CI for the current head; then append the NEX-053 section to PR #5
   and comment on issue #2.
+
+### NEX-2026-11-27-55 addendum — CI green, NEX-053 promoted to VERIFIED
+
+- **CI results**: 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at `c825db61859591a46b5d4fc1d957130f126db9f8`
+  (pull_request/Backend (ruff, mypy, pytest, migrations)/success, pull_request/Frontend (typecheck, lint, test, build)/success, push/Backend (ruff, mypy, pytest, migrations)/success, push/Frontend (typecheck, lint, test, build)/success). Polled from
+  `git ls-remote origin feature/agentic-enterprise-platform`, not from a SHA written in the
+  checkpoint — that is the rule the `cancelled` trap taught.
+- **Promotion**: NEX-053 → **VERIFIED**.
+- **Next action**: PR #5 NEX-053 section + issue #2 comment, then the redaction obligation
+  adapter.
