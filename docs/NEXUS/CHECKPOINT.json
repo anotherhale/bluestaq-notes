@@ -273,8 +273,8 @@
     "polled_at": "2026-11-27T11:04Z",
     "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/19aafa8/check-runs",
     "standing_rule": "A commit superseded in the concurrency group reads queued/null forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed.",
-    "final_head_sha": "d178de6",
-    "final_head_result": "4/4 completed/success at d178de6, polled 2026-11-27T11:15Z, every check run reporting that head_sha."
+    "final_head_sha": "28fe062",
+    "final_head_result": "4/4 completed/success at 28fe062, polled 2026-11-27T11:25Z, every check run reporting that head_sha."
   },
   "verified_tasks": [
     "NEX-001",
@@ -324,7 +324,7 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "d178de6d0380f6e9f44c9dcec754e4bb3ef2d9ed",
+  "head_at_checkpoint": "28fe06253d49c516818bbd25512965a9c7ba331f",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
   "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
   "completed_task_notes": {
@@ -346,8 +346,8 @@
     "pushed": true,
     "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned b7078c85f90f23bbef929ff9105a68d6b4132f56, equal to local git rev-parse HEAD",
     "ci_verified": true,
-    "ci_verifying_sha": "d178de6",
-    "ci_result": "4/4 completed/success at the final head d178de6, polled 2026-11-27T11:15Z. Every check run reported head_sha d178de6. The product slice at 19aafa8 was independently 4/4 completed/success, polled 2026-11-27T11:04Z.",
+    "ci_verifying_sha": "28fe062",
+    "ci_result": "4/4 completed/success at the final head 28fe062, polled 2026-11-27T11:25Z, every check run reporting head_sha 28fe062. Earlier heads this run: 19aafa8 4/4 green at 11:04Z, d178de6 4/4 green at 11:15Z.",
     "tracking_issue_updated": true,
     "tracking_issue_detail": "Issue #2 comment id 7216799351 posted (HTTP 201, 3266 chars stored vs 3274 local - GitHub line-ending normalisation, not truncation). Lists only, no tables.",
     "pr_updated": "PR #3 body PATCHed from 82079 to 84930 chars with the R36 read-side section. Still draft, still open, still unmerged. Read back and asserted on 4 substrings.",
