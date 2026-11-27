@@ -2117,3 +2117,62 @@ evidence.
 - **Issue #2**: NEX-053 status comment posted.
 - **Delivery debt is now zero.** Every completed slice is reflected in the PR and the
   tracking issue, so the next run starts on implementation, not on bookkeeping.
+
+## Run NEX-2026-11-27-61 — PR #5 review feedback addressed (NEX-061)
+
+**Phase.** 3 (governance). Five of five ADR-015 obligations have mechanisms. Remaining
+governance gap: risk-based approval.
+
+**Branch / head.** `feature/agentic-enterprise-platform`. Product commit `dd42fd7`; merge
+head `327144a` (merged concurrent docs-only commit `f7e2b4a` from another run). Tree clean.
+
+**Active task.** None — NEX-061 is committed and pushed, awaiting a CI read.
+
+**Last completed task.** NEX-061 — fail-closed policy-evaluation boundary, from the first
+human review of PR #5.
+
+**What the review asked for, and what was done.**
+
+| Review item | Severity | Status |
+| --- | --- | --- |
+| Policy evaluation only catches `DomainError`; unexpected failures escape the denial/audit path | P1 | ADDRESSED at `dd42fd7` |
+| Rate limiter is process-local; make the deployment limitation explicit | non-blocking | ADDRESSED at `dd42fd7` (documented, no code change needed) |
+| Obligation readiness should be visible at authoring time | non-blocking | Deferred — needs policy-validation surface |
+| Parameterised per-rule rate limits | non-blocking | Deferred — vocabulary change, needs an ADR |
+
+**The defect, stated plainly.** The gate promised fail-closed behaviour and caught only
+`DomainError`. Any other failure escaped *before* the denial and its audit row were written,
+so the caller got a stack trace and the trail got nothing. A gate that throws is failing open
+with extra steps.
+
+**Why the test injects a fault.** `Comparison` validates its value type at construction, so
+every *currently reachable* evaluator failure is already a `DomainError`. Crafting a bad
+policy would have tested the old path and passed before the fix. The new tests patch
+`tools.evaluate` to raise, which is the only honest way to exercise the boundary the review
+asked for. Reverting the fix fails 4 of the new cases.
+
+**Verified implementation status.** NEX-061 is IMPLEMENTED, TESTED, COMMITTED, PUSHED.
+**Not VERIFIED** — CI was polled once right after the push and only the Frontend check-run
+had completed. Local gates are not a CI verdict.
+
+**Validation run this run, bare as CI runs them.** `ruff format --check` 297 files already
+formatted; `ruff check` clean; `mypy` 139 source files; full `pytest` exit 0 (4 postgresql
+skipped); the touched test file 15 passed.
+
+**Open PRs.** #5 — open, not draft, unmerged, mergeable. Nine slices now stack in it; the
+reviewer's "consider a split" note stands. **NEXUS never merges.**
+
+**Tracking issue.** #2 open. Last reported NEX-059 (comment 7226992946). Owes NEX-058, NEX-059
+and NEX-061 reporting — NEX-058/059 were reported by a concurrent run, NEX-061 is new.
+
+**Blockers.** None.
+
+**Next best actions.**
+
+1. Poll `GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` (head from
+   `git ls-remote`) until every entry is `status=completed`; on 4/4 `success` promote NEX-061
+   to VERIFIED.
+2. Reply to review 6092140204 and resolve it, naming `dd42fd7`.
+3. Clear delivery debt: append NEX-057/058/059/061 to PR #5, post one issue #2 comment.
+4. Resume NEX-060 — the `derive_assurance` acr/amr mapping test, the signal `step-up` rests
+   on and still the only untested piece of that control.
