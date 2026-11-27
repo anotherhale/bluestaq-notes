@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-47",
-  "timestamp": "2026-11-27T10:52:00Z",
+  "run_id": "NEX-2026-11-27-48",
+  "timestamp": "2026-11-27T11:04:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "1eb1d3b",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-2026-11-27-47 closed the auditable half of R36: the operator allowlist behind the platform-wide views was duplicated in GetWithholdingReport and SweepAuditIntegrity and recorded nothing, so a privileged read left no trace inside the system. It is now one OperatorGate shared by both use cases, and every granted read appends an OperatorAccessEntry stamped by the request's own clock. Refusal happens before recording, so an entry is evidence of authorisation. Rotation and per-operation scoping stay open with the scoped-capability-grant slice.",
+  "commit": "19aafa8",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. Run NEX-2026-11-27-48 closed the read side of R36. The previous run made the operator allowlist a single OperatorGate that records every granted read of a platform-wide view, but OperatorAccessLog.recent() had no caller outside its tests, so the record could be written and never read: 'who read the platform-wide totals' was still unanswerable from inside the system. GetOperatorAccessReport now reads it at GET /api/v1/ops/access-report, gate-first so a refusal leaves no trace, and the read itself is recorded because an audit view is exactly the privileged read the log exists to capture. The snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. Allowlist expiry, per-operation scoping and holder visibility remain open with the scoped-capability-grant slice.",
   "active_task": null,
   "task_statuses": {
+    "R36-read-side": "VERIFIED",
     "R36-auditable-half": "VERIFIED"
   },
   "completed_tasks": [
@@ -19,17 +20,17 @@
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "clean (ruff format --check . -> 253 files already formatted)",
+    "ruff_format": "clean (ruff format: 1 file reformatted, 116 left unchanged)",
     "ruff_check": "All checks passed (src/ and tests/).",
-    "mypy": "Success: no issues found in 120 source files.",
-    "pytest_full": "1079 passed, 4 skipped, 0 failed. Full suite re-measured on the committed tree by this run, not taken from a briefing.",
-    "targeted": "tests/application/test_operator_gate.py + test_withholding_report.py + test_audit_sweep.py = 19 passed.",
-    "architecture": "tests/architecture/test_layering.py green; the new port and use case import no FastAPI/SQLAlchemy/JWT.",
-    "ci": "4/4 completed/success at 1eb1d3b (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 1eb1d3b, so the result is attributable to the pushed slice and not to a superseded run. Polled 2026-11-27T10:39Z.",
-    "commit_message_note": "Heredoc corrupted the message body again (third occurrence); amended with `git commit --amend -F <file>` before any push, so 1eb1d3b is the only version that reached the remote.",
-    "correction_note": "An earlier version of these records claimed 1092 passed. That figure came from a briefing describing a different tree; re-running the suite on 1eb1d3b gives 1079 passed, 4 skipped. Corrected in STATE.md, EXECUTION_LOG.md, this checkpoint, issue #2 comment 7216150877 and the PR #3 body. Recorded rather than silently overwritten."
+    "mypy": "Success: no issues found in 121 source files.",
+    "pytest_targeted": "tests/application/test_operator_access_report.py + tests/api/test_ops_access_report_api.py + tests/architecture = 32 passed.",
+    "pytest_new": "19 new tests (11 application, 8 API).",
+    "architecture": "tests/architecture/test_layering.py green; the new use case imports no FastAPI/SQLAlchemy/JWT.",
+    "ci": "4/4 completed/success at 19aafa8 (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 19aafa8, so the result belongs to the pushed slice. Polled 2026-11-27T11:04Z.",
+    "commit_message_note": "Inline multi-line commit message was corrupted by the shell input path again (fourth recorded occurrence) and wedged the command. Nothing was committed: HEAD stayed at 7ac7230 and all six files remained staged. Recovered by writing the message to /tmp/nexus_r36read_msg.txt with the file editor, asserting it intact, then git commit -F. 19aafa8 carries a verified 28-line body.",
+    "measurement_note": "Every count above was produced by running the command in this session. No figure was carried over from a briefing."
   },
-  "uncommitted_work": "None; the docs commit that writes this checkpoint follows it.",
+  "uncommitted_work": "None after the docs commit that writes this file; product tree was clean at push.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -129,8 +130,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -261,17 +262,17 @@
       "closure_evidence": "default_holder() resolves NEXUS_HOLDER, then host-s<sid>, then host-<pid> only where os.getsid is unavailable. Holder.parse accepts both shapes; a session id is the session leader's pid, so the liveness probe is unchanged. The decisive property is cross-process identity, which no single-process test can express, so test_the_holder_is_identical_across_separate_processes spawns two real subprocesses; reverting to host-pid turns exactly that test and the shape test red. A five-process CLI acceptance run confirmed the full cycle against a scratch repo with a bare origin. Residual, recorded rather than closed: the identity is only as stable as the session, so a harness that spawns each invocation under its own session reproduces the defect - that is what NEXUS_HOLDER is for. A recycled session-leader pid can make holder_liveness report 'alive' for a dead run; that is reporting inaccuracy only, because acquisition is gated on expiry, never on liveness."
     }
   ],
-  "next_task": "NEX-043",
-  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything. Then take R36's residual governance half: the operator allowlist has no expiry, no per-operation scoping, and no way to read the current holders. Read docs/NEXUS/BACKLOG.md for the task that owns it. Do not start from this file's prose alone: it describes the past.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` (no __main__) and no --repo flag (it uses cwd). 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R39 is CLOSED at 64759f4 - do not redo it.",
+  "next_task": "R36-governance-half",
+  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything. Then clear the carried delivery debt: post the R36 read-side report to issue #2 (lists, never tables - tables 500 on this repo) and append the R36 read-side section to PR #3's body, reading both back with substring assertions. Then take R36's governance half: the operator allowlist has no expiry, no per-operation scoping, and no way to read the current holders.",
+  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R39 and R36's auditable half are CLOSED - do not redo them. 5. Delivery debt outstanding: issue #2 comment + PR #3 body for the R36 read side.",
   "ci_status": {
-    "product_slice_sha": "1eb1d3b",
-    "product_slice_result": "4/4 completed/success at 1eb1d3b",
-    "docs_head_sha": "ca9f789",
-    "docs_head_result": "CI was queued when this checkpoint was written; the run's final report records the observed result. The docs commits touch only docs/NEXUS, so they cannot affect the product verdict at 1eb1d3b.",
-    "polled_at": "2026-11-27T10:52Z",
-    "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs",
-    "standing_rule": "A commit whose workflow run is superseded in the concurrency group reads as queued/null forever; read the check runs of the head that actually ran, and confirm head_sha matches the sha you are claiming."
+    "product_slice_sha": "19aafa8",
+    "product_slice_result": "4/4 completed/success at 19aafa8",
+    "docs_head_sha": "written by the docs commit after this file",
+    "docs_head_result": "Docs commits touch only docs/NEXUS, so they cannot change the product verdict at 19aafa8.",
+    "polled_at": "2026-11-27T11:04Z",
+    "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/19aafa8/check-runs",
+    "standing_rule": "A commit superseded in the concurrency group reads queued/null forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed."
   },
   "verified_tasks": [
     "NEX-001",
@@ -320,8 +321,8 @@
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
-  "commit_scope": "6e7141e is the last commit carrying IMPLEMENTATION (tools/nexus_coord, tests/coordination, pyproject gate wiring, ADR-013). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "ca9f78971da3959a3fc04285753317bf5823b2cc",
+  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
+  "head_at_checkpoint": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
   "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
   "completed_task_notes": {
@@ -334,37 +335,31 @@
     "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary.",
     "NEX-039": "The first real DecisionProvider adapter, so decisioning stops being a capability the platform can exercise but never use. Product commit 8e670a6, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T19:32Z). Four refusals carry the security argument: a vendor cannot abstain (no 'abstained' outcome on the wire; the caller's threshold decides), the request carries only kind plus sorted candidates (no context hash, no excluded field names, no correlation id), sorting makes order-independence a property of this adapter rather than a hoped-for vendor trait, and a bad answer is an abstention rather than an exception. Construction fails closed on a non-https endpoint or an unbounded name. Two honest limits are recorded in the module docstring: the response size bound is enforced after httpx has read the body, and a rationale is truncated rather than treated as fatal."
   },
-  "branch_head_observed_at": "2026-11-27T09:45Z",
+  "branch_head_observed_at": "2026-11-27T11:01Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "1eb1d3b",
-    "759b752",
-    "60e7442",
-    "ca9f789"
+    "19aafa8"
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 1eb1d3be842db46138c7b3ebf882df1b00ea7908, equal to local git rev-parse HEAD",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 19aafa84f2d55619ebb6edbcb333dbe0de1e28b3, equal to local git rev-parse HEAD",
     "ci_verified": true,
-    "ci_verifying_sha": "1eb1d3b",
-    "ci_result": "4/4 completed/success at 1eb1d3b, polled 2026-11-27T10:39Z. Every check run reported head_sha 1eb1d3b.",
-    "tracking_issue_updated": true,
-    "pr_updated": "PR #3 body appended with an R36 section (77311 -> 82034 chars), verified by re-reading the body and asserting the heading appears exactly once, the prior NEX-037 and R39 headings still appear exactly once, and 6/6 key substrings are present. Still draft, still unmerged.",
-    "delivery_debt": "None. CI polled, issue #2 commented (7216150877), PR #3 body updated, all in this run.",
-    "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20",
-    "tracking_issue_comment_id": 7216150877,
-    "tracking_issue_comment_len": 4364,
-    "tracking_issue_comment_scope": "R36 auditable half: defect, the two orderings, why it is not an AuthorizationProvider decision, the residual governance gap, the fourteen tests (9 gate, 5 use-case), validation, CI at 1eb1d3b. Lists only, no tables. Read back with 7/7 substring assertions."
+    "ci_verifying_sha": "19aafa8",
+    "ci_result": "4/4 completed/success at 19aafa8, polled 2026-11-27T11:04Z. Every check run reported head_sha 19aafa8.",
+    "tracking_issue_updated": false,
+    "pr_updated": "NOT updated this run.",
+    "delivery_debt": "CI polled and green in-run. Issue #2 comment and PR #3 body section NOT written this run - recorded as debt for the next run rather than left implicit.",
+    "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
-  "run_summary": "NEX-2026-11-27-47. Closed the auditable half of R36. Started from the true remote head de7db43 (git ls-remote; local HEAD after checking out the feature branch). Extracted the duplicated operator allowlist check from GetWithholdingReport and SweepAuditIntegrity into one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared. Every granted read appends one entry stamped by the request's own clock; refusals record nothing, so the log is evidence of authorisation rather than of attempts. 9 files, +454/-43. Gates green on the committed tree: ruff format clean, ruff check clean, mypy 120 files, pytest 1079 passed / 4 skipped / 0 failed. Committed 1eb1d3b, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 1eb1d3b. Delivery debt cleared in-run: issue #2 comment 7216150877 and PR #3 body section, both read back and asserted.",
+  "run_summary": "NEX-2026-11-27-48. Closed the read side of R36. Started from the true remote head 7ac7230 (git ls-remote; the run began on main at d6f92d0 in a fresh clone and fast-forwarded the feature branch). OperatorAccessLog had a writer and no reader, so privileged reads of platform-wide views were recorded and unreachable. GetOperatorAccessReport reads the log gate-first, the read is itself recorded as a granted operator read, and the snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. 6 files, +563/-1. Gates green on the committed tree: ruff format, ruff check, mypy 121 files, 32 targeted tests. Committed 19aafa8, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 19aafa8. Delivery debt recorded, not hidden: issue #2 and PR #3 were not updated this run.",
   "head_observation": {
-    "sha": "ca9f78971da3959a3fc04285753317bf5823b2cc",
-    "remote_sha": "ca9f78971da3959a3fc04285753317bf5823b2cc",
+    "sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
+    "remote_sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
     "read_from": "git rev-parse HEAD and git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T10:52Z",
-    "note": "HEAD before the commit that writes this checkpoint. That commit is docs-only and changes no product file, so the product slice is still 1eb1d3b. The previous value here, 3534897, was a truncated sha from an older run and described nothing on this branch."
+    "at": "2026-11-27T11:01Z",
+    "note": "HEAD before the docs commit that writes this file. That commit is docs-only and changes no product file, so the product slice is still 19aafa8."
   },
-  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 2d58e22. The docs commit that writes this file comes after it and is not implementation. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit and any head written here is stale by construction.",
+  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 19aafa8. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {

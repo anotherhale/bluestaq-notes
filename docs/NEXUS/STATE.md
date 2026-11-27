@@ -9,13 +9,63 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. **NEX-040 VERIFIED (verification only, no code change):** no default or production configuration in this repository can reach a live vendor — no `DECISIONING_*` variable appears in any deploy artifact, the measured defaults are `enabled=False`/`endpoint=None`/`min_confidence=0.5`, a `None` endpoint selects the stub even with the flag on, the stub's `0.1` confidence sits below the `0.5` threshold so every answer abstains, and the one production route short-circuits to `DISABLED` before touching a provider. Pinned by 13 tests whose pin was proven non-vacuous by mutation. **R37 CLOSED (run `NEX-2026-11-27-44`):** the `HttpDecisionProvider` 64 KiB cap previously ran *after* httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming — an announced oversized `Content-Length` is refused before any body byte is read, an unannounced body is abandoned rather than drained, and a non-200 body is never read. Six new tests, three of which fail against the old implementation. **R39 CLOSED (run `NEX-2026-11-27-46`):** the coordination lease could be acquired and never released. Holder identity was `host-pid`, and every `nexus_coord` invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call, `release` and `renew` both failed with `lease held by another agent`, and every successful acquire blocked the next run for the full 45-minute TTL. R38's "stale lease held by a dead process" was the predictable output of that, not bad luck. The holder is now session-scoped (`host-s<sid>`), with `NEXUS_HOLDER` as an explicit override and `host-<pid>` only as a fallback where `os.getsid` is unavailable. Liveness stays reporting-only, so this cannot enable a false takeover. **R36 CLOSED (run `NEX-2026-11-27-47`), auditable half:** the operator allowlist behind the platform-wide views was duplicated in two use cases and recorded nothing, so a privileged read left no trace inside the system. It is now one `OperatorGate` shared by `GetWithholdingReport` and `SweepAuditIntegrity`, and every *granted* read appends one `OperatorAccessEntry`. Refusal happens before recording, so an entry is evidence of authorisation; the entry is stamped by the request's own clock (see R29). Rotation and per-operation scoping remain open with the scoped-capability slice. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `7d03814` (run `NEX-2026-11-27-46`; established with `git ls-remote` and equal to local `HEAD`, so no reconciliation was needed). Prior run `NEX-2026-11-27-45` started at `f92262a` — the run began on `main` at `d6f92d0` in a fresh clone, then fast-forwarded `feature/agentic-enterprise-platform` from `042e2b6` to `f92262a` after `git ls-remote` (not the local tracking ref) established the remote head. `f92262a` is docs-only: it posts NEX-039/040/041 to issue #2 and PR #3. |
-| Head commit (run end) | `1eb1d3b` (R36 product commit, pushed and `ls-remote`-verified) plus the docs commit that writes these files. See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (this run's R37 fix). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
+| Base commit (run start) | `7ac7230` (run `NEX-2026-11-27-48`; established with `git ls-remote` and equal to local `HEAD` after fast-forwarding the feature branch — the run began on `main` at `d6f92d0` in a fresh clone, and `origin/feature/agentic-enterprise-platform` was at `7ac7230`). Prior run `NEX-2026-11-27-46` started at `7d03814` (run `NEX-2026-11-27-46`; established with `git ls-remote` and equal to local `HEAD`, so no reconciliation was needed). Prior run `NEX-2026-11-27-45` started at `f92262a` — the run began on `main` at `d6f92d0` in a fresh clone, then fast-forwarded `feature/agentic-enterprise-platform` from `042e2b6` to `f92262a` after `git ls-remote` (not the local tracking ref) established the remote head. `f92262a` is docs-only: it posts NEX-039/040/041 to issue #2 and PR #3. |
+| Head commit (run end) | `19aafa8` (R36 read-side product commit, pushed and `ls-remote`-verified: `git ls-remote` returned `19aafa84f2d55619ebb6edbcb333dbe0de1e28b3`, equal to local `git rev-parse HEAD`), plus the docs commit that writes these files. Prior head `1eb1d3b` (R36 product commit, pushed and `ls-remote`-verified) plus the docs commit that writes these files. See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (this run's R37 fix). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
 | Last CI result | **`6da559d` (R37 docs commit — tree is a docs-only superset of the `2d58e22` implementation commit): 4/4 `completed/success`**, polled 2026-11-27T08:26Z. The `2d58e22` workflow run was superseded in the concurrency group so it has no check-runs of its own; `6da559d`'s Backend job ran ruff/mypy/pytest against the exact R37 code. Prior: `497ab77` 4/4 green; `f92262a` 4/4 green. See `ci_status` in `CHECKPOINT.json` for per-slice authority. |
 | Tracking issue | #2 (open) — **R39 report posted this run.** Prior: **current, no delivery debt.** NEX-037 by comment 7171861451, NEX-038 by 7171956166, NEX-039/040/041 by comment **7213047814**, and **R37 by comment `7213326000`** (3495 chars, read back byte-identical, 8/8 substring assertions). |
 | Draft PR | #3 (draft, unmerged — human review required). R39 section appended this run. Prior: Body PATCHed 2026-11-27T08:33Z with the R37 section (69961 chars, `draft=true`, read back byte-identical). **No delivery debt outstanding.** |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## R36 CLOSED, read side (run `NEX-2026-11-27-48`) — a log nobody reads is not an audit trail
+
+**The gap.** The previous run gave the operator allowlist a record: every granted read of a
+platform-wide operational view appends an `OperatorAccessEntry` naming caller, operation and
+moment. Nothing read that record back. `OperatorAccessLog.record()` had a caller and
+`recent()` had none outside its own tests, so "who read the platform-wide totals" was still
+unanswerable from inside the system — the write half of an audit trail with no read half. An
+append-only file that no code path can open is storage, not accountability.
+
+**The read side.** `GetOperatorAccessReport` (`application/use_cases/operator_access_report.py`)
+returns a frozen `OperatorAccessSnapshot`. Exposed at `GET /api/v1/ops/access-report`, gated
+exactly like every other ops endpoint, with `OperatorAccessEntryResponse` /
+`OperatorAccessReportResponse` carrying the wire shape.
+
+**Three decisions, each a correctness argument rather than a style choice.**
+
+- **Gate first, then read.** The refusal path must not touch the log. If a non-operator could
+  cause a read, the endpoint would leak the log's *size* through timing and would let anyone
+  append load to a security control. Refusal happens in `OperatorGate.authorize` before
+  `recent()` is called at all.
+- **Inspecting the trail is itself a granted operator read, and is recorded.** The gate records
+  before returning, so the read that follows is already attributable. That is deliberate: an
+  audit-view access is exactly the kind of privileged read the log exists to capture. The
+  consequence to state plainly is that reading the report grows it — the report a caller sees
+  includes their own current read as the newest entry. Tests pin that, so it reads as intent
+  rather than an off-by-one.
+- **The snapshot carries `log_name` and `capacity`.** The only implementation is a bounded,
+  process-local ring. A bare list of entries would let an operator read "nothing since 09:14"
+  as a statement about the deployment when it is a statement about one process's ring buffer.
+  Naming the log and its capacity makes the window's scope visible in the payload, and
+  `truncated` reports that the window *filled* — not that entries were proven withheld, which
+  the port cannot express.
+
+**The limit is clamped, not rejected silently.** A caller-supplied `limit` is bounded into
+`[1, MAX_LIMIT]`, so a request cannot ask for an unbounded response or for zero. The HTTP
+layer returns 422 for an out-of-range limit rather than quietly substituting a default,
+because an operator asking for 10,000 entries should learn the ceiling rather than believe
+they received 10,000.
+
+**Why the tests are evidence.** Nineteen new tests. The application level pins newest-first
+ordering, the clamp at both ends, that the granted read is recorded, that a refused caller
+leaves no entry, and that an empty allowlist admits nobody. The API level pins 404 (not 403)
+for a non-operator, so probing cannot confirm the endpoint exists, and 422 for limits outside
+the accepted range.
+
+**Still open, unchanged.** The allowlist remains a static environment variable with no expiry
+and no per-operation scoping. This slice makes the use of a grant *readable*; rotation and
+scoping remain with the scoped-capability-grant slice. Reading is a prerequisite for rotating
+anything responsibly, which is why it came first.
 
 ## R36 CLOSED (run `NEX-2026-11-27-47`) — one operator gate, and a record of who used it
 

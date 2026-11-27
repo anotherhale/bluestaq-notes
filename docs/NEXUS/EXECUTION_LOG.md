@@ -5622,3 +5622,62 @@ like harmless bookkeeping.
 Poll CI at the final head of this run. If green, R36's residual governance half (allowlist
 expiry, per-operation scoping, reading current holders) is the next dependency-ready slice, and
 it should start from `git ls-remote`, not from this file.
+
+---
+
+## Run `NEX-2026-11-27-48` — R36's read side: a log nobody reads is not an audit trail
+
+**Run ID** `NEX-2026-11-27-48` · **Branch** `feature/agentic-enterprise-platform` ·
+**Starting commit** `7ac7230` (from `git ls-remote`, not the local tracking ref) ·
+**Ending commit** `19aafa8` (product) plus the docs commit that writes this entry.
+
+### What was actually missing
+
+The previous run closed R36's auditable half: the operator allowlist became one `OperatorGate`
+and every *granted* read appended an `OperatorAccessEntry`. But `OperatorAccessLog.record()`
+had a caller and `recent()` had none outside its own tests. The system could write a record of
+privileged reads and could not read it back, so the original question — who read the
+platform-wide totals — was still unanswerable from inside the system. That is the state this
+run found, and it is worth naming precisely: an audit write path with no read path is not
+half-finished accountability, it is storage.
+
+### The slice
+
+`GetOperatorAccessReport` reads the log after the gate has authorised and recorded the caller.
+`GET /api/v1/ops/access-report` exposes it; `OperatorAccessSnapshot` carries `log_name` and
+`capacity` so a bounded process-local ring cannot be mistaken for a durable deployment-wide
+history. `truncated` is documented as "the window filled", not "entries were withheld", because
+the port cannot distinguish those and an audit view should not imply completeness it cannot
+prove.
+
+Six files, +563/−1. Nineteen new tests at the application and HTTP boundaries.
+
+### A process failure, and the recovery that worked
+
+The commit message was written inline and the shell corrupted it — the same multi-line input
+defect this programme has recorded three times. The corruption was severe enough to wedge the
+command (no exit, no new output). Interrupting was not possible because the tool had already
+lost the process handle.
+
+The important part is what did *not* happen: `git log` showed HEAD unchanged at `7ac7230` and
+`git status` showed the six files still staged. A corrupted command failed to commit; it did not
+commit garbage. The recovery was the documented one — write the message to a file with the file
+editor, assert it is intact (`wc -l`, `grep -c` on a distinctive line), then `git commit -F`.
+That produced `19aafa8` with a 28-line body, verified by reading `%B` back.
+
+The lesson is not new but it earned its place again: this terminal cannot be trusted with
+multi-KB inline bodies, and the safe pattern is file-then-assert-then-use.
+
+### Evidence
+
+Gates on the committed tree: `ruff format` (1 file reformatted, 116 unchanged), `ruff check`
+"All checks passed!", `mypy` "no issues found in 121 source files", targeted tests 32 passed
+(19 new plus the architecture suite). CI on `19aafa8`: Frontend 4/4 `completed/success`;
+Backend in progress at the time this entry was written — the run's final report carries the
+observed result, and no claim here depends on an unfinished check.
+
+### Next action
+
+Backend CI result at `19aafa8`, then R36's remaining governance half: allowlist expiry,
+per-operation scoping, and a way to read the current holders. It starts from `git ls-remote`,
+never from these files.
