@@ -1331,6 +1331,12 @@ class PolicyDraftRequest(StrictModel):
     rationale: str
 
 
+class PolicyApproveRequest(StrictModel):
+    """Approve a specific stored draft. The approver is the caller, never a field."""
+
+    version: int = Field(ge=1)
+
+
 class PolicyPublishRequest(StrictModel):
     """Publish a specific stored draft. The publisher is the caller, never a field."""
 
@@ -1367,6 +1373,8 @@ class PolicyVersionResponse(ResponseModel):
     created_at: datetime | None
     published_at: datetime | None
     published_by: str | None
+    approved_at: datetime | None
+    approved_by: str | None
     drafted_by: str | None
     ref: str
 
@@ -1389,6 +1397,8 @@ class PolicyVersionResponse(ResponseModel):
             created_at=version.created_at,
             published_at=version.published_at,
             published_by=version.published_by,
+            approved_at=version.approved_at,
+            approved_by=version.approved_by,
             drafted_by=version.drafted_by,
             ref=version.ref,
         )

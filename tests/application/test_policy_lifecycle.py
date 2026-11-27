@@ -25,6 +25,8 @@ from notes_service.application.actor_label import actor_label
 from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.policy_lifecycle import (
+    ApproveDraft,
+    ApprovePolicyVersion,
     DraftPolicy,
     DraftPolicyVersion,
     GetPolicyHistory,
@@ -42,6 +44,7 @@ from notes_service.domain.governance.policy import (
     PolicyObligation,
     PolicyRule,
     PolicyStatus,
+    PolicyVersion,
     evaluate,
     new_policy_version,
 )
@@ -126,6 +129,27 @@ def gate() -> OperatorGate:
     )
 
 
+def _approve_then_publish(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    policy_id: str,
+    version: int,
+) -> PolicyVersion:
+    """Drive the NEX-065 two-step lifecycle: a second principal approves, then publishes.
+
+    Kept as one helper because every lifecycle test needs the same pair, and a
+    test that published without approving would now be asserting on a state the
+    domain refuses to produce.
+    """
+    ApproveDraft(store=store, clock=clock, operator_gate=gate).execute(
+        OPERATOR, ApprovePolicyVersion(policy_id=policy_id, version=version)
+    )
+    return PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
+        OPERATOR, PublishPolicyVersion(policy_id=policy_id, version=version)
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Store: version numbers and history
 # --------------------------------------------------------------------------- #
@@ -143,7 +167,9 @@ def test_next_version_number_counts_retired_versions(
         policy_id="p", version=1, rules=(_allow_low_risk(),), rationale="x", drafted_by="dana"
     )
     store.add_draft(draft)
-    store.publish(draft.publish(now=clock.now(), published_by="alice"))
+    approved = draft.approve(now=clock.now(), approved_by="reviewer-1")
+    store.approve(approved)
+    store.publish(approved.publish(now=clock.now(), published_by="alice"))
     store.retire(store.get("p", 1).retire())  # type: ignore[union-attr]
     assert store.next_version_number("p") == 2
 
@@ -165,7 +191,9 @@ def test_only_a_draft_can_be_added(
     draft = new_policy_version(
         policy_id="p", version=1, rules=(_allow_low_risk(),), rationale="x", drafted_by="dana"
     )
-    published = draft.publish(now=clock.now(), published_by="alice")
+    published = draft.approve(now=clock.now(), approved_by="reviewer-1").publish(
+        now=clock.now(), published_by="alice"
+    )
     with pytest.raises(InvariantViolation, match="only a draft can be added"):
         store.add_draft(published)
 
@@ -320,9 +348,7 @@ def test_publish_puts_the_version_in_force(
     draft = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="x")
     )
-    published = PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR, PublishPolicyVersion(policy_id="p", version=draft.version)
-    )
+    published = _approve_then_publish(store, clock, gate, "p", draft.version)
     assert published.status is PolicyStatus.PUBLISHED
     assert published.published_at == NOW
     assert store.published_for("p") == published
@@ -335,15 +361,14 @@ def test_publishing_a_new_version_retires_the_previous_one(
 ) -> None:
     """Exactly one version per policy is ever in force."""
     draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
-    publish = PublishDraft(store=store, clock=clock, operator_gate=gate)
     v1 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="v1")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v1.version))
+    _approve_then_publish(store, clock, gate, "p", v1.version)
     v2 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="v2")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v2.version))
+    _approve_then_publish(store, clock, gate, "p", v2.version)
 
     assert store.get("p", 1).status is PolicyStatus.RETIRED  # type: ignore[union-attr]
     assert store.get("p", 2).status is PolicyStatus.PUBLISHED  # type: ignore[union-attr]
@@ -356,9 +381,7 @@ def test_publishing_an_unknown_version_is_not_found(
     gate: OperatorGate,
 ) -> None:
     with pytest.raises(ResourceNotFound):
-        PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-            OPERATOR, PublishPolicyVersion(policy_id="p", version=99)
-        )
+        _approve_then_publish(store, clock, gate, "p", 99)
 
 
 def test_publishing_an_already_published_version_is_a_conflict(
@@ -369,10 +392,11 @@ def test_publishing_an_already_published_version_is_a_conflict(
     draft = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="x")
     )
-    publish = PublishDraft(store=store, clock=clock, operator_gate=gate)
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=draft.version))
-    with pytest.raises(Conflict, match="cannot be published"):
-        publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=draft.version))
+    _approve_then_publish(store, clock, gate, "p", draft.version)
+    # The second attempt fails at the approval step, because a published version
+    # is no longer a draft: the lifecycle cannot be re-entered at the middle.
+    with pytest.raises(Conflict, match="only a draft can be approved"):
+        _approve_then_publish(store, clock, gate, "p", draft.version)
 
 
 def test_publishing_makes_the_policy_evaluable(
@@ -384,9 +408,7 @@ def test_publishing_makes_the_policy_evaluable(
     draft = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="x")
     )
-    PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR, PublishPolicyVersion(policy_id="p", version=draft.version)
-    )
+    _approve_then_publish(store, clock, gate, "p", draft.version)
     in_force = store.all_published()
     assert evaluate(in_force, {"risk": "low"}).allowed
     assert not evaluate(in_force, {"risk": "high"}).allowed
@@ -403,15 +425,14 @@ def test_rollback_creates_a_new_version_with_the_old_rules(
     gate: OperatorGate,
 ) -> None:
     draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
-    publish = PublishDraft(store=store, clock=clock, operator_gate=gate)
     v1 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="v1")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v1.version))
+    _approve_then_publish(store, clock, gate, "p", v1.version)
     v2 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="v2")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v2.version))
+    _approve_then_publish(store, clock, gate, "p", v2.version)
 
     rolled_back = RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
         OPERATOR,
@@ -431,15 +452,14 @@ def test_rollback_does_not_delete_history(
 ) -> None:
     """The original versions stay readable exactly as they were."""
     draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
-    publish = PublishDraft(store=store, clock=clock, operator_gate=gate)
     v1 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="v1")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v1.version))
+    _approve_then_publish(store, clock, gate, "p", v1.version)
     v2 = draft_policy.execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="v2")
     )
-    publish.execute(OPERATOR, PublishPolicyVersion(policy_id="p", version=v2.version))
+    _approve_then_publish(store, clock, gate, "p", v2.version)
 
     RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
         OPERATOR,
@@ -495,9 +515,7 @@ def test_history_reports_the_version_in_force(
     draft = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
         AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="x")
     )
-    PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR, PublishPolicyVersion(policy_id="p", version=draft.version)
-    )
+    _approve_then_publish(store, clock, gate, "p", draft.version)
     history = GetPolicyHistory(store=store, operator_gate=gate).execute(OPERATOR, "p")
     assert history.published is not None
     assert history.published.version == 1
@@ -518,16 +536,12 @@ def test_all_published_is_sorted_by_policy_id(
 ) -> None:
     """Deterministic ordering so a decision's consulted-version list is stable."""
     draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
-    publish = PublishDraft(store=store, clock=clock, operator_gate=gate)
     for policy_id in ("zeta", "alpha", "mu"):
         draft = draft_policy.execute(
             AUTHOR,
             DraftPolicyVersion(policy_id=policy_id, rules=(_allow_low_risk(),), rationale="x"),
         )
-        publish.execute(
-            OPERATOR,
-            PublishPolicyVersion(policy_id=policy_id, version=draft.version),
-        )
+        _approve_then_publish(store, clock, gate, policy_id, draft.version)
     assert [v.policy_id for v in store.all_published()] == ["alpha", "mu", "zeta"]
 
 

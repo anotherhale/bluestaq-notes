@@ -22,6 +22,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from notes_service.application.use_cases.policy_lifecycle import (
+    ApprovePolicyVersion,
     DraftPolicyVersion,
     PublishPolicyVersion,
     RollbackPolicyVersion,
@@ -31,6 +32,7 @@ from notes_service.domain.governance.policy import PolicyEffect, PolicyObligatio
 from notes_service.infrastructure.governance.policy_codec import decode_condition
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
+    PolicyApproveRequest,
     PolicyDraftRequest,
     PolicyHistoryResponse,
     PolicyPublishRequest,
@@ -96,6 +98,32 @@ def draft_policy_version(
         DraftPolicyVersion(
             policy_id=policy_id, rules=_to_rules(body.rules), rationale=body.rationale
         ),
+    )
+    return PolicyVersionResponse.from_domain(version)
+
+
+@router.post(
+    "/{policy_id}/approve",
+    response_model=PolicyVersionResponse,
+    summary="Approve a draft policy version, making it publishable (operators only)",
+    dependencies=[RateLimitDep],
+)
+def approve_policy_version(
+    policy_id: str,
+    body: PolicyApproveRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> PolicyVersionResponse:
+    """Record an approval against a stored draft.
+
+    Approval is a separate verb with a separate scope on purpose (NEX-065): a
+    publish that also approved would let one operator satisfy the whole
+    two-person control alone. Only a draft can be approved; anything else is a
+    ``409`` because it conflicts with the version's state.
+    """
+    version = container.approve_draft().execute(
+        principal,
+        ApprovePolicyVersion(policy_id=policy_id, version=body.version),
     )
     return PolicyVersionResponse.from_domain(version)
 

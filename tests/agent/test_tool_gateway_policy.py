@@ -159,7 +159,9 @@ def _publish(h: Harness, rules: tuple[PolicyRule, ...]) -> None:
         drafted_by="drafter",
     )
     h.policies.add_draft(version)
-    h.policies.publish(version.publish(now=SystemClock().now(), published_by="operator"))
+    approved = version.approve(now=SystemClock().now(), approved_by="reviewer-1")
+    h.policies.approve(approved)
+    h.policies.publish(approved.publish(now=SystemClock().now(), published_by="operator"))
 
 
 def _deny_tool(tool_name: str) -> PolicyRule:

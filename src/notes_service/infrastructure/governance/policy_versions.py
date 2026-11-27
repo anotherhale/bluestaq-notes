@@ -50,6 +50,23 @@ class InMemoryPolicyVersionRepository:
             )
         self._versions[key] = version
 
+    def approve(self, version: PolicyVersion) -> None:
+        if not isinstance(version, PolicyVersion):
+            raise ValidationError("approve requires a PolicyVersion")
+        if version.status is not PolicyStatus.APPROVED:
+            raise InvariantViolation("approve requires an approved version value")
+        key = (version.policy_id, version.version)
+        stored = self._versions.get(key)
+        if stored is None:
+            raise InvariantViolation(f"cannot approve {version.ref}: it was never added")
+        if stored.status is not PolicyStatus.DRAFT:
+            # Re-approving would overwrite who actually made the decision, which
+            # is the record this transition exists to keep.
+            raise InvariantViolation(
+                f"cannot approve {version.ref}: it is {stored.status.value}, not a draft"
+            )
+        self._versions[key] = version
+
     def publish(self, version: PolicyVersion) -> None:
         if not isinstance(version, PolicyVersion):
             raise ValidationError("publish requires a PolicyVersion")
@@ -59,9 +76,13 @@ class InMemoryPolicyVersionRepository:
         stored = self._versions.get(key)
         if stored is None:
             raise InvariantViolation(f"cannot publish {version.ref}: it was never added")
-        if stored.status is not PolicyStatus.DRAFT:
+        if stored.status is not PolicyStatus.APPROVED:
+            # A draft that reaches publish skipped the approval record. Refusing
+            # here, and not only in the domain, means a caller cannot bypass the
+            # control by writing through the store.
             raise InvariantViolation(
-                f"cannot publish {version.ref}: it is already {stored.status.value}"
+                f"cannot publish {version.ref}: it is {stored.status.value}, and only an "
+                "approved version can be published"
             )
         self._versions[key] = version
 

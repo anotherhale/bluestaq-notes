@@ -59,9 +59,11 @@ def operator_client(app: FastAPI) -> TestClient:
         app,
         ops_operator_user_ids=[
             operator_grant(ALICE, "policy-draft"),
+            operator_grant(ALICE, "policy-approve"),
             operator_grant(ALICE, "policy-publish"),
             operator_grant(ALICE, "policy-rollback"),
             operator_grant(ALICE, "policy-history"),
+            operator_grant(BOB, "policy-approve"),
             operator_grant(BOB, "policy-publish"),
             operator_grant(BOB, "policy-rollback"),
             operator_grant(BOB, "policy-history"),
@@ -82,6 +84,14 @@ def test_operator_drafts_then_publishes(operator_client: TestClient) -> None:
     assert body["published_by"] is None
     assert body["rules"][0]["rule_id"] == "allow-low-risk"
     assert body["rules"][0]["effect"] == "allow"
+
+    approved = operator_client.post(
+        f"{BASE}/risk-gate/approve", json={"version": 1}, headers=auth_headers(BOB)
+    )
+    assert approved.status_code == 200, approved.text
+    # Approval is a recorded transition, not a side effect of publishing.
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["approved_by"] == f"user-{BOB}"
 
     published = operator_client.post(
         f"{BASE}/risk-gate/publish",
@@ -109,8 +119,19 @@ def test_publisher_cannot_be_chosen_by_the_request(operator_client: TestClient) 
 def test_a_drafting_operator_cannot_publish_their_own_version(
     operator_client: TestClient,
 ) -> None:
-    """Separation of duties is enforced at the boundary, as a 409 (NEX-050)."""
+    """Separation of duties is enforced at the boundary, as a 409 (NEX-050).
+
+    Also pinned at the approval step (NEX-065): the author cannot approve their own
+    draft, so they can never supply the approval half of the control themselves.
+    """
     operator_client.post(f"{BASE}/p5/versions", json=DRAFT, headers=auth_headers(ALICE))
+    self_approval = operator_client.post(
+        f"{BASE}/p5/approve", json={"version": 1}, headers=auth_headers(ALICE)
+    )
+    assert self_approval.status_code == 409, self_approval.text
+    assert "separation of duties" in self_approval.json()["error"]["message"]
+
+    operator_client.post(f"{BASE}/p5/approve", json={"version": 1}, headers=auth_headers(BOB))
     response = operator_client.post(
         f"{BASE}/p5/publish", json={"version": 1}, headers=auth_headers(ALICE)
     )
@@ -118,8 +139,19 @@ def test_a_drafting_operator_cannot_publish_their_own_version(
     assert "separation of duties" in response.json()["error"]["message"]
 
 
+def test_a_draft_cannot_be_published_without_approval(operator_client: TestClient) -> None:
+    """The gap NEX-065 closes: publish is not allowed to imply approval."""
+    operator_client.post(f"{BASE}/p9/versions", json=DRAFT, headers=auth_headers(ALICE))
+    response = operator_client.post(
+        f"{BASE}/p9/publish", json={"version": 1}, headers=auth_headers(BOB)
+    )
+    assert response.status_code == 409, response.text
+    assert "must be approved" in response.json()["error"]["message"]
+
+
 def test_an_operator_who_is_not_the_author_can_publish(operator_client: TestClient) -> None:
     operator_client.post(f"{BASE}/p6/versions", json=DRAFT, headers=auth_headers(ALICE))
+    operator_client.post(f"{BASE}/p6/approve", json={"version": 1}, headers=auth_headers(BOB))
     response = operator_client.post(
         f"{BASE}/p6/publish", json={"version": 1}, headers=auth_headers(BOB)
     )
@@ -129,6 +161,7 @@ def test_an_operator_who_is_not_the_author_can_publish(operator_client: TestClie
 
 def test_history_reports_the_version_in_force(operator_client: TestClient) -> None:
     operator_client.post(f"{BASE}/p3/versions", json=DRAFT, headers=auth_headers(ALICE))
+    operator_client.post(f"{BASE}/p3/approve", json={"version": 1}, headers=auth_headers(BOB))
     operator_client.post(f"{BASE}/p3/publish", json={"version": 1}, headers=auth_headers(BOB))
 
     response = operator_client.get(f"{BASE}/p3/versions", headers=auth_headers(ALICE))
@@ -141,6 +174,7 @@ def test_history_reports_the_version_in_force(operator_client: TestClient) -> No
 
 def test_rollback_keeps_the_history(operator_client: TestClient) -> None:
     operator_client.post(f"{BASE}/p4/versions", json=DRAFT, headers=auth_headers(ALICE))
+    operator_client.post(f"{BASE}/p4/approve", json={"version": 1}, headers=auth_headers(BOB))
     operator_client.post(f"{BASE}/p4/publish", json={"version": 1}, headers=auth_headers(BOB))
 
     rolled_back = operator_client.post(

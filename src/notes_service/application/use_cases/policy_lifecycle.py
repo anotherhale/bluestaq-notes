@@ -14,18 +14,22 @@ enforce on its own, because it needs a store and a clock:
   version* — there is deliberately no "un-publish" path, because un-publishing
   would delete history, and history is what an audit of a past decision needs.
 
-Approve is not here yet, and that is honest
--------------------------------------------
+Approve is its own verb (NEX-065)
+---------------------------------
 
-The full lifecycle includes an approval step. This slice ships draft → publish →
-retire because those are the transitions the *store* must support. The approval
-*decision* — a separate reviewer signing off before publication — is still not
-built. What is built, from NEX-050, is the control that approval depends on:
-**separation of duties**. The principal that authored a version cannot be the
-principal that publishes it, enforced in the domain and again here. That is a
-real, tested restriction on who can put a policy in force, not a placeholder gate
-that always passes. A distinct approval *record* on top of it (an approve verb
-with its own scope, obligations and audit entry) remains the follow-on slice.
+The full lifecycle is ``Draft → Validate → Impact Preview → Approve → Publish →
+Monitor``. NEX-050 built the control approval depends on — **separation of duties**,
+enforced in the domain and again here — but a control is not a record. This module
+now also ships the missing ``Approve`` verb: :class:`ApproveDraft` transitions a
+draft to ``APPROVED`` with its own operator scope, and :class:`PublishDraft` refuses
+anything that has not been approved. Putting a policy in force is therefore two
+recorded decisions by two different principals rather than one.
+
+The approval record is deliberately part of the *version*, not a separate table,
+because it describes that version's own history: who approved v3, and when, must
+survive v3 being retired by v4. A rollback re-drafts already-reviewed rules, so it
+inherits the source version's approval record verbatim instead of manufacturing a
+new one.
 
 Why a use case and not a repository method
 ------------------------------------------
@@ -51,6 +55,7 @@ from notes_service.domain.governance.policy import (
     PolicyRule,
     PolicyStatus,
     PolicyVersion,
+    approval_of_duties,
     deployment_obligation_gaps,
     new_policy_version,
     separation_of_duties,
@@ -61,6 +66,15 @@ DRAFT_OPERATION = "policy-draft"
 """Operator scope for drafting a policy version. Names the operation, not a role."""
 PUBLISH_OPERATION = "policy-publish"
 """Operator scope for publishing a policy version, which puts it in force."""
+APPROVE_OPERATION = "policy-approve"
+"""Operator scope for approving a policy version (NEX-065).
+
+Separate from ``policy-publish`` on purpose. If approval and publication shared a
+scope, an operator granted that scope could satisfy the whole two-person control
+alone — which is the control, not a permission to tidy up. A deployment that wants
+a genuine review must grant ``policy-approve`` to a different operator than
+``policy-publish``.
+"""
 ROLLBACK_OPERATION = "policy-rollback"
 """Operator scope for rolling a policy back to an earlier release."""
 HISTORY_OPERATION = "policy-history"
@@ -90,6 +104,20 @@ class PublishPolicyVersion:
     caller-chosen publisher would let anyone attribute a policy in force to
     someone else, and separation of duties is only meaningful if both identities
     are authoritative.
+    """
+
+    policy_id: str
+    version: int
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovePolicyVersion:
+    """A request to approve a specific draft, making it publishable (NEX-065).
+
+    It carries no approver. ``approved_by`` is stamped from the authenticated
+    principal inside :class:`ApproveDraft`, for the same reason the publisher is:
+    an approval recorded against a caller-supplied name would not be evidence that
+    anyone reviewed the policy.
     """
 
     policy_id: str
@@ -210,6 +238,59 @@ def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:
         raise Conflict(str(exc)) from exc
 
 
+def _require_distinct_approver(draft: PolicyVersion, *, approver: str) -> None:
+    """The same two-person rule for the approval step (NEX-065).
+
+    Kept separate from :func:`_require_two_principals` rather than folded into it
+    because the two check different pairs. An author who approves their own draft
+    and has it published by a third operator satisfies the publish-time check
+    perfectly while still never having had their rules reviewed, so the approval
+    step needs its own refusal.
+    """
+    try:
+        approval_of_duties(author=draft.drafted_by, approver=approver, ref=draft.ref)
+    except InvariantViolation as exc:
+        raise Conflict(str(exc)) from exc
+
+
+class ApproveDraft:
+    """Approve a stored draft so that a second principal may publish it (NEX-065).
+
+    Approval is deliberately its own use case with its own operator scope, not a
+    flag on the publish request. A publish that carried "and also approve it" would
+    let one operator with one scope complete both halves of the two-person control
+    in a single call, which is the control being bypassed rather than exercised.
+    """
+
+    def __init__(
+        self, *, store: PolicyVersionRepository, clock: Clock, operator_gate: OperatorGate
+    ) -> None:
+        self._store = store
+        self._clock = clock
+        self._operator_gate = operator_gate
+
+    def execute(self, principal: Principal, request: ApprovePolicyVersion) -> PolicyVersion:
+        self._operator_gate.authorize(principal, operation=APPROVE_OPERATION)
+        draft = self._store.get(request.policy_id, request.version)
+        if draft is None:
+            raise ResourceNotFound(
+                f"policy version {request.policy_id}@v{request.version} not found"
+            )
+        if draft.status is not PolicyStatus.DRAFT:
+            # An approved version already names its approver; re-approving would
+            # overwrite that record. A published or retired version is past the
+            # point where approval means anything.
+            raise Conflict(
+                f"policy version {draft.ref} is {draft.status.value}, and only a draft "
+                "can be approved"
+            )
+        approver = actor_label(principal)
+        _require_distinct_approver(draft, approver=approver)
+        approved = draft.approve(now=self._clock.now(), approved_by=approver)
+        self._store.approve(approved)
+        return approved
+
+
 class PublishDraft:
     """Publish a stored draft, retiring whatever was in force before it."""
 
@@ -227,7 +308,15 @@ class PublishDraft:
             raise ResourceNotFound(
                 f"policy version {request.policy_id}@v{request.version} not found"
             )
-        if draft.status is not PolicyStatus.DRAFT:
+        if draft.status is PolicyStatus.DRAFT:
+            # The gap NEX-065 closes. A draft that reaches publish skipped the
+            # approval record, so the honest answer is "approve it first" — a 409
+            # the caller can act on, not a 422 invariant error.
+            raise Conflict(
+                f"policy version {draft.ref} is a draft, and must be approved before it "
+                "can be published"
+            )
+        if draft.status is not PolicyStatus.APPROVED:
             # Publishing a published or retired version would rewrite history.
             # It is a conflict with the version's state, not a missing resource.
             raise Conflict(
@@ -291,7 +380,18 @@ class RollbackPolicy:
             created_at=self._clock.now(),
         )
         self._store.add_draft(draft)
-        published = draft.publish(now=self._clock.now(), published_by=publisher)
+        # The restored rules already carry an approval: they were reviewed when the
+        # source version was approved, and a rollback changes which rules are in
+        # force, not what they say. So the new version inherits that approval record
+        # verbatim — same approver, same timestamp — instead of demanding a fresh
+        # review or, worse, stamping a new approval nobody gave. ``approve`` still
+        # re-checks separation of duties, so a source version that somehow recorded
+        # a self-approval cannot be laundered through a rollback.
+        assert source.approved_at is not None  # a released version always records one
+        assert source.approved_by is not None
+        approved = draft.approve(now=source.approved_at, approved_by=source.approved_by)
+        self._store.approve(approved)
+        published = approved.publish(now=self._clock.now(), published_by=publisher)
         current = self._store.published_for(request.policy_id)
         if current is not None:
             self._store.retire(current.retire())
@@ -330,6 +430,8 @@ class GetPolicyHistory:
 
 
 __all__ = [
+    "ApproveDraft",
+    "ApprovePolicyVersion",
     "DraftPolicy",
     "DraftPolicyVersion",
     "GetPolicyHistory",

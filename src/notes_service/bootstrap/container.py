@@ -125,6 +125,7 @@ from notes_service.application.use_cases.permissions import (
     ShareNote,
 )
 from notes_service.application.use_cases.policy_lifecycle import (
+    ApproveDraft,
     DraftPolicy,
     GetPolicyHistory,
     PublishDraft,
@@ -303,6 +304,7 @@ class Container:
     # The policy lifecycle (NEX-047/NEX-048). Durable: a published version is
     # what a past decision was made against, so it must survive a restart.
     draft_policy: Callable[[], DraftPolicy]
+    approve_draft: Callable[[], ApproveDraft]
     publish_draft: Callable[[], PublishDraft]
     rollback_policy: Callable[[], RollbackPolicy]
     get_policy_history: Callable[[], GetPolicyHistory]
@@ -556,6 +558,9 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             rate_limiter_configured=rate_limiter is not None,
         )
 
+    def make_approve_draft() -> ApproveDraft:
+        return ApproveDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)
+
     def make_publish_draft() -> PublishDraft:
         return PublishDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)
 
@@ -728,6 +733,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
         draft_policy=make_draft_policy,
+        approve_draft=make_approve_draft,
         publish_draft=make_publish_draft,
         rollback_policy=make_rollback_policy,
         get_policy_history=make_get_policy_history,

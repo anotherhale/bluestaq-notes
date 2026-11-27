@@ -800,29 +800,43 @@ class PolicyVersionRow(Base):
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     published_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     drafted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("policy_id", "version_number", name="uq_policy_versions_policy_version"),
         CheckConstraint(
-            "status IN ('draft','published','retired')", name="policy_versions_status_valid"
+            "status IN ('draft','approved','published','retired')",
+            name="policy_versions_status_valid",
         ),
         CheckConstraint("version_number >= 1", name="policy_versions_version_positive"),
         CheckConstraint("length(policy_id) > 0", name="policy_versions_policy_id_not_empty"),
-        # A published row must carry its publication data, and a draft must not.
-        # The domain enforces this on construction; the schema enforces it against
-        # a row that was written by something other than the domain.
+        # Each lifecycle state carries exactly the record it is entitled to: a draft
+        # has none, an approved version has an approval and no publication, and a
+        # version in force has both. The domain enforces this on construction; the
+        # schema enforces it against a row written by something other than the
+        # domain, so an approval cannot be invented after the fact.
         CheckConstraint(
-            "(status = 'draft' AND published_at IS NULL AND published_by IS NULL)"
+            "(status = 'draft'"
+            " AND published_at IS NULL AND published_by IS NULL"
+            " AND approved_at IS NULL AND approved_by IS NULL)"
+            " OR (status = 'approved'"
+            " AND approved_at IS NOT NULL AND approved_by IS NOT NULL"
+            " AND published_at IS NULL AND published_by IS NULL)"
             " OR (status IN ('published','retired')"
-            " AND published_at IS NOT NULL AND published_by IS NOT NULL)",
+            " AND published_at IS NOT NULL AND published_by IS NOT NULL"
+            " AND approved_at IS NOT NULL AND approved_by IS NOT NULL)",
             name="policy_versions_publication_data_consistent",
         ),
-        # Separation of duties (NEX-050): anything in force names an author, and
-        # that author is not the publisher. Checked in the schema so a row written
-        # by a future caller that skips the use cases cannot put a self-published
-        # policy in force. The domain refuses the same pair on construction.
+        # Separation of duties (NEX-050, extended by NEX-065): anything past draft
+        # names an author, and that author is neither the principal that approved it
+        # nor the one that published it. An author approving their own rules is not a
+        # review, so the approval step is checked as well as the publication step.
         CheckConstraint(
-            "status = 'draft' OR (drafted_by IS NOT NULL AND drafted_by <> published_by)",
+            "status = 'draft'"
+            " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
+            " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
+            " AND drafted_by <> published_by AND drafted_by <> approved_by)",
             name="policy_versions_separation_of_duties",
         ),
         Index("ix_policy_versions_policy_status", "policy_id", "status"),

@@ -40,6 +40,7 @@ from notes_service.domain.governance.policy import (
     PolicyEffect,
     PolicyRule,
     PolicyStatus,
+    PolicyVersion,
     new_policy_version,
 )
 from notes_service.infrastructure.governance.policy_versions_db import (
@@ -88,6 +89,20 @@ def _draft(policy_id: str = "content.access", version: int = 1):
     )
 
 
+def _publish(store: SqlAlchemyPolicyVersionRepository, draft: PolicyVersion) -> PolicyVersion:
+    """Approve then publish through the store.
+
+    NEX-065 made approval a recorded transition, so publishing a draft straight
+    through the adapter is now refused by design. Tests that only care about the
+    published end state go through both steps.
+    """
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    published = approved.publish(now=NOW, published_by="operator-1")
+    store.publish(published)
+    return published
+
+
 def test_reports_a_distinct_name(store: SqlAlchemyPolicyVersionRepository) -> None:
     # The container picks an adapter by name; two adapters answering to the same
     # name would make "which store is this process using" unanswerable in a log.
@@ -122,7 +137,7 @@ def test_published_version_survives_a_restart(
     """
     draft = _draft()
     store.add_draft(draft)
-    store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    _publish(store, draft)
 
     restarted = _restart(session_factory)
 
@@ -150,7 +165,7 @@ def test_next_version_number_counts_retired_versions(
 ) -> None:
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     retired = store.get("content.access", 1)
     assert retired is not None
     store.retire(retired.retire())
@@ -161,7 +176,11 @@ def test_next_version_number_counts_retired_versions(
 
 
 def test_add_draft_refuses_a_non_draft(store: SqlAlchemyPolicyVersionRepository) -> None:
-    published = _draft().publish(now=NOW, published_by="operator-1")
+    published = (
+        _draft()
+        .approve(now=NOW, approved_by="reviewer-1")
+        .publish(now=NOW, published_by="operator-1")
+    )
     with pytest.raises(InvariantViolation, match="only a draft can be added"):
         store.add_draft(published)
 
@@ -183,7 +202,11 @@ def test_add_draft_requires_a_policy_version(
 
 def test_publish_requires_a_stored_draft(store: SqlAlchemyPolicyVersionRepository) -> None:
     with pytest.raises(InvariantViolation, match="was never added"):
-        store.publish(_draft().publish(now=NOW, published_by="operator-1"))
+        store.publish(
+            _draft()
+            .approve(now=NOW, approved_by="reviewer-1")
+            .publish(now=NOW, published_by="operator-1")
+        )
 
 
 def test_publish_refuses_an_already_published_version(
@@ -191,10 +214,14 @@ def test_publish_refuses_an_already_published_version(
 ) -> None:
     draft = _draft()
     store.add_draft(draft)
-    store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    store.publish(approved.publish(now=NOW, published_by="operator-1"))
 
-    with pytest.raises(InvariantViolation, match="it is published, not draft"):
-        store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    # The store transition, not only the domain, refuses the second publish: the
+    # stored row is already published, so re-publishing would rewrite history.
+    with pytest.raises(InvariantViolation, match="it is published, not approved"):
+        store.publish(approved.publish(now=NOW, published_by="operator-1"))
 
 
 def test_retire_requires_a_retired_value(
@@ -208,8 +235,7 @@ def test_retire_requires_a_retired_value(
     """
     draft = _draft()
     store.add_draft(draft)
-    published = draft.publish(now=NOW, published_by="operator-1")
-    store.publish(published)
+    published = _publish(store, draft)
 
     with pytest.raises(InvariantViolation, match="retire requires a retired version value"):
         store.retire(published)
@@ -223,7 +249,7 @@ def test_history_is_oldest_first_and_includes_every_status(
 ) -> None:
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     retired = store.get("content.access", 1)
     assert retired is not None
     # Retire before publishing v2: the schema allows only one published version
@@ -231,7 +257,7 @@ def test_history_is_oldest_first_and_includes_every_status(
     store.retire(retired.retire())
     v2 = _draft(version=2)
     store.add_draft(v2)
-    store.publish(v2.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v2)
 
     history = store.history("content.access")
 
@@ -254,7 +280,7 @@ def test_all_published_is_sorted_by_policy_id(
     for policy_id in ("zeta.policy", "alpha.policy", "mid.policy"):
         draft = _draft(policy_id=policy_id)
         store.add_draft(draft)
-        store.publish(draft.publish(now=NOW, published_by="operator-1"))
+        _publish(store, draft)
 
     # Deterministic order is what makes a decision's policy_versions list stable.
     assert [v.policy_id for v in store.all_published()] == [
@@ -276,7 +302,7 @@ def test_schema_refuses_a_second_published_version_of_one_policy(
     """
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     store.add_draft(_draft(version=2))
 
     with pytest.raises(IntegrityError), session_factory() as session:

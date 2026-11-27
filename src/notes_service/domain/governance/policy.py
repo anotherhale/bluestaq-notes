@@ -86,9 +86,20 @@ class PolicyStatus(StrEnum):
     "published policy releases are immutable" and a rollback is a new release.
     ``RETIRED`` marks a version superseded by a later one without deleting it —
     the history of what was in force must survive.
+
+    ``APPROVED`` sits between the two (NEX-065) so that putting a policy in force
+    is two recorded decisions rather than one. A draft says what the author wants;
+    an approval says a *different* principal read it and accepted it; only then may
+    a publish make it binding. Without this state a policy went from "written" to
+    "in force" in a single call, so the fact that anyone reviewed it was not a
+    property of the data — it had to be inferred from the publisher differing from
+    the author, which is a separation-of-duties check, not an approval record. The
+    two are different controls: separation of duties asks *who*, approval records
+    *that a decision was taken, when, and by whom*.
     """
 
     DRAFT = "draft"
+    APPROVED = "approved"
     PUBLISHED = "published"
     RETIRED = "retired"
 
@@ -454,6 +465,30 @@ def separation_of_duties(*, author: str | None, publisher: str, ref: str) -> Non
         )
 
 
+def approval_of_duties(*, author: str | None, approver: str, ref: str) -> None:
+    """Refuse to let the principal that drafted a version approve it (NEX-065).
+
+    This is :func:`separation_of_duties` applied to the *approval* step rather
+    than the publication step, and it is the same rule for the same reason: a
+    review performed by the person whose work is being reviewed is not a review.
+
+    Approving and publishing are distinct acts, so both are checked. A caller that
+    only checked publication would still allow an author to approve their own
+    draft and have a third operator publish it — three identities in the audit
+    trail, and still no independent review of the rules.
+    """
+    if author is None:
+        raise InvariantViolation(
+            f"cannot approve {ref}: the drafting principal is not recorded, so "
+            "separation of duties cannot be satisfied"
+        )
+    if author == approver:
+        raise InvariantViolation(
+            f"cannot approve {ref}: {approver} drafted it, and separation of duties "
+            "requires a different principal to approve"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PolicyVersion:
     """One immutable snapshot of a policy's rules.
@@ -472,6 +507,17 @@ class PolicyVersion:
     It is ``None`` only for a version that predates the field; a version that has
     been published always names both its author and its publisher, and
     :func:`separation_of_duties` refuses the pair being the same principal.
+
+    ``approved_at``/``approved_by`` are the approval record (NEX-065). They are
+    stamped only by :meth:`approve`, and :meth:`publish` refuses a version that
+    lacks them, so "a policy in force was approved by a named second principal at a
+    known time" is a property the type enforces rather than a convention a caller
+    is trusted to follow. ``approved_by`` must differ from ``drafted_by`` for the
+    same reason the publisher must: an author approving their own policy is not a
+    review. The publisher need not be the approver — publishing is the mechanical
+    act of putting an already-approved version in force, and requiring the approver
+    to also be the publisher would make a two-person control impossible with only
+    two operators.
     """
 
     policy_id: str
@@ -483,6 +529,8 @@ class PolicyVersion:
     published_at: datetime | None = None
     published_by: str | None = None
     drafted_by: str | None = None
+    approved_at: datetime | None = None
+    approved_by: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -517,11 +565,35 @@ class PolicyVersion:
             self.published_at is not None or self.published_by is not None
         ):
             raise ValidationError("a draft policy version must not carry publication data")
-        if self.status is PolicyStatus.PUBLISHED and (
+        if self.status is PolicyStatus.DRAFT and (
+            self.approved_at is not None or self.approved_by is not None
+        ):
+            raise ValidationError("a draft policy version must not carry an approval record")
+        if self.status is PolicyStatus.APPROVED and (
+            self.approved_at is None or self.approved_by is None
+        ):
+            raise ValidationError(
+                "an approved policy version must record when and by whom it was approved"
+            )
+        if self.status is PolicyStatus.APPROVED and (
+            self.published_at is not None or self.published_by is not None
+        ):
+            raise ValidationError("an approved policy version must not carry publication data")
+        if self.status in (PolicyStatus.PUBLISHED, PolicyStatus.RETIRED) and (
             self.published_at is None or self.published_by is None
         ):
             raise ValidationError(
                 "a published policy version must record when and by whom it was published"
+            )
+        if self.status in (PolicyStatus.PUBLISHED, PolicyStatus.RETIRED) and (
+            self.approved_at is None or self.approved_by is None
+        ):
+            # A version in force that never recorded an approval predates NEX-065.
+            # Refusing it here rather than defaulting an approval keeps the record
+            # honest: an invented approval is worse than a missing one, because it
+            # cannot be told apart from a real review afterwards.
+            raise ValidationError(
+                "a policy version in force must record when and by whom it was approved"
             )
 
     @property
@@ -538,6 +610,39 @@ class PolicyVersion:
         """The stable, human-readable reference used in decisions and audit lines."""
         return f"{self.policy_id}@v{self.version}"
 
+    def approve(self, *, now: datetime, approved_by: str) -> PolicyVersion:
+        """Return this version transitioned to ``APPROVED`` (NEX-065).
+
+        Approval is the recorded decision that a *second* principal read these
+        rules and accepted them. It does not put the policy in force — only
+        :meth:`publish` does — so an approval can be taken back simply by never
+        publishing, and a draft that is edited after approval is a new version
+        number rather than an edit to an approved one.
+
+        Only a draft can be approved. Approving an approved version is a
+        programming error rather than a user error, so it raises
+        :class:`InvariantViolation` instead of quietly re-stamping the record: a
+        second approval would overwrite who actually made the decision.
+        """
+        if self.status is not PolicyStatus.DRAFT:
+            raise InvariantViolation(
+                f"policy version {self.ref} is {self.status.value}, and only a draft can be "
+                "approved"
+            )
+        approver = _validate_identifier(approved_by, what="approved_by")
+        approval_of_duties(author=self.drafted_by, approver=approver, ref=self.ref)
+        return PolicyVersion(
+            policy_id=self.policy_id,
+            version=self.version,
+            rules=self.rules,
+            rationale=self.rationale,
+            status=PolicyStatus.APPROVED,
+            created_at=self.created_at,
+            drafted_by=self.drafted_by,
+            approved_at=now,
+            approved_by=approver,
+        )
+
     def publish(self, *, now: datetime, published_by: str) -> PolicyVersion:
         """Return this version transitioned to ``PUBLISHED``.
         Returns a new value rather than mutating, so the draft object a caller
@@ -548,8 +653,20 @@ class PolicyVersion:
         The publisher must not be the author: separation of duties is checked
         here as well as in the use case, so a caller that builds the published
         value directly cannot bypass it.
+
+        Only an **approved** version can be published (NEX-065). A draft cannot be
+        published directly any more: that path was the gap this task closes, and
+        leaving it open would let a caller skip the approval record the rest of the
+        lifecycle now depends on. The refusal is explicit rather than a status
+        check that happens to fail, because "you must approve first" is the fix and
+        "it is already published" is not.
         """
-        if self.status is not PolicyStatus.DRAFT:
+        if self.status is PolicyStatus.DRAFT:
+            raise InvariantViolation(
+                f"cannot publish {self.ref}: it is a draft, and a policy version must be "
+                "approved before it can be published"
+            )
+        if self.status is not PolicyStatus.APPROVED:
             raise InvariantViolation(
                 f"policy version {self.policy_id}@v{self.version} is already {self.status.value}"
             )
@@ -565,6 +682,8 @@ class PolicyVersion:
             published_at=now,
             published_by=publisher,
             drafted_by=self.drafted_by,
+            approved_at=self.approved_at,
+            approved_by=self.approved_by,
         )
 
     def retire(self) -> PolicyVersion:
@@ -587,6 +706,8 @@ class PolicyVersion:
             published_at=self.published_at,
             published_by=self.published_by,
             drafted_by=self.drafted_by,
+            approved_at=self.approved_at,
+            approved_by=self.approved_by,
         )
 
 
@@ -701,7 +822,8 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
        policy set therefore denies everything, which is the only safe default for
        a governance surface.
     3. **Only published versions may be consulted.** A draft in force is a policy
-       nobody approved, and a retired version is one a later release explicitly
+       nobody approved, an approved version is one that passed review but was
+       never put in force, and a retired version is one a later release explicitly
        superseded. Passing *either* raises rather than being ignored: silently
        dropping it would make a caller believe its rules applied, and silently
        *keeping* a retired version would enforce rules the platform has already
@@ -718,11 +840,20 @@ def evaluate(versions: tuple[PolicyVersion, ...], attributes: dict[str, object])
         if not isinstance(version, PolicyVersion):
             raise ValidationError("evaluate requires PolicyVersion instances")
         if version.status is not PolicyStatus.PUBLISHED:
-            # Draft and retired both refuse, for different reasons that share one
-            # rule: a version that is not in force must never be enforced. The
-            # message names the actual status so a caller can tell a draft it has
-            # not published from a release it has already superseded.
-            label = "a draft" if version.status is PolicyStatus.DRAFT else "retired"
+            # Draft, approved and retired all refuse, for different reasons that
+            # share one rule: a version that is not in force must never be
+            # enforced. The message names the actual status so a caller can tell a
+            # draft it has not approved from an approved version it has not
+            # published, and from a release it has already superseded. An
+            # ``APPROVED`` version is the subtlest of the three: it has passed
+            # review, so enforcing it *looks* justified, and that is exactly why it
+            # must be refused explicitly rather than falling through.
+            if version.status is PolicyStatus.DRAFT:
+                label = "a draft"
+            elif version.status is PolicyStatus.APPROVED:
+                label = "approved but not published"
+            else:
+                label = "retired"
             raise ValidationError(f"policy {version.ref} is {label} and cannot be evaluated")
         consulted.append(version.ref)
         for rule in version.rules:
