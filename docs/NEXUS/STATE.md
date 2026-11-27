@@ -2178,3 +2178,62 @@ Delivery debt is cleared; nothing owed.
 2. Risk-based approval: the last named ADR-015 obligation without a mechanism.
 3. Decide with a human whether PR #5 should be split; nine slices stack in it and the
    reviewer raised the cost. Not a NEXUS decision to make alone.
+
+## Run NEX-2026-11-27-62 — `derive_assurance` fail-open fixed and tested (NEX-062)
+
+**Current project phase.** Phase 3 (governance). All five ADR-015 obligations have mechanisms.
+This run closed the last untested piece of the `step-up` control and fixed a fail-open found
+while testing it. Remaining governance gap: risk-based approval.
+
+**Current branch / commit.** `feature/agentic-enterprise-platform`; product commit `acb1fd9`,
+pushed as part of head `6aa0af6` (merge of a concurrent run's docs commit `1c2377e`).
+
+**Active task.** None — NEX-062 is committed and pushed, awaiting a CI read.
+
+**Last completed task.** **NEX-062** — `derive_assurance` acr/amr mapping.
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. NOT VERIFIED.** CI for this head has not
+been polled, and a push is not a verdict, so it is deliberately absent from `verified_tasks`.
+
+**What was found.** The function decided multi-factor by substring, so every `acr` naming
+multi-factor in order to deny it resolved to the strongest level — `mfa-optional`,
+`mfa-not-required`, `mfa-disabled`, `not-multifactor` all read as stepped-up. ADR-015 makes the
+`step-up` obligation enforceable by this one derived fact, so the control itself was reading a
+fail-open value: a login the IdP labelled as not stepped-up could spend a step-up obligation.
+This is the same class of defect NEX-060 fixed one layer up.
+
+**The fix.** Match by segment, let an adjacent negation segment veto a marker. The veto is
+blunt on purpose — `mfa:not-sms` reads as single-factor because telling "multi-factor but not
+SMS" from "multi-factor not required" needs a level registry this build lacks. Understating
+refuses a step-up; overstating spends one that never happened. Numeric level conventions
+(`aal2`, `loa3`, `ial2`) stay unmapped and now say why: several describe identity proofing, not
+a factor count, and mapping them would guess at provider semantics inside an enforcement path.
+Mapping them needs an ADR.
+
+**Validation run this run, bare as CI runs them.** `ruff format --check` 298 files already
+formatted; `ruff check` clean; `mypy` 139 source files; full `pytest` exit 0 (4 postgresql
+skipped); `pytest tests/authentication/` 194 passed. Negative check: reverting the fix made 12
+of the new tests fail, restoring it returned them to green — the regression is pinned, not
+merely described.
+
+**Open PRs.** #5 — open, not draft, unmerged. Ten slices now stack in it; the reviewer's
+"consider a split" note stands and is a human decision. **NEXUS never merges.**
+
+**Tracking issue.** #2 open. NEX-060 was reported by run 61. NEX-062 is **owed** a comment.
+
+**CI status.** Not polled for `acb1fd9`. That is the first action of the next run, not a gap
+being papered over.
+
+**Blockers.** None.
+
+**Risks.** Concurrent runs on this branch are the norm — this run had to merge a push that
+landed mid-test. Task IDs can collide: run 61 had already taken `NEX-060` and `NEX-061`, so
+this slice is `NEX-062`; read the log before assigning an ID. The blunt negation veto will
+understate a compound level like `mfa:not-sms` (accepted, argued above). Ten slices in one PR
+carry real review cost.
+
+**Next best actions.**
+
+1. Poll CI for the current head — `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`,
+   then `GET /commits/<sha>/check-runs` — and promote NEX-062 only on 4/4 `completed`/`success`.
+2. Comment on issue #2 with NEX-062 and the fail-open it fixed; append NEX-062 to PR #5's body.
+3. NEX-063: risk-based approval — the last named ADR-015 obligation without a mechanism.

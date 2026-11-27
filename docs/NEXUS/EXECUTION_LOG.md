@@ -7525,3 +7525,93 @@ the precise status. Delivery debt for NEX-059/060 is cleared.
 mapping that the `step-up` control rests on, and the only untested piece of that control.
 Then risk-based approval, the last named ADR-015 obligation without a mechanism. Human
 review of PR #5 stays outside NEXUS authority.
+
+## Run NEX-2026-11-27-62 — `derive_assurance` tested, and the fail-open it found
+
+**Starting commit.** `1c2377e` (docs descendant of NEX-060 product commit `dd42fd7`).
+**Ending commit.** `6aa0af6` (merge of concurrent docs `1c2377e`; product commit `acb1fd9`).
+**Branch.** `feature/agentic-enterprise-platform`. **Run ID** `NEX-2026-11-27-62` — 60 and 61
+were already taken by the previous run for the policy-gate fix.
+
+**Why this task.** Run 61 left this as its "next exact action": `derive_assurance` — the OIDC
+`acr`/`amr` mapping that the `step-up` control rests on — was the only untested piece of that
+control. ADR-015 makes the `step-up` obligation enforceable by naming exactly one deterministic
+fact, the recorded assurance of the delegating human, and this function is the only thing in the
+platform that mints it. A defect here is not a local bug; it is the control reading the wrong
+value.
+
+**The defect, found while writing the test.** `derive_assurance` decided multi-factor by
+substring:
+
+```python
+if any(marker in normalised for marker in ("mfa", "multi-factor", "multifactor")):
+```
+
+Every `acr` that names multi-factor *in order to deny it* therefore resolved to the strongest
+level:
+
+| `acr` sent by the IdP | old result | correct |
+| --- | --- | --- |
+| `urn:acme:mfa-optional` | multi-factor | single-factor |
+| `urn:acme:mfa-not-required` | multi-factor | single-factor |
+| `urn:acme:mfa-disabled` | multi-factor | single-factor |
+| `urn:acme:not-multifactor` | multi-factor | single-factor |
+
+That is a fail-open in the enforcement path: a login the IdP explicitly labelled as not
+stepped-up could spend a `step-up` obligation. It is the same class of defect NEX-060 fixed one
+layer up — a control whose stated guarantee does not hold for the inputs it will actually see.
+
+**Fix.** Match `acr` by segment rather than by substring, and let an adjacent negation segment
+veto a marker (`mfa-optional`, `not-multifactor`, `optional-mfa` all read as single-factor). The
+veto is deliberately blunt: `mfa:not-sms` reads as single-factor, because distinguishing
+"multi-factor, but not by SMS" from "multi-factor not required" needs a registry of level names
+this build does not have. Understating refuses a step-up; overstating spends one that never
+happened, so the blunt direction is the safe one. The reason is in the docstring, not only here.
+
+Numeric level conventions (`aal2`, `loa3`, `urn:okta:loa:2`, `ial2`) stay **unmapped** and now
+say so. Several describe identity proofing rather than a factor count — `ial2` is proofing, and
+`aal2` is reachable with one factor at some providers — so mapping them would guess at
+provider-specific semantics inside an enforcement path. They read as single-factor. Mapping them
+is a vocabulary change and needs an ADR.
+
+**Tests.** `tests/authentication/test_derive_assurance.py` (new) is the direct suite: absent,
+null, empty, whitespace, non-string and wrong-shaped claims all read single-factor; the `acr`
+marker forms that must read multi-factor; the negation cases above; the `amr` mapping; and the
+deliberate non-mappings. Four end-to-end cases went into `test_oidc_relying_party.py` instead,
+because that file already owns the signing helpers — they prove the mapping is consulted on the
+real `_verify_id_token` path rather than only correct in isolation. Duplicating the fixtures into
+the new module would have invented a second fixture style for one assertion.
+
+**Negative check, the part that matters.** Reverting `oidc_relying_party.py` to the pre-fix
+version made **12** of the new tests fail: the ten negation parametrisations, the either-side
+veto case, and the end-to-end negated-`acr` case. Restoring the fix returned them to green. So
+the regression is pinned by tests that actually detect it, not merely described by tests that
+pass.
+
+**Gates, run bare as CI runs them.** `ruff format --check` → 298 files already formatted;
+`ruff check` → All checks passed; `mypy` → Success, 139 source files; `pytest` → exit 0, full
+suite green, 4 postgresql tests skipped; `pytest tests/authentication/` → 194 passed. Repo-wide
+`ruff format --check` matters here because CI's version also formats Python inside Markdown
+fences.
+
+**The race.** By the time the commit was ready the remote had moved to `1c2377e` — another run
+pushing docs. Resolved by fetching that exact SHA, merging (never rebasing, never force-pushing),
+revalidating, and pushing `6aa0af6`. The overlap was `docs/NEXUS/*` only; no source conflict. The
+task ID was chosen as `NEX-062` rather than `NEX-060`/`061` precisely because run 61 had already
+used both, and two runs writing one ID would make this log ambiguous.
+
+**Status, stated honestly.** NEX-062 is **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at
+`acb1fd9`. It is **not VERIFIED**: CI for this head has not been polled, and a push is not a
+verdict. It is absent from `verified_tasks` for that reason.
+
+**Risks.** The blunt negation veto will understate a compound level such as `mfa:not-sms`
+(accepted, argued above). Ten slices now stack in PR #5 and the reviewer's "consider a split"
+note stands — a human decision. Concurrent runs on this branch remain the norm, not the
+exception.
+
+**Next exact action.** Poll CI for the current head — `git ls-remote origin
+refs/heads/feature/agentic-enterprise-platform`, then `GET /commits/<sha>/check-runs` — and
+promote NEX-062 only on 4/4 `completed`/`success`. Then comment on issue #2 with NEX-062 and the
+fail-open it fixed, append NEX-062 to PR #5's body, and move to NEX-063 (risk-based approval, the
+last named ADR-015 obligation without a mechanism). Human review of PR #5 stays outside NEXUS
+authority.
