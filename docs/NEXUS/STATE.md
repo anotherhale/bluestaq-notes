@@ -1951,3 +1951,12 @@ evidence.
   Evidence, not local gates, is what promoted it.
 - **Remaining delivery debt**: PR #5 description still has no NEX-053 section and issue #2
   has no NEX-053 comment. That is the first task of the next run.
+
+## Run NEX-2026-11-27-55 (continued) — delivery debt cleared
+
+- **PR #5**: appended the NEX-053 section (obligations as a separate axis, fail-closed
+  deny-on-unhandled-obligation, the file table, the CI evidence) and corrected a stale line
+  that still called the PR a draft. It is **ready for human review and still unmerged**.
+- **Issue #2**: NEX-053 status comment posted.
+- **Delivery debt is now zero.** Every completed slice is reflected in the PR and the
+  tracking issue, so the next run starts on implementation, not on bookkeeping.

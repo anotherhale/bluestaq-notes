@@ -6769,3 +6769,11 @@ work it could not finish and verify.
 - **Promotion**: NEX-053 → **VERIFIED**.
 - **Next action**: PR #5 NEX-053 section + issue #2 comment, then the redaction obligation
   adapter.
+
+### NEX-2026-11-27-55 addendum 2 — delivery debt cleared
+
+- **PR #5**: 12,015 -> 15,204 chars. Added the NEX-053 section; replaced the stale
+  "Left as a draft" status block, which had been false since a concurrent run promoted the
+  PR. Verified by re-fetching the body: NEX-053 present, stale phrase absent.
+- **Issue #2**: NEX-053 VERIFIED comment posted.
+- **Status**: PR #5 open, non-draft, **unmerged**. Delivery debt zero.
