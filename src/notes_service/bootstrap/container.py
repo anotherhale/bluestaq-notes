@@ -597,6 +597,10 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
                 authorization=authorization_provider,
                 clock=clock,
             ),
+            # Published policy is enforced here, at the one seam every agent
+            # action passes through (NEX-051). Until this was wired the lifecycle
+            # could publish rules nothing consulted.
+            policy_versions=policy_versions,
         )
 
     def make_plan_agent_run() -> PlanAgentRun:

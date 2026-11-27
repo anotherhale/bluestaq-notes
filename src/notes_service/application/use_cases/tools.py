@@ -58,6 +58,7 @@ from notes_service.application.errors import (
 )
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.clock import Clock
+from notes_service.application.ports.policy_versions import PolicyVersionRepository
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.agents import ResolveAgentToken, ResolvedToken
 from notes_service.application.use_cases.base import UseCase
@@ -79,6 +80,7 @@ from notes_service.domain.agent.tools import (
 )
 from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
+from notes_service.domain.governance.policy import PolicyEffect, evaluate
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
 from notes_service.domain.notes.value_objects import NoteId
@@ -131,9 +133,11 @@ class InvokeTool(UseCase):
         authorization: AuthorizationProvider,
         clock: Clock,
         resolve_token: ResolveAgentToken,
+        policy_versions: PolicyVersionRepository | None = None,
     ) -> None:
         super().__init__(uow_factory=uow_factory, authorization=authorization, clock=clock)
         self._resolve_token = resolve_token
+        self._policy_versions = policy_versions
 
     def run(
         self,
@@ -177,6 +181,14 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
+        self._enforce_published_policy(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+        )
+
         principal = _actor_principal(resolved)
 
         if tool.requires_approval:
@@ -196,6 +208,116 @@ class InvokeTool(UseCase):
             resource_ref=resource_ref,
             idempotency_key=idempotency_key,
         )
+
+    # -- published policy enforcement ------------------------------------
+
+    def _enforce_published_policy(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+    ) -> None:
+        """Refuse the call when a published policy explicitly denies it (NEX-051).
+
+        Until now the policy lifecycle could store and publish versions but
+        nothing consulted them: ``evaluate`` had no production caller, so a
+        published policy was documentation rather than an enforced control. This
+        is that caller. It runs after the capability check (a token without the
+        capability is refused before policy is even considered) and before any
+        handler is reachable, so a policy denial is a real gate, not a log line.
+
+        **Deny-only, and only on a matched rule.** ``evaluate`` returns ``DENY``
+        for an empty policy set — the correct default for a bare evaluator, but
+        fatal if used naively here: it would deny every tool call in a deployment
+        that has published no policy at all. So a denial requires a decision whose
+        effect is ``DENY`` *and* whose ``matched_rules`` is non-empty. No policy,
+        or policies that match nothing, leave the gateway's existing controls in
+        charge. Policies can therefore only subtract authority from what the
+        capability and approval checks already allow, never grant it — an allow
+        rule does not bypass a capability check that already failed.
+
+        **Fails closed.** A defect in a policy (a condition compared against an
+        attribute of the wrong type, say) raises during evaluation; that is
+        treated as a denial rather than a pass, because "the policy could not be
+        evaluated" must never mean "the action was permitted".
+
+        The refusal is audited exactly like a capability denial — a ``denied``
+        invocation row is written before raising — so a policy-blocked attempt is
+        as visible in the trail as a capability-blocked one.
+        """
+        if self._policy_versions is None:
+            return
+
+        attributes = _policy_attributes(resolved=resolved, tool=tool, resource_ref=resource_ref)
+        try:
+            decision = evaluate(self._policy_versions.all_published(), attributes)
+        except DomainError as exc:
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=f"policy evaluation failed: {type(exc).__name__}",
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} refused: published policy could not be evaluated"
+            ) from exc
+
+        if decision.effect is PolicyEffect.DENY and decision.matched_rules:
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=f"denied by policy {', '.join(decision.matched_rules)}",
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} refused by published policy "
+                f"({', '.join(decision.matched_rules)})"
+            )
+
+    def _record_policy_denial(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        outcome: str,
+    ) -> None:
+        """Persist a ``denied`` invocation row for a policy refusal.
+
+        A retried denial replays the recorded refusal rather than colliding with
+        the ``(agent_id, idempotency_key)`` constraint, matching the capability
+        denial path.
+        """
+        prior = self._find_prior(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            idempotency_key=idempotency_key,
+            resource_ref=resource_ref,
+        )
+        if prior is not None:
+            return
+        with self._uow_factory() as uow:
+            invocation = self._begin_invocation(
+                uow,
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+            )
+            invocation.deny(outcome=outcome)
+            uow.tool_invocations.add(invocation)
+            uow.commit()
 
     # -- direct tools ----------------------------------------------------
 
@@ -612,6 +734,27 @@ def _open_or_reuse_approval_request(
     )
     uow.approvals.add(request)
     return request
+
+
+def _policy_attributes(
+    *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
+) -> dict[str, object]:
+    """The attribute snapshot a published policy is evaluated against.
+
+    Deliberately small and non-secret: the capability being exercised, the tool
+    name, the resource reference (``note:<id>`` or ``tool:<name>`` — never note
+    content), and the agent's owner. A policy cannot reference an attribute that
+    is not here, and a missing attribute never matches (the evaluator's rule), so
+    an unknown attribute fails toward *not* matching a deny rather than granting.
+    The vocabulary is what the enforcement path can attest to; widening it is a
+    deliberate change, not an incidental one.
+    """
+    return {
+        "capability": tool.capability.value,
+        "tool": tool.name,
+        "resource": resource_ref,
+        "agent_owner": str(resolved.agent.owner_user_id),
+    }
 
 
 def _resource_ref(tool: ToolDefinition, arguments: dict[str, object]) -> str:
