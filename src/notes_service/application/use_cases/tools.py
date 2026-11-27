@@ -774,7 +774,12 @@ class InvokeTool(UseCase):
         if prior is not None:
             return prior
 
-        approval = self._approved_request(resolved=resolved, tool=tool, resource_ref=resource_ref)
+        approval = self._approved_request(
+            resolved=resolved,
+            tool=tool,
+            resource_ref=resource_ref,
+            required_approvals=required_approvals,
+        )
         if approval is None:
             self._defer_awaiting_approval(
                 resolved=resolved,
@@ -897,15 +902,38 @@ class InvokeTool(UseCase):
         )
 
     def _approved_request(
-        self, *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        resource_ref: str,
+        required_approvals: int,
     ) -> ApprovalRequest | None:
-        """An approved, unspent, unexpired approval for this (agent, capability, resource)."""
+        """An approved, unspent, unexpired approval strong enough for *this* call.
+
+        The threshold check is the whole point of taking ``required_approvals``
+        here rather than trusting the row. A request stamps the threshold that
+        was in force when it was opened, and ``is_usable`` judges it against
+        *that* number — which is right for the row and wrong for the call. If a
+        policy demanded one signature yesterday and two today, a single-signature
+        approval is still "usable" by its own record while being insufficient for
+        the call about to be made on it.
+
+        Without this guard the two-person control is bypassable by timing: open a
+        one-person approval, let it be granted, tighten the policy, then spend the
+        old grant on the now-two-person action. The spend guard in SQL cannot
+        catch it either — that predicate compares against the row's own
+        ``required_approvals``, which is the weaker number. Refusing the mismatch
+        here leaves the strict approval to be opened afresh by the caller's
+        deferral path, which is the only way a human is actually asked again.
+        """
         now = self._clock.now()
         with self._uow_factory() as uow:
             for request in uow.approvals.list_for_agent(resolved.agent.id):
                 if (
                     request.capability is tool.capability
                     and request.resource_ref == resource_ref
+                    and request.required_approvals >= required_approvals
                     and request.is_usable(now=now)
                 ):
                     return request

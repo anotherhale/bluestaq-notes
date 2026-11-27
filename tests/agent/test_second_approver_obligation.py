@@ -272,3 +272,124 @@ class TestGatewayAuditsTheGate:
         assert len(recorded) == 1
         assert recorded[0].status is InvocationStatus.DENIED
         assert recorded[0].approval_request_id == request.id
+
+
+def _allow_delete_with_one_approver() -> PolicyRule:
+    return PolicyRule(
+        rule_id="delete-needs-one",
+        effect=PolicyEffect.ALLOW,
+        when=Comparison(
+            attribute=AttributeRef(name="tool", type=AttributeType.STRING),
+            operator="==",
+            value="delete_note",
+        ),
+        obligations=(PolicyObligation.APPROVAL,),
+    )
+
+
+def _tighten_to_two_approvers(h: Harness) -> None:
+    """Retire the one-signature policy and publish the two-person one in its place."""
+    current = h.policies.published_for("gateway")
+    assert current is not None
+    h.policies.retire(current.retire())
+    _publish(h, (_allow_delete_with_second_approver(),))
+
+
+class TestAWeakerGrantCannotBeSpentUnderAStricterRule:
+    def test_a_one_signature_grant_does_not_authorise_a_two_person_action(self, h: Harness) -> None:
+        # The timing bypass this closes: open a one-person approval, have it
+        # granted, tighten the policy, then spend the old grant on the action that
+        # now needs two signatures. ``is_usable`` judges the row against the
+        # threshold it was opened under (one), so it reads as usable; only the
+        # call's own threshold can tell it is not enough.
+        _publish(h, (_allow_delete_with_one_approver(),))
+        agent, secret, note, _ = _request_delete(h)
+
+        with h.uow() as uow:
+            granted = uow.approvals.list_pending_for_agent(agent.id)[0]
+            granted.approve(approver_user_id=BOB, now=granted.requested_at)
+            uow.approvals.save(granted)
+            uow.commit()
+
+        with h.uow() as uow:
+            assert uow.approvals.list_for_agent(agent.id)[0].required_approvals == 1
+
+        _tighten_to_two_approvers(h)
+
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-weaker-grant",
+            )
+        # The note survives: the single signature never reached the side effect.
+        assert h.list_notes.run(h.principal).total == 1
+
+    def test_the_stricter_rule_opens_a_fresh_two_person_request(self, h: Harness) -> None:
+        # Refusing the stale grant is only half the behaviour: the caller must be
+        # able to get the action approved properly afterwards, against the stricter
+        # rule, rather than being stuck behind an unusable one-signature row.
+        _publish(h, (_allow_delete_with_one_approver(),))
+        agent, secret, note, _ = _request_delete(h)
+
+        with h.uow() as uow:
+            granted = uow.approvals.list_pending_for_agent(agent.id)[0]
+            granted.approve(approver_user_id=BOB, now=granted.requested_at)
+            uow.approvals.save(granted)
+            uow.commit()
+
+        _tighten_to_two_approvers(h)
+
+        with pytest.raises(AccessDenied, match="requires human approval"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": str(note.id)},
+                idempotency_key="k-weaker-grant-fresh",
+            )
+
+        with h.uow() as uow:
+            pending = uow.approvals.list_pending_for_agent(agent.id)
+        assert len(pending) == 1
+        assert pending[0].required_approvals == 2
+
+        with h.uow() as uow:
+            fresh = uow.approvals.list_pending_for_agent(agent.id)[0]
+            fresh.approve(approver_user_id=BOB, now=fresh.requested_at)
+            fresh.approve(approver_user_id=CAROL, now=fresh.requested_at)
+            uow.approvals.save(fresh)
+            uow.commit()
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="delete_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-weaker-grant-done",
+        )
+        assert h.list_notes.run(h.principal).total == 0
+
+    def test_a_two_signature_grant_still_authorises_a_one_person_action(self, h: Harness) -> None:
+        # The guard is a floor, not an equality: a grant that met a *stricter*
+        # rule than the call needs is still a valid grant for it. Rejecting it
+        # would make a relaxed policy unable to use approvals already granted.
+        _publish(h, (_allow_delete_with_second_approver(),))
+        agent, secret, note, _ = _request_delete(h)
+
+        with h.uow() as uow:
+            granted = uow.approvals.list_pending_for_agent(agent.id)[0]
+            granted.approve(approver_user_id=BOB, now=granted.requested_at)
+            granted.approve(approver_user_id=CAROL, now=granted.requested_at)
+            uow.approvals.save(granted)
+            uow.commit()
+
+        h.policies.retire(h.policies.published_for("gateway").retire())  # type: ignore[union-attr]
+        _publish(h, (_allow_delete_with_one_approver(),))
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="delete_note",
+            arguments={"note_id": str(note.id)},
+            idempotency_key="k-stronger-grant",
+        )
+        assert h.list_notes.run(h.principal).total == 0
