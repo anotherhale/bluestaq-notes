@@ -12,11 +12,12 @@ These tests pin the three ways obligations can be got wrong:
   has to route the call through the real human-approval flow, so the handler does
   not run until a person has approved it.
 * **An obligation with no enforcement adapter must refuse, not be dropped.** The
-  gateway can satisfy ``approval`` (for a human-gated capability) and ``redaction``
-  (a real output filter, NEX-054); it has no adapter for ``step-up``,
-  ``second-approver``, ``rate-limit`` or ``enhanced-audit``. Proceeding anyway
-  would make the policy read as enforced when it is not, so the call is refused
-  and audited. This is the fail-closed half of the control.
+  gateway can satisfy ``approval`` (for a human-gated capability), ``redaction``
+  (a real output filter, NEX-054), ``rate-limit`` (NEX-056) and ``step-up``
+  (against the assurance recorded on the delegation, NEX-058); it has no adapter
+  for ``second-approver``. Proceeding anyway would make the policy read as
+  enforced when it is not, so the call is refused and audited. This is the
+  fail-closed half of the control.
 * **Deny still wins.** Obligations on an allow rule that also matched a deny rule
   are irrelevant: the action is refused, and no obligation is reported as a way
   to proceed.
@@ -43,9 +44,15 @@ from notes_service.domain.governance.policy import (
     PolicyObligation,
     PolicyRule,
 )
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.redaction import REDACTED
 from notes_service.infrastructure.security.clock import SystemClock
-from tests.agent.test_tool_gateway_policy import RATE_LIMIT_BOUND, Harness, _publish
+from tests.agent.test_tool_gateway_policy import (
+    RATE_LIMIT_BOUND,
+    TOOL_GATEWAY,
+    Harness,
+    _publish,
+)
 from tests.agent.test_tool_gateway_policy import h as h
 
 pytestmark = pytest.mark.usefixtures("seeded")
@@ -264,11 +271,72 @@ class TestRateLimitObligationIsEnforced:
         assert h.list_notes.run(h.principal).total == RATE_LIMIT_BOUND
 
 
+class TestStepUpObligationIsEnforced:
+    """NEX-058: ``step-up`` reads the *recorded* assurance, not a live claim.
+
+    A refusal-only test would be satisfied by an adapter that always refused, so
+    the permitted path is pinned too: a delegation granted by a human who proved
+    multi-factor must pass. Assurance is fixed on the delegation at consent time
+    (ADR-015), which is why the elevated principal is used when granting.
+    """
+
+    def test_a_multi_factor_delegation_satisfies_step_up(self, h: Harness) -> None:
+        _publish(h, (_allow_tool("create_note", PolicyObligation.STEP_UP),))
+        elevated = dataclasses.replace(h.principal, assurance=AuthenticationAssurance.MULTI_FACTOR)
+        agent = h.register.run(
+            elevated,
+            display_name="Summarizer",
+            runtime_identity="svc-summarizer",
+            capabilities=[Capability.CREATE_NOTE.value],
+        )
+        delegation = h.delegate.run(
+            elevated,
+            agent_id=str(agent.id),
+            capabilities=[Capability.CREATE_NOTE.value],
+        )
+        secret = h.issue.run(
+            elevated,
+            delegation_id=str(delegation.id),
+            capabilities=[Capability.CREATE_NOTE.value],
+            audience=TOOL_GATEWAY,
+            ttl_seconds=300,
+        ).secret
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-step-up-ok",
+        )
+
+        assert result.invocation.status is InvocationStatus.SUCCEEDED
+        assert h.list_notes.run(h.principal).total == 1
+
+    def test_a_single_factor_delegation_is_refused(self, h: Harness) -> None:
+        # The default principal is single-factor, so the same tool that passes
+        # above must be refused here: the difference is only the recorded
+        # assurance, which is exactly the signal the control is meant to use.
+        _publish(h, (_allow_tool("create_note", PolicyObligation.STEP_UP),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        with pytest.raises(AccessDenied, match="step-up"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "T", "content": "C"},
+                idempotency_key="k-step-up-no",
+            )
+
+        assert h.list_notes.run(h.principal).total == 0
+        recorded = h.invocations(agent)
+        assert [r.status for r in recorded] == [InvocationStatus.DENIED]
+        assert "single-factor" in (recorded[0].outcome or "")
+
+
 class TestUnsatisfiableObligationsFailClosed:
     @pytest.mark.parametrize(
         "obligation",
         [
-            PolicyObligation.STEP_UP,
             PolicyObligation.SECOND_APPROVER,
         ],
     )

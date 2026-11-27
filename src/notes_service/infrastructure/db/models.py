@@ -401,6 +401,9 @@ class UserSessionRow(Base):
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    #: Assurance the human proved at login (ADR-015). Nullable for rows created
+    #: before the column existed; read back as single-factor, never as stepped up.
+    assurance: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     idle_expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
@@ -469,6 +472,10 @@ class DelegationRow(Base):
     )
     capabilities: Mapped[str] = mapped_column(String(1024), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    #: Assurance the delegator proved when granting (ADR-015). Nullable because
+    #: rows written before the column existed have no recorded proof, and an
+    #: absent value must read as single-factor — never as stepped up.
+    assurance: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 

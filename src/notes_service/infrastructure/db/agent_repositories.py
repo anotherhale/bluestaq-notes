@@ -50,6 +50,7 @@ from notes_service.domain.agent.value_objects import (
     TokenAudience,
 )
 from notes_service.domain.errors import VersionConflict
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import (
     AgentRow,
@@ -97,6 +98,7 @@ def _delegation_to_domain(row: DelegationRow) -> DelegatedAuthorization:
         delegator_user_id=UserId.parse(row.delegator_user_id),
         capabilities=_decode_capabilities(row.capabilities),
         status=DelegationStatus(row.status),
+        assurance=AuthenticationAssurance.parse(row.assurance),
         created_at=row.created_at,
         revoked_at=row.revoked_at,
     )
@@ -330,6 +332,7 @@ class SqlAlchemyDelegationRepository:
                 delegator_user_id=_as_uuid(delegation.delegator_user_id),
                 capabilities=_encode_capabilities(delegation.capabilities),
                 status=delegation.status.value,
+                assurance=delegation.assurance.value,
                 created_at=delegation.created_at,
                 revoked_at=delegation.revoked_at,
             )

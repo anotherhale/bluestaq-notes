@@ -32,6 +32,7 @@ from jwt import PyJWKClient
 
 from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.oidc import VerifiedIdToken
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 
 #: Bound on any single IdP HTTP call. A hanging IdP must not hang the request.
 _HTTP_TIMEOUT_SECONDS = 10.0
@@ -193,7 +194,70 @@ class HttpOidcRelyingParty:
             name=claims.get("name") if isinstance(claims.get("name"), str) else None,
             issued_at=issued_at,
             expires_at=expires_at,
+            assurance=derive_assurance(claims),
         )
+
+
+#: ``amr`` methods that count as a second, independent factor. Kept as a closed
+#: set so a provider cannot smuggle a weaker method in under a new spelling and
+#: have it read as multi-factor. A password/OIDC login is always one factor; a
+#: second entry from this set is what makes a token multi-factor (ADR-015).
+_MULTI_FACTOR_AMR: frozenset[str] = frozenset(
+    {
+        "mfa",
+        "otp",
+        "totp",
+        "hwk",
+        "swk",
+        "sms",
+        "tel",
+        "fpt",
+        "face",
+        "iris",
+        "vbm",
+        "pin",
+        "pwd-2fa",
+        "webauthn",
+        "fido",
+        "passkey",
+    }
+)
+
+
+def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
+    """Derive authentication assurance from verified ``acr``/``amr`` claims.
+
+    Only two outcomes exist, and the default is the weaker one, so anything this
+    function does not positively recognise is single-factor. That matters: the
+    claims here have passed signature and standard-claim verification, but their
+    *content* is still an assertion by the IdP, and a provider that sends an
+    ``amr`` shape we do not model must not be read as stronger than it is.
+
+    Two independent signals, either of which is sufficient:
+
+    * ``amr`` lists a second factor from :data:`_MULTI_FACTOR_AMR` alongside a
+      first one, or
+    * ``acr`` names a recognised multi-factor level. Both the ``...:mfa`` style
+      and the numeric OIDC ``loa``/``ial`` conventions are matched by substring,
+      because providers differ and there is no single registry.
+    """
+    acr = claims.get("acr")
+    if isinstance(acr, str) and acr.strip():
+        normalised = acr.strip().lower()
+        if any(marker in normalised for marker in ("mfa", "multi-factor", "multifactor")):
+            return AuthenticationAssurance.MULTI_FACTOR
+
+    amr = claims.get("amr")
+    if isinstance(amr, str):
+        methods = {amr.strip().lower()}
+    elif isinstance(amr, list | tuple):
+        methods = {str(item).strip().lower() for item in amr if isinstance(item, str)}
+    else:
+        methods = set()
+    if len(methods) >= 2 and methods & _MULTI_FACTOR_AMR:
+        return AuthenticationAssurance.MULTI_FACTOR
+
+    return AuthenticationAssurance.SINGLE_FACTOR
 
 
 def _as_datetime(value: object) -> datetime | None:

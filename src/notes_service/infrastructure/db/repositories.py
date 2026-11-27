@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from notes_service.domain.errors import VersionConflict
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.entities import ExternalIdentity, User
 from notes_service.domain.identity.session import LoginTransaction, UserSession
 from notes_service.domain.identity.value_objects import (
@@ -637,6 +638,7 @@ def _session_to_domain(row: UserSessionRow) -> UserSession:
         provider=row.provider,
         subject=row.subject,
         token_hash=row.token_hash,
+        assurance=AuthenticationAssurance.parse(row.assurance),
         created_at=row.created_at,
         last_seen_at=row.last_seen_at,
         idle_expires_at=row.idle_expires_at,
@@ -657,6 +659,7 @@ class SqlAlchemyUserSessionRepository:
                 provider=session.provider,
                 subject=session.subject,
                 token_hash=session.token_hash,
+                assurance=session.assurance.value,
                 created_at=session.created_at,
                 last_seen_at=session.last_seen_at,
                 idle_expires_at=session.idle_expires_at,

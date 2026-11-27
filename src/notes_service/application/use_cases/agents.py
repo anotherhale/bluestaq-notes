@@ -177,6 +177,7 @@ class GrantDelegation(UseCase):
                 agent=agent,
                 delegator_user_id=principal.user_id,
                 capabilities=parse_capabilities(capabilities),
+                assurance=principal.assurance,
             )
             uow.delegations.add(delegation)
             uow.commit()

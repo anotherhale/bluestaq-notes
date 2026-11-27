@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+from notes_service.domain.identity.assurance import AuthenticationAssurance
+
 
 @dataclass(frozen=True, slots=True)
 class VerifiedIdToken:
@@ -35,6 +37,9 @@ class VerifiedIdToken:
     name: str | None
     issued_at: datetime
     expires_at: datetime
+    #: How strongly the IdP asserts the human authenticated, from ``acr``/``amr``
+    #: (ADR-015). Derived and bounded by the adapter; never trusted as free text.
+    assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR
 
 
 @runtime_checkable

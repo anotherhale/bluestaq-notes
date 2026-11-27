@@ -84,6 +84,7 @@ from notes_service.domain.agent.tools import (
 from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
 from notes_service.domain.governance.policy import PolicyEffect, PolicyObligation, evaluate
+from notes_service.domain.identity.assurance import STEP_UP_FLOOR
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
 from notes_service.domain.notes.value_objects import NoteId
@@ -146,6 +147,9 @@ def _actor_principal(resolved: ResolvedToken) -> Principal:
         provider="agent-delegation",
         subject=str(resolved.agent.id),
         claims={"agent_id": str(resolved.agent.id), "token_id": str(resolved.token.id)},
+        # The agent has no assurance of its own; the handler acts as the human,
+        # so it carries the assurance that human proved when granting (ADR-015).
+        assurance=resolved.delegation.assurance,
     )
 
 
@@ -245,6 +249,13 @@ class InvokeTool(UseCase):
         #   :class:`RateLimiter` on a per-tool key (NEX-056). It is checked before
         #   the approval gate so a flood cannot open approval requests it will
         #   never use.
+        # * ``step-up`` — a minimum *authentication* strength for the human behind
+        #   the agent (NEX-058). Its adapter always exists: the assurance the
+        #   delegator proved when granting, recorded on the delegation. It is
+        #   satisfiable as a mechanism, but a given delegation may not *meet* the
+        #   floor — that is a separate, explicit refusal below, so "the gateway
+        #   cannot enforce step-up" is never confused with "this delegation was
+        #   granted at a weaker assurance".
         #
         # Every other obligation is refused here rather than ignored: an obligation
         # with no enforcement adapter that was silently dropped would be worse than
@@ -259,6 +270,7 @@ class InvokeTool(UseCase):
                 (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
                 or obligation is PolicyObligation.REDACTION
                 or obligation is PolicyObligation.ENHANCED_AUDIT
+                or obligation is PolicyObligation.STEP_UP
                 or (obligation is PolicyObligation.RATE_LIMIT and self._rate_limiter is not None)
             )
         ]
@@ -280,6 +292,16 @@ class InvokeTool(UseCase):
             raise AccessDenied(
                 f"tool {tool.name!r} is {reason}; refusing rather than proceeding "
                 "with an unmet obligation"
+            )
+
+        if PolicyObligation.STEP_UP in obligations:
+            self._enforce_step_up_obligation(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                policy_versions=consulted,
             )
 
         redaction_required = gate.redaction_required
@@ -427,6 +449,56 @@ class InvokeTool(UseCase):
             consulted=consulted,
             obligations=decision.obligations,
             evidence=evidence,
+        )
+
+    def _enforce_step_up_obligation(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        policy_versions: tuple[str, ...],
+    ) -> None:
+        """Require the delegating human to have authenticated with multi-factor (NEX-058).
+
+        ADR-015 names the only deterministic signal a tool gateway can honestly
+        use: the *recorded* authentication assurance of the human behind the
+        agent, captured at login from the IdP's ``acr``/``amr`` claims and fixed
+        onto the delegation when consent was given. An agent has no assurance of
+        its own, so reading it live from a request (or from a claim the agent
+        presents) would let the agent assert its own step-up.
+
+        The floor is :data:`STEP_UP_FLOOR`, a static application constant. It is
+        deliberately not read from the policy version or the rule: a policy author
+        must be able to *ask* for step-up, but never to define what counts as
+        stepped up — otherwise the same rule that requests the control could
+        weaken it.
+
+        A refusal is audited as a ``denied`` invocation naming the obligation and
+        the assurance actually held, so a weaker delegation is visible in the
+        trail rather than only as a 403 the caller saw.
+        """
+        held = resolved.delegation.assurance
+        if held.meets(STEP_UP_FLOOR):
+            return
+        reason = (
+            f"allowed only under obligation step-up: the delegation was granted at "
+            f"{held.value} assurance, below the required {STEP_UP_FLOOR.value}"
+        )
+        self._record_policy_denial(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+            outcome=reason,
+            policy_versions=policy_versions,
+        )
+        raise AccessDenied(
+            f"tool {tool.name!r} is {reason}; the delegating human must re-authenticate "
+            "with multi-factor and grant a new delegation"
         )
 
     def _enforce_rate_limit_obligation(
