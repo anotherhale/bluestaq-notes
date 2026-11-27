@@ -6517,3 +6517,62 @@ verifier, which is worse than no verifier.
 Poll CI for `3215e08`; post the PR #5 / issue #2 updates; then start the obligations
 slice (an allow that still carries a required action) — the third policy effect the
 architecture lists and the only one still unmodelled.
+
+## Run NEX-2026-11-27-54 — NEX-052 promoted to VERIFIED
+
+- **Timestamp**: 2026-11-27T16:34Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `57f50d1`
+- **Ending commit**: `57f50d1` (plus this run's docs commit)
+- **Tasks completed**: NEX-052 verification. No new product code.
+- **Why this run existed**: the previous run ended with NEX-052 at PUSHED, not VERIFIED,
+  because CI on its product commit `3215e08` read `cancelled`. That was an open
+  verification debt, not a passing build.
+
+### The CI result
+
+`57f50d1` — **4/4 `completed/success`** on both the `push` and `pull_request` events,
+polled 2026-11-27T16:30Z:
+
+| Job | Result |
+| --- | --- |
+| Backend (ruff, mypy, pytest, migrations) | success |
+| Frontend (typecheck, lint, test, build) | success |
+
+`57f50d1` is a docs-only descendant of the NEX-052 product commit `3215e08`, so the
+Backend job compiles and tests the NEX-052 product code — including the migration path
+against Postgres, which the local gates do not exercise.
+
+### Resolving the `cancelled` reading
+
+The previous run reported `3215e08` as `cancelled` and correctly refused to call it
+either a pass or a failure. The cause is now confirmed rather than assumed: the branch's
+CI concurrency cancels superseded runs, and every NEXUS checkpoint is itself a commit on
+this branch. So a checkpoint that names a SHA guarantees that SHA's runs are cancelled
+while still in progress.
+
+The important consequence, which is what makes the evidence usable: **cancellation only
+affects runs still in progress.** A concluded run is never retracted. That is why the
+same `57f50d1` verdict read `in_progress` at the previous run's deadline and reads
+`completed/success` now, and why it will still read `completed/success` after this
+checkpoint commit supersedes nothing it depends on.
+
+### Status transitions
+
+- NEX-052: PUSHED → **VERIFIED** (CI evidence, not local gates alone).
+- `verified_tasks` now 46 entries.
+
+### Delivery
+
+- PR #5 body: NEX-052 CI evidence section appended.
+- Issue #5: status comment (the focused issue for gateway enforcement).
+- Issue #2: NEX-052 verification comment.
+
+### Next action
+
+Obligations — the third policy effect the architecture lists (deny, allow, obligations)
+and the only one the gateway does not model. It is not another denial path: an obligation
+allows the call but attaches required actions, so the decision must carry them back to the
+caller and into the audit trail. Read the obligation contract in
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
+return type has to change shape.

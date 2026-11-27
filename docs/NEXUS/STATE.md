@@ -1873,3 +1873,30 @@ evidence.
    carry required actions to the caller. Read `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md`
    for the obligation contract before designing it, and write an ADR if the gateway's
    return type has to change shape.
+
+## Run NEX-2026-11-27-54 — NEX-052 VERIFIED
+
+- **Branch**: `feature/agentic-enterprise-platform` · **HEAD**: `57f50d1`
+- **Status**: NEX-052 is **VERIFIED**. CI 4/4 `completed/success` at `57f50d1` on both
+  events (polled 2026-11-27T16:30Z). No new product code this run — the slice was
+  delivered last run; this run closed its verification debt.
+- **Why `57f50d1` is valid evidence**: it is a docs-only descendant of the product commit
+  `3215e08`, so the Backend job tests the NEX-052 code, including migrations against
+  Postgres.
+- **The `cancelled` mystery, resolved**: branch concurrency cancels superseded runs, and
+  every checkpoint is a commit on the branch, so a checkpoint naming a SHA cancels that
+  SHA's runs while in progress. **Cancellation never retracts a concluded run** — that is
+  what makes a later poll authoritative. Recorded in `CHECKPOINT.json` → `ci_status`.
+
+**Next best actions**
+
+1. **Obligations.** The architecture lists three policy effects — deny, allow,
+   obligations — and the gateway models the first two only. An obligation allows the call
+   but attaches required actions, so it cannot be bolted on as another denial: the
+   decision has to carry those actions to the caller and into the audit trail. Read the
+   obligation contract before designing, and write an ADR if `PolicyDecision`'s shape must
+   change.
+2. **PR #5 is ready for human review** — CI green, mergeable, `mergeable_state: clean`,
+   24 files. It stays **draft** until a human decides; NEXUS must not merge it.
+3. **Tracking issue #2** carries 42 comments; the next phase section should be written
+   when obligations lands, not before.
