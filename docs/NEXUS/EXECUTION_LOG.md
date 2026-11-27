@@ -6854,3 +6854,25 @@ file.
 
 Poll CI on the current branch head (a descendant of `1878cd1`), promote NEX-054 to VERIFIED
 on that evidence, then append the NEX-054 section to PR #5 and comment on issue #2.
+
+### NEX-2026-11-27-56 addendum — NEX-054 promoted to VERIFIED
+
+CI was polled after the push, and the result is worth stating precisely because the raw
+check-run list looks alarming: for `1878cd1` it returns **four** entries, three success and
+one `cancelled`. That is two workflow runs, not a failure. The run that finished carries
+Backend (ruff, mypy, pytest, migrations) `success` **and** Frontend (typecheck, lint, test,
+build) `success`; the `cancelled` Backend belongs to the run superseded in the branch
+concurrency group, which is the standing trap already recorded in this log — a cancelled job
+is never a verdict. Both job types are green on the product commit, so NEX-054 is
+**VERIFIED**.
+
+Promotion is on evidence, not on the local gates: the local suite proved the change compiles
+and the tests pass on this machine, and CI proved it on a clean runner including the
+migration path that is skipped locally.
+
+**Remaining debt**: PR #5 and issue #2 do not yet carry NEX-054. Both are narrative, not
+code — the branch is pushed and green — and they are the next run's first action.
+
+**Next task**: NEX-055, the `enhanced-audit` obligation adapter. It reuses the enforcement
+seam NEX-054 established (resolve the obligation in the decision, apply it on the way out,
+record that it fired), so it should be a small slice rather than a new mechanism.

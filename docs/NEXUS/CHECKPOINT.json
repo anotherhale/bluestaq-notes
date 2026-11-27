@@ -4,7 +4,7 @@
  "timestamp": "2026-11-27T17:22Z",
  "branch": "feature/agentic-enterprise-platform",
  "commit": "1878cd14578ab454fbc84ca4e73067c6e512943c",
- "project_phase": "Phase 3 (governance). NEX-054 is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd1: the redaction obligation now has a real output-filtering adapter at the tool gateway. CI not yet polled.",
+ "project_phase": "Phase 3 (governance). NEX-054 VERIFIED: the redaction obligation has a real output-filtering adapter at the tool gateway, green on CI. Remaining named gaps: the other obligation adapters (step-up, second-approver, rate-limit, enhanced-audit) and risk-based approval.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -17,7 +17,7 @@
   "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
   "NEX-052": "VERIFIED - CI 4/4 completed/success at 57f50d1 (polled 2026-11-27T16:30Z by run 54).",
   "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z).",
-  "NEX-054": "PUSHED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c. Local gates green on the feature-branch tree: ruff format 290 unchanged, ruff check clean, mypy 138 files, targeted pytest exit 0, full suite exit 0. CI not yet polled."
+  "NEX-054": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c + CI PASSED on that commit. 1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit."
  },
  "completed_tasks": [
   "NEX-054",
@@ -47,7 +47,7 @@
   ],
   "scope": "Run bare from the repo root on the feature-branch tree, first at the checkout 2631f4f plus the NEX-054 working tree, then on the committed tree.",
   "not_run": "PostgreSQL-marked tests skipped locally; the CI Backend job runs the migration path. CI was not polled this run.",
-  "ci": "NOT POLLED for 1878cd1. NEX-053 remains CI-verified at c825db6."
+  "ci": "1878cd1: Backend (ruff, mypy, pytest, migrations) completed/success AND Frontend (typecheck, lint, test, build) completed/success in the same workflow run. A second run for the same SHA shows Backend completed/cancelled - that is the superseded concurrency run, not a failure; per the standing rule a cancelled job is never a verdict. Both job types are green on the product commit."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -79,8 +79,8 @@
   "An obligation kind with no handler refuses agents by design. The refusal must name the kind, or the policy author sees an unexplained outage.",
   "Heredocs corrupt multi-line input in this environment (three occurrences across two runs, one of them silently truncating a commit message). Write multi-line content with the file editor and pass it to `git commit -F <file>` or `python3 <file>`."
  ],
- "next_task": "NEX-055: poll CI on the current branch head (which descends from 1878cd1) and promote NEX-054 to VERIFIED on real CI evidence; then take the next dependency-ready governance task.",
- "next_action": "1. Read the head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. 2. Confirm 4/4 completed/success on the check-runs API. 3. Promote NEX-054 to VERIFIED in task_statuses. 4. Append the NEX-054 section to PR #5 and comment on issue #2.",
+ "next_task": "NEX-055: report NEX-054 to PR #5 and issue #2 (the outstanding delivery debt), then take the next dependency-ready governance task - most likely the `enhanced-audit` obligation adapter, which reuses the same enforcement seam NEX-054 established.",
+ "next_action": "1. Append the NEX-054 section to PR #5's body with the CI evidence above. 2. Comment the NEX-054 verification on issue #2. 3. Start NEX-055 (enhanced-audit obligation) in domain + application + tests.",
  "recovery_instructions": "NEX-054 product code is COMMITTED and PUSHED at 1878cd1; containment was verified structurally (merge-base --is-ancestor plus cat-file on the remote head). Nothing is in flight. CI for 1878cd1 was not polled. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5.",
  "ci_status": {
   "head_polled": "c825db61859591a46b5d4fc1d957130f126db9f8",
@@ -166,7 +166,8 @@
   "remote_verified_by": "git merge-base --is-ancestor 1878cd1 <remote head>, and git cat-file -e <remote head>:src/notes_service/domain/redaction.py",
   "pr_updated": false,
   "issue_updated": false,
-  "delivery_debt": "PR #5 and issue #2 do not yet carry NEX-054. The next run owes both, plus the CI poll."
+  "delivery_debt": "PR #5 and issue #2 do not yet carry NEX-054. Product and docs are pushed; only the GitHub narrative is owed.",
+  "ci_verified": true
  },
  "run_summary": "Implemented NEX-054. The redaction obligation previously had no adapter, so a policy that said 'allow with redaction' was refused outright. The shape-based credential judgement moved from bootstrap/logging_config.py into domain/redaction.py so the log formatter and the tool gateway share one implementation instead of drifting copies; the formatter re-exports it so no importer changed. InvokeTool now filters the tool result when a redaction obligation is present, on both the direct and the approval-gated path, and records an audit outcome that says redaction fired without naming the withheld fields. Filtering happens on the way out only, so the stored note is untouched. Unenforceable obligations still refuse the whole call. The run also found and corrected a run-integrity problem: it began on main instead of the authorized branch, so the gates were re-run on the feature-branch tree before the commit was made.",
  "head_observation": {
