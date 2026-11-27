@@ -21,7 +21,7 @@
     "NEX-055": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c55fb9f, CI 4/4 at that SHA. Reported to PR #5 and issue #2 this run (delivery debt cleared).",
     "NEX-056": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at e7c73157050a2fc0363b1090f4e17749b66bfe91, and CI PASSED on that exact commit: check-runs polled 2026-11-27T18:14Z returned `Backend (ruff, mypy, pytest, migrations)` status=completed conclusion=success and `Frontend (typecheck, lint, test, build)` status=completed conclusion=success. A second check-run pair for the same SHA was still in_progress - the concurrency group re-running, not a failure.",
     "NEX-057": "VERIFIED - ADR-015's design is now backed by code: NEX-058 implements exactly the signal ADR-015 names, so the ADR is no longer a design without an implementation.",
-    "NEX-058": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at c5a4f4e. Local gates green: ruff format, ruff check, mypy (139 files), full pytest exit 0. CI not yet polled on c5a4f4e - this run ran out of clock before the check-runs concluded, so it is NOT recorded as VERIFIED. The next run must poll `GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` for the head read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and, on 4/4 success, promote it to VERIFIED."
+    "NEX-058": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c5a4f4e, and CI PASSED on head a4003bf: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:23Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. a4003bf descends from product commit c5a4f4e through a docs-only commit, so its CI compiled and tested the NEX-058 product code."
   },
   "completed_tasks": [
     "NEX-039",
@@ -87,25 +87,24 @@
   "blockers": [],
   "risks": [
     "Concurrent agent runs push to this branch. Take the tip from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, merge (never rebase, never force-push), revalidate, push.",
-    "NEX-058 is pushed but CI is unpolled at c5a4f4e. Do not call it VERIFIED until a check-run pair concludes success on the current head.",
     "The assurance columns are nullable and have exactly one writer each (login for sessions, grant for delegations). Any future writer must not default to multi-factor; `AuthenticationAssurance.parse` fails closed, but a SQL default of 'multi-factor' would bypass it entirely.",
     "`step-up` is enforced against the delegator's assurance *at grant time*. A delegation granted at single-factor stays single-factor even if the human later steps up - they must re-grant. That is intentional (ADR-015) but will surprise an operator.",
     "`second-approver` must be a distinct human, not a second click by the first approver. Reusing the first approver would make separation of duties a formality.",
     "Seven slices now stack in PR #5. Review cost is real; a reviewer may ask for a split."
   ],
-  "next_task": "NEX-059: enforce the `second-approver` obligation with a second DISTINCT approver. It is the last of the five named obligations without a real mechanism, and the one where the obvious implementation (any second approval) would silently defeat the control.",
-  "next_action": "1. Poll CI on the current head for c5a4f4e; on 4/4 success promote NEX-058 to VERIFIED and record the poll. 2. Clear delivery debt: append NEX-057 + NEX-058 to PR #5 and post one issue #2 comment covering both. 3. Then implement NEX-059 (second-approver, distinct human). Human review of PR #5 remains the outstanding item outside NEXUS authority.",
-  "recovery_instructions": "HEAD c5a4f4e is the NEX-058 product commit; the checkpoint commit that follows it is docs-only. Tree was clean at commit time. Nothing uncommitted to recover. Do not redo NEX-058. Budget the CI poll first (cheap), then delivery debt, then NEX-059.",
+  "next_task": "NEX-059: enforce the `second-approver` obligation with a second DISTINCT approver. Also owed: a direct test for `derive_assurance` (the OIDC acr/amr mapping the whole step-up control rests on), which the NEX-058 backlog entry asked for by name and which has no test today.",
+  "next_action": "1. Clear delivery debt: append NEX-057 + NEX-058 to PR #5 and post one issue #2 comment covering both - the interesting fact is that ADR-015 now has an implementation behind it. 2. Add the `derive_assurance` acr/amr mapping test. 3. Implement NEX-059 (second-approver, distinct human). Human review of PR #5 remains the outstanding item outside NEXUS authority.",
+  "recovery_instructions": "HEAD a4003bf == origin/feature/agentic-enterprise-platform, tree clean, CI 4/4 green at that head. Nothing to recover. NEX-058 is VERIFIED. Do not redo it.",
   "ci_status": {
-    "head_polled": null,
+    "head_polled": "a4003bfa549f570edadbc5ca7a3694f818556ceb",
     "product_commit": "c5a4f4eeee5779de1bde46f7671db8500e3cc9d9",
-    "docs_commit": null,
-    "result": "NOT POLLED. This run pushed c5a4f4e with ~7 minutes left and spent them on the gates, the commit and this checkpoint rather than on a poll that would not have concluded in time.",
-    "conclusion": "unknown",
-    "polled_at": null,
-    "note": "Local evidence is strong (ruff format, ruff check, mypy, full pytest all green on the committed tree) but CI is the stronger evidence and it has not been read for this SHA.",
-    "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, with <sha> read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-    "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. A second in_progress check-run set for the same SHA is the concurrency group re-running; judge on any completed/success pair."
+    "docs_commit": "a4003bfa549f570edadbc5ca7a3694f818556ceb",
+    "result": "4/4 completed/success: Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), both duplicate pairs concluded success.",
+    "conclusion": "success",
+    "polled_at": "2026-11-27T19:23Z",
+    "note": "First poll 19:14Z showed all four in_progress; second poll 19:23Z showed all four completed/success. Waited rather than recording a partial read.",
+    "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, sha from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
+    "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. Duplicate check-run pairs are the concurrency group re-running."
   },
   "verified_tasks": [
     "NEX-001",
@@ -157,11 +156,10 @@
     "NEX-054",
     "NEX-055",
     "NEX-056",
-    "NEX-057"
+    "NEX-057",
+    "NEX-058"
   ],
-  "in_progress_tasks": [
-    "NEX-058 (awaiting CI confirmation on c5a4f4e)"
-  ],
+  "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. NEX-058 is in completed_tasks but NOT in verified_tasks: it is implemented, tested locally, committed and pushed, but its CI has not been read. That distinction is deliberate - a push is not a verdict.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
   "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
@@ -179,7 +177,8 @@
   "branch_head_observed_at": "2026-11-27T13:44:00Z",
   "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "c5a4f4eeee5779de1bde46f7671db8500e3cc9d9"
+    "c5a4f4eeee5779de1bde46f7671db8500e3cc9d9",
+    "a4003bfa549f570edadbc5ca7a3694f818556ceb"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
@@ -187,7 +186,7 @@
     "pr_updated": false,
     "issue_updated": false,
     "delivery_debt": "NEX-057 (ADR-015) and NEX-058 (enforcement) are unreported to PR #5 and issue #2. Report them together: the ADR now has code behind it, which is the interesting fact.",
-    "ci_verified": false
+    "ci_verified": true
   },
   "run_summary": "Implemented NEX-058, the slice that turns ADR-015 from a design into a control. The previous run left step-up designed-but-refused, which was the honest state; this run makes it enforceable without ever letting a weaker check wear the obligation's name. The domain vocabulary is closed and ordered with floor semantics, and `parse()` fails closed to single-factor so an absent or unrecognised stored value degrades rather than escalates. The IdP's acr/amr claim is derived into that bounded vocabulary in the adapter, never carried as free text. Assurance is recorded on the session at login, rehydrated into the Principal on resolve, and copied onto the delegation at grant where it is fixed - because a delegation can outlive the session that created it, and consent is the moment the human chose. The gateway compares against STEP_UP_FLOOR, a static constant, so a policy author can ask for step-up but cannot define what counts as stepped up. Refusals are audited as denied invocations naming the obligation and the level actually held. Tests cover both directions: five persistence tests including absent-reads-as-single-factor, and a positive gateway case proving a multi-factor delegation satisfies the obligation - because an obligation that can only ever refuse is not enforced, it is merely unimplemented. Two test fixtures had to be repaired mid-run (a stale Harness API and a missing TOOL_GATEWAY import); both were real defects in the new test, not in the product code. Gates ran bare, as CI runs them: ruff format, ruff check, mypy over 139 files, and the full pytest suite, all green. CI itself was not polled - the clock ran out - so NEX-058 is recorded as completed but not VERIFIED.",
   "head_observation": {

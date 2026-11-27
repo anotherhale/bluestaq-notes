@@ -52,10 +52,9 @@ absent-reads-as-single-factor.
 
 **Migration** `b8d3e1f5a274` adds nullable `assurance` columns to `user_sessions` and
 `agent_delegations`; `alembic heads` reports a single head.
+**Status:** IMPLEMENTED, TESTED, COMMITTED, PUSHED at `c5a4f4e`, **CI PASSED** - 4/4 `completed/success` on head `a4003bf` (polled 2026-11-27T19:23Z). VERIFIED.
 
-**Status:** IMPLEMENTED, TESTED locally, COMMITTED, PUSHED at `c5a4f4e`. **Not VERIFIED** —
-CI was not polled before the clock expired, and a push is not a verdict.
-
+**Known gap:** `derive_assurance` in the OIDC adapter has no direct test. It is the fail-closed `acr`/`amr` mapping the whole step-up control rests on, and the backlog asked for it by name.
 ## NEX-057 ADR DELIVERED (run `NEX-2026-11-27-58`) — `step-up` has a deterministic signal
 
 `step-up` was the hardest of the five named obligations because the other four are *predicates*
@@ -1151,7 +1150,7 @@ Recorded so a later audit does not re-open it without cause.
 | Field | Value |
 | --- | --- |
 | Task | NEX-059 — enforce `second-approver` with a second **distinct** human |
-| Status | Nothing in flight. **NEX-058** is IMPLEMENTED + TESTED + COMMITTED + PUSHED at `c5a4f4e`; CI unpolled, so **not VERIFIED**. |
+| Status | Nothing in flight. **NEX-058 VERIFIED** at `c5a4f4e` (CI 4/4 at `a4003bf`). |
 | Next action | 1. Poll CI for the head read from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; on 4/4 `completed/success` promote NEX-058 to VERIFIED. 2. Clear delivery debt: append NEX-057 + NEX-058 to PR #5 and post one issue #2 comment covering both. 3. Then NEX-059 — the last named obligation without a mechanism, and the one where "any second approval" silently defeats the control. |
 
 ## NEX-032 (run `NEX-2026-11-25-34`) — a withheld field that cannot say why is not a signal
