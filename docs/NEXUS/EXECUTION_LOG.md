@@ -6171,3 +6171,61 @@ It must keep two invariants true at the *storage* layer, not only in the use cas
 constraint on `(policy_id, version_number)`, and a guard so two rows cannot both be `PUBLISHED`
 for one policy id. Reimplementing the lifecycle in SQL is not the goal; enforcing its two
 invariants is. No delivery debt is outstanding, so the run starts on product work immediately.
+
+
+## NEX-2026-11-27-51 — delivery correction: PR #3 status refreshed to measured head
+
+**Run** `NEX-2026-11-27-51` · **Branch** `feature/agentic-enterprise-platform` ·
+**Start** `8b6cb15` · **End** `16bab4b`
+
+### What this run found
+
+The NEX-047 slice itself was already committed, pushed and CI-green at `379a98a`. What was
+not current was the delivery surface. PR #3's header had been written on 2026-11-25 against
+head `03ead43` and still claimed 34,710 additions across 124 files in 142 commits, 828
+collected tests, and CI green at `a3d1b32`. Every one of those numbers was true when it was
+written and false at `16bab4b`. The roadmap table in the same body listed Phases 1 through 5
+and stopped, so the governance slice this program just shipped appeared nowhere in the PR's
+own status view.
+
+### What changed
+
+- PR #3 header recomputed from the pull-request object at `16bab4b`: **50,962 additions /
+  32 deletions / 189 files / 236 commits**, 1,232 collected tests (1,228 passed, 4 skipped),
+  CI green 4/4 at `379a98a`. The measurement commit and read time are carried in the text.
+- Validation row corrected: the `pytest` row no longer cites 828 tests at `03ead43`.
+- Roadmap table gained a **Phase 6 — Governance (VERIFIED, NEX-047)** row naming the domain
+  module, use case, adapter, and the two test modules with their counts.
+- `docs/NEXUS/BACKLOG.md` gained the full NEX-048 entry (it had been a one-line mention).
+- `STATE.md`, `EXECUTION_LOG.md`, `CHECKPOINT.json` updated; the mid-run log entry for
+  `NEX-2026-11-27-50` marked superseded so its ending commit is not read as the run's end.
+
+One `03ead43` reference is deliberately retained: a past-tense paragraph recording that
+`/pulls/3/files` and `/compare/...` both under-report file sums. Deleting it would lose the
+reason the PR object is the authoritative source.
+
+### Why this counted as the slice
+
+The task instructions are explicit that docs must reflect reality and that a status is not
+VERIFIED because code exists. A green CI on a commit that the PR header no longer describes
+leaves a human reviewer reading numbers for a head that is 236 commits stale. Correcting it
+was the highest-value work available in the remaining window, and it was the only work that
+fit: at the point the correction began there were under 10 minutes left, which is below the
+threshold for starting a new implementation slice.
+
+### Validation
+
+- PR read back after both patches: all 12 positive/negative probes pass except the single
+  intentional `03ead43` mention, confirmed by inspection.
+- `## NEX-047 — M3.1` and `## NEX-046 — R40 CLOSED` each appear exactly once; the governance
+  row appears exactly once; the NEX-047 section contains no table pipes (this repo wants
+  lists in issue comments).
+- PR remains `draft: true`, `state: open`, `merged: false`. No merge performed.
+- `CHECKPOINT.json` written temp-file-then-replace and re-parsed; 26 risk entries and the
+  verified-task list asserted unchanged.
+
+### Next action
+
+**NEX-048** — durable `PolicyVersionRepository` (SQLAlchemy adapter + migration) enforcing
+unique `(policy_id, version_number)` and at most one `PUBLISHED` row per policy id at the
+storage layer. No delivery debt outstanding; start on product work immediately.
