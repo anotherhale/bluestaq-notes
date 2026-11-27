@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-50",
   "timestamp": "2026-11-27T13:14:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "16bab4b",
+  "commit": "0ef42ec",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Phase 3 (governance) is now open. Run NEX-2026-11-27-50 delivered NEX-047 / M3.1: a closed, typed policy AST (Comparison/AllOf/AnyOf/Not over a fixed operator vocabulary - no eval, no inventable node type), PolicyRule and PolicyVersion value objects with a DRAFT -> PUBLISHED -> RETIRED lifecycle, a PolicyVersionRepository port, a PolicyLifecycle use case, and an in-memory adapter that names itself in-memory. Publishing retires the predecessor in the same operation and writes the retire FIRST, so a crash leaves nothing published (deny) rather than two versions in force; exactly one version per policy id is ever in force. Rollback is a new release rather than a rewrite, so the rollback is itself recorded. Three semantics are pinned: a missing attribute never satisfies a condition under ANY operator including !=; a wrong-typed value raises rather than denying; explicit deny overrides allow with an empty or non-matching set denying. The store assigns version numbers. approve is deliberately absent (it needs separation of duties, M3.3 - a gate that always passes would look governed and not be), the adapter is in-memory, and there is no HTTP surface yet: all three are recorded gaps, not silent ones.",
   "active_task": null,
   "task_statuses": {
@@ -44,9 +44,9 @@
     "state": "open",
     "draft": true,
     "merged": false,
-    "body_len": 108965,
-    "body_updated_at": "2026-11-27T13:18Z",
-    "body_update_scope": "NEX-046 and NEX-047 sections each present exactly once; PR header metrics and the validation row recomputed at 16bab4b (50,962 additions / 189 files / 236 commits, 1,232 tests); a Phase 6 governance row added to the roadmap table",
+    "body_len": 109037,
+    "body_updated_at": "2026-11-27T13:19Z",
+    "body_update_scope": "Header, validation row and measurement note all recomputed at 0ef42ec: 51,008 additions / 32 deletions / 189 files / 237 commits, 1,232 tests, read 2026-11-27T13:19Z. NEX-046 and NEX-047 sections each present exactly once; Phase 6 governance row present.",
     "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides."
   },
   "tracking_issue": {
@@ -353,7 +353,7 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "16bab4b",
+  "head_at_checkpoint": "0ef42ec",
   "delivery_notes": "PR #3 was opened on 2026-11-25 and its header still described head 03ead43 (34,710 additions / 124 files / 142 commits, 828 tests, CI at a3d1b32). Those figures were accurate when written and are stale now, which is the failure mode the repo has hit repeatedly. Recomputed from the pull-request object at 16bab4b and patched, with the commit and read time carried in the text so the next run can tell fresh from stale. The roadmap table also had no row for Phase 6 governance, so NEX-047 was invisible from the PR's own status table; added. One 03ead43 reference remains on purpose: it is a past-tense note recording which GitHub endpoints under-report file sums.",
   "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
   "completed_task_notes": {
@@ -369,7 +369,7 @@
   "branch_head_observed_at": "2026-11-27T12:16Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "16bab4b"
+    "0ef42ec"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
@@ -394,8 +394,8 @@
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 19aafa8. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
-  "head_observed": "16bab4b",
-  "head_at_checkpoint_note": "Final verified HEAD before the last docs commit was 3045a6b (product commit e6f58c0 plus docs commits 217ac7d and 3045a6b), confirmed with git ls-remote after push. The final docs commit that writes this file necessarily postdates it, so its own SHA cannot appear here; read the branch head with git ls-remote rather than trusting this field for the very last commit.",
+  "head_observed": "0ef42ec",
+  "head_at_checkpoint_note": "0ef42ec is the last commit whose PR-object metrics are quoted in PR #3. The checkpoint update that records this fact is itself a later, documentation-only commit, so the live branch head will read one commit ahead of this field. That is expected and is why the PR body names the measured head and read time explicitly instead of quoting a bare count.",
   "last_completed_task": {
     "id": "NEX-047",
     "title": "M3.1 governance policy model + versioning (typed AST, immutable published versions)",
