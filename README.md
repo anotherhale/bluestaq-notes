@@ -1,5 +1,58 @@
 # Bluestaq Notes Service
 
+For the Bluestaq take-home exercise, I would focus on three design decisions that consumed the most engineering thought. Authentication absolutely belongs in that list—not simply because security matters, but because it influenced the design of the entire application.
+1. Three design choices I spent the most time on
+1. Authentication and authorization as first-class architectural concerns
+This was one of the most consequential decisions because the application is a shared-notes system. Identity determines who owns a note, who can access it, and what actions they are permitted to perform.
+
+I deliberately separated authentication from authorization and introduced provider boundaries rather than embedding identity assumptions in API endpoints or business logic.
+
+The design emphasizes:
+- A replaceable identity provider, with a demo implementation for the exercise.
+- Explicit authorization rules enforced by the backend.
+- Private-by-default notes and deny-by-default access.
+- Distinct owner, READ, and WRITE permissions.
+- Immediate enforcement of revoked permissions.
+Why I spent so much time here: Authentication is not just a login feature. It establishes the trusted identity context on which every security decision depends. Getting that boundary wrong creates security problems throughout the application and makes future integration with enterprise identity systems more difficult.
+
+I wanted to demonstrate that the application could evolve toward an enterprise identity provider without rewriting its domain or application layers.
+2. Domain-driven design and Hexagonal Architecture
+I spent considerable time establishing clear boundaries between the domain, application, infrastructure, and presentation layers.
+
+The domain should not know about FastAPI, SQLAlchemy, HTTP, or the underlying database. Application use cases coordinate business operations through ports, while infrastructure adapters implement those ports.
+
+Why I chose this: I wanted the business rules to remain independently testable and the infrastructure replaceable. This also makes the system easier to extend without allowing framework or persistence concerns to leak into the domain.
+
+I chose a modular monolith rather than introducing microservices. The problem did not justify distributed-system complexity.
+3. Data ownership, sharing, and consistency
+The note-sharing model required more thought than simply creating CRUD endpoints.
+
+I focused on:
+- Clear ownership and permission relationships.
+- Repository and Unit of Work boundaries.
+- Private-by-default behavior.
+- Preventing unauthorized users from manipulating notes.
+- Optimistic concurrency to prevent one user from silently overwriting another user's changes.
+Why I spent time here: These decisions establish the integrity of the application's core business behavior. A sharing model that works only in the happy path is not sufficient. It needs to remain correct when multiple users interact with the same resource, permissions change, or requests conflict.
+
+2. What would I change, add, or stop doing with more time?
+I would frame this as improving production readiness rather than changing the fundamental architecture.
+Area	What I would do
+Authentication	Implement a production identity adapter using an enterprise identity provider, potentially OIDC or CAC/PKI integration depending on the environment.
+Security	Conduct a more formal threat model and expand negative authorization and abuse-case testing.
+Testing	Add broader end-to-end tests covering multiple users, permission changes, concurrency, and failure scenarios.
+Observability	Add more comprehensive structured audit events, tracing, and operational metrics.
+Persistence	Run the application against PostgreSQL in integration testing rather than relying primarily on SQLite.
+Documentation	Expand deployment, configuration, security, and operational documentation.
+
+What I would stop doing
+I would stop adding features once the core architectural and security requirements were satisfied.
+
+For this exercise, I would resist expanding the product surface just to demonstrate more functionality. I would prioritize validating the security boundaries, API contracts, and failure behavior over adding additional UI features or infrastructure.
+
+I would also avoid introducing abstractions that don't solve a demonstrated problem. Good architecture is not about maximizing the number of patterns; it's about establishing the right boundaries for the problem.
+
+---
 A secure, multi-user REST backend for a note-taking service shared across small
 teams, with a Google Drive-inspired React workspace. Notes are **private by
 default**; an owner may organise notes into folders, star them, and share a note
@@ -175,10 +228,16 @@ production, wildcard CORS in production) fail fast.
 For a quick local start you can let the app create the schema directly:
 
 ```bash
-notes-service init-db --seed     # creates tables (SQLite) and seeds demo users
+notes-service init-db --seed     # creates tables (SQLite) and seeds the demo dataset
 ```
 
 For a real setup, prefer migrations (next section) and seed separately.
+
+`--seed` / `notes-service seed` populate a **realistic demo dataset**: 13 users
+across 4 teams, ~400 notes (each active user owns 20–50), folders, READ/WRITE
+shares, and personal stars. The data is generated deterministically (see
+[§11](#11-demo-authentication)) and seeding is **idempotent**, so it is safe to
+re-run. Add `--users-only` to seed just the users without the generated content.
 
 ## 7. Run migrations
 
@@ -312,14 +371,45 @@ tests. It is **not production authentication**.
   and provider construction).
 
 Seeded demo users (created by `notes-service init-db --seed` or
-`notes-service seed`):
+`notes-service seed`). The first four keep fixed, documented ids; the rest are
+generated from the same roster and are grouped into demo teams. All active users
+are discoverable via `GET /api/v1/demo/identities`, which is the source of truth
+for the demo selector.
 
-| Name | `X-Demo-User-ID` | Status |
-|---|---|---|
-| Alice Anderson | `11111111-1111-1111-1111-111111111111` | active |
-| Bob Baker | `22222222-2222-2222-2222-222222222222` | active |
-| Carol Chen | `33333333-3333-3333-3333-333333333333` | active |
-| Dave Diaz | `44444444-4444-4444-4444-444444444444` | suspended (cannot authenticate) |
+| Name | `X-Demo-User-ID` | Team | Status |
+|---|---|---|---|
+| Alice Anderson | `11111111-1111-1111-1111-111111111111` | Engineering | active |
+| Bob Baker | `22222222-2222-2222-2222-222222222222` | Engineering | active |
+| Carol Chen | `33333333-3333-3333-3333-333333333333` | Product | active |
+| Dave Diaz | `44444444-4444-4444-4444-444444444444` | — | suspended (cannot authenticate) |
+| Priya Patel | `55555555-5555-5555-5555-555555555555` | Engineering | active |
+| Miguel Rivera | `66666666-6666-6666-6666-666666666666` | Product | active |
+| Sofia Rossi | `77777777-7777-7777-7777-777777777777` | Product | active |
+| Dana Kim | `88888888-8888-8888-8888-888888888888` | Design | active |
+| Lena Novak | `eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee` | Design | active |
+| Tariq Hassan | `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa` | Design | active |
+| Omar Farouk | `bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb` | Operations | active |
+| Grace Lee | `cccccccc-cccc-cccc-cccc-cccccccccccc` | Operations | active |
+| Yuki Tanaka | `dddddddd-dddd-dddd-dddd-dddddddddddd` | Operations | active |
+
+### The demo dataset
+
+Beyond the users, seeding generates a realistic, internally consistent graph so
+the service looks like a real multi-team deployment:
+
+- **Teams** are a *data grouping*, not a domain entity (the schema has no teams
+  table — see ADR-002). A team is expressed through sharing: each team lead owns
+  a `"<Team> — team hub"` note shared **WRITE** with every member, plus assorted
+  1:1 shares in both directions, and a few cross-team shares.
+- **Notes**: each active user owns 20–50 notes (meeting notes, design docs,
+  runbooks, retros, 1:1s) with HTML bodies drawn from realistic templates.
+- **Folders**: three per user (e.g. Meetings, Runbooks, Roadmap).
+- **Stars**: a few personal stars per user.
+
+The generator (`infrastructure/db/demo_content.py`) is **deterministic**: every
+id is derived with `uuid5` and every choice from a SHA-256 counter, so the same
+data appears on every machine and reseeding never duplicates rows. Suspended
+users (Dave) own no content and cannot authenticate.
 
 For production, disable demo auth and enable OIDC
 (`AUTH_OIDC_ENABLED=true`, `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_JWKS_URL`) and
@@ -526,8 +616,8 @@ runs, in order:
    (`DB_WAIT_TIMEOUT_SECONDS`, default 60s) so a slow PostgreSQL start is not a
    crash-loop.
 2. **Apply migrations** — `alembic upgrade head`.
-3. **Seed demo users** — idempotent, controlled by `SEED_DEMO_USERS` (default
-   `true`).
+3. **Seed the demo dataset** — users + generated content, idempotent, controlled
+   by `SEED_DEMO_USERS` (default `true`).
 4. **Serve** — `exec`s uvicorn as PID 1.
 
 `db` and `api` declare healthchecks, and `depends_on: condition: service_healthy`

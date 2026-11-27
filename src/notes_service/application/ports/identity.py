@@ -30,6 +30,9 @@ class AuthenticationContext(Protocol):
     @property
     def demo_user_id_header(self) -> str | None: ...
 
+    @property
+    def session_cookie(self) -> str | None: ...
+
 
 @runtime_checkable
 class IdentityProvider(Protocol):

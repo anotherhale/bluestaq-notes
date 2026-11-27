@@ -1,62 +1,48 @@
-"""Database seeding for demo users and their external identities.
+"""Database seeding for demo users and a realistic demo dataset.
 
-Seeding is idempotent: running it twice does not create duplicates. It is used
-by ``notes-service init-db --seed`` and by the test suite to obtain a known set
-of users for multi-user scenarios.
+Two levels of seeding are provided:
+
+* :func:`seed_demo_users` — the demo *users* only. This is the stable, minimal
+  primitive the test suite relies on for a known set of actors.
+* :func:`seed_demo_data` — the users **plus** a full, realistic graph of folders,
+  notes, sharing grants, and stars generated deterministically by
+  :mod:`notes_service.infrastructure.db.demo_content`. This is what makes a
+  freshly started service look like a real multi-team deployment.
+
+Both are **idempotent**: users are matched by email and every generated row uses
+a deterministic (``uuid5``) primary key, so running the seed twice is a no-op and
+never duplicates data. Seeding is additive — it never deletes rows a user
+created through the API.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from notes_service.application.ports.identity import DEMO_PROVIDER_NAME
 from notes_service.domain.identity.entities import ExternalIdentity, User
-from notes_service.domain.identity.value_objects import Email, UserId, UserStatus
+from notes_service.domain.identity.value_objects import Email, UserId
+from notes_service.infrastructure.db.demo_content import (
+    DEMO_TEAMS,
+    DEMO_USERS,
+    DemoDataset,
+    DemoTeam,
+    DemoUserSpec,
+    build_demo_dataset,
+)
 from notes_service.infrastructure.db.models import UserRow
 from notes_service.infrastructure.db.repositories import (
     SqlAlchemyExternalIdentityRepository,
+    SqlAlchemyFolderRepository,
+    SqlAlchemyNotePermissionRepository,
+    SqlAlchemyNoteRepository,
+    SqlAlchemyNoteStarRepository,
     SqlAlchemyUserRepository,
 )
 
-
-@dataclass(frozen=True, slots=True)
-class DemoUserSpec:
-    """A deterministic demo user used for local runs and tests."""
-
-    email: str
-    display_name: str
-    # A stable UUID makes curl examples and docs reproducible.
-    id: str
-    status: UserStatus = UserStatus.ACTIVE
-
-
 DEMO_PROVIDER = DEMO_PROVIDER_NAME
-
-DEMO_USERS: tuple[DemoUserSpec, ...] = (
-    DemoUserSpec(
-        id="11111111-1111-1111-1111-111111111111",
-        email="alice@example.com",
-        display_name="Alice Anderson",
-    ),
-    DemoUserSpec(
-        id="22222222-2222-2222-2222-222222222222",
-        email="bob@example.com",
-        display_name="Bob Baker",
-    ),
-    DemoUserSpec(
-        id="33333333-3333-3333-3333-333333333333",
-        email="carol@example.com",
-        display_name="Carol Chen",
-    ),
-    DemoUserSpec(
-        id="44444444-4444-4444-4444-444444444444",
-        email="dave@example.com",
-        display_name="Dave Diaz",
-        status=UserStatus.SUSPENDED,
-    ),
-)
 
 
 def seed_demo_users(session: Session) -> list[User]:
@@ -89,9 +75,53 @@ def seed_demo_users(session: Session) -> list[User]:
     return seeded
 
 
+def seed_demo_data(session: Session, *, now: datetime | None = None) -> DemoDataset:
+    """Seed the demo users and their generated folders/notes/shares/stars.
+
+    Returns the generated dataset. Idempotent: existing rows (matched by their
+    deterministic primary key) are left untouched, so this is safe to run on
+    every container start.
+    """
+    seed_demo_users(session)
+
+    dataset = build_demo_dataset(now=now or datetime.now(UTC))
+
+    folders_repo = SqlAlchemyFolderRepository(session)
+    notes_repo = SqlAlchemyNoteRepository(session)
+    permissions_repo = SqlAlchemyNotePermissionRepository(session)
+    stars_repo = SqlAlchemyNoteStarRepository(session)
+
+    for folder in dataset.folders:
+        if folders_repo.get(folder.id) is None:
+            folders_repo.add(folder)
+
+    for note in dataset.notes:
+        if notes_repo.get(note.id) is None:
+            notes_repo.add(note)
+
+    for permission in dataset.permissions:
+        permissions_repo.upsert(permission)
+
+    for star in dataset.stars:
+        stars_repo.add(star.note_id, star.user_id)
+
+    session.flush()
+    return dataset
+
+
 def clear_users(session: Session) -> None:
     """Remove all users (and, by cascade, their notes and permissions)."""
     session.query(UserRow).delete()
 
 
-__all__ = ["DEMO_PROVIDER", "DEMO_USERS", "DemoUserSpec", "clear_users", "seed_demo_users"]
+__all__ = [
+    "DEMO_PROVIDER",
+    "DEMO_TEAMS",
+    "DEMO_USERS",
+    "DemoDataset",
+    "DemoTeam",
+    "DemoUserSpec",
+    "clear_users",
+    "seed_demo_data",
+    "seed_demo_users",
+]

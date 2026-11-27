@@ -14,6 +14,21 @@ from typing import Self
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from notes_service.application.ports.agents import (
+    AgentRepository,
+    AgentRunRepository,
+    AgentTokenRepository,
+    ApprovalRequestRepository,
+    DelegationRepository,
+    ToolInvocationRepository,
+)
+from notes_service.application.ports.organization_repositories import (
+    OrganizationMembershipRepository,
+    OrganizationRepository,
+    OrganizationUnitRepository,
+    TeamMembershipRepository,
+    TeamRepository,
+)
 from notes_service.application.ports.repositories import (
     ExternalIdentityRepository,
     FolderRepository,
@@ -23,13 +38,34 @@ from notes_service.application.ports.repositories import (
     UnitOfWork,
     UserRepository,
 )
+from notes_service.application.ports.sessions import (
+    LoginTransactionRepository,
+    UserSessionRepository,
+)
+from notes_service.infrastructure.db.agent_repositories import (
+    SqlAlchemyAgentRepository,
+    SqlAlchemyAgentRunRepository,
+    SqlAlchemyAgentTokenRepository,
+    SqlAlchemyApprovalRequestRepository,
+    SqlAlchemyDelegationRepository,
+    SqlAlchemyToolInvocationRepository,
+)
+from notes_service.infrastructure.db.organization_repositories import (
+    SqlAlchemyOrganizationMembershipRepository,
+    SqlAlchemyOrganizationRepository,
+    SqlAlchemyOrganizationUnitRepository,
+    SqlAlchemyTeamMembershipRepository,
+    SqlAlchemyTeamRepository,
+)
 from notes_service.infrastructure.db.repositories import (
     SqlAlchemyExternalIdentityRepository,
     SqlAlchemyFolderRepository,
+    SqlAlchemyLoginTransactionRepository,
     SqlAlchemyNotePermissionRepository,
     SqlAlchemyNoteRepository,
     SqlAlchemyNoteStarRepository,
     SqlAlchemyUserRepository,
+    SqlAlchemyUserSessionRepository,
 )
 
 
@@ -46,6 +82,19 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
     permissions: NotePermissionRepository
     folders: FolderRepository
     stars: NoteStarRepository
+    organizations: OrganizationRepository
+    organization_units: OrganizationUnitRepository
+    teams: TeamRepository
+    organization_memberships: OrganizationMembershipRepository
+    team_memberships: TeamMembershipRepository
+    sessions: UserSessionRepository
+    login_transactions: LoginTransactionRepository
+    agents: AgentRepository
+    delegations: DelegationRepository
+    agent_tokens: AgentTokenRepository
+    approvals: ApprovalRequestRepository
+    tool_invocations: ToolInvocationRepository
+    agent_runs: AgentRunRepository
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
@@ -65,6 +114,19 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.permissions = SqlAlchemyNotePermissionRepository(self._session)
         self.folders = SqlAlchemyFolderRepository(self._session)
         self.stars = SqlAlchemyNoteStarRepository(self._session)
+        self.organizations = SqlAlchemyOrganizationRepository(self._session)
+        self.organization_units = SqlAlchemyOrganizationUnitRepository(self._session)
+        self.teams = SqlAlchemyTeamRepository(self._session)
+        self.organization_memberships = SqlAlchemyOrganizationMembershipRepository(self._session)
+        self.team_memberships = SqlAlchemyTeamMembershipRepository(self._session)
+        self.sessions = SqlAlchemyUserSessionRepository(self._session)
+        self.login_transactions = SqlAlchemyLoginTransactionRepository(self._session)
+        self.agents = SqlAlchemyAgentRepository(self._session)
+        self.delegations = SqlAlchemyDelegationRepository(self._session)
+        self.agent_tokens = SqlAlchemyAgentTokenRepository(self._session)
+        self.approvals = SqlAlchemyApprovalRequestRepository(self._session)
+        self.tool_invocations = SqlAlchemyToolInvocationRepository(self._session)
+        self.agent_runs = SqlAlchemyAgentRunRepository(self._session)
         return self
 
     def __exit__(

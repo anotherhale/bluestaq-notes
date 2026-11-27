@@ -97,6 +97,44 @@ class ExternalIdentityId(uuid.UUID):
             raise ValidationError(f"invalid external identity id: {value!r}") from exc
 
 
+class LoginTransactionId(uuid.UUID):
+    """Strongly-typed identifier for a pending OIDC login transaction."""
+
+    __slots__ = ()
+
+    @classmethod
+    def new(cls) -> LoginTransactionId:
+        return cls(str(uuid.uuid4()))
+
+    @classmethod
+    def parse(cls, value: str | uuid.UUID) -> LoginTransactionId:
+        if isinstance(value, LoginTransactionId):
+            return value
+        try:
+            return cls(str(uuid.UUID(str(value))))
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValidationError(f"invalid login transaction id: {value!r}") from exc
+
+
+class SessionId(uuid.UUID):
+    """Strongly-typed identifier for an authenticated user session."""
+
+    __slots__ = ()
+
+    @classmethod
+    def new(cls) -> SessionId:
+        return cls(str(uuid.uuid4()))
+
+    @classmethod
+    def parse(cls, value: str | uuid.UUID) -> SessionId:
+        if isinstance(value, SessionId):
+            return value
+        try:
+            return cls(str(uuid.UUID(str(value))))
+        except (ValueError, AttributeError, TypeError) as exc:
+            raise ValidationError(f"invalid session id: {value!r}") from exc
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderSubject:
     """The (provider, subject) pair that identifies a user at an IdP.

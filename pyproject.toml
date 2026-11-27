@@ -42,7 +42,7 @@ packages = ["src/notes_service"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "tools"]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*.py" = ["E501"]
@@ -67,8 +67,8 @@ known-first-party = ["notes_service"]
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = "src"
-packages = ["notes_service"]
+mypy_path = "src:tools"
+packages = ["notes_service", "nexus_coord"]
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
