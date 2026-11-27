@@ -6378,3 +6378,30 @@ slice; both are delivery debt carried to the next run.
 **Next task:** NEX-050 — separation of duties: the principal that drafted a policy version
 must not be the principal that publishes it. Enforced in the application layer, for the
 same reason the gate is.
+
+## NEX-2026-11-27-53 — 2026-11-27T14:30Z–14:41Z
+
+- **Branch**: feature/agentic-enterprise-platform
+- **Starting commit**: b0f9b56 (remote head; local clone was grafted at main d6f92d0)
+- **Ending commit**: 5a96ef6501c1aa42bf1914860b4e2619c9e52670
+- **Task**: NEX-050 — separation of duties on policy publication (M3.3)
+- **Files changed**: domain/governance/policy.py, application/actor_label.py (new),
+  application/use_cases/policy_lifecycle.py, infrastructure/db/models.py,
+  infrastructure/governance/policy_versions_db.py, presentation/api/routers/policies.py,
+  presentation/schemas.py, migrations/versions/9c4d1e8a7b23_policy_separation_of_duties.py (new),
+  plus four test files.
+- **Tests**: domain/application/persistence/api policy suites all green; full suite no failures.
+- **Gates**: ruff format clean, ruff check clean, mypy clean (136 source files).
+- **Decisions**: the actor label is derived in exactly one application function
+  (`actor_label`) because the domain refuses a raw UUID and a second copy is the one that
+  gets forgotten; an unrecorded author is a refusal, not a pass, so the control cannot be
+  bypassed by omitting a field; rollback keeps the original author as `drafted_by` and the
+  caller as publisher, so an author cannot silently re-force their own retired rules.
+- **Recovered work**: the domain, schema and migration were already in the tree from an
+  interrupted run; this run verified them and completed the test migration to the new
+  contract, which was the blocking remainder.
+- **Risks**: none new. R39 stays closed.
+- **Push**: 5a96ef6 -> origin/feature/agentic-enterprise-platform, verified by ls-remote.
+- **CI**: UNPOLLED — the run budget expired first. Next run must poll 5a96ef6.
+- **Delivery debt**: PR #3 section and issue #2 comment for NEX-050.
+- **Next action**: poll CI for 5a96ef6, clear the delivery debt, then start NEX-051.

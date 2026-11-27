@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-52",
-  "timestamp": "2026-11-27T07:29Z",
+  "run_id": "NEX-2026-11-27-53",
+  "timestamp": "2026-11-27T14:41Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "22124f27dd1d3a6da4c183542faa8d1a109efcea",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Phase 3 (governance): NEX-047 delivered the closed typed policy AST and immutable published versions; NEX-048 made them durable; NEX-049 (this run) exposed the lifecycle over HTTP behind per-operation operator scopes. Next: NEX-050 separation of duties.",
+  "commit": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+  "project_phase": "Phase 3 (governance) continues. NEX-047 (typed policy AST, immutable versions), NEX-048 (durable versions), NEX-049 (HTTP lifecycle behind per-operation operator scopes) and NEX-050 (separation of duties) are delivered. Next governance work per BACKLOG is NEX-051.",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
@@ -12,9 +12,11 @@
     "R36-governance-half": "VERIFIED",
     "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)",
     "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed",
-    "NEX-047": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a, CI 4/4 green, issue #2 comment 7219198697 posted, PR #3 section appended"
+    "NEX-047": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a, CI 4/4 green, issue #2 comment 7219198697 posted, PR #3 section appended",
+    "NEX-050": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 5a96ef6. Not VERIFIED: CI has not been polled."
   },
   "completed_tasks": [
+    "NEX-050",
     "NEX-047",
     "NEX-046",
     "NEX-045",
@@ -29,12 +31,13 @@
   ],
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format --check src tests: 2 files reformatted, then clean",
+      "ruff format --check src tests: clean (214 files)",
       "ruff check src tests: All checks passed",
-      "mypy: Success, no issues found in 135 source files",
-      "pytest full suite: 1257 passed, 4 skipped"
+      "mypy: Success, no issues found in 136 source files",
+      "pytest tests/domain/test_governance_policy.py tests/application/test_policy_lifecycle.py tests/persistence/test_policy_versions_db.py tests/api/test_ops_policy_lifecycle_api.py: all passed",
+      "pytest full suite: no failures reported"
     ],
-    "not_run": "No PostgreSQL-marked tests run locally (4 skipped by marker); CI's Backend job runs the migration path and passed at 22124f2."
+    "not_run": "PostgreSQL-marked tests skipped locally, as before; CI's Backend job runs the migration path."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -275,18 +278,13 @@
       "closure_evidence": "SqlAlchemyOperatorGrantRepository behind the unchanged OperatorGrantRepository port, plus migration f7b3c0d95a12. Two properties the port promises now survive a table: active_grants ordering is by a surrogate autoincrement id rather than granted_at, because two grants in one seed share a timestamp; and add() is idempotent on the unique (user_id, scope, granted_at) key, so a re-issued grant extends its deadline instead of duplicating. Expiry is still evaluated by OperatorGrant.is_active in exactly one place rather than filtered in SQL, so the two adapters cannot drift. 23 persistence tests cover restart (a second adapter over the same file sees the grant), cross-adapter visibility, insertion order, both expiry boundaries, the empty-scope CHECK, the user FK and cascade delete."
     }
   ],
-  "next_task": "NEX-050",
-  "next_action": "1. Poll CI for the docs head. 2. Fold the NEX-048/NEX-049 PR comment into the PR description and recompute its header metrics. 3. Implement NEX-050, separation of duties on the policy lifecycle: the principal that drafted a version must not publish it, enforced in the application layer so the router cannot bypass it.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust a head field in this file. 2. NEX-049 is COMMITTED and PUSHED at 22124f2 - do not redo it. 3. Its CI has NOT been polled: poll it first. 4. Delivery debt: PR #3 sections for NEX-048 and NEX-049, plus an issue #2 comment for NEX-049. Use lists, not tables, in issue comments. 5. Then start NEX-050 per next_action.",
+  "next_task": "NEX-051",
+  "next_action": "1. Poll CI for 5a96ef6 (do not treat NEX-050 as VERIFIED before it is green). 2. Add a PR #3 section and an issue #2 comment for NEX-050 (delivery debt). 3. Start NEX-051 from BACKLOG.",
+  "recovery_instructions": "1. Read the true head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a head field in this file. 2. NEX-050 is committed and pushed at 5a96ef6 - do not redo it. 3. Poll CI for 5a96ef6 first. 4. Owed delivery: PR #3 section + issue #2 comment for NEX-050. 5. Then start NEX-051.",
   "ci_status": {
-    "commit": "22124f2",
-    "status": "4/4 completed/success",
-    "polled_at": "2026-11-27T07:34Z",
-    "checks": [
-      "Backend (ruff, mypy, pytest, migrations) success",
-      "Frontend (typecheck, lint, test, build) success"
-    ],
-    "note": "Both the push and pull_request events report success at this exact SHA. The docs commit 083cf2c is not polled and will read cancelled once superseded."
+    "commit": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+    "status": "UNPOLLED",
+    "note": "The run budget expired before polling. The next run must poll 5a96ef6 before treating NEX-050 as VERIFIED."
   },
   "verified_tasks": [
     "NEX-047",
@@ -338,8 +336,8 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "22124f27dd1d3a6da4c183542faa8d1a109efcea",
-  "delivery_notes": "PR #3 was opened on 2026-11-25 and its header still described head 03ead43 (34,710 additions / 124 files / 142 commits, 828 tests, CI at a3d1b32). Those figures were accurate when written and are stale now, which is the failure mode the repo has hit repeatedly. Recomputed from the pull-request object at 16bab4b and patched, with the commit and read time carried in the text so the next run can tell fresh from stale. The roadmap table also had no row for Phase 6 governance, so NEX-047 was invisible from the PR's own status table; added. One 03ead43 reference remains on purpose: it is a past-tense note recording which GitHub endpoints under-report file sums.",
+  "head_at_checkpoint": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
   "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
@@ -354,19 +352,18 @@
   "branch_head_observed_at": "2026-11-27T13:44:00Z",
   "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "22124f27dd1d3a6da4c183542faa8d1a109efcea"
+    "5a96ef6501c1aa42bf1914860b4e2619c9e52670"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "84774785822d7b18d480be19d56447fe90c97ff0",
+    "head": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
     "remote_verified": true,
-    "remote_verified_by": "git ls-remote returned 84774785822d7b18d480be19d56447fe90c97ff0",
-    "pr_updated": true,
-    "issue_updated": true,
-    "delivery_debt": "CLEAR for NEX-048 and NEX-049. The PR description itself was not rewritten: at 109k chars a full-body patch is not a safe operation with minutes left, so the two slices are documented in PR comment 7220694491 and the description's measured head (0ef42ec) is left as a truthful, stale marker.",
-    "pr_update_kind": "comment 7220694491"
+    "remote_verified_by": "git ls-remote returned 5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+    "pr_updated": false,
+    "issue_updated": false,
+    "delivery_debt": "OPEN for NEX-050: PR #3 section and issue #2 comment."
   },
-  "run_summary": "NEX-049 delivered and pushed at 22124f2: /api/v1/ops/policies with draft, publish, rollback and history. The operator gate lives in the application use cases (DraftPolicy / PublishDraft / RollbackPolicy / GetPolicyHistory), not the router, so every future caller is gated by the same code. Scope is per operation, so a drafting grant cannot publish a policy into force. published_by is stamped from the authenticated Principal and mapped to a lowercase identifier (user-<uuid>) because the domain rejects a raw UUID; a caller cannot attribute a published policy to someone else. Local gates green; CI unpolled; PR #3 and issue #2 delivery debt open.",
+  "run_summary": "NEX-050 delivered and pushed at 5a96ef6: a policy version records its author (drafted_by) and publication refuses the principal that drafted it. An unrecorded author fails closed, so omitting a field cannot bypass the control. Both identities are stamped from the authenticated principal at the boundary, never from a request body. The publisher label is derived in one place (application/actor_label.py) because the domain rejects a raw UUID. Self-publication surfaces as a 409 naming the reason; the domain check remains the backstop for a caller that builds a published value directly. Migration 9c4d1e8a7b23 adds the drafted_by column.",
   "head_observation": {
     "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -380,14 +377,14 @@
   "head_observed": "810d1dc",
   "head_at_checkpoint_note": "0ef42ec is the last commit whose PR-object metrics are quoted in PR #3. The checkpoint update that records this fact is itself a later, documentation-only commit, so the live branch head will read one commit ahead of this field. That is expected and is why the PR body names the measured head and read time explicitly instead of quoting a bare count.",
   "last_completed_task": {
-    "id": "NEX-049",
-    "title": "Policy lifecycle over HTTP behind per-operation operator scopes",
-    "status": "VERIFIED - CI 4/4 at 22124f2",
+    "id": "NEX-050",
+    "title": "Separation of duties on policy publication (M3.3)",
+    "status": "IMPLEMENTED + TESTED + COMMITTED + PUSHED - local gates green; CI unpolled",
     "evidence": [
-      "pytest full suite: 1257 passed, 4 skipped",
-      "ruff format --check clean, ruff check clean, mypy clean (135 source files)",
-      "tests/api/test_ops_policy_lifecycle_api.py: 11 tests (draft/publish/rollback/history, per-operation scope separation, 403/404/422)",
-      "tests/application/test_policy_lifecycle.py: 22 tests, unchanged count (gate added to each use case)"
+      "ruff format clean (214 files), ruff check clean, mypy clean (136 source files)",
+      "pytest: all four policy suites green (domain, application, persistence, api)",
+      "tests/api/test_ops_policy_lifecycle_api.py gained two boundary tests: a drafting operator gets 409 on self-publish, and a different operator publishes successfully",
+      "commit 5a96ef6 pushed; git ls-remote confirms the remote ref at that SHA"
     ]
   },
   "closed_items": [
