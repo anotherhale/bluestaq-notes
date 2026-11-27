@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): **NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main`** via PR #3 (merge commit `4d57f39`). **NEX-051 VERIFIED** — published policy is now *enforced* at the tool gateway (deny-only, fail-closed), at `f1cafeb` with **CI 4/4 green at `f4eae90`**; awaiting human review in **draft PR #5** (mergeable, 18 files). **Remaining gaps, named:** obligations, risk-based approval and deciding-policy-versions in the audit trail are still unbuilt. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051 VERIFIED** (enforcement at the gateway, deny-only + fail-closed) and **NEX-052 VERIFIED** (deciding policy versions cited in the audit trail). Both await human review in **draft PR #5**. **Remaining gaps, named:** obligations, and risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `d00c661` (run `NEX-2026-11-27-50`; the clone arrived on `main` at `d6f92d0`, the feature branch was already present and `d00c661` was its measured head before this run's commit). Prior: `80114ca`.) |
-| Head commit (measured) | `5647d42` (docs; CI `in_progress` at run end). Product head `f4eae90` — the merge of `origin/main`, **CI 4/4 success** — with `f1cafeb` (NEX-051), `14b7643` (docs), `5a96ef6` (NEX-050) beneath it. Verified via `git ls-remote`: `5647d42fe30f2155c238f010064ab70c6012c25a`. |
-| Last CI result | **`f4eae90` (NEX-051 product head): 4/4 `completed/success`, polled 2026-11-27T15:21Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), on both the `push` and `pull_request` events. This is the first CI evidence for NEX-051. The docs-only head `5647d42` was `in_progress` at run end and carries only NEXUS state files. Prior verified: `22124f2` and `810d1dc` 4/4 `completed/success`. Standing rule: a docs-only commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. |
-| Tracking issue | #2 (open) — **NEX-051 reported** (comment `7221930939`, HTTP 201), covering NEX-051 status and the avoided revert of #1's demo dataset. Prior: NEX-049 (`7220681767`), NEX-048 (`7220035523`), NEX-047 (`7219198697`). The issue stays open: the programme is not done. **Issue delivery debt: none.** |
-| Draft PR | **#5 (draft, unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, head `f4eae90`. Created this run because PR #3 had already been **merged by a human** at `b0f9b56`, leaving NEX-050/NEX-051 with no PR. Body documents the scope, the empty-policy trap, the fail-closed rule and the merge-not-rebase decision. Automated merging is prohibited; a human reviewer decides. PR #3 is closed/merged. |
-| CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
+| Starting commit (run 54) | `57f50d1` — the head inherited from run 53, clean tree, remote in agreement. |
+| Head commit (measured) | `48230e0`, verified on the remote via `git ls-remote` and clean in `git status`. Product commit remains `3215e08` (NEX-052); `4c48847` and `48230e0` are NEXUS state commits. |
+| Last CI result | **`48230e0`: 4/4 `completed/success`** (Backend: ruff, mypy, pytest, migrations; Frontend: typecheck, lint, test, build), polled this run. **NEX-052 evidence anchor `57f50d1`: 4/4 `completed/success`**, re-polled this run *after* two later pushes and still green — the durability claim is now tested, not asserted. |
+| Tracking issue | #2 (open) — NEX-052 verification reported (comment `7223372951`). The issue stays open: the programme is not done. **Issue delivery debt: none.** |
+| Draft PR | **#5 (draft, unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, head `48230e0`, mergeable, `mergeable_state` follows the newest head's checks. Body carries NEX-052 CI evidence. Automated merging is prohibited; a human reviewer decides. |
+| CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-049 PUSHED (run `NEX-2026-11-27-52`) — the lifecycle, behind a gate the router cannot skip
@@ -1873,3 +1873,30 @@ evidence.
    carry required actions to the caller. Read `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md`
    for the obligation contract before designing it, and write an ADR if the gateway's
    return type has to change shape.
+
+## Run NEX-2026-11-27-54 — NEX-052 VERIFIED
+
+- **Branch**: `feature/agentic-enterprise-platform` · **HEAD**: `57f50d1`
+- **Status**: NEX-052 is **VERIFIED**. CI 4/4 `completed/success` at `57f50d1` on both
+  events (polled 2026-11-27T16:30Z). No new product code this run — the slice was
+  delivered last run; this run closed its verification debt.
+- **Why `57f50d1` is valid evidence**: it is a docs-only descendant of the product commit
+  `3215e08`, so the Backend job tests the NEX-052 code, including migrations against
+  Postgres.
+- **The `cancelled` mystery, resolved**: branch concurrency cancels superseded runs, and
+  every checkpoint is a commit on the branch, so a checkpoint naming a SHA cancels that
+  SHA's runs while in progress. **Cancellation never retracts a concluded run** — that is
+  what makes a later poll authoritative. Recorded in `CHECKPOINT.json` → `ci_status`.
+
+**Next best actions**
+
+1. **Obligations.** The architecture lists three policy effects — deny, allow,
+   obligations — and the gateway models the first two only. An obligation allows the call
+   but attaches required actions, so it cannot be bolted on as another denial: the
+   decision has to carry those actions to the caller and into the audit trail. Read the
+   obligation contract before designing, and write an ADR if `PolicyDecision`'s shape must
+   change.
+2. **PR #5 is ready for human review** — CI green, mergeable, `mergeable_state: clean`,
+   24 files. It stays **draft** until a human decides; NEXUS must not merge it.
+3. **Tracking issue #2** carries 42 comments; the next phase section should be written
+   when obligations lands, not before.

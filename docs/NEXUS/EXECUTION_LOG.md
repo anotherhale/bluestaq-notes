@@ -6517,3 +6517,172 @@ verifier, which is worse than no verifier.
 Poll CI for `3215e08`; post the PR #5 / issue #2 updates; then start the obligations
 slice (an allow that still carries a required action) — the third policy effect the
 architecture lists and the only one still unmodelled.
+
+## Run NEX-2026-11-27-54 — NEX-052 promoted to VERIFIED
+
+- **Timestamp**: 2026-11-27T16:34Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `57f50d1`
+- **Ending commit**: `57f50d1` (plus this run's docs commit)
+- **Tasks completed**: NEX-052 verification. No new product code.
+- **Why this run existed**: the previous run ended with NEX-052 at PUSHED, not VERIFIED,
+  because CI on its product commit `3215e08` read `cancelled`. That was an open
+  verification debt, not a passing build.
+
+### The CI result
+
+`57f50d1` — **4/4 `completed/success`** on both the `push` and `pull_request` events,
+polled 2026-11-27T16:30Z:
+
+| Job | Result |
+| --- | --- |
+| Backend (ruff, mypy, pytest, migrations) | success |
+| Frontend (typecheck, lint, test, build) | success |
+
+`57f50d1` is a docs-only descendant of the NEX-052 product commit `3215e08`, so the
+Backend job compiles and tests the NEX-052 product code — including the migration path
+against Postgres, which the local gates do not exercise.
+
+### Resolving the `cancelled` reading
+
+The previous run reported `3215e08` as `cancelled` and correctly refused to call it
+either a pass or a failure. The cause is now confirmed rather than assumed: the branch's
+CI concurrency cancels superseded runs, and every NEXUS checkpoint is itself a commit on
+this branch. So a checkpoint that names a SHA guarantees that SHA's runs are cancelled
+while still in progress.
+
+The important consequence, which is what makes the evidence usable: **cancellation only
+affects runs still in progress.** A concluded run is never retracted. That is why the
+same `57f50d1` verdict read `in_progress` at the previous run's deadline and reads
+`completed/success` now, and why it will still read `completed/success` after this
+checkpoint commit supersedes nothing it depends on.
+
+### Status transitions
+
+- NEX-052: PUSHED → **VERIFIED** (CI evidence, not local gates alone).
+- `verified_tasks` now 46 entries.
+
+### Delivery
+
+- PR #5 body: NEX-052 CI evidence section appended.
+- Issue #5: status comment (the focused issue for gateway enforcement).
+- Issue #2: NEX-052 verification comment.
+
+### Next action
+
+Obligations — the third policy effect the architecture lists (deny, allow, obligations)
+and the only one the gateway does not model. It is not another denial path: an obligation
+allows the call but attaches required actions, so the decision must carry them back to the
+caller and into the audit trail. Read the obligation contract in
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
+return type has to change shape.
+
+## NEX-2026-11-27-54 - resolve pending issues, and fix the checkpoint's self-reference
+
+- **Run ID:** NEX-2026-11-27-54
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `57f50d1`
+- **Ending commit:** `48230e0`
+- **Project phase:** Phase 1 - security foundation (governance enforcement)
+
+### Tasks completed
+
+- NEX-052 promoted to **VERIFIED** and committed (`4c48847`). Status string now reads
+  IMPLEMENTED + TESTED + COMMITTED + PUSHED + CI GREEN, anchored to concluded run
+  `57f50d1`.
+- Checkpoint self-reference defect fixed (`48230e0`). See decision below.
+
+### Evidence gathered, not assumed
+
+The prior run ended with NEX-052 CI unverified. This run closed it with API evidence:
+`57f50d1` returned **4/4 completed/success** (Backend: ruff, mypy, pytest, migrations;
+Frontend: typecheck, lint, test, build) on both push and pull_request events.
+
+The durability of that evidence was then *tested* rather than asserted. Two pushes
+(`4c48847`, `48230e0`) happened after the poll. A re-poll of `57f50d1` still read 4/4
+success while the new head read `in_progress`. Branch concurrency cancellation only
+touches runs still running, so a concluded verdict is permanent. This matters because
+every NEXUS run pushes checkpoint commits, and a verdict that later pushes could retract
+would be worthless as an anchor.
+
+Earlier `3215e08` runs reading `cancelled` were never failures - they were superseded
+mid-run by `d44fe24`.
+
+### Decision - a checkpoint must not name its own commit
+
+`CHECKPOINT.json` carried `head_at_checkpoint: 57f50d1`. That field cannot be correct:
+the file is committed, so whatever SHA it names is superseded by the commit that writes
+it. It was stale on arrival, and any verifier comparing it to `git rev-parse HEAD` fails
+by construction - which is exactly what the run's own consistency check did.
+
+Rather than rewrite the SHA each run (which only resets the staleness clock), the field
+was removed and replaced with `head_resolution`: a rule to derive the head
+(`git rev-parse HEAD`), plus the two SHAs that carry real meaning - `product_commit`
+`3215e08` and `ci_evidence_commit` `57f50d1`. Verification anchors to a concluded CI run,
+which is permanent, not to a moving head.
+
+A checkpoint that is stale the moment it is written trains the next run to distrust it.
+That is worse than the field never having existed.
+
+### Validation
+
+- `.venv/bin/ruff format --check`: 287 files already formatted.
+- `CHECKPOINT.json`: parses as valid JSON, written via temp file then atomic replace.
+- CI on `48230e0`: **4/4 completed/success**.
+- Consistency verifier: `CONSISTENT` - head equals remote, worktree clean,
+  `uncommitted_work: false`, no in-progress tasks, no self-referential head field.
+
+### Commits
+
+- `4c48847` docs(nexus): verify NEX-052 on concluded CI evidence
+- `48230e0` docs(nexus): stop the checkpoint naming its own commit
+
+### Push status
+
+Both pushed. `48230e0` verified on remote and green in CI.
+
+### PR / issue status
+
+- PR #5: draft, mergeable, head `48230e0`. Unmerged by design - human review required.
+- Issue #5: focused issue for gateway enforcement, still open (objective not yet met).
+- Issue #2: tracking issue, still open.
+
+### Next action
+
+Obligations - the third policy effect the architecture lists (deny, allow, obligations)
+and the only one the gateway does not model. Not another denial path: an obligation
+allows the call but attaches required actions, so the decision must carry them back to
+the caller and into the audit trail. Read the obligation contract in
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
+return type must change shape.
+
+### Second slice - ADR-014, the obligations decision (docs only)
+
+With the pending item closed and the clock showing roughly 15 minutes, implementing
+obligations was considered and declined: it changes the shape of `PolicyDecision`, which
+every enforcement path consumes, and the repository's rule is that a shape change gets an
+ADR before code. Writing the ADR is the correct first step and fits the remaining budget;
+implementing it would not.
+
+- **Commit:** `ef81697` docs(adr): obligations are a separate decision axis
+- **Files:** `docs/ADR/ADR-014-obligations-as-separate-axis.md` (new), `docs/ADR/README.md`,
+  `docs/NEXUS/DECISIONS.md` (D-054), `docs/NEXUS/CHECKPOINT.json`
+- **Status:** DECIDED. Implementation NOT started.
+
+The decision in one line: `PolicyEffect` keeps two members, and obligations become a tuple
+on `PolicyDecision`. Effect answers *may this proceed at all*; obligations answer *what must
+happen for it to proceed*. A third enum member would collapse both and lose the
+"allowed and conditional" case that is the whole point.
+
+The load-bearing rule: **an obligation the gateway has no handler for denies.** Without it,
+the type could only land once every obligation kind existed, because the intermediate state
+would fail open. With it, the feature lands incrementally and a missing handler is a
+refusal, not a skip.
+
+Implementation is scoped into three separately committable steps, recorded in
+`CHECKPOINT.json` → `next_task`. Step 1 is domain-only and cannot fail open; that is the
+one to start with.
+
+### Format gate
+
+`.venv/bin/ruff format --check`: 288 files already formatted (ADR-014 added one).
