@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-70",
-  "timestamp": "2026-11-27T23:18Z",
+  "timestamp": "2026-11-27T23:25Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "7a1d5e2",
   "project_phase": "Phase 3 (governance). NEX-065 records a policy approval as an explicit lifecycle transition; NEX-069 makes that migration survive an upgrade of a database that had already published a policy.",
@@ -19,7 +19,7 @@
     "NEX-068": "VERIFIED - product cd8c843, docs f63ac1b, CI 4/4 completed/success. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; regression tests were proved to fail with the guard removed. PR #5 body and issue #2 comment 7228764536 carry the evidence.",
     "NEX-067": "VERIFIED - CI 4/4 completed/success at c01fde5 (polled 2026-11-27T22:47Z). derive_assurance() now classifies AMR methods into factor families and requires two independent families; otp+totp and sms+tel read as SINGLE_FACTOR. Closes a fail-open where the step-up obligation was satisfied by one factor spelled twice.",
     "NEX-065": "VERIFIED - CI 4/4 completed/success at 2d59c74 (the docs head descending from the NEX-065 product commit eca18f3), polled 2026-11-27T23:12Z by run 70. eca18f3's own pairs read `cancelled`, which is superseded, not failed. Re-validated locally: 1472 passed / 4 skipped, ruff format+check clean, mypy clean on 140 files.",
-    "NEX-069": "VERIFIED-PENDING-CI. CI not yet polled for 7a1d5e2. The NEX-065 migration required approved_at/approved_by for any in-force row; because a CHECK constraint is table-wide, `alembic upgrade head` failed on any database that had already published a policy. Now tolerates a legacy in-force row with both columns NULL while still refusing a half-written approval. Also fixed the test that had been silently vacuous (it seeded a text id into an INTEGER PK and never reached the migration). 1472 passed / 4 skipped locally; 5 tests fail with the source fix reverted."
+    "NEX-069": "VERIFIED - CI 4/4 completed/success at 7a1d5e2, polled 2026-11-27T23:22Z by run 70. The NEX-065 migration required approved_at/approved_by for any in-force row; because a CHECK constraint is table-wide, `alembic upgrade head` failed on any database that had already published a policy. Now tolerates a legacy in-force row with both columns NULL while still refusing a half-written approval. Also fixed the test that had been silently vacuous (it seeded a text id into an INTEGER PK and never reached the migration). 1472 passed / 4 skipped locally; 5 tests fail with the source fix reverted."
   },
   "completed_tasks": [
     "NEX-039",
@@ -136,16 +136,16 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "base": "main",
     "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body now carries NEX-052..NEX-067 (42794 chars) and was updated this run. Fifteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited.",
-    "body_covers_through": "NEX-067",
+    "note": "Body now carries NEX-052..NEX-069 (46209 chars). Fifteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Automated merging is prohibited.",
+    "body_covers_through": "NEX-069",
     "body_updated_this_run": true
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
-    "last_reported_task": "NEX-067",
-    "note": "Issue #2 open; comment 7229097083 covers NEX-067 (posted after the state commit, so it is noted here rather than in the commit). Prior: 7228764536 (NEX-068), 7228642936 (NEX-064/NEX-066 and the corrected NEX-056 record).",
-    "comment_id": 7229097083
+    "last_reported_task": "NEX-069",
+    "note": "Issue #2 open; comment 7230076705 covers NEX-065 (verified) and NEX-069. Prior: 7229097083 (NEX-067), 7228764536 (NEX-068).",
+    "comment_id": 7230076705
   },
   "blockers": [],
   "risks": [
@@ -160,15 +160,15 @@
     "An approval records the threshold in force when it was opened. Any future control that tightens a threshold between open and spend must remember that `is_usable` cannot detect the gap - NEX-068 fixed the one place that mattered, not the pattern.",
     "The approval record is additive and nullable: pre-existing policy_versions rows keep approved_at/approved_by NULL while being in force. The domain refuses to *construct* such a version, so only legacy rows are affected - but any consumer that assumes 'in force implies approved' must handle NULL.",
     "Run IDs are assigned independently of the log and have collided twice now (NEX-2026-11-27-61 reused, and NEX-069 written as NEX-066 in its commit message). Grep EXECUTION_LOG.md and CHECKPOINT.json for the next free ID BEFORE writing the commit message.",
-    "NEX-069 is pushed but its CI has not been polled. Local gates are green; a CI-only failure (environment, cache, frontend) would not have been seen.",
     "A legacy policy version in force carries no approval record. has_approval_record() is the only correct way to ask; any new consumer that reads `status == 'published'` as 'a human approved this' reintroduces the ambiguity NEX-069 documents rather than removes."
   ],
-  "next_task": "NEX-069 verification: poll CI on 7a1d5e2. Then report NEX-065 (verified) and NEX-069 together in one PR #5 body update and one issue #2 comment - both are currently silent on both tasks.",
-  "next_action": "1) `GET /repos/anotherhale/bluestaq-notes/commits/7a1d5e2/check-runs` until every entry is completed; two pairs per SHA is normal, judge on the completed pair, treat `cancelled` as superseded. 2) If green, promote NEX-069 to VERIFIED. 3) Update PR #5 body to cover NEX-069 and comment on issue #2. 4) Then pick the next dependency-ready backlog slice.",
-  "recovery_instructions": "Tree is clean at 7a1d5e2, pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-065 is VERIFIED (CI 4/4 at 2d59c74). NEX-069 is committed and pushed but its CI is unpolled, and it is mislabelled NEX-066 in its commit message - the correction is in EXECUTION_LOG.md and must not be silently rewritten. PR #5 and issue #2 mention neither task.",
-  "ci_status": "4/4 completed/success at 2d59c74 (NEX-065 docs head). 7a1d5e2 (NEX-069) not polled.",
+  "next_task": "Next dependency-ready backlog slice. NEX-065 and NEX-069 are both verified, pushed and reported; PR #5 and issue #2 are current through NEX-069. There is no carried-over debt.",
+  "next_action": "Read docs/NEXUS/BACKLOG.md and pick the highest-priority task whose dependencies are met, excluding everything already verified. The open P1 from the 21:18Z review (derive_assurance factor families) was closed by NEX-067. Consider the remaining risks list: request-level risk signals beyond the capability, approval `preview`, and the per-process rate-limit bound are the named deferrals with ADR reasons - do not reopen them without new evidence.",
+  "recovery_instructions": "Tree is clean at cf9e1a1 (docs checkpoint) over product head 7a1d5e2, both pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-065 and NEX-069 are VERIFIED with CI 4/4. PR #5 body and issue #2 comment 7230076705 both cover through NEX-069. The NEX-069 commit message says NEX-066 - that mislabel is documented in EXECUTION_LOG.md and must not be silently rewritten. Start the next slice from BACKLOG.md.",
+  "ci_status": "4/4 completed/success at 7a1d5e2 (NEX-069) and at 2d59c74 (NEX-065). cf9e1a1 (this checkpoint) in progress.",
   "commits_this_run": [
-    "7a1d5e2"
+    "7a1d5e2",
+    "cf9e1a1"
   ],
   "decisions_this_run": [
     "D-070e: tolerate a legacy in-force policy version with NULL approval columns rather than backfill. Backfilling invents an approver; the column exists so the audit trail cannot do that.",
@@ -179,29 +179,30 @@
   "run_summary": "NEX-065 verified against CI (4/4 at 2d59c74) and re-validated locally at 1472 passed. While doing so, found and fixed a defect that made NEX-065's own migration unupgradable on any database that had already published a policy: a table-wide CHECK constraint required an approver on rows written before the column existed. The test that should have caught it was itself broken and had been vacuous. Both fixed; five tests were proved to fail with the fix reverted. Recorded as NEX-069 because the commit message says NEX-066, an ID already in use.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "7a1d5e2",
-    "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "PR #5 body and issue #2 mention neither NEX-065 (now verified) nor NEX-069 (pushed, CI unpolled). Clear both in the next run in a single pass.",
-    "ci_verified": false,
-    "ci_verified_head": "2d59c74",
-    "pr_body_covers_through": "NEX-068",
-    "issue_comment_covers_through": "NEX-067",
+    "head": "cf9e1a1",
+    "pr_updated": true,
+    "issue_updated": true,
+    "delivery_debt": "",
+    "ci_verified": true,
+    "ci_verified_head": "7a1d5e2",
+    "pr_body_covers_through": "NEX-069",
+    "issue_comment_covers_through": "NEX-069",
     "docs_head_ci_green": true
   },
-  "branch_head": "7a1d5e2",
+  "branch_head": "cf9e1a1",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {
     "run_id": "NEX-2026-11-27-70",
     "branch": "feature/agentic-enterprise-platform",
     "starting_commit": "2d59c74 (live tip; run resumed on main and moved its work onto the feature branch)",
-    "ending_commit": "7a1d5e2",
+    "ending_commit": "cf9e1a1",
     "tasks_completed": [
       "NEX-069"
     ],
     "tasks_verified": [
-      "NEX-065"
+      "NEX-065",
+      "NEX-069"
     ],
     "tasks_in_progress": [],
     "tasks_blocked": [],
@@ -222,16 +223,17 @@
       "The migration test had been vacuous (text id into an INTEGER PK), so it had never proved the legacy-row guarantee it claimed.",
       "The approval audit trail is preserved: no approver is fabricated for legacy rows, and rollback of a legacy version is refused rather than inheriting a non-existent review."
     ],
-    "ci_status": "4/4 completed/success at 2d59c74 (NEX-065); 7a1d5e2 not polled",
+    "ci_status": "4/4 completed/success at 2d59c74 (NEX-065) and 7a1d5e2 (NEX-069)",
     "commits": [
-      "7a1d5e2"
+      "7a1d5e2",
+      "cf9e1a1"
     ],
-    "push_status": "pushed (fast-forward 2d59c74..7a1d5e2, verified via git ls-remote)",
-    "pr_status": "PR #5 open and unmerged; body covers through NEX-068, silent on NEX-065 and NEX-069",
-    "tracking_issue_status": "issue #2 open; last comment covers NEX-067",
+    "push_status": "pushed (2d59c74..7a1d5e2..cf9e1a1, each verified via git ls-remote)",
+    "pr_status": "PR #5 open and unmerged; body updated to cover NEX-065 and NEX-069",
+    "tracking_issue_status": "issue #2 open; comment 7230076705 covers NEX-065 and NEX-069",
     "checkpoint_status": "updated",
-    "next_prioritized_task": "Verify NEX-069 (poll CI on 7a1d5e2), then report NEX-065 + NEX-069",
-    "recommended_next_action": "Poll CI on 7a1d5e2; if green, update PR #5 body and comment on issue #2, then take the next backlog slice."
+    "next_prioritized_task": "Next dependency-ready backlog slice (no carried-over debt)",
+    "recommended_next_action": "Read BACKLOG.md and start the highest-priority dependency-ready slice."
   },
   "pr": {
     "body_covers_through": "NEX-068",
