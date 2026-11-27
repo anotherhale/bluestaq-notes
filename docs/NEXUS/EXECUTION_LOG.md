@@ -6312,3 +6312,18 @@ are unusable here.
 Poll CI for `810d1dc`. If green, report NEX-048 to issue #2 and append the NEX-048 section
 to PR #3 (clearing the delivery debt), then start **NEX-049** — the HTTP surface for the
 policy lifecycle, gated on an operator scope, converging on the existing use cases.
+
+### Delivery closure for NEX-048 (same run, after the docs commit)
+
+The push of `810d1dc` landed at the run's budget boundary, so CI was reported unknown in
+the first state commit. It was polled afterwards: **4/4 `completed/success`** — Backend
+(ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), on both the
+`push` and `pull_request` events. The Backend job running migrations is what exercises the
+Postgres path for `4b1e7a9c3f28`; the local check was SQLite-only.
+
+NEX-048 was then reported to tracking issue #2 (comment `7220035523`, 3163 chars, HTTP 201).
+**Issue delivery debt for NEX-048: cleared.** PR #3 section for NEX-048 remains outstanding
+and is the first task of the next run, alongside the product slice NEX-049.
+
+Statuses, stated precisely: NEX-048 is IMPLEMENTED, TESTED, COMMITTED, PUSHED, **CI PASSED**
+at `810d1dc`, and PR UPDATED is **not** true — the PR body does not yet describe this slice.
