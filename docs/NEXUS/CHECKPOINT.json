@@ -1,15 +1,16 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-45",
-  "timestamp": "2026-11-27T09:50:00Z",
+  "run_id": "NEX-2026-11-27-46",
+  "timestamp": "2026-11-27T10:05:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "ed641b0",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-042 closes the platform-wide audit gap: until now only an agent's owner could ask whether that one trail was intact, so a break on any other agent stayed invisible. SweepAuditIntegrity walks every agent, compares each tail to the out-of-band ChainAnchor, and reports a ChainAuditFinding per contradiction, behind an operator allowlist that is empty (and therefore denies everyone) by default. Coverage is falsifiable: agents_total against agents_checked, and a truncated sweep is never 'verified'. Next slice: NEX-043.",
+  "commit": "64759f4",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-042 VERIFIED. NEX-2026-11-27-46 closed R39, the coordination defect that has cost every recent run wall clock: the lease could be acquired but never released, because holder identity was `host-pid` and every nexus_coord invocation is a fresh process. The holder is now session-scoped (`host-s<sid>`), so release and renew recognise their own lease across processes. R38 was the same defect seen from the other side. Next slice: NEX-043.",
   "active_task": null,
   "task_statuses": {
-    "NEX-042": "VERIFIED"
+    "R39": "VERIFIED"
   },
   "completed_tasks": [
+    "R39",
     "NEX-042",
     "R37",
     "NEX-041",
@@ -17,13 +18,14 @@
     "NEX-039"
   ],
   "validation": {
-    "ruff_format": "248 files already formatted (ruff format --check .).",
-    "ruff_check": "All checks passed. Two findings were fixed first: an unused import and one E501 in a new test.",
+    "ruff_format": "249 files already formatted (ruff format --check .).",
+    "ruff_check": "All checks passed.",
     "mypy": "Success: no issues found in 117 source files.",
-    "pytest_full": "1060 passed, 4 skipped, 0 failed in 15.96s. Full suite, run against the exact tree that became ed641b0.",
-    "targeted": "tests/application/test_audit_sweep.py + tests/api/test_ops_audit_integrity_api.py = 9 passed.",
-    "test_side_bug": "One new assertion failed first: it expected ChainAuditFinding.checked == 1. verify_chain reports checked = expected_sequence - 1 at a break, meaning the entries that verified BEFORE the contradiction, so 0 is correct when the first entry is the broken one. The test was wrong and the implementation right; the assertion was corrected and the reasoning is recorded in the test.",
-    "product_commit": "ed641b0 carries the implementation and the tests. The docs commit that writes this file is separate and carries no product code."
+    "pytest_full": "1068 passed, 4 skipped, 0 failed in 16.57s. Full suite, run against the exact tree that became 64759f4.",
+    "targeted": "tests/coordination/ = 62 passed.",
+    "acceptance": "Five separate `python -c` processes against a scratch repo with a bare origin: acquire (proc 1) -> status reporting mine=true (proc 2) -> renew (proc 3) -> release (proc 4) -> held=false (proc 5). A sixth process with a foreign identity was refused with 'lease held by another agent', so exclusion is unchanged.",
+    "negative_control": "Reverting default_holder() to host-pid turned exactly two tests red (cross-process identity and holder shape); the file was restored from a backup and re-verified before commit.",
+    "commit_message_note": "The first commit used a shell heredoc and the terminal corrupted the message body; it was amended with `git commit --amend -F <file>` before any push, so 64759f4 is the only version that ever reached the remote."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -53,7 +55,10 @@
       "summary": "A stale lease held by a dead process blocked coordination writes for 254s at the start of this run. It expired at 1795772807 and the lease was acquired cleanly at 1795772820 (holder ...-95179, 30-minute window).",
       "affects": "Coordination-file writes only. Product delivery (commit, push, CI) is unaffected by design.",
       "can_other_work_continue": "Yes, and it did: the slice was committed, pushed and CI-verified before the lease was free.",
-      "recurrence": "Second consecutive run. The liveness-aware takeover is still unbuilt and cost about 4 minutes of waiting here."
+      "recurrence": "Second consecutive run. The liveness-aware takeover is still unbuilt and cost about 4 minutes of waiting here.",
+      "status": "CLOSED - run NEX-2026-11-27-46",
+      "closed_by": "commit 64759f4",
+      "closure_note": "Holder identity is session-scoped (`host-s<sid>`) instead of `host-pid`, so release and renew recognise their own lease across processes. Verified across five separate processes on a scratch repo (acquire -> mine=true -> renew -> release -> held=false), with a foreign identity still refused. Liveness stays reporting-only, so expiry alone still gates acquisition."
     },
     {
       "id": "R39",
@@ -63,7 +68,10 @@
       "why_writes_were_still_made": "The lease ref is held by this run's own identity, so the lease is in fact held; only the tool's `mine` comparison is broken. Coordination writes were made on that basis and are recorded here rather than concealed. This is the same judgement the prior run recorded for its second segment.",
       "recommended_fix": "Give the holder a stable per-run identity (run id, or a pid that persists for the run's lifetime) instead of `host-pid`, so release and renew can recognise their own lease. Failing that, `release --force` guarded by the run id recorded in the lease commit message. Do NOT force-delete the ref by hand.",
       "affects": "Coordination-file writes only. Product delivery is unaffected by design.",
-      "can_other_work_continue": "Yes."
+      "can_other_work_continue": "Yes.",
+      "status": "CLOSED - run NEX-2026-11-27-46",
+      "closed_by": "commit 64759f4",
+      "closure_note": "Holder identity is session-scoped (`host-s<sid>`) instead of `host-pid`, so release and renew recognise their own lease across processes. Verified across five separate processes on a scratch repo (acquire -> mine=true -> renew -> release -> held=false), with a foreign identity still refused. Liveness stays reporting-only, so expiry alone still gates acquisition."
     }
   ],
   "risks": [
@@ -234,25 +242,56 @@
     {
       "id": "R38",
       "severity": "high",
-      "status": "OPEN",
+      "status": "CLOSED - run NEX-2026-11-27-46",
       "summary": "Two NEXUS segments ran concurrently in the same workspace and the single-writer lease did not prevent it. Evidence: this clone was created at 01:00:28 -0700 and checked out to feature/agentic-enterprise-platform at 01:01:01; lease holder Andrews-Mac-mini.local-56084 (run NEX-2026-11-27-43) committed 2d58e22/6da559d between 01:12 and 01:16 while a second segment (this one, host-pid ...-48657) was already issuing git commands. The 56084 process is now dead but its lease is unexpired, so lease acquire returns exit 2 and refuses to write. This segment went on to write coordination files and commit 606805f/5ecb5c7 without holding the lease - a protocol violation, recorded here rather than concealed.",
       "impact": "No corruption resulted: the branch is linear (042e2b6 -> f92262a -> 2d58e22 -> 6da559d -> 606805f -> 5ecb5c7), the tree is clean, main is untouched at d6f92d0, and CI on the head is 4/4 success. The risk is procedural, not state damage.",
       "recommended_resolution": "The next run must call `lease acquire` first and treat exit 2 as a hard stop - do not write coordination state without the lease, even if the holder looks dead. The stale lease expires at 1795769694 (2026-11-27T09:34:54Z); after that acquire succeeds normally. Do not force-delete refs/locks/nexus/lease. Consider a liveness-aware takeover (compare holder pid to a running process) as a follow-up task, since a crashed holder currently blocks writes for the full 45-minute TTL.",
-      "opened_by": "NEX-2026-11-27-44 (second segment)"
+      "opened_by": "NEX-2026-11-27-44 (second segment)",
+      "closed_by": "commit 64759f4",
+      "closure_evidence": "R38 was recorded as a stale lease held by a dead process. It was in fact the predictable output of R39: a run that acquired the lease could never release it, so the next run always found an unexpired lease it did not hold. 64759f4 makes the holder session-scoped, so release and renew recognise their own lease across processes. Pinned by a two-subprocess test (the only shape that can express cross-process identity) plus a five-process CLI acceptance run."
+    },
+    {
+      "id": "R39",
+      "severity": "high",
+      "status": "CLOSED - run NEX-2026-11-27-46",
+      "opened_by": "NEX-2026-11-27-45",
+      "closed_by": "commit 64759f4",
+      "summary": "The coordination lease could be acquired but never released, so every successful acquire blocked the next run for the full TTL.",
+      "detail": "`release` and `renew` compare the live lease's holder against the caller's holder to decide 'is this mine?'. The default holder was `host-pid`, and every nexus_coord invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call and both verbs failed with 'lease held by another agent'. The holder must be identical across every process of one run and different between two concurrent runs on one host; a pid satisfies the second and fails the first. The POSIX session id satisfies both. This also explains R38, which was recorded as a stale lease held by a dead process: that was the predictable output of a run that acquired and could not hand back, so the two entries were one defect.",
+      "closure_evidence": "default_holder() resolves NEXUS_HOLDER, then host-s<sid>, then host-<pid> only where os.getsid is unavailable. Holder.parse accepts both shapes; a session id is the session leader's pid, so the liveness probe is unchanged. The decisive property is cross-process identity, which no single-process test can express, so test_the_holder_is_identical_across_separate_processes spawns two real subprocesses; reverting to host-pid turns exactly that test and the shape test red. A five-process CLI acceptance run confirmed the full cycle against a scratch repo with a bare origin. Residual, recorded rather than closed: the identity is only as stable as the session, so a harness that spawns each invocation under its own session reproduces the defect - that is what NEXUS_HOLDER is for. A recycled session-leader pid can make holder_liveness report 'alive' for a dead run; that is reporting inaccuracy only, because acquisition is gated on expiry, never on liveness."
     }
   ],
   "next_task": "NEX-043",
-  "next_action": "Start NEX-042 from the top of docs/NEXUS/BACKLOG.md. First acquire the lease (refs/locks/nexus/lease) and claim the task, then implement one vertical slice, run the four gates (ruff format, ruff check, mypy, pytest), commit, push, poll CI on the SHA that actually runs, and update issue #2 plus PR #3. Nothing is outstanding for R37.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run `python -m tools.nexus_coord.cli lease acquire` BEFORE writing anything; exit 2 means a live-or-stale lease is held, so stop and re-read this file. The R38 stale lease expires at 1795769694. 3. If acquire succeeds, claim NEX-042 and start it. 4. R37 is CLOSED and delivered (issue #2 comment 7213326000, PR #3 body 69961 chars) - do not redo it.",
+  "next_action": "Read BACKLOG.md from the top for NEX-043. Before anything else run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD`. Then acquire the coordination lease and confirm release works in the field: the shared ref was still held this run by a legacy `host-pid` lease (Andrews-Mac-mini.local-95179) that expires 1795775517, and no one can release it - wait for expiry, never force-delete. Highest-value product work is the deferred NEX-042 route-level operator-gate test.",
+  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` (no __main__) and no --repo flag (it uses cwd). 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R39 is CLOSED at 64759f4 - do not redo it.",
   "ci_status": {
-    "product_slice_sha": "2d58e22",
-    "product_slice_result": "VERIFIED GREEN via 6da559d. The 2d58e22 workflow run was superseded in the CI concurrency group by the docs commit that immediately followed it, so 2d58e22 itself has zero check-runs. That is not a gap in coverage: 6da559d's tree is a strict superset of 2d58e22's tree (docs only were added), so the Backend job at 6da559d ran ruff, mypy and pytest against the exact R37 implementation.",
-    "verifying_sha": "6da559d",
-    "verifying_sha_result": "4/4 completed/success - Backend (ruff, mypy, pytest, migrations) x2 and Frontend (typecheck, lint, test, build) x2, one pair per push and pull_request event.",
-    "polled_at": "2026-11-27T08:26Z",
-    "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/6da559d/check-runs",
-    "last_known_green_before_this_run": "497ab77 (4/4 completed/success)",
-    "standing_rule": "A commit whose workflow run is superseded in the concurrency group reads completed/cancelled or has no check-runs at all - neither pass nor fail, and never evidence on its own. Cite the SHA that actually ran."
+    "product_slice_sha": "64759f4",
+    "product_slice_result": "4/4 completed/success at 64759f4",
+    "polled_at": "2026-11-27T10:07Z",
+    "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/64759f4/check-runs",
+    "standing_rule": "A commit whose workflow run is superseded in the concurrency group reads completed/cancelled or has no check-runs at all - neither pass nor fail, and never evidence on its own. Cite the SHA that actually ran.",
+    "checks": [
+      {
+        "name": "Backend (ruff, mypy, pytest, migrations)",
+        "conclusion": "success",
+        "head_sha": "64759f4"
+      },
+      {
+        "name": "Frontend (typecheck, lint, test, build)",
+        "conclusion": "success",
+        "head_sha": "64759f4"
+      },
+      {
+        "name": "Backend (ruff, mypy, pytest, migrations)",
+        "conclusion": "success",
+        "head_sha": "64759f4"
+      },
+      {
+        "name": "Frontend (typecheck, lint, test, build)",
+        "conclusion": "success",
+        "head_sha": "64759f4"
+      }
+    ]
   },
   "verified_tasks": [
     "NEX-001",
@@ -318,22 +357,20 @@
   "branch_head_observed_at": "2026-11-27T09:45Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "ed641b0"
+    "64759f4"
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned ed641b07cfe7a283cc2cce090b8177efd67c9d02, equal to local git rev-parse HEAD",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 64759f4f45658a5c0298c7bd5b80ddac52553909, equal to local git rev-parse HEAD",
     "ci_verified": true,
-    "ci_verifying_sha": "ed641b0",
-    "ci_result": "4/4 completed/success (Backend and Frontend, both duplicate check-run sets), polled 2026-11-27T09:46Z",
+    "ci_verifying_sha": "64759f4",
+    "ci_result": "4/4 completed/success at 64759f4 (Backend and Frontend, one pair per push and pull_request event). Every check run reported head_sha 64759f4, so the result is attributable to the pushed slice and not to a superseded run.",
     "tracking_issue_updated": true,
     "pr_updated": true,
-    "delivery_debt": "One follow-up remains, and it is product work rather than delivery: NEX-042 has no route-level test proving the ops route reads the operator allowlist from settings - the API tests exercise the use case directly. Run report for this run was posted to issue #2 and PR #3 during the same run, so no reporting debt carries forward.",
-    "tracking_issue_ref": "issue #2 comment 7215122677 (NEX-042 run report, lists only, no markdown tables)",
-    "pr_ref": "PR #3 body 69961 -> 72415 chars; NEX-042 section appended and read back verified. Still draft, still unmerged.",
-    "lease_state": "ACQUIRED at 1795772820 (holder ...-95179) and NOT released: `lease release` refuses because the pid-based holder identity cannot match across processes. Expires 1795775517."
+    "lease_state": "NOT acquired this run. The shared ref was held throughout by a prior run's legacy host-pid lease (Andrews-Mac-mini.local-95179, expiring 1795775517) which the old code cannot release. The fix was verified on a scratch repo instead of waiting ~17 minutes for that expiry.",
+    "delivery_debt": "None. Run report posted to issue #2 and PR #3 in this run."
   },
-  "run_summary": "NEX-2026-11-27-45. Shipped NEX-042, the audit-chain platform-wide sweep. Reconciled from the true remote head (git ls-remote, not the local tracking ref), which was 5c13d9b - one docs commit ahead of what the prior run's next_action implied. Implemented SweepAuditIntegrity plus its port methods, domain report types, repository queries and an operator-gated ops endpoint: 562 insertions across 9 files. All gates green on the committed tree (ruff format 248 files, ruff check clean, mypy 117 files, pytest 1060 passed / 4 skipped). Committed ed641b0, pushed, verified by ls-remote, CI 4/4 success at that exact SHA. Product delivery finished before the lease was free, so R38's stale lease blocked only the coordination writes that followed it. Delivery was closed out in the same run: the run report was posted to tracking issue #2 (comment 7215122677) and appended to PR #3 (69961 -> 72415 chars, read back and asserted), so no reporting debt carries into the next run.",
+  "run_summary": "NEX-2026-11-27-46. Closed R39, the coordination lease defect that made every acquire a full-TTL block for the next run. Reconciled from the true remote head (git ls-remote), which equalled local HEAD at 7d03814, so no catch-up was needed. Changed 3 files and added one test module (218 insertions): holder identity is session-scoped instead of host-pid, so release and renew recognise their own lease across processes. All gates green on the committed tree (ruff format 249 files, ruff check clean, mypy 117 files, pytest 1068 passed / 4 skipped), negative control run on disk, and a five-process CLI acceptance run proved acquire -> mine=true -> renew -> release -> held=false while a foreign identity stayed refused. Committed 64759f4, pushed, verified by ls-remote, CI polled. One process defect was recorded rather than concealed: the shared lease was never acquired because a legacy host-pid lease held it, so the fix was verified on a scratch repo.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "ed641b07cfe7a283cc2cce090b8177efd67c9d02",

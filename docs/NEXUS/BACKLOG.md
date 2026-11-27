@@ -2338,3 +2338,70 @@ Stated in ADR-013 rather than left for a reader to discover:
 **NEX-040, unchanged:** verify whether any production route actually reaches a configured live
 vendor. The adapter exists and the container selects one, but "nothing configures one by
 default" is a claim to check in the code before building on it.
+
+---
+
+## R39 — The coordination lease could be acquired but never released
+
+| Field | Value |
+| --- | --- |
+| Phase | 0 (process substrate) |
+| Priority | P1 — it gated every run's ability to coordinate |
+| Status | **VERIFIED / COMMITTED / PUSHED / CI PASSED** |
+| Type | Defect, found in `tools/nexus_coord` |
+| Commit | `64759f4` |
+| Closed by | run `NEX-2026-11-27-46` |
+
+**Symptom.** After a run acquired the coordination lease, `lease release` in that same run
+exited 2 with `lease held by another agent`, naming the run's own holder. The next run then
+opened with the lease still held, `holder_liveness: dead`, `mine: false`, and was locked out
+of coordination writes for the remainder of the TTL.
+
+**Root cause.** `release` and `renew` decide "is this mine?" by comparing the live lease's
+`holder` with the caller's holder. The default holder was `host-pid`, and every `nexus_coord`
+invocation is a fresh process — so the pid recorded at acquire time is never the pid doing the
+release. `mine` is false on the very next call. A lease was therefore single-use per
+acquisition, and every successful acquire blocked the following run.
+
+**Why this also closes R38.** R38 was recorded as "a stale lease held by a dead process". It
+was the predictable output of a run that acquired and could not hand back. The two entries were
+one defect.
+
+**Fix.** The holder must be identical across every process of one run and different between two
+concurrent runs on one host. A pid satisfies the second and fails the first; the run id
+satisfies both but is a briefing value passed by hand, which would make coordination depend on
+a human remembering a flag. The POSIX **session id** satisfies both: one terminal session drives
+a run, every process it spawns inherits it, and overlapping runs get different sessions.
+`default_holder()` resolves `NEXUS_HOLDER`, then `host-s<sid>`, then `host-<pid>` only where
+`os.getsid` is unavailable or raises.
+
+**Acceptance criteria — all met**
+
+- A process can release a lease that another process of the same session acquired.
+- A process can renew it, and `status` reports `mine: true` from a different process.
+- A different identity is still refused, so exclusion did not widen with self-recognition.
+- Liveness remains reporting-only: expiry alone gates acquisition, so a wrong liveness answer
+  can never cause a false takeover.
+
+**Required tests**
+
+- `tests/coordination/test_holder_identity.py` — two real subprocesses must report the same
+  holder. This is the only shape that can express cross-process identity; two calls in one
+  process share a pid and pass under the broken implementation.
+- Negative control: reverting `default_holder()` to `host-pid` must turn that test red.
+
+**Validation.** ruff format 249 files clean, ruff check clean, mypy 117 source files clean,
+`pytest` 1068 passed / 4 skipped / 0 failed. Five-process CLI acceptance run on a scratch repo
+with a bare origin: acquire -> mine=true -> renew -> release -> held=false. CI 4/4 success at
+`64759f4`.
+
+**Residual risk, recorded not hidden.** The identity is only as stable as the session; a harness
+that spawns each invocation under its own session (via `setsid`) reproduces the original defect.
+That is what `NEXUS_HOLDER` is for. A recycled session-leader pid can make `holder_liveness`
+report `alive` for a dead run — reporting inaccuracy only, because acquisition is gated on
+expiry, never on liveness.
+
+**Not verified in the field.** This run did not acquire the shared lease: a prior run's legacy
+`host-pid` lease (`Andrews-Mac-mini.local-95179`, expiring `1795775517`) still held the ref, and
+the old code cannot release it. The fix was therefore proven on a scratch repo. The next run
+should confirm acquire -> `mine: true` -> release against the real ref after that expiry.

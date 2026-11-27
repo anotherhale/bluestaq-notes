@@ -7,15 +7,62 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. **NEX-040 VERIFIED (verification only, no code change):** no default or production configuration in this repository can reach a live vendor — no `DECISIONING_*` variable appears in any deploy artifact, the measured defaults are `enabled=False`/`endpoint=None`/`min_confidence=0.5`, a `None` endpoint selects the stub even with the flag on, the stub's `0.1` confidence sits below the `0.5` threshold so every answer abstains, and the one production route short-circuits to `DISABLED` before touching a provider. Pinned by 13 tests whose pin was proven non-vacuous by mutation. **R37 CLOSED (run `NEX-2026-11-27-44`):** the `HttpDecisionProvider` 64 KiB cap previously ran *after* httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming — an announced oversized `Content-Length` is refused before any body byte is read, an unannounced body is abandoned rather than drained, and a non-200 body is never read. Six new tests, three of which fail against the old implementation. |
+| Project phase | Phase 2 **complete** — agent identity & delegation all VERIFIED. Phase 5 (durable runtime): **NEX-001…NEX-039 all VERIFIED.** NEX-028 (context assembly) and NEX-029 (its first production caller) complete **M2.6 decisioning**; NEX-030 closes risk **R31** by making `context_hash` unforgeable by construction; NEX-031 exercises the envelope bounds against real stored **note** bodies; NEX-032 closes **R32** by making withholding observable per field with a reason; NEX-033 turns that per-response detail into a **rate** via a `WithholdingRecorder` port, and repairs two observability defects — `JsonFormatter` silently dropped every `extra` field outside a six-key allowlist, and `redact()` had zero callers. NEX-034 closes the hole NEX-033 thereby opened: once `redact()` was on the formatting path it *advertised* protection, so its eleven-string exact-match matcher had to become a shape-based one. NEX-035 closes **R30** with the adapter conformance suite R30 asked for — and building it found four real defects in the provider identity seam, which are fixed. NEX-036 audits the decisioning path's **production caller**: the fail-closed premise held, but `RecommendApprovalDecision` produced advice for requests already settled. Fixed with a status/liveness guard returning **409** — see **R35**. NEX-037 closes **R34**: the per-process withholding count is now an aggregate an operator can alert on, at `GET /api/v1/ops/withholding-report`, gated on an explicit operator allowlist that is empty — and therefore denies everyone — by default. NEX-038 re-polled NEX-037's CI and cleared its delivery debt. **NEX-039 ships the first real `DecisionProvider` adapter**: until now `StubDecisionProvider` was the only implementation, so decisioning was a capability the platform could exercise but never actually use. **NEX-040 VERIFIED (verification only, no code change):** no default or production configuration in this repository can reach a live vendor — no `DECISIONING_*` variable appears in any deploy artifact, the measured defaults are `enabled=False`/`endpoint=None`/`min_confidence=0.5`, a `None` endpoint selects the stub even with the flag on, the stub's `0.1` confidence sits below the `0.5` threshold so every answer abstains, and the one production route short-circuits to `DISABLED` before touching a provider. Pinned by 13 tests whose pin was proven non-vacuous by mutation. **R37 CLOSED (run `NEX-2026-11-27-44`):** the `HttpDecisionProvider` 64 KiB cap previously ran *after* httpx had buffered the body, so it bounded parsing and not memory. It is now enforced while streaming — an announced oversized `Content-Length` is refused before any body byte is read, an unannounced body is abandoned rather than drained, and a non-200 body is never read. Six new tests, three of which fail against the old implementation. **R39 CLOSED (run `NEX-2026-11-27-46`):** the coordination lease could be acquired and never released. Holder identity was `host-pid`, and every `nexus_coord` invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call, `release` and `renew` both failed with `lease held by another agent`, and every successful acquire blocked the next run for the full 45-minute TTL. R38's "stale lease held by a dead process" was the predictable output of that, not bad luck. The holder is now session-scoped (`host-s<sid>`), with `NEXUS_HOLDER` as an explicit override and `host-<pid>` only as a fallback where `os.getsid` is unavailable. Liveness stays reporting-only, so this cannot enable a false takeover. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Base commit (run start) | `f92262a` — the run began on `main` at `d6f92d0` in a fresh clone, then fast-forwarded `feature/agentic-enterprise-platform` from `042e2b6` to `f92262a` after `git ls-remote` (not the local tracking ref) established the remote head. `f92262a` is docs-only: it posts NEX-039/040/041 to issue #2 and PR #3. |
-| Head commit (run end) | See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (this run's R37 fix). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
+| Base commit (run start) | `7d03814` (run `NEX-2026-11-27-46`; established with `git ls-remote` and equal to local `HEAD`, so no reconciliation was needed). Prior run `NEX-2026-11-27-45` started at `f92262a` — the run began on `main` at `d6f92d0` in a fresh clone, then fast-forwarded `feature/agentic-enterprise-platform` from `042e2b6` to `f92262a` after `git ls-remote` (not the local tracking ref) established the remote head. `f92262a` is docs-only: it posts NEX-039/040/041 to issue #2 and PR #3. |
+| Head commit (run end) | `64759f4` (R39 product commit, pushed and `ls-remote`-verified) plus the docs commit that writes these files. See `commit` in `CHECKPOINT.json` — it names the last commit carrying **implementation** (this run's R37 fix). The true branch head includes the docs commit that writes this file and is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
 | Last CI result | **`6da559d` (R37 docs commit — tree is a docs-only superset of the `2d58e22` implementation commit): 4/4 `completed/success`**, polled 2026-11-27T08:26Z. The `2d58e22` workflow run was superseded in the concurrency group so it has no check-runs of its own; `6da559d`'s Backend job ran ruff/mypy/pytest against the exact R37 code. Prior: `497ab77` 4/4 green; `f92262a` 4/4 green. See `ci_status` in `CHECKPOINT.json` for per-slice authority. |
-| Tracking issue | #2 (open) — **current, no delivery debt.** NEX-037 by comment 7171861451, NEX-038 by 7171956166, NEX-039/040/041 by comment **7213047814**, and **R37 by comment `7213326000`** (3495 chars, read back byte-identical, 8/8 substring assertions). |
-| Draft PR | #3 (draft, unmerged — human review required). Body PATCHed 2026-11-27T08:33Z with the R37 section (69961 chars, `draft=true`, read back byte-identical). **No delivery debt outstanding.** |
+| Tracking issue | #2 (open) — **R39 report posted this run.** Prior: **current, no delivery debt.** NEX-037 by comment 7171861451, NEX-038 by 7171956166, NEX-039/040/041 by comment **7213047814**, and **R37 by comment `7213326000`** (3495 chars, read back byte-identical, 8/8 substring assertions). |
+| Draft PR | #3 (draft, unmerged — human review required). R39 section appended this run. Prior: Body PATCHed 2026-11-27T08:33Z with the R37 section (69961 chars, `draft=true`, read back byte-identical). **No delivery debt outstanding.** |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## R39 (run `NEX-2026-11-27-46`) — the lease could be acquired but never released
+
+**Found by trying to be polite.** After the previous run's docs were pushed, it called
+`lease release` to hand the lease back. It exited with `lease held by another agent`, naming
+that run's own holder. The next run opened with the same lease still held — 1405 seconds
+remaining, `holder_liveness: dead`, `mine: false`.
+
+**The defect.** `release` and `renew` compare the live lease's `holder` against the caller's
+holder to decide "is this mine?". The default holder was `host-pid`. Every `nexus_coord`
+invocation is a fresh process, so the pid recorded at acquire time is never the pid doing the
+release. `mine` is false on the very next call, and both verbs fail. A lease was single-use per
+acquisition, so every successful acquire blocked the next run for the full TTL.
+
+**Why R38 was not bad luck.** R38 was recorded as "a stale lease held by a dead process". It
+was the predictable output of a run that acquired and could not hand back. The two defects are
+one defect; fixing this one removes the source of the other.
+
+**The fix.** The holder must be identical across every process of one run and different between
+two concurrent runs on one host. A pid satisfies the second and fails the first. The run id
+satisfies both but is a briefing value passed by hand — coordination would then depend on a
+human remembering a flag. The POSIX **session id** is exactly the required identity: one
+terminal session drives a run, every process it spawns inherits the session, and overlapping
+runs have different sessions. `default_holder()` resolves `NEXUS_HOLDER`, then `host-s<sid>`,
+then `host-<pid>` only where `os.getsid` is unavailable or fails.
+
+**Why the tests are evidence.** The decisive property is stability *across processes*, which no
+single-process test can express — two calls in one process share a pid and pass under the
+broken implementation too. `test_the_holder_is_identical_across_separate_processes` spawns two
+real subprocesses and compares their answers. Negative control on disk: reverting
+`default_holder()` to `host-pid` turns exactly two tests red (the cross-process one and the
+shape one); the file was restored from a backup and re-verified before commit.
+
+A five-process acceptance run against a scratch repository with a bare origin confirmed the
+whole cycle: acquire, then `status` in a *different* process reporting `mine: true`, then
+`renew`, then `release`, then `held: false`. A sixth process with a foreign identity was still
+refused, so the fix widened self-recognition without widening exclusion.
+
+**Validation.** ruff format 249 files clean, ruff check clean, mypy clean (117 source files),
+`pytest` **1068 passed, 4 skipped, 0 failed**. Commit `64759f4`, pushed,
+`git ls-remote` confirms the remote head equals local `HEAD`.
+
+**Honest limits.** The identity is only as stable as the session; a harness that spawns each
+invocation under its own session (via `setsid`) reproduces the original defect, which is what
+`NEXUS_HOLDER` is for. A recycled session-leader pid could make `holder_liveness` report
+`alive` for a dead run — reporting inaccuracy only, because acquisition is gated on expiry,
+never on liveness, so it cannot cause a false takeover.
 
 ## R37 (run `NEX-2026-11-27-44`) — the cap bounded parsing, not memory
 
@@ -1326,17 +1373,20 @@ number has met no real deployment.
 lease blocked only the docs. Second consecutive run; the liveness-aware takeover is still
 unbuilt.
 
-## Next best actions (run `NEX-2026-11-27-45`, superseding the lists above)
+## Next best actions (run `NEX-2026-11-27-46`, superseding the lists above)
 
 1. **NEX-043** from the top of `BACKLOG.md`. First command is always
    `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against
-   `git rev-parse HEAD` — this run's own start proved again that a recorded `next_action`
-   describes the past (it was one docs commit behind).
-2. **Close NEX-042's deferred delivery debt:** post the run report to issue #2 and add the
-   NEX-042 section to PR #3.
-3. **The route-level operator-gate test for NEX-042** — prove the ops route reads
-   `OPS_OPERATOR_USER_IDS` from settings, rather than trusting that the container wiring was
-   reviewed.
+   `git rev-parse HEAD` — every recent run has had to correct a recorded `next_action`.
+2. **Close NEX-042's deferred delivery debt:** prove the ops route reads
+   `OPS_OPERATOR_USER_IDS` from settings with a route-level test, rather than trusting that
+   the container wiring was reviewed. This is product work, not reporting.
+3. **Verify the lease fix in the field.** This run proved release/renew across processes on a
+   scratch repo, but it did not acquire the shared lease: a prior run's `host-pid` lease
+   (`Andrews-Mac-mini.local-95179`, expiring `1795775517`) still held the ref, and under the old
+   code no one can release it. The next run should find the ref free after that expiry and
+   confirm acquire -> status(`mine: true`) -> release on the real repo. If a legacy `host-pid`
+   lease is ever stuck again, let it expire; never force-delete the ref.
 
 ## R39 (run `NEX-2026-11-27-45`) — the lease can be acquired but never released
 

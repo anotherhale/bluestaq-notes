@@ -5406,3 +5406,89 @@ commit message. Do **not** force-delete the ref by hand.
 
 This is now the highest-value process fix in the programme: it costs every run minutes of wall
 clock and, worse, it invites runs to write without the lease because the lease is unusable.
+
+## Run NEX-2026-11-27-46 — R39: the lease could be acquired but never released
+
+| Field | Value |
+| --- | --- |
+| Run ID | NEX-2026-11-27-46 |
+| Timestamp | 2026-11-27T10:00Z |
+| Starting commit | `7d03814` |
+| Ending commit | product commit `64759f4` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Tasks completed | R39 |
+| Tasks started | R39 (only slice; the window went to the fix and its evidence) |
+| Files changed | `tools/nexus_coord/lease.py`, `liveness.py`, `cli.py`, `tests/coordination/test_holder_identity.py` (new) |
+| Migrations | none |
+| Tests executed | `pytest` full suite; `pytest tests/coordination/`; a five-process CLI acceptance run against a scratch repo |
+| Test results | 1068 passed, 4 skipped, 0 failed. Coordination subset 62 passed. Acceptance run: acquire -> `mine: true` from a *different* process -> renew -> release -> `held: false`; a foreign identity still gets `lease held by another agent` |
+| Security findings | None introduced. Liveness remains reporting-only, so the fix cannot enable a false takeover: expiry still gates acquisition (lease.py docstring, unchanged). Exclusion between two different identities is pinned by a test |
+| CI status | **4/4 `completed/success` at `64759f4`** — polled after push. Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), one pair per push and pull_request event. Every check run reported `head_sha` `64759f4`, so the result is attributable to the pushed slice. |
+| Commits | product commit `64759f4`, then this docs commit |
+| Push status | Pushed and verified with `git ls-remote` |
+| PR updates | PR #3 body and issue #2 comment updated with the R39 section |
+| CI results | 4/4 success at `64759f4`, detail in `CHECKPOINT.json` `ci_status` |
+| Checkpoint status | Updated |
+| Next action | NEX-043 from the top of `BACKLOG.md` |
+
+### What was wrong
+
+`release` and `renew` compare the live lease's `holder` against the caller's holder to decide
+"is this mine?". The default holder was `host-pid`. Every `nexus_coord` invocation is a fresh
+process, so the pid recorded at acquire time is never the pid doing the release: `mine` is
+false on the very next call, and both `release` and `renew` fail with `lease held by another
+agent`. A lease was therefore single-use per acquisition, and every successful acquire became a
+full-TTL (45 minute) block for the next run.
+
+That is why R38 was not bad luck. "A stale lease held by a dead process" was the predictable
+output of a run that acquired and could not hand back, not an unlucky crash. This run opened
+with exactly that: the prior run's lease (`Andrews-Mac-mini.local-95179`) still held the ref
+with 1405 seconds left, reporting `holder_liveness: dead` and `mine: false`.
+
+### The fix, and why a session id rather than the run id
+
+The requirement is a value that is *identical across every process in one run* but *different
+between two concurrent runs on one host*. A pid satisfies the second and fails the first. The
+run id satisfies both but is not known to the tool: it is a briefing value passed by hand, and
+a coordination primitive that depends on a human remembering a flag is a coordination
+primitive that silently stops coordinating.
+
+The POSIX **session id** is exactly the required identity. One terminal session drives one
+run, every process it spawns inherits that session, and two overlapping runs have different
+sessions. Resolution order in `default_holder()`:
+
+1. `NEXUS_HOLDER` — an explicit identity, for a harness that already knows the run id.
+2. `host-s<sid>` — the session id, when the platform exposes one.
+3. `host-<pid>` — the old shape, only as a fallback where `os.getsid` does not exist
+   (Windows) or fails. Release and renew are unreliable under it, which is exactly why it is no
+   longer the default.
+
+`Holder.parse` recognises both shapes. A session id *is* the session leader's pid, so the
+liveness probe is unchanged; `is_session` is carried only so status output can say which
+identity it saw. The `s` prefix is what keeps the two shapes unambiguous.
+
+### Why the tests are evidence
+
+The decisive property is stability *across processes*, which no single-process test can
+express — two calls in one process share a pid and pass under the broken implementation too.
+So `test_the_holder_is_identical_across_separate_processes` spawns two real subprocesses and
+compares their answers.
+
+Negative control, run on disk: reverting `default_holder()` to `host-pid` turns exactly two
+tests red — the cross-process one and the shape one — and the file was restored from a backup
+and re-verified before committing.
+
+The end-to-end acceptance run used five separate `python -c` processes against a scratch
+repository with a bare origin: acquire in one process, then `lease status` in another reporting
+`mine: true`, then `renew`, then `release`, then `held: false`. A sixth process with a
+different identity was refused, so the fix widened self-recognition without widening
+exclusion.
+
+### Honest limits
+
+- The identity is only as stable as the session. A harness that spawns each invocation under
+  its own session (for example via `setsid`) reproduces the original defect. `NEXUS_HOLDER`
+  is the escape hatch, and it is checked first.
+- A recycled session-leader pid could make `holder_liveness` report `alive` for a dead run.
+  That is a reporting inaccuracy only: acquisition is gated on expiry, never on liveness, so
+  it cannot cause a false takeover.
