@@ -48,23 +48,33 @@ class HolderLiveness(Enum):
 
 @dataclass(frozen=True)
 class Holder:
-    """A parsed lease holder: ``host-pid`` (see :func:`default_holder`)."""
+    """A parsed lease holder: ``host-pid`` or ``host-s<sid>`` (see :func:`default_holder`)."""
 
     host: str
     pid: int
+    # True when the number came from a session id rather than a process id. Both
+    # are probed the same way — a session id *is* the session leader's pid — but
+    # the distinction is kept so status output can say which identity it saw.
+    is_session: bool = False
 
     @classmethod
     def parse(cls, holder: str) -> Holder | None:
-        """Split a holder string, or ``None`` if it is not ``host-pid`` shape.
+        """Split a holder string, or ``None`` if it is neither shape.
 
         ``rsplit`` on the last dash, because a hostname may contain dashes
         (``Andrews-Mac-mini.local-56084`` -> host ``Andrews-Mac-mini.local``,
-        pid ``56084``) while the pid never does.
+        pid ``56084``) while the pid never does. A ``s``-prefixed number
+        (``host-s99906``) is a session id; see :func:`default_holder` for why the
+        default identity is a session rather than a pid.
         """
-        host, sep, pid_text = holder.rpartition("-")
-        if not sep or not host or not pid_text.isdigit():
+        host, sep, suffix = holder.rpartition("-")
+        if not sep or not host or not suffix:
             return None
-        return cls(host=host, pid=int(pid_text))
+        if suffix.isdigit():
+            return cls(host=host, pid=int(suffix))
+        if suffix[0] == "s" and suffix[1:].isdigit():
+            return cls(host=host, pid=int(suffix[1:]), is_session=True)
+        return None
 
 
 def _process_exists(pid: int) -> bool | None:

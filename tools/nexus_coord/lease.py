@@ -59,13 +59,54 @@ DEFAULT_TTL_SECONDS = 45 * 60
 
 
 def default_holder() -> str:
-    """Identify this machine and process.
+    """Identify this run, stably across every process it starts.
 
-    The pid keeps two overlapping runs on one host distinct, which is exactly
-    the collision this exists to prevent.
+    The holder string is what `release` and `renew` compare against the live
+    lease to decide "is this mine?", so it must be the *same value* in every
+    invocation of this CLI. A pid cannot do that: each `nexus_coord` call is a
+    fresh process, so a pid recorded at acquire time never matches the process
+    that later releases, and both `release` and `renew` fail with "held by
+    another agent" (R39). Every acquire then blocked the next run for the full
+    TTL (R38), because the lock could never be handed back.
+
+    The **session id** is the run-scoped identity: one terminal session drives a
+    run, and every process it spawns inherits that session. Two overlapping runs
+    on one host have different sessions, which is the collision this exists to
+    prevent, so a session keeps that property while remaining stable.
+
+    Resolution order:
+
+    1. ``NEXUS_HOLDER`` — an explicit identity, for a wrapper that already knows
+       the run id. Highest precedence so a harness can be deterministic.
+    2. ``host-s<sid>`` — the session id, when the platform exposes one.
+    3. ``host-<pid>`` — the old shape, only as a fallback on platforms without
+       session ids. Release/renew are unreliable under it, which is why it is no
+       longer the default.
     """
+    explicit = os.environ.get("NEXUS_HOLDER")
+    if explicit:
+        return explicit
     host = os.environ.get("NEXUS_HOLDER_HOST") or socket.gethostname() or "unknown"
+    sid = _session_id()
+    if sid is not None:
+        return f"{host}-s{sid}"
     return f"{host}-{os.getpid()}"
+
+
+def _session_id() -> int | None:
+    """The caller's POSIX session id, or ``None`` where it is unavailable.
+
+    ``os.getsid`` does not exist on Windows, and can fail on an exotic platform;
+    both cases fall back to the pid rather than raising, because a coordination
+    tool must not fail to start.
+    """
+    getsid = getattr(os, "getsid", None)
+    if getsid is None:
+        return None
+    try:
+        return int(getsid(0))
+    except OSError:
+        return None
 
 
 @dataclass(frozen=True)

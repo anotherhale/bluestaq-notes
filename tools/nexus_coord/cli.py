@@ -69,8 +69,10 @@ def _cmd_lease(args: argparse.Namespace, manager: LeaseManager) -> int:
 
     # renew and release both operate on the caller's own lease, identified by
     # the live ref rather than by local state. The holder string must match, so
-    # a caller must pass the same --holder it acquired with (the default
-    # host-pid changes every invocation and therefore cannot renew).
+    # the caller must run from the same identity it acquired with. The default
+    # identity is the terminal session id (see `default_holder`), which is
+    # stable across the separate processes that make up one run; a pid would
+    # change on every invocation and could never renew or release (R39).
     live = manager.current()
     if live is None:
         _emit({"error": "no lease held"})
@@ -171,7 +173,7 @@ def _cmd_claim(args: argparse.Namespace, registry: ClaimRegistry) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nexus_coord", description=__doc__)
-    parser.add_argument("--holder", default=None, help="agent identity (default: host-pid)")
+    parser.add_argument("--holder", default=None, help="agent identity (default: host-s<session>)")
     parser.add_argument("--run-id", default="", help="run id recorded in claims")
     sub = parser.add_subparsers(dest="command", required=True)
 
