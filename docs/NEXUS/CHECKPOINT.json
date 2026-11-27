@@ -4,7 +4,7 @@
   "timestamp": "2026-11-27T20:05Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "dd42fd7",
-  "project_phase": "Phase 3 (governance). Five of five ADR-015 obligations have mechanisms. NEX-061 closed the first human review of PR #5: the policy gate's fail-closed promise now covers every way evaluation can fail, not just DomainError. Remaining governance gap: risk-based approval.",
+  "project_phase": "Phase 3 (governance). Five of five ADR-015 obligations have mechanisms. NEX-060 closed the first human review of PR #5: the policy gate's fail-closed promise now covers every way evaluation can fail, not just DomainError. Remaining governance gap: risk-based approval.",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
@@ -23,7 +23,7 @@
     "NEX-057": "VERIFIED - ADR-015's design is now backed by code: NEX-058 implements exactly the signal ADR-015 names, so the ADR is no longer a design without an implementation.",
     "NEX-058": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at c5a4f4e, and CI PASSED on head a4003bf: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:23Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. a4003bf descends from product commit c5a4f4e through a docs-only commit, so its CI compiled and tested the NEX-058 product code.",
     "NEX-059": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 39fa1db, and CI PASSED on head b9811d7: all four check-runs (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build) status=completed conclusion=success, polled 2026-11-27T19:53Z. The two duplicate pairs are the branch concurrency group re-running, not a second verdict. b9811d7 descends from product commit 39fa1db through a docs-only commit, so its CI compiled and tested the NEX-059 product code.",
-    "NEX-061": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at dd42fd7 (merge head 327144a). NOT VERIFIED: CI was polled once immediately after the push and only the Frontend check-run had completed/success; the other three were in_progress. Poll the head until every check-run is completed and promote only on 4/4 success."
+    "NEX-060": "VERIFIED. Implemented by the PRIOR run at dd42fd7 (not by run NEX-2026-11-27-61). This run read the PR #5 review, checked the fix against its P1 item, re-ran every gate, and polled CI to 4/4 completed/success on head 29f71e5. Promotion to VERIFIED rests on that CI evidence."
   },
   "completed_tasks": [
     "NEX-039",
@@ -47,7 +47,7 @@
     "R36-governance-half",
     "R37",
     "R39",
-    "NEX-061"
+    "NEX-060"
   ],
   "validation": {
     "commands_run_on_committed_tree": [
@@ -59,7 +59,7 @@
     ],
     "scope": "One focused remediation slice: a single exception boundary in the policy gate plus the tests that exercise it, and a docstring note at the rate-limit enforcement site.",
     "negative_check": "Reverting the fix produced 4 failures in TestEvaluationFailuresFailsClosed; restoring it returned them to green.",
-    "not_run": "CI was polled once and was still in progress. NEX-061 is not VERIFIED."
+    "not_run": "Nothing skipped. Full local gates plus a 4/4 CI read. The only gap is human review of PR #5, which is outside NEXUS authority by design."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -75,8 +75,8 @@
     "mergeable": true,
     "mergeable_state": "unstable",
     "body_len": 21968,
-    "note": "Body carries NEX-052 through NEX-057. OWED: append NEX-058/059/061. Nine slices stack in one PR; the reviewer's 'consider a split' note stands. Never merge without human review.",
-    "reviews": "One review, 6092140204 (COMMENTED, 2026-11-27T18:35Z, body only, no inline threads). P1 evaluation exception-boundary item ADDRESSED at dd42fd7; non-blocking rate-limit deployment-scope item ADDRESSED at dd42fd7. Review is not yet replied to or resolved. Non-blocking items explicitly deferred: obligation-readiness surfacing at authoring time, and parameterised per-rule limits (needs a vocabulary ADR).",
+    "note": "Body extended with NEX-059/060. Nine slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "reviews": "Review 6092140204 (COMMENTED, body only, no inline threads) answered in PR conversation comment 7227186314. P1 and the non-blocking rate-limit item addressed at dd42fd7; the other two non-blocking items explicitly deferred with reasons. Review-comment replies are 422 on a body-only review, which is why the answer is a conversation comment.",
     "mergeable_state_note": "GitHub reports `unstable` while check-runs are still arriving; that is not a failure signal. Poll until every check-run has status=completed and judge on that.",
     "comments_this_run": []
   },
@@ -96,18 +96,16 @@
     "Nine slices now stack in PR #5. Review cost is real; the reviewer's 'consider a split' note stands.",
     "The rate-limit obligation is a per-process bound with the in-memory adapter. A multi-replica deployment gets N per window per process, not N in total, until a shared-store adapter is wired."
   ],
-  "next_task": "NEX-060: clear delivery debt (NEX-057/058/059/061 to PR #5 and issue #2), then add a direct test for `derive_assurance` - the OIDC acr/amr mapping the step-up control rests on, still untested. After that, risk-based approval is the last named ADR-015 obligation without a mechanism.",
-  "next_action": "1. Poll `GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` (head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`) until every entry is status=completed; on 4/4 success promote NEX-061 to VERIFIED. 2. Reply to review 6092140204 and resolve it, naming dd42fd7. 3. Append NEX-057/058/059/061 to PR #5 and post one issue #2 comment. 4. Add the derive_assurance acr/amr mapping test. Human review of PR #5 remains outside NEXUS authority.",
-  "recovery_instructions": "Head is whatever `git rev-parse HEAD` says in the checkout; tree is clean. Product commit dd42fd7 carries the NEX-061 fix, merged with concurrent docs commit f7e2b4a as 327144a. NEX-061 is NOT VERIFIED - poll CI before promoting it. NEX-059 and earlier are VERIFIED; do not redo them. Do not redo NEX-061's implementation either.",
+  "next_task": "NEX-061: add a direct test for `derive_assurance` - the OIDC acr/amr mapping the `step-up` control rests on and the only untested piece of that control. Then risk-based approval, the last named ADR-015 obligation without a mechanism.",
+  "next_action": "1. Add `tests/` coverage for `derive_assurance` acr/amr mapping (absent -> single-factor, mfa/acr values -> multi-factor, unrecognised -> single-factor, fail-closed). 2. Raise risk-based approval as the next governance slice. 3. Ask a human whether PR #5 should be split before adding a tenth slice. Never merge.",
+  "recovery_instructions": "Head is `29f71e5` (docs) over product commit `dd42fd7`. Tree clean. NEX-060 is VERIFIED on 4/4 CI. NEX-059 and earlier are VERIFIED too. Do not redo any of them. The next implementation task is a `derive_assurance` acr/amr mapping test; after that, risk-based approval.",
   "ci_status": {
-    "head_polled": "327144a7ac0b92dfe34e54df732c2c7d403b836f",
+    "head_polled": "29f71e5f650b3e4147f28b2c1c07a9821b6b8226",
     "product_commit": "dd42fd7",
-    "result": "INCOMPLETE at poll time: Frontend completed/success, three check-runs in_progress.",
-    "conclusion": "unknown",
-    "polled_at": "2026-11-27T20:03Z",
-    "note": "A single early poll, recorded honestly rather than rounded up. Do not treat the Frontend success as a verdict on the pair.",
-    "how_to_poll": "GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs, sha from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-    "interpretation_rule": "conclusion=cancelled means superseded, NOT failed. Duplicate check-run pairs are the concurrency group re-running. mergeable_state=unstable means checks are still arriving."
+    "result": "4/4 completed/success",
+    "conclusion": "success",
+    "polled_at": "2026-11-27T20:20Z",
+    "note": "29f71e5 is a docs-only descendant of dd42fd7, so its CI compiled and tested the fail-closed fix. The earlier incomplete poll on 327144a is recorded in the log as incomplete rather than rounded up."
   },
   "verified_tasks": [
     "NEX-001",
@@ -162,7 +160,7 @@
     "NEX-057",
     "NEX-058",
     "NEX-059",
-    "NEX-061"
+    "NEX-060"
   ],
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. NEX-059 was promoted only after its CI was actually read and passed on b9811d7. A push is not a verdict.",
@@ -193,7 +191,7 @@
     "delivery_debt": "PR #5 body still carries only NEX-052..NEX-056. OWED: append NEX-057/058/059 to the PR description. Issue #2 is now current.",
     "ci_verified": true
   },
-  "run_summary": "Acted on the first human review of PR #5. The P1 item was a genuine defect: the policy gate documented fail-closed behaviour but caught only DomainError, so any other failure escaped before the denial and its audit row were written - a gate that throws a stack trace is failing open with extra steps. The fix is one broadened handler at that single boundary, with the exception type recorded for diagnostics, the cause preserved, and a generic AccessDenied to the caller. The interesting part is the test: every currently reachable evaluator failure is already a DomainError because Comparison validates its value type at construction, so the boundary could only be exercised by injecting a fault. A crafted bad policy would have passed before the fix and proved nothing. Reverting the fix fails 4 of the new cases, which is the evidence that the tests have teeth. The non-blocking rate-limit item needed no code: the enforcement was right, the unstated deployment caveat was not, so it is now documented at the enforcement site. The branch moved under this run again (another run pushed two docs-only commits); the tip was taken from ls-remote, the diff confirmed no source overlap, and the merge was made rather than a rebase. CI was polled once after the push and was still running, so NEX-061 is committed and pushed but deliberately not VERIFIED - local gates are not a CI verdict.",
+  "run_summary": "The prior run had already committed the fail-closed policy fix (NEX-060, dd42fd7) and pushed it; what was missing was proof and delivery. This run supplied both. It read the first human review of PR #5, checked the committed fix against the review's P1 item and found it a genuine match - the exception type is recorded, the message withheld, the cause preserved - then re-ran every gate bare and polled CI to 4/4 completed/success. The first CI poll was incomplete and was recorded as incomplete; only the later 4/4 read promoted the task. Delivery debt was cleared: the review was answered in a PR conversation comment (a body-only review has no thread, so /pulls/5/comments is 422), the PR body gained NEX-059/060, and issue #2 got the status comment. Mid-run the record was found to overstate this run's role by calling the prior run's commit NEX-061; that was corrected in place with a visible note in both the log and the state snapshot. The honest description of this run is verification and delivery, not implementation.",
   "head_observation": {
     "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -246,7 +244,9 @@
     "D-061b: record only the exception TYPE in the audit outcome, never its message. The type is what a diagnostician needs; the message can carry record data.",
     "D-061c: test the boundary by fault injection (patching tools.evaluate) rather than by crafting a bad policy. Every currently reachable evaluator failure is already a DomainError, so a crafted policy would have passed before the fix and proved nothing.",
     "D-061d: leave the two `except DomainError` sites around `_execute` unchanged. They wrap execution, not policy evaluation, and grant no authority; widening them would exceed what the review asked for.",
-    "D-061e: document the rate limiter's process-local scope at the enforcement site instead of changing code. The enforcement was correct; the missing thing was the deployment caveat."
+    "D-061e: document the rate limiter's process-local scope at the enforcement site instead of changing code. The enforcement was correct; the missing thing was the deployment caveat.",
+    "D-061f: correct the run record rather than let it stand. dd42fd7 was the prior run's NEX-060, not this run's implementation; the docs were relabelled and the correction is visible in both the log and the state snapshot. An overstated status is worse than a smaller true one.",
+    "D-061g: answer a body-only review in a PR conversation comment. POST /pulls/5/comments returns 422 because there is no diff thread to attach a reply to."
   ],
   "ci": {
     "head": "e7c7315",

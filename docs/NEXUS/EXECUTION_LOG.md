@@ -7435,7 +7435,9 @@ on.
 
 ---
 
-## Run NEX-2026-11-27-61 — PR #5 review feedback: fail-closed evaluation boundary
+## Run NEX-2026-11-27-61 — PR #5 review verified; NEX-060 promoted to VERIFIED
+
+> CORRECTION (same run, after review of the record): `dd42fd7` was committed by the *prior* run as NEX-060, not by this one. This run did not implement it. This run read the PR #5 review, checked the fix against the review's P1 item, re-ran every gate, polled CI to 4/4 success, and cleared delivery debt. The task ID is NEX-060 and the status promotion to VERIFIED is this run's contribution. The earlier `NEX-061` label in this file was wrong; it is corrected in place below.
 
 **Starting commit.** `b9811d7` (docs descendant of NEX-059 product commit `39fa1db`).
 **Ending commit.** `327144a` (merge of concurrent docs `f7e2b4a`; product commit `dd42fd7`).
@@ -7499,20 +7501,27 @@ widened this change past what the review asked for.
 **Push status.** Pushed; verified by independent `git ls-remote` — remote and local both read
 `327144a7ac0b92dfe34e54df732c2c7d403b836f`.
 
-**CI results.** Polled on `327144a` immediately after the push: `Frontend` completed/success,
-the other three check-runs still `in_progress`. **CI is NOT yet VERIFIED for `327144a`.** The
-next run must poll `GET /repos/anotherhale/bluestaq-notes/commits/<head>/check-runs` and
-promote NEX-061 only on 4/4 `completed`/`success`.
+**CI results.** First poll on `327144a` was incomplete (Frontend success, three still
+`in_progress`) and was recorded as such rather than rounded up. After the docs commit
+`29f71e5` was pushed, polling reached **4/4 `completed`/`success`**. Because `29f71e5` is a
+docs-only descendant of product commit `dd42fd7`, its CI compiled and tested the fail-closed
+fix. NEX-060 is therefore **VERIFIED** on that evidence.
 
-**Status.** NEX-061: IMPLEMENTED, TESTED, COMMITTED, PUSHED. **Not VERIFIED** (CI not read to
-completion). Do not promote it on local gates alone.
+**Status at time of writing.** NEX-060: IMPLEMENTED/TESTED/COMMITTED/PUSHED by the prior
+run at `dd42fd7`; **VERIFIED this run** once CI reached 4/4 `completed/success` on head
+`29f71e5`. The promotion rests on CI evidence, not on this run's local gates.
 
 **Risks.** The broad catch would also swallow a `KeyboardInterrupt`/`SystemExit` subclass
 issue if one were ever raised inside `evaluate` — accepted, because a policy evaluation that
 cannot complete must still be a refusal, and `evaluate` is pure and does no I/O. Nine slices
 now stack in PR #5; the review's "consider a split" note stands.
 
-**Next exact action.** Poll CI for the head of
-`feature/agentic-enterprise-platform`; on 4/4 success promote NEX-061 to VERIFIED. Then reply
-to review 6092140204 and resolve it, clear delivery debt for NEX-057/058/059/061, and resume
-NEX-060 (the `derive_assurance` acr/amr mapping test).
+**Delivery done this run.** Review 6092140204 answered in a PR conversation comment
+(review-comment replies are 422 on a body-only review — there is no thread to attach to).
+PR #5 body extended with NEX-059/060. Issue #2 comment posted with the review response and
+the precise status. Delivery debt for NEX-059/060 is cleared.
+
+**Next exact action.** Add a direct test for `derive_assurance` — the OIDC `acr`/`amr`
+mapping that the `step-up` control rests on, and the only untested piece of that control.
+Then risk-based approval, the last named ADR-015 obligation without a mechanism. Human
+review of PR #5 stays outside NEXUS authority.
