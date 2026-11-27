@@ -7860,3 +7860,96 @@ Resolved by recording the invariant instead of the SHA: `commit` names the last 
 enforced. It needs a migration and a new use case, so it wants a full run — this run closed with
 ~11 minutes left, which is not enough to land that safely.
 
+
+---
+
+## NEX-2026-11-27-66 — NEX-066: obligation readiness at policy authoring
+
+**Run ID.** NEX-2026-11-27-66
+**Branch.** `feature/agentic-enterprise-platform`
+**Starting commit.** `1c2377e` (local) / `e6f5486` (remote tip, discovered on push)
+**Ending commit.** `353ef6d` (rebased onto `e6f5486`, then pushed)
+**Phase.** Phase 3 (governance)
+
+### Task
+
+Address PR #5 review 6092140204, item "Obligation readiness": policy authoring/validation
+should show whether each obligation is supported by the deployment and explain missing
+enforcement dependencies *before* publication.
+
+The predecessor run (NEX-060/061) had recorded this as "deferred — no policy-validation
+surface exists". **That was wrong.** `DraftPolicy` is exactly the authoring surface, and it
+already refuses structurally invalid drafts (no rules, two principals). Self-correction
+recorded rather than quietly dropped.
+
+### What changed
+
+- `domain/governance/policy.py`: new `deployment_obligation_gaps()` plus the
+  `_NO_ADAPTER_NEEDED` set. This is the single source of the *deployment-wide* half of the
+  satisfiability judgement — "does an enforcement adapter exist at all?".
+- `application/use_cases/tools.py`: the gateway now calls that shared function instead of
+  keeping its own local copy of which obligations are satisfiable, so the authoring path and
+  the call path cannot drift. The gateway still layers the per-tool and per-caller conditions
+  (human-gated capability, delegation assurance) on top.
+- `application/use_cases/policy_lifecycle.py`: `DraftPolicy` gains
+  `rate_limiter_configured` (default `True`, so existing call sites are unchanged) and a
+  `_require_enforceable_obligations` helper that refuses a draft naming an obligation this
+  deployment cannot enforce, with the reason in the error.
+- `bootstrap/container.py`: `make_draft_policy()` passes the real wiring
+  (`rate_limiter is not None`), not an assumption.
+
+### Why this does not weaken anything
+
+The gateway's call-time refusal remains the security control. A policy still cannot widen
+authority by naming an obligation nobody enforces. What this adds is that the author is told
+at draft time instead of every caller the policy later blocks discovering it through
+unexplained denials. It is the same judgement, asked one step earlier, against the same
+function — so the two answers are identical by construction.
+
+### Deliberately not done
+
+- **Draft-time refusal for `approval` / `second-approver` / `step-up`.** Whether a *given
+  call* can satisfy these depends on the tool and the delegation, so they stay call-time
+  decisions. Refusing them at draft time would block policies that are perfectly enforceable
+  for the tools they target. Tests pin this: a draft naming any of them is accepted.
+- **Per-rule parameterised limits.** A vocabulary change, therefore an ADR. Not widened here.
+
+### Correction to a prior record
+
+The NEX-056 comment table listed `second-approver` as "None — the call is refused
+(fail-closed)". Verified against code this run: it is **not** refused. The gateway treats it
+as satisfiable when the tool requires approval, the approval request opens with
+`required_approvals=2`, and `ApprovalRequest` tracks `second_approver_user_id` in the domain.
+The earlier table was stale. `step-up` is the only obligation with no mechanism.
+
+### Validation (all on the committed, rebased tree)
+
+- `ruff format --check` → 301 files already formatted
+- `ruff check` → All checks passed
+- `mypy` → Success: no issues found in 140 source files
+- `pytest` → **1442 passed, 4 skipped, exit 0**
+- Focused: `tests/application/test_policy_lifecycle.py` (29) + `tests/agent/test_tool_gateway_policy.py` green
+
+New tests: refusal when no limiter is configured; acceptance when one is; a refused draft
+writes no version; and the five adapter-free obligations are never refused at draft time.
+
+### Concurrency
+
+The push was rejected non-fast-forward: a concurrent run had advanced the tip `1c2377e` →
+`e6f5486` with NEX-062/063/064. `1c2377e` *was* an ancestor of `e6f5486`, so this was a
+fast-forward race, not a rewrite. Rebased onto `e6f5486`, re-ran every gate on the rebased
+tree (1442 passed), then pushed `353ef6d`.
+
+### Status
+
+**COMMITTED + PUSHED.** Not VERIFIED: CI has not been polled on `353ef6d` yet. Next run must
+poll the check-runs for the head and only then promote NEX-066.
+
+**Next action.** Poll CI for `353ef6d`. Then NEX-065 (explicit policy `approve` transition,
+`DRAFT -> APPROVED -> PUBLISHED`, approver identity persisted, SoD enforced) — it needs a
+migration and a new use case, so it wants a full run.
+
+**Not done this run.** The security follow-up review (2026-11-27T21:18Z, AMR factor
+independence in `derive_assurance()`) arrived after this run's work was committed. It is a
+real P1 defect and is the highest-priority task for the next run. Do not let the docs slices
+crowd it out.

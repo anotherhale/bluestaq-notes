@@ -7,15 +7,54 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 64) | `33c780d` — the live feature-branch tip read from `git ls-remote`, which the clone was already on with a clean tree. |
-| Head commit (measured) | Product commit `55e4436` (NEX-064), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`7456a89` (NEX-064 docs head): 4/4 `completed/success`**, polled 2026-11-27T21:13Z — NEX-064 VERIFIED. |
-| Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-063** evidence; NEX-064 pending. Twelve slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| Starting commit (run 66) | `1c2377e` locally; the live tip was `e6f5486` (a concurrent run had advanced it). |
+| Head commit (measured) | Product commit `353ef6d` (NEX-066), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
+| Last CI result | **`7456a89` (NEX-064 docs head): 4/4 `completed/success`**, polled 2026-11-27T21:13Z — NEX-064 VERIFIED. **NEX-066 not yet polled.** |
+| Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open; NEX-064 and NEX-066 comments pending. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-064** evidence; NEX-066 pending. Thirteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). Not addressed. Top priority next run as **NEX-067**. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-066 (run `NEX-2026-11-27-66`) — an unenforceable obligation is refused when the policy is drafted
+
+**Status: COMMITTED + PUSHED at `353ef6d`. NOT VERIFIED — CI has not been polled on that head.**
+
+PR #5 review (6092140204) asked that authoring show whether each obligation is supported by the
+deployment. A prior run deferred this as *"no policy-validation surface exists"* — that was
+wrong, and this run corrects it: `DraftPolicy` **is** the authoring surface, and it already
+refuses structurally invalid drafts.
+
+The defect: a policy naming `rate-limit` in a deployment with no limiter published cleanly and
+then denied **every call it matched**, with the reason only in the audit trail. The gateway's
+call-time refusal was correct, but the author was never told.
+
+The fix puts the deployment-wide half of the judgement in one domain function,
+`deployment_obligation_gaps()`, and calls it from **both** the tool gateway and `DraftPolicy`.
+One function, two callers — so the authoring path cannot promise something the call path
+refuses. The gateway keeps what only the tool and the caller can decide (human-gated
+capability, delegation assurance). `DraftPolicy` gained `rate_limiter_configured`, defaulting
+to `True` so existing call sites are unchanged, with the container passing the real wiring
+(`rate_limiter is not None`) rather than an assumption.
+
+Deliberately narrow: `approval`, `second-approver`, and `step-up` are **not** refused at draft
+time. Whether a given call can satisfy them depends on the tool and the delegation, so
+refusing them at authoring would block policies that are perfectly enforceable for the tools
+they target. Tests pin that.
+
+Correction to a prior record: the NEX-056 comment table listed `second-approver` as refused
+(fail-closed). Verified against code — it is **not** refused; the gateway treats it as
+satisfiable when the tool requires approval, the approval request opens with
+`required_approvals=2`, and `ApprovalRequest` tracks `second_approver_user_id`. `step-up` is
+the only obligation with no mechanism.
+
+Validation on the rebased tree: `ruff format --check` 301 files, `ruff check` clean, `mypy`
+clean across 140 files, `pytest` **1442 passed / 4 skipped**. The push was rejected
+non-fast-forward by a concurrent run (`1c2377e` → `e6f5486`); the ancestor check proved a
+fast-forward race, not a rewrite, so the commit was rebased and every gate re-run before
+pushing `353ef6d`.
 
 ## NEX-064 (run `NEX-2026-11-27-64`) — a retired policy version can no longer stay in force
 
@@ -2343,3 +2382,26 @@ That is a human decision; NEXUS may not split or merge unilaterally.
 3. Keep PR #5 unmerged and its body current; the split decision is human.
 
 **Do not redo** NEX-060 or NEX-062 — both are CI-verified.
+
+## Next best actions (run `NEX-2026-11-27-66`, superseding the lists above)
+
+1. **NEX-067 — AMR factor independence (P1 security).** The 2026-11-27T21:18Z PR #5 review
+   reports `derive_assurance()` treats AMR factors as independent without checking they belong
+   to distinct factor families, so two claims from the same family can be read as multi-factor.
+   That is a fail-open in an authentication assurance decision and it outranks further
+   governance breadth. Verify the claim against
+   `src/notes_service/infrastructure/identity/oidc_relying_party.py` before fixing, then pin it
+   with a test that two same-family claims do not satisfy a multi-factor ACR.
+2. Poll CI for `353ef6d` and promote NEX-066 only if every check-run is `completed` and green.
+   `cancelled` means superseded, not failed.
+3. **NEX-065 — explicit policy `approve` verb.** DRAFT → PUBLISHED is currently direct, so
+   approving a policy change is not itself recorded. Needs a migration and a new use case, so
+   it wants a full run.
+4. Keep PR #5 unmerged and its body current. Thirteen slices now stack in it; the split decision
+   is human.
+
+**Do not redo** NEX-062, NEX-063, NEX-064, or NEX-066.
+
+**Run-ID caution.** This run was handed `NEX-2026-11-27-61`, a run ID an earlier run had already
+used in `EXECUTION_LOG.md`. The entry was renumbered to `NEX-2026-11-27-66` (its task ID).
+Read the log before writing a run ID.
