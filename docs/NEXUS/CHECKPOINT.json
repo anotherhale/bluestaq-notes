@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
  "run_id": "NEX-2026-11-27-53",
- "timestamp": "2026-11-27T15:22Z",
+ "timestamp": "2026-11-27T16:05Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "5647d42fe30f2155c238f010064ab70c6012c25a",
- "project_phase": "Phase 3 (governance) continues. NEX-047..NEX-050 are merged to main via PR #3. NEX-051 (published policy enforced at the tool gateway) is implemented, tested, committed and pushed, and is awaiting CI + human review in draft PR #5.",
+ "commit": "3215e08",
+ "project_phase": "Phase 3 (governance) continues. NEX-047..NEX-051 are on the feature branch. NEX-052 (cite the deciding policy versions in the audit trail) is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3215e08 and awaiting CI.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -14,9 +14,11 @@
   "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed",
   "NEX-047": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a, CI 4/4 green, issue #2 comment 7219198697 posted, PR #3 section appended",
   "NEX-050": "VERIFIED - merged to main via PR #3 (merge commit 4d57f39, parent b0f9b56). Separation of duties on policy publication is in main.",
-  "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5."
+  "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
+  "NEX-052": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3215e08 - local gates green (ruff, mypy, pytest incl. new migration tests); CI in_progress at run end"
  },
  "completed_tasks": [
+  "NEX-052",
   "NEX-051",
   "NEX-050",
   "NEX-047",
@@ -33,14 +35,15 @@
  ],
  "validation": {
   "commands_run_on_committed_tree": [
-   "ruff format --check: 286 files already formatted",
+   "ruff format: 287 files left unchanged",
    "ruff check: All checks passed",
    "mypy: Success, no issues found in 137 source files",
-   "pytest full suite: 1275 passed, 4 skipped"
+   "pytest full suite: exit 0, 4 skipped",
+   "pytest tests/persistence/test_migrations.py: 10 passed"
   ],
-  "scope": "Run bare from the repo root, exactly as CI does, on the merged tree (f4eae90).",
-  "not_run": "PostgreSQL-marked tests skipped locally; CI's Backend job runs the migration path. CI on f4eae90 had not concluded at run end.",
-  "ci": "CI on the product head f4eae90: 4/4 completed/success, both events. This is the first CI evidence for NEX-051."
+  "scope": "Run bare from the repo root on the committed tree 3215e08.",
+  "not_run": "PostgreSQL-marked tests skipped locally; CI Backend job runs the migration path.",
+  "ci": "CI on 3215e08: in_progress at run end (4 check runs, both events)."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -49,11 +52,11 @@
   "draft": true,
   "merged": false,
   "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-  "head_sha": "5647d42",
+  "head_sha": "3215e08",
   "base": "main",
   "title": "Enforce published governance policy at the tool gateway",
-  "note": "Created this run because PR #3 had already been merged by a human at b0f9b56, leaving NEX-050 and NEX-051 on the branch with no PR. The branch was behind main by d6f92d0 (demo dataset #1); a PR opened as-is would have deleted demo_content.py and test_demo_seed.py. Rebase requires a force-push (prohibited), so origin/main was merged in at f4eae90, which restores both files. git diff --diff-filter=D origin/main..HEAD reports no files.",
-  "ci": "f4eae90 (product head): 4/4 completed/success, polled 2026-11-27T15:21Z. 5647d42 (docs-only head): in_progress at run end; carries only NEXUS state files, so it is not product evidence either way.",
+  "note": "PR #5 carries NEX-051 and now NEX-052. Branch was merged up from origin/main earlier (f4eae90) to avoid reverting the demo dataset; no force-push used. Never merge without human review.",
+  "ci": "3215e08: in_progress at run end (Backend + Frontend, push and pull_request).",
   "mergeable": true,
   "changed_files": 18
  },
@@ -79,13 +82,13 @@
   "Enforcement is deny-only by design: a published allow rule cannot restore authority. Do not read an allow rule as a grant.",
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
- "next_task": "Continue the governance backlog: obligations, risk-based approval, and deciding-policy-versions in the audit trail. Confirm CI on the docs head 5647d42, then keep PR #5 current for human review.",
- "next_action": "1. Poll CI for 5a96ef6 (do not treat NEX-050 as VERIFIED before it is green). 2. Add a PR #3 section and an issue #2 comment for NEX-050 (delivery debt). 3. Start NEX-051 from BACKLOG.",
+ "next_task": "Phase 3 governance, next dependency-ready slice: obligations carried on a policy decision (an allow that still requires an action), which the security architecture lists alongside deny and which NEX-051/052 do not yet model.",
+ "next_action": "1. Poll CI for 3215e08 and record the conclusion. 2. Comment on issue #2 and PR #5 with NEX-052 (delivery debt). 3. Start the obligations slice from BACKLOG.",
  "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for f4eae90 (PR #5). Nothing is uncommitted: HEAD = f4eae90 = origin/feature/agentic-enterprise-platform. If the branch has moved on, re-merge origin/main rather than rebasing (force-push is prohibited). Never merge PR #5.",
  "ci_status": {
-  "commit": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
-  "status": "UNPOLLED",
-  "note": "The run budget expired before polling. The next run must poll 5a96ef6 before treating NEX-050 as VERIFIED."
+  "commit": "3215e08",
+  "status": "IN_PROGRESS",
+  "note": "Polled at 16:04Z: 4 check runs in_progress (Backend, Frontend; push and pull_request events)."
  },
  "verified_tasks": [
   "NEX-047",
@@ -137,7 +140,7 @@
  "in_progress_tasks": [],
  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
- "head_at_checkpoint": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+ "head_at_checkpoint": "3215e08",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
  "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
  "completed_task_notes": {
@@ -153,18 +156,18 @@
  "branch_head_observed_at": "2026-11-27T13:44:00Z",
  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
  "commits_this_run": [
-  "5a96ef6501c1aa42bf1914860b4e2619c9e52670"
+  "3215e08"
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+  "head": "3215e08",
   "remote_verified": true,
-  "remote_verified_by": "git ls-remote returned 5a96ef6501c1aa42bf1914860b4e2619c9e52670",
+  "remote_verified_by": "git push reported 6fae5c0..3215e08",
   "pr_updated": false,
   "issue_updated": false,
-  "delivery_debt": "OPEN for NEX-050: PR #3 section and issue #2 comment."
+  "delivery_debt": "OPEN for NEX-052: PR #5 section and issue #2 comment."
  },
- "run_summary": "NEX-050 delivered and pushed at 5a96ef6: a policy version records its author (drafted_by) and publication refuses the principal that drafted it. An unrecorded author fails closed, so omitting a field cannot bypass the control. Both identities are stamped from the authenticated principal at the boundary, never from a request body. The publisher label is derived in one place (application/actor_label.py) because the domain rejects a raw UUID. Self-publication surfaces as a 409 naming the reason; the domain check remains the backstop for a caller that builds a published value directly. Migration 9c4d1e8a7b23 adds the drafted_by column.",
+ "run_summary": "NEX-052 delivered at 3215e08: every audited tool invocation now records the published policy versions that governed it, sealed into the intent hash. Compatibility is the crux - policy_versions is versioned into the sealed payload, so an uncited row hashes with the original v:1 payload byte for byte and the entire pre-existing audit trail still verifies; only a cited row moves to v:2. Migration b7d2c48e91af adds the NOT NULL column, backfills existing rows, then drops the server default so a writer that forgets the column fails loudly rather than asserting 'no policy was cited'. Two real migration bugs were found and fixed: a docstring claiming a dropped default the code kept, and a SQLite batch rebuild that omitted the new column when the add and the default-drop shared one batch.",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -178,14 +181,14 @@
  "head_observed": "810d1dc",
  "head_at_checkpoint_note": "0ef42ec is the last commit whose PR-object metrics are quoted in PR #3. The checkpoint update that records this fact is itself a later, documentation-only commit, so the live branch head will read one commit ahead of this field. That is expected and is why the PR body names the measured head and read time explicitly instead of quoting a bare count.",
  "last_completed_task": {
-  "id": "NEX-050",
-  "title": "Separation of duties on policy publication (M3.3)",
-  "status": "IMPLEMENTED + TESTED + COMMITTED + PUSHED - local gates green; CI unpolled",
+  "id": "NEX-052",
+  "title": "Cite the deciding policy versions in the audit trail",
+  "status": "IMPLEMENTED + TESTED + COMMITTED + PUSHED - CI unpolled",
   "evidence": [
-   "ruff format clean (214 files), ruff check clean, mypy clean (136 source files)",
-   "pytest: all four policy suites green (domain, application, persistence, api)",
-   "tests/api/test_ops_policy_lifecycle_api.py gained two boundary tests: a drafting operator gets 409 on self-publish, and a different operator publishes successfully",
-   "commit 5a96ef6 pushed; git ls-remote confirms the remote ref at that SHA"
+   "ruff format clean (287 files), ruff check clean, mypy clean (137 source files)",
+   "pytest full suite: exit 0, 4 skipped",
+   "tests/persistence/test_migrations.py: 10 passed, incl. 3 new TestPolicyVersionsColumnBackfill cases against a non-empty table",
+   "commit 3215e08 pushed; remote ref 6fae5c0..3215e08"
   ]
  },
  "closed_items": [

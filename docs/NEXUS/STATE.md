@@ -1847,3 +1847,29 @@ evidence.
    in-memory one for tests. The gate and `ListOperatorGrants` do not change — that is the
    point of the port. Do not start this until the two reports above are posted: delivery
    debt compounds, and R40 fails closed so it is not urgent in the security sense.
+
+## Run NEX-2026-11-27-53 — NEX-052 (policy versions on tool invocations)
+
+- **Branch**: `feature/agentic-enterprise-platform` · **HEAD**: `3215e08`
+- **Status**: IMPLEMENTED + TESTED + COMMITTED + PUSHED. **CI `in_progress` — not VERIFIED.**
+- **Slice**: an audited tool invocation now names the published policy versions that
+  governed it, sealed into the intent hash. Allowed and denied calls both record it.
+- **Compatibility**: uncited rows hash with the original `v: 1` payload byte for byte, so
+  the pre-existing audit trail still verifies; only cited rows move to `v: 2`.
+- **Migration** `b7d2c48e91af`: NOT NULL column, backfill, then drop the server default so
+  a forgotten write fails loudly. Two real bugs fixed (undropped default; SQLite batch
+  rebuild dropping the column).
+- **Open delivery debt**: PR #5 section and issue #2 comment for NEX-052.
+
+**Next best actions**
+
+1. **Poll CI for `3215e08`.** This is the only thing standing between NEX-052 and
+   VERIFIED. Do not promote it on local gates alone — that is the mistake the status
+   semantics exist to prevent.
+2. **Clear the NEX-052 delivery debt**: append a section to PR #5 and comment on issue #2.
+3. **Obligations.** The security architecture lists deny, allow and *obligations*; the
+   gateway models the first two only. An obligation is an allow that still requires an
+   action, so it cannot be bolted on as another denial path — it needs the decision to
+   carry required actions to the caller. Read `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md`
+   for the obligation contract before designing it, and write an ADR if the gateway's
+   return type has to change shape.

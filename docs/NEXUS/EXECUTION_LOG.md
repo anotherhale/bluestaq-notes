@@ -6444,3 +6444,76 @@ Continuation of the same run id after an interruption; the NEX-050 entry above e
 - **CI**: polled at run end — Backend and Frontend `in_progress`. **Not claimed as passing.**
 - **Push**: f1cafeb..f4eae90, verified against the GitHub API (remote head f4eae90).
 - **Next action**: poll CI on f4eae90 / PR #5, fix any failure, then continue governance.
+
+## Run NEX-2026-11-27-53 — NEX-052: cite deciding policy versions in the audit trail
+
+- **Timestamp**: 2026-11-27T16:06Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `6fae5c0`
+- **Ending commit**: `3215e08`
+- **Task**: NEX-052 (governance) — record which published policy versions governed each
+  audited tool invocation.
+- **Why it matters**: the security architecture requires an audited action to name its
+  "matched policy versions". NEX-051 enforced published policy at the gateway but threw
+  the decision away, so once policies were republished the record of *what decided* a
+  past call was gone. A denial that cannot name its policy cannot be reviewed.
+
+### Files changed
+
+- `src/notes_service/domain/agent/tools.py` — `ToolInvocation.policy_versions`, threaded
+  through `begin()` and sealed into `intent_hash`.
+- `src/notes_service/domain/agent/audit_chain.py` — `policy_versions` is versioned into the
+  sealed payload, not added unconditionally (see the compatibility note below).
+- `src/notes_service/application/use_cases/tools.py` — the gateway returns the consulted
+  versions and passes them to every sealing path: direct, approval, deferred, and the
+  denied-row recorder.
+- `src/notes_service/infrastructure/db/{models,agent_repositories}.py` — column plus
+  serialisation.
+- `migrations/versions/b7d2c48e91af_invocation_policy_versions.py` — new revision.
+- `tests/persistence/test_migrations.py`, `tests/agent/test_audit_chain.py`,
+  `tests/agent/test_tool_gateway_policy.py`.
+
+### The compatibility decision
+
+`policy_versions` is *versioned into* the sealed payload rather than added to it. An
+invocation that cites nothing hashes with the original `v: 1` payload byte for byte, so
+every row written before this change still verifies. Only a row that actually cites a
+version moves to `v: 2`. Adding the key to every payload would have reported the entire
+existing audit trail as tampered — a false alarm that teaches an operator to ignore the
+verifier, which is worse than no verifier.
+
+### Two real migration bugs found and fixed
+
+1. The migration's docstring claimed it dropped the `server_default`, but the code kept
+   it. A lingering default lets a writer that forgets the column record "no policy was
+   cited" instead of failing — a silent assertion about a decision never made. The default
+   is now genuinely dropped, and `test_the_server_default_is_dropped_after_the_backfill`
+   asserts it against `PRAGMA table_info` rather than trusting prose.
+2. Dropping the default in the *same* `batch_alter_table` as adding the NOT NULL column
+   made SQLite's table rebuild omit the column entirely. Split into two batches.
+
+### Validation
+
+- `ruff format` — 287 files left unchanged; `ruff check` — all checks passed.
+- `mypy` — success, 137 source files.
+- `pytest` full suite — exit 0, 4 skipped.
+- `pytest tests/persistence/test_migrations.py` — 10 passed, including three new cases
+  that seed a row *before* the upgrade, so the backfill runs against a non-empty table.
+  An empty-database upgrade cannot distinguish a working backfill from a missing one.
+- **CI on `3215e08`: `in_progress` at run end. Not claimed as passing.**
+
+### Commit and push
+
+- `3215e08` — `feat(agent): cite policy versions on every audited tool invocation`
+- Pushed `6fae5c0..3215e08` to `origin/feature/agentic-enterprise-platform`.
+
+### Delivery debt
+
+- PR #5 section and issue #2 comment for NEX-052 are **not yet posted**. Recorded in
+  `CHECKPOINT.json` → `delivery_state.delivery_debt`.
+
+### Next action
+
+Poll CI for `3215e08`; post the PR #5 / issue #2 updates; then start the obligations
+slice (an allow that still carries a required action) — the third policy effect the
+architecture lists and the only one still unmodelled.
