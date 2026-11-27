@@ -134,6 +134,23 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
     )
 
 
+def _decode_policy_versions(raw: str | None) -> tuple[str, ...]:
+    """Read the stored policy-version list back into a tuple.
+
+    An empty or absent column means "no policy was consulted" — the state of every
+    row written before NEX-052 — and must read back as ``()`` so the verifier
+    recomputes the v1 intent payload for it. A malformed value is not swallowed:
+    the row is untrusted on the way back in, and silently degrading it to ``()``
+    would let a corrupted citation verify as if nothing were cited.
+    """
+    if not raw:
+        return ()
+    decoded = json.loads(raw)
+    if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+        raise ValueError("policy_versions must be a JSON array of strings")
+    return tuple(decoded)
+
+
 def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
     return ToolInvocation(
         id=ToolInvocationId.parse(row.id),
@@ -144,6 +161,7 @@ def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
         idempotency_key=row.idempotency_key,
         arguments_digest=row.arguments_digest,
         resource_ref=row.resource_ref,
+        policy_versions=_decode_policy_versions(row.policy_versions),
         status=InvocationStatus(row.status),
         outcome=row.outcome,
         approval_request_id=(
@@ -577,6 +595,7 @@ class SqlAlchemyToolInvocationRepository:
                 idempotency_key=invocation.idempotency_key,
                 arguments_digest=invocation.arguments_digest,
                 resource_ref=invocation.resource_ref,
+                policy_versions=json.dumps(list(invocation.policy_versions), ensure_ascii=True),
                 status=invocation.status.value,
                 outcome=invocation.outcome,
                 approval_request_id=(
@@ -601,6 +620,10 @@ class SqlAlchemyToolInvocationRepository:
         row.status = invocation.status.value
         row.outcome = invocation.outcome
         row.completed_at = invocation.completed_at
+        # ``policy_versions`` is deliberately not updated here. It is part of the
+        # sealed intent, fixed before the handler ran; letting a finalisation
+        # rewrite it would make the cited policy set mutable after the fact and
+        # defeat the point of sealing it.
         # The outcome seal is written with the verdict it covers, in the same
         # UPDATE: a crash between the two would leave a completed row whose
         # outcome_hash is missing, which the verifier reports as tampering.

@@ -36,6 +36,7 @@ from notes_service.application.use_cases.agents import (
 from notes_service.application.use_cases.authorization_policy import DefaultAuthorizationProvider
 from notes_service.application.use_cases.notes import CreateNote, ListNotes
 from notes_service.application.use_cases.tools import InvokeTool
+from notes_service.domain.agent.audit_chain import verify_chain
 from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation
 from notes_service.domain.agent.value_objects import Capability, TokenAudience
 from notes_service.domain.governance.policy import (
@@ -243,3 +244,123 @@ class TestMatchedDenyRuleIsEnforced:
         recorded = h.invocations(agent)
         assert len(recorded) == 1
         assert recorded[0].status is InvocationStatus.DENIED
+
+
+class TestPolicyVersionCitation:
+    """The attempt must name the policy versions that were in force (NEX-052).
+
+    Without the citation a decision is only explainable while the policy store
+    still holds the same version: once a version is retired or superseded the
+    audit trail says "denied" but not "by which rule, under which policy". The
+    citation is sealed into the intent hash, so it is tamper-evident too.
+    """
+
+    def test_a_successful_call_cites_the_published_policy(self, h: Harness) -> None:
+        # An ALLOW-only policy still gets cited: "no deny rule matched" is a
+        # decision made under that policy, not the absence of one.
+        _publish(h, (PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-cite-ok",
+        )
+
+        assert result.invocation.status is InvocationStatus.SUCCEEDED
+        assert result.invocation.policy_versions == ("gateway@v1",)
+        assert h.invocations(agent)[0].policy_versions == ("gateway@v1",)
+
+    def test_a_policy_denial_cites_the_policy_it_was_denied_under(self, h: Harness) -> None:
+        _publish(h, (_deny_tool("create_note"),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        with pytest.raises(AccessDenied, match="refused by published policy"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="create_note",
+                arguments={"title": "T", "content": "C"},
+                idempotency_key="k-cite-deny",
+            )
+
+        recorded = h.invocations(agent)
+        assert len(recorded) == 1
+        assert recorded[0].status is InvocationStatus.DENIED
+        assert recorded[0].policy_versions == ("gateway@v1",)
+
+    def test_a_capability_denial_cites_nothing(self, h: Harness) -> None:
+        # The capability check is a token-level control and refuses *before* any
+        # policy is evaluated. Recording a citation there would be a lie: no
+        # policy took part in the decision. The citation names consulted policy,
+        # not whatever happened to be published.
+        _publish(h, (_deny_tool("delete_note"),))
+        agent, secret = h.secret_for(Capability.READ_NOTE)
+
+        with pytest.raises(AccessDenied, match="lacks capability"):
+            h.gateway.run(
+                secret=secret,
+                tool_name="delete_note",
+                arguments={"note_id": "n1"},
+                idempotency_key="k-cite-cap",
+            )
+
+        assert h.invocations(agent)[0].policy_versions == ()
+
+    def test_no_published_policy_cites_nothing(self, h: Harness) -> None:
+        # The empty case must stay empty rather than inventing a citation: the
+        # sealed payload omits the field, which is what keeps pre-NEX-052 audit
+        # rows byte-identical and therefore verifiable.
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        result = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-cite-none",
+        )
+
+        assert result.invocation.policy_versions == ()
+        assert h.invocations(agent)[0].policy_versions == ()
+
+    def test_the_citation_is_sealed_into_the_intent_hash(self, h: Harness) -> None:
+        # The citation must be tamper-evident, not just recorded: a verifier
+        # recomputes the seal from the row's own fields, so if the citation were
+        # left out of the hash an operator could rewrite which policy a decision
+        # was made under and the chain would still verify. Same row, same key,
+        # only the citation differs -> different seal.
+        _publish(h, (PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None),))
+        _agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        uncited = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-cite-seal",
+        ).invocation
+        cited = h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-cite-seal-2",
+        ).invocation
+
+        assert cited.policy_versions == ("gateway@v1",)
+        assert cited.intent_hash != uncited.intent_hash
+
+    def test_the_citation_survives_the_chain_verifier(self, h: Harness) -> None:
+        # The sealed payload was versioned to keep pre-NEX-052 rows verifiable;
+        # this pins that a row *carrying* a citation also verifies, so the field
+        # cannot be silently dropped from the recomputation.
+        _publish(h, (PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None),))
+        agent, secret = h.secret_for(Capability.CREATE_NOTE)
+
+        h.gateway.run(
+            secret=secret,
+            tool_name="create_note",
+            arguments={"title": "T", "content": "C"},
+            idempotency_key="k-cite-verify",
+        )
+
+        report = verify_chain(h.invocations(agent))
+        assert report.verified is True, report

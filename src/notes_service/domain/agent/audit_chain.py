@@ -98,29 +98,39 @@ def intent_hash(
     approval_request_id: uuid.UUID | str | None,
     invoked_at: datetime,
     previous_hash: str,
+    policy_versions: tuple[str, ...] = (),
 ) -> str:
-    """Seal one immutable attempt, chained to the entry before it."""
-    return _sha256(
-        _canonical(
-            {
-                "v": 1,
-                "kind": "tool_invocation.intent",
-                "id": str(invocation_id),
-                "agent_id": str(agent_id),
-                "token_id": str(token_id) if token_id is not None else None,
-                "tool_name": tool_name,
-                "capability": capability,
-                "idempotency_key": idempotency_key,
-                "arguments_digest": arguments_digest,
-                "resource_ref": resource_ref,
-                "approval_request_id": (
-                    str(approval_request_id) if approval_request_id is not None else None
-                ),
-                "invoked_at": _timestamp(invoked_at),
-                "previous_hash": previous_hash,
-            }
-        )
-    )
+    """Seal one immutable attempt, chained to the entry before it.
+
+    ``policy_versions`` (NEX-052) is versioned *into the payload*, not added to it
+    unconditionally. An invocation that consulted no policy is sealed with the
+    original ``v: 1`` payload, byte for byte, so every entry written before this
+    field existed still verifies. Only an entry that actually cites policy
+    versions moves to ``v: 2``. Adding the key to every payload would have
+    reported every historical row as tampered — a false alarm that trains an
+    operator to ignore the verifier.
+    """
+    payload: dict[str, object] = {
+        "v": 1,
+        "kind": "tool_invocation.intent",
+        "id": str(invocation_id),
+        "agent_id": str(agent_id),
+        "token_id": str(token_id) if token_id is not None else None,
+        "tool_name": tool_name,
+        "capability": capability,
+        "idempotency_key": idempotency_key,
+        "arguments_digest": arguments_digest,
+        "resource_ref": resource_ref,
+        "approval_request_id": (
+            str(approval_request_id) if approval_request_id is not None else None
+        ),
+        "invoked_at": _timestamp(invoked_at),
+        "previous_hash": previous_hash,
+    }
+    if policy_versions:
+        payload["v"] = 2
+        payload["policy_versions"] = list(policy_versions)
+    return _sha256(_canonical(payload))
 
 
 def outcome_hash(
@@ -279,6 +289,9 @@ class VerifiableEntry(Protocol):
     def resource_ref(self) -> str: ...
 
     @property
+    def policy_versions(self) -> tuple[str, ...]: ...
+
+    @property
     def approval_request_id(self) -> uuid.UUID | None: ...
 
     @property
@@ -354,6 +367,7 @@ def verify_chain(
             approval_request_id=entry.approval_request_id,
             invoked_at=entry.invoked_at,
             previous_hash=previous,
+            policy_versions=entry.policy_versions,
         )
         if recomputed_intent != entry.intent_hash:
             return ChainVerdict(

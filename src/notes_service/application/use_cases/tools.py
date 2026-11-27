@@ -181,7 +181,7 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
-        self._enforce_published_policy(
+        consulted = self._enforce_published_policy(
             resolved=resolved,
             tool=tool,
             cleaned=cleaned,
@@ -199,6 +199,7 @@ class InvokeTool(UseCase):
                 principal=principal,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=consulted,
             )
         return self._run_direct(
             resolved=resolved,
@@ -207,6 +208,7 @@ class InvokeTool(UseCase):
             principal=principal,
             resource_ref=resource_ref,
             idempotency_key=idempotency_key,
+            policy_versions=consulted,
         )
 
     # -- published policy enforcement ------------------------------------
@@ -219,7 +221,7 @@ class InvokeTool(UseCase):
         cleaned: dict[str, object],
         resource_ref: str,
         idempotency_key: str,
-    ) -> None:
+    ) -> tuple[str, ...]:
         """Refuse the call when a published policy explicitly denies it (NEX-051).
 
         Until now the policy lifecycle could store and publish versions but
@@ -247,13 +249,20 @@ class InvokeTool(UseCase):
         The refusal is audited exactly like a capability denial — a ``denied``
         invocation row is written before raising — so a policy-blocked attempt is
         as visible in the trail as a capability-blocked one.
+
+        Returns the versions that were in force, so the attempt the caller is
+        about to seal can cite them (NEX-052). An allowed call and a refused one
+        both record what governed the decision; the returned tuple is empty only
+        when no policy repository is wired at all.
         """
         if self._policy_versions is None:
-            return
+            return ()
 
+        published = self._policy_versions.all_published()
+        consulted = tuple(version.ref for version in published)
         attributes = _policy_attributes(resolved=resolved, tool=tool, resource_ref=resource_ref)
         try:
-            decision = evaluate(self._policy_versions.all_published(), attributes)
+            decision = evaluate(published, attributes)
         except DomainError as exc:
             self._record_policy_denial(
                 resolved=resolved,
@@ -262,6 +271,7 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 outcome=f"policy evaluation failed: {type(exc).__name__}",
+                policy_versions=consulted,
             )
             raise AccessDenied(
                 f"tool {tool.name!r} refused: published policy could not be evaluated"
@@ -275,11 +285,13 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 outcome=f"denied by policy {', '.join(decision.matched_rules)}",
+                policy_versions=consulted,
             )
             raise AccessDenied(
                 f"tool {tool.name!r} refused by published policy "
                 f"({', '.join(decision.matched_rules)})"
             )
+        return consulted
 
     def _record_policy_denial(
         self,
@@ -290,6 +302,7 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         outcome: str,
+        policy_versions: tuple[str, ...] = (),
     ) -> None:
         """Persist a ``denied`` invocation row for a policy refusal.
 
@@ -314,6 +327,7 @@ class InvokeTool(UseCase):
                 cleaned=cleaned,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
             )
             invocation.deny(outcome=outcome)
             uow.tool_invocations.add(invocation)
@@ -330,6 +344,7 @@ class InvokeTool(UseCase):
         principal: Principal,
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -351,6 +366,7 @@ class InvokeTool(UseCase):
                 cleaned=cleaned,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -378,6 +394,7 @@ class InvokeTool(UseCase):
         principal: Principal,
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -397,6 +414,7 @@ class InvokeTool(UseCase):
                 cleaned=cleaned,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
             )
 
         # Spend the approval before the side effect, in the same transaction as
@@ -413,6 +431,7 @@ class InvokeTool(UseCase):
                     resource_ref=resource_ref,
                     idempotency_key=idempotency_key,
                     approval_request_id=approval.id,
+                    policy_versions=policy_versions,
                 )
                 invocation.deny(outcome="approval request no longer usable")
                 uow.tool_invocations.add(invocation)
@@ -429,6 +448,7 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 approval_request_id=approval.id,
+                policy_versions=policy_versions,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -453,6 +473,7 @@ class InvokeTool(UseCase):
         cleaned: dict[str, object],
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
     ) -> NoReturn:
         """Open (or reuse) an approval request and park this attempt, never failing it.
 
@@ -481,6 +502,7 @@ class InvokeTool(UseCase):
                     resource_ref=resource_ref,
                     idempotency_key=deferred_key,
                     approval_request_id=request.id,
+                    policy_versions=policy_versions,
                 )
                 invocation.deny(outcome=f"human approval required for {tool.capability.value}")
                 uow.tool_invocations.add(invocation)
@@ -555,6 +577,7 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         approval_request_id: UUID | None = None,
+        policy_versions: tuple[str, ...] = (),
     ) -> ToolInvocation:
         """Begin an audited invocation, sealed into the agent's hash chain.
 
@@ -563,6 +586,10 @@ class InvokeTool(UseCase):
         consistent with what is committed. A concurrent insert that claims the
         same sequence is rejected by the unique constraint rather than silently
         forking the chain.
+
+        ``policy_versions`` are the published policy versions in force when the
+        gateway decided this call. They are sealed into the intent hash, so the
+        citation is as tamper-evident as the rest of the attempt.
         """
         sequence, previous = uow.tool_invocations.next_chain_link(resolved.agent.id)
         invocation = ToolInvocation.begin(
@@ -575,6 +602,7 @@ class InvokeTool(UseCase):
             approval_request_id=approval_request_id,
             previous_hash=previous,
             chain_sequence=sequence,
+            policy_versions=policy_versions,
         )
         # Move the anchor in the same transaction that will insert the entry, so
         # the two cannot disagree. Doing it here rather than at each call site

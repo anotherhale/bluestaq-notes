@@ -198,3 +198,94 @@ class TestRevocationDowngradeFoldsRevokedRows:
             }
 
         assert {"revoked_at", "revoked_by_user_id", "revoke_reason"} <= columns
+
+
+class TestPolicyVersionsColumnBackfill:
+    """NEX-052 adds ``policy_versions`` to a table that already has rows in it.
+
+    Two things can go wrong here and neither shows up in an empty-database
+    upgrade. First, a NOT NULL column added without a default cannot be filled
+    for existing rows, so the upgrade aborts. Second — and this one is silent —
+    a *lingering* server default would let a writer that forgets the column
+    record "no policy was cited" instead of failing, quietly asserting something
+    about a decision that was never made.
+
+    The default is therefore dropped once the backfill is done, and that is
+    asserted here against the real schema rather than the migration's prose.
+    """
+
+    PREVIOUS_REVISION = "9c4d1e8a7b23"
+
+    def _seed_legacy_invocation(self, db_path: Path) -> None:
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO tool_invocations"
+                " (id, agent_id, tool_name, capability, idempotency_key,"
+                "  arguments_digest, resource_ref, status, outcome, invoked_at,"
+                "  chain_sequence, previous_hash, intent_hash, outcome_hash)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "legacy-invocation",
+                    "11111111-1111-1111-1111-111111111111",
+                    "delete_note",
+                    "delete_note",
+                    "legacy-key",
+                    "a" * 64,
+                    "note:legacy",
+                    "succeeded",
+                    "deleted",
+                    "2026-01-01 00:00:00.000000",
+                    1,
+                    "b" * 64,
+                    "c" * 64,
+                    "d" * 64,
+                ),
+            )
+
+    def _policy_versions_column(self, db_path: Path) -> tuple:
+        with sqlite3.connect(db_path) as connection:
+            for row in connection.execute("PRAGMA table_info(tool_invocations)"):
+                if row[1] == "policy_versions":
+                    return row
+        raise AssertionError("policy_versions column was not created")
+
+    def test_existing_rows_are_backfilled_with_no_citation(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "backfill.db"
+        assert _alembic(db_path, "upgrade", self.PREVIOUS_REVISION).returncode == 0
+        self._seed_legacy_invocation(db_path)
+
+        result = _alembic(db_path, "upgrade", "head")
+        assert result.returncode == 0, f"backfill failed:\n{result.stderr}"
+
+        with sqlite3.connect(db_path) as connection:
+            stored = connection.execute(
+                "SELECT policy_versions FROM tool_invocations WHERE id='legacy-invocation'"
+            ).fetchone()
+
+        assert stored == ("",), f"a pre-NEX-052 row must read as no citation, got {stored}"
+
+    def test_the_server_default_is_dropped_after_the_backfill(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "default.db"
+        assert _alembic(db_path, "upgrade", "head").returncode == 0
+
+        column = self._policy_versions_column(db_path)
+        assert column[3] == 1, f"policy_versions must be NOT NULL: {column}"
+        assert column[4] is None, f"a lingering server default hides a forgotten write: {column}"
+
+    def test_downgrade_removes_the_column(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "downgrade.db"
+        assert _alembic(db_path, "upgrade", self.PREVIOUS_REVISION).returncode == 0
+        self._seed_legacy_invocation(db_path)
+        assert _alembic(db_path, "upgrade", "head").returncode == 0
+
+        result = _alembic(db_path, "downgrade", self.PREVIOUS_REVISION)
+        assert result.returncode == 0, f"downgrade failed:\n{result.stderr}"
+
+        with sqlite3.connect(db_path) as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(tool_invocations)")}
+            surviving = connection.execute(
+                "SELECT status FROM tool_invocations WHERE id='legacy-invocation'"
+            ).fetchone()
+
+        assert "policy_versions" not in columns
+        assert surviving == ("succeeded",), "downgrade must not drop the invocation itself"

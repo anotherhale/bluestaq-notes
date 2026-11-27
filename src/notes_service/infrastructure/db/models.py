@@ -565,6 +565,11 @@ class ToolInvocationRow(Base):
 
     ``idempotency_key`` is unique per agent — not globally — so one agent
     reusing a key cannot block or observe another agent's invocation.
+
+    ``policy_versions`` holds the JSON array of policy versions in force when the
+    gateway decided the call (NEX-052), sealed into ``intent_hash``. It is stored
+    as JSON text for the same reason ``PolicyVersionRow.rules`` is: the column is
+    a durable record of a decision, not a queryable dimension.
     """
 
     __tablename__ = "tool_invocations"
@@ -592,6 +597,7 @@ class ToolInvocationRow(Base):
     previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    policy_versions: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     __table_args__ = (
         CheckConstraint("status IN ('started','succeeded','failed','denied')", name="status_valid"),
