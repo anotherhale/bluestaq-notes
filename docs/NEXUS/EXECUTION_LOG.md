@@ -8269,3 +8269,93 @@ VERIFIED**. The next run must finish the verification before starting anything n
   approve their own change.
 - D-070c: the approval is exposed in the API response rather than kept internal.
 - D-070d: nullable columns, no backfill (see above).
+
+---
+
+## Run NEX-2026-11-27-70 (continued) — NEX-065 verified; upgrade-blocking migration defect fixed
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `2d59c74` (live tip; the run resumed on `main` and moved its
+  uncommitted work onto the feature branch without losing a byte — all seven files
+  compared identical against a `/tmp` backup after the switch)
+- **Ending commit:** `7a1d5e2`
+- **Tasks verified:** NEX-065
+- **Tasks completed:** NEX-069 (recorded in the commit as NEX-066 — see the ID
+  correction below)
+
+### NEX-065 promoted to VERIFIED
+
+CI on `2d59c74` — the docs-only head descending from the NEX-065 product commit
+`eca18f3` — is **4/4 completed/success** (two check-run pairs for one SHA is normal
+on this branch; both pairs are green). `eca18f3` itself shows `cancelled` on both
+pairs, which means superseded by the docs commit, not failed. NEX-065 is therefore
+VERIFIED, not merely pushed. The full suite was also re-run here: **1472 passed,
+4 skipped**, ruff format/check clean, mypy clean on 140 files.
+
+### NEX-069 — the NEX-065 migration could not upgrade a real deployment
+
+The task actually executed this run. Found while re-validating NEX-065 rather than
+looked for: `TestPolicyApprovalMigrationKeepsLegacyRows` failed with
+`sqlite3.IntegrityError: datatype mismatch` on the *seed* step.
+
+Two separate defects, one in the test and one in the migration:
+
+1. **Test defect.** The seed inserted a text `id` (`'legacy-published'`) into
+   `policy_versions.id`, which is an `INTEGER` primary key. Fixed by letting the
+   column autoincrement and selecting the row by `policy_id`. Without this fix the
+   test never reached the migration at all, so it proved nothing.
+2. **Migration defect — the real one.** `c4e7a1b93d05` required
+   `approved_at IS NOT NULL AND approved_by IS NOT NULL` for any row with
+   `status IN ('published','retired')`. A CHECK constraint is table-wide and SQLite
+   evaluates it against **every existing row** when `batch_alter_table` rebuilds the
+   table. Any deployment that had already published a policy — i.e. every deployment
+   that had used the feature — would fail `alembic upgrade head` with
+   `CHECK constraint failed` and could not be upgraded at all. The revision's own
+   docstring promised the opposite ("a version published before NEX-065 is left
+   readable"), so code and stated contract disagreed.
+
+The fix tolerates the single state legacy data can be in — in force, both approval
+columns NULL — while still refusing a half-written approval (one column set, the
+other NULL), which no legitimate writer produces. Backfilling an approver was
+rejected for the same reason NEX-065 rejected it: the column exists so the audit
+trail cannot claim a review that never happened.
+
+`PolicyVersion.has_approval_record` is the new way to ask "was this reviewed"; a
+caller that asks `status` instead will get the wrong answer for a legacy row.
+`RollbackPolicy` uses it to refuse restoring a legacy version's rules, because there
+is no review to inherit and the inherited-approval path would otherwise have to
+fabricate one — refusing before any draft is written, with a message naming the one
+remediation that works (re-draft with a named approver).
+
+**The tests were proved to fail without the fix.** Reverting the four source files
+(`git stash` of `policy.py`, `policy_lifecycle.py`, `models.py`, the migration) made
+five tests fail — three in `test_migrations.py`, two in `test_policy_versions_db.py`
+plus the rollback test. A test that cannot fail is not evidence, so this check
+mattered more than usual here: the original seed bug meant the migration test had
+been silently vacuous.
+
+### Run-ID correction (visible, not rewritten)
+
+The commit message says **NEX-066**. That ID was already assigned to a different,
+CI-verified task (`2ce7730`, the obligation-enforcement-gap slice). Force-pushing is
+prohibited, so the message stands and this entry records the correct ID: the work in
+`7a1d5e2` is **NEX-069**. NEX-066 remains the earlier task. Lesson: grep
+`EXECUTION_LOG.md` and `CHECKPOINT.json` for the next free ID before writing the
+commit message, not after.
+
+### Validation
+
+- `.venv/bin/ruff format --check` → clean
+- `.venv/bin/ruff check` → clean
+- `.venv/bin/mypy` → no issues in 140 source files
+- `.venv/bin/python -m pytest` → **1472 passed, 4 skipped**
+- Negative control: 5 tests fail with the source fix reverted
+- CI: 4/4 completed/success at `2d59c74`; `7a1d5e2` not yet polled
+
+### Delivery
+
+- **Push:** `2d59c74..7a1d5e2`, fast-forward, verified with `git ls-remote`
+- **PR #5:** open, unmerged; body does not yet mention NEX-069
+- **Issue #2:** no comment for NEX-069 yet
+- **Next:** poll CI on `7a1d5e2`, then report NEX-065 (now verified) and NEX-069
+  together in one PR body update and one issue comment

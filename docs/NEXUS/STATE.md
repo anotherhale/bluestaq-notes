@@ -2454,25 +2454,35 @@ That is a human decision; NEXUS may not split or merge unilaterally.
 
 **Do not redo** NEX-060 or NEX-062 — both are CI-verified.
 
-## Next best actions (run `NEX-2026-11-27-66`, superseding the lists above)
+## Next best actions (run `NEX-2026-11-27-70`, superseding the lists above)
 
-1. **NEX-067 — AMR factor independence (P1 security).** The 2026-11-27T21:18Z PR #5 review
-   reports `derive_assurance()` treats AMR factors as independent without checking they belong
-   to distinct factor families, so two claims from the same family can be read as multi-factor.
-   That is a fail-open in an authentication assurance decision and it outranks further
-   governance breadth. Verify the claim against
-   `src/notes_service/infrastructure/identity/oidc_relying_party.py` before fixing, then pin it
-   with a test that two same-family claims do not satisfy a multi-factor ACR.
-2. Poll CI for `353ef6d` and promote NEX-066 only if every check-run is `completed` and green.
-   `cancelled` means superseded, not failed.
-3. **NEX-065 — explicit policy `approve` verb.** DRAFT → PUBLISHED is currently direct, so
-   approving a policy change is not itself recorded. Needs a migration and a new use case, so
-   it wants a full run.
-4. Keep PR #5 unmerged and its body current. Thirteen slices now stack in it; the split decision
-   is human.
+1. **Verify NEX-069 - poll CI on `7a1d5e2`.** It is pushed and green locally (1472 passed,
+   ruff + mypy clean, 5 tests proved to fail with the fix reverted) but CI has not been read.
+   `cancelled` means superseded by a later docs commit, never failed.
+2. **Clear delivery debt.** PR #5's body covers through NEX-068 and issue #2's last comment
+   covers NEX-067. Both are silent on **NEX-065** (now CI-verified) and **NEX-069**. Update
+   both in one pass; do not open a second PR - fifteen slices already stack in #5.
+3. **Then take the next dependency-ready backlog slice.** Read `BACKLOG.md` for the highest
+   priority task whose dependencies are met; do not start a new slice with under 10 minutes
+   left on the clock.
 
-**Do not redo** NEX-062, NEX-063, NEX-064, or NEX-066.
+**Do not redo** NEX-060, NEX-062, NEX-063, NEX-064, NEX-065, NEX-066, NEX-067, NEX-068 or
+NEX-069 - all are implemented and pushed, and every one but NEX-069 has been CI-verified.
 
-**Run-ID caution.** This run was handed `NEX-2026-11-27-61`, a run ID an earlier run had already
-used in `EXECUTION_LOG.md`. The entry was renumbered to `NEX-2026-11-27-66` (its task ID).
-Read the log before writing a run ID.
+### What this run found, and why it matters more than the task it was doing
+
+NEX-069 was not on the backlog. It surfaced while re-validating NEX-065, and it is the kind
+of defect that only shows up on a database with real history in it: the NEX-065 migration
+required an approver on every in-force policy version, and a CHECK constraint is table-wide,
+so `alembic upgrade head` failed for anyone who had ever published a policy. The test meant
+to catch that had never reached the migration at all - it seeded a text `id` into an INTEGER
+primary key and died on the seed. **A green test suite was hiding a broken upgrade path.**
+
+Two habits worth keeping: re-run the gates on the branch you are actually going to push to
+(not the one you developed on), and treat "the test passes" as unproven until you have seen
+it fail without the fix.
+
+**Run-ID caution.** IDs are assigned per run and have now collided twice. NEX-069's commit
+message says NEX-066, an ID already used by the obligation-enforcement slice; force-push is
+prohibited, so the message stands and the correction lives in `EXECUTION_LOG.md`. Grep the
+log and checkpoint for the next free ID *before* writing the commit message.
