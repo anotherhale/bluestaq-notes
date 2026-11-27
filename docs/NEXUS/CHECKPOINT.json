@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-66",
   "timestamp": "2026-11-27T21:40Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "f8ae00c",
+  "commit": "787ed57",
   "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius (NEX-063); evaluate() fails closed on any version that is not published (NEX-064); and policy authoring now refuses an obligation this deployment cannot enforce (NEX-066), using the same domain judgement as the gateway. Remaining governance work is breadth: no approve verb, no preview, no non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
@@ -153,14 +153,7 @@
   "next_task": "NEX-067 (P1 security): make `derive_assurance()` require AMR factors from distinct factor families before counting a session as multi-factor.",
   "next_action": "Implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). Verify the defect against the code first; then pin it with a test that two same-family claims do not satisfy a multi-factor ACR. Update PR #5 body and issue #2 with NEX-064 and NEX-066.",
   "recovery_instructions": "Tree is clean; 2ce7730 is pushed and CI-verified (4/4 success). NEX-066 is VERIFIED - do not redo NEX-062/063/064/066. The P1 `derive_assurance()` AMR-independence defect is the top priority and outranks further docs slices. NEX-065 (policy approve verb) is reserved but unstarted.",
-  "ci_status": {
-    "head_polled": "2ce7730",
-    "product_commit": "353ef6d",
-    "result": "4/4 completed/success",
-    "conclusion": "success",
-    "polled_at": "2026-11-27T22:55Z",
-    "note": "Two check-run pairs per SHA is the concurrency group re-running; all four concluded success. The docs head descends from the product commit, so its CI still compiles and tests the product code. `cancelled` means superseded, not failed."
-  },
+  "ci_status": "NEX-066 verified 4/4 completed/success at 2ce7730 (polled 2026-11-27T22:55Z). No check runs existed yet at 787ed57 when this run closed; 787ed57 is docs-only and descends from 2ce7730, so it carries the same product code. Not re-verified at 787ed57.",
   "commits_this_run": [
     "353ef6d",
     "2ce7730"
@@ -184,7 +177,7 @@
   },
   "branch_head": "f8ae00c",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436.",
+  "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {
     "run_id": "NEX-2026-11-27-66",
     "branch": "feature/agentic-enterprise-platform",
