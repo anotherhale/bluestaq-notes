@@ -7,13 +7,13 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051 VERIFIED** (enforcement at the gateway, deny-only + fail-closed) and **NEX-052 VERIFIED** (deciding policy versions cited in the audit trail). Both await human review in **draft PR #5**. **Remaining gaps, named:** obligations, and risk-based approval. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047 / NEX-048 / NEX-049 / NEX-050 merged to `main` via PR #3 (`4d57f39`). **NEX-051 / NEX-052 / NEX-053 VERIFIED** in PR #5. **NEX-054 PUSHED** (`1878cd1`): the `redaction` obligation now has a real output-filtering adapter, so "allow with redaction" is expressible instead of being refused as unsatisfiable. CI not yet polled for it. **Remaining gaps, named:** the remaining obligation adapters (`step-up`, `second-approver`, `rate-limit`, `enhanced-audit`) and risk-based approval. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 54) | `57f50d1` — the head inherited from run 53, clean tree, remote in agreement. |
-| Head commit (measured) | `48230e0`, verified on the remote via `git ls-remote` and clean in `git status`. Product commit remains `3215e08` (NEX-052); `4c48847` and `48230e0` are NEXUS state commits. |
-| Last CI result | **`48230e0`: 4/4 `completed/success`** (Backend: ruff, mypy, pytest, migrations; Frontend: typecheck, lint, test, build), polled this run. **NEX-052 evidence anchor `57f50d1`: 4/4 `completed/success`**, re-polled this run *after* two later pushes and still green — the durability claim is now tested, not asserted. |
-| Tracking issue | #2 (open) — NEX-052 verification reported (comment `7223372951`). The issue stays open: the programme is not done. **Issue delivery debt: none.** |
-| Draft PR | **#5 (draft, unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, head `48230e0`, mergeable, `mergeable_state` follows the newest head's checks. Body carries NEX-052 CI evidence. Automated merging is prohibited; a human reviewer decides. |
+| Starting commit (run 56) | `2631f4f` — the true remote tip read from `git ls-remote`; a concurrent run had pushed past the `c825db6` named by run 55. The run began on `main` with uncommitted work and was corrected to the authorized branch before committing. |
+| Head commit (measured) | Product commit `1878cd1` (NEX-054), pushed and verified structurally on the remote with `git merge-base --is-ancestor` plus `cat-file`. The docs commit that writes this file descends from it; read the live head with `git rev-parse HEAD`, never from a SHA recorded here. |
+| Last CI result | **Not polled for `1878cd1`.** Last polled evidence: `c825db6` 4/4 `completed/success` (NEX-053). Polling the current head and promoting NEX-054 is the next run's first action. |
+| Tracking issue | #2 (open) — last reported NEX-053. **Delivery debt: NEX-054 has not yet been reported to issue #2.** The issue stays open: the programme is not done. |
+| Draft PR | **#5 (unmerged)** — *Enforce published governance policy at the tool gateway*, `feature/agentic-enterprise-platform` → `main`, mergeable. Body carries NEX-052 and NEX-053 evidence. **Delivery debt: the NEX-054 section is not yet appended.** Automated merging is prohibited; a human reviewer decides. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 

@@ -1,10 +1,10 @@
 {
  "schema_version": 1,
- "run_id": "NEX-2026-11-27-55",
- "timestamp": "2026-11-27T17:07Z",
+ "run_id": "NEX-2026-11-27-56",
+ "timestamp": "2026-11-27T17:22Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "9c31484",
- "project_phase": "Phase 3 (governance). NEX-053 (policy obligations carried on the decision and enforced at the tool gateway) is VERIFIED - CI green at c825db61859591a46b5d4fc1d957130f126db9f8.",
+ "commit": "1878cd14578ab454fbc84ca4e73067c6e512943c",
+ "project_phase": "Phase 3 (governance). NEX-054 is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd1: the redaction obligation now has a real output-filtering adapter at the tool gateway. CI not yet polled.",
  "active_task": null,
  "task_statuses": {
   "R36-read-side": "VERIFIED",
@@ -16,9 +16,11 @@
   "NEX-050": "VERIFIED - merged to main via PR #3 (merge commit 4d57f39, parent b0f9b56). Separation of duties on policy publication is in main.",
   "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5.",
   "NEX-052": "VERIFIED - CI 4/4 completed/success at 57f50d1 (polled 2026-11-27T16:30Z by run 54).",
-  "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z)."
+  "NEX-053": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 9c31484; CI 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success at c825db61859591a46b5d4fc1d957130f126db9f8 (polled 2026-11-27T17:07Z).",
+  "NEX-054": "PUSHED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 1878cd14578ab454fbc84ca4e73067c6e512943c. Local gates green on the feature-branch tree: ruff format 290 unchanged, ruff check clean, mypy 138 files, targeted pytest exit 0, full suite exit 0. CI not yet polled."
  },
  "completed_tasks": [
+  "NEX-054",
   "NEX-052",
   "NEX-051",
   "NEX-050",
@@ -37,14 +39,15 @@
  ],
  "validation": {
   "commands_run_on_committed_tree": [
-   "ruff format: 289 files left unchanged",
+   "ruff format: 290 files left unchanged",
    "ruff check: All checks passed",
-   "mypy: Success, no issues found in 137 source files",
-   "pytest: 1306 tests, 0 failures, 0 errors, 4 skipped (exit 0, junit xml)"
+   "mypy: Success, no issues found in 138 source files",
+   "pytest tests/agent/test_tool_gateway_obligations.py tests/bootstrap tests/architecture: exit 0",
+   "pytest (full suite): exit 0"
   ],
-  "scope": "Run bare from the repo root on the pushed tree 9521442 (product 9c31484).",
-  "not_run": "PostgreSQL-marked tests skipped locally; CI Backend job runs the migration path.",
-  "ci": "GREEN at c825db61859591a46b5d4fc1d957130f126db9f8: 2 workflow run(s) (pull_request, push), 4 jobs, all completed/success."
+  "scope": "Run bare from the repo root on the feature-branch tree, first at the checkout 2631f4f plus the NEX-054 working tree, then on the committed tree.",
+  "not_run": "PostgreSQL-marked tests skipped locally; the CI Backend job runs the migration path. CI was not polled this run.",
+  "ci": "NOT POLLED for 1878cd1. NEX-053 remains CI-verified at c825db6."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -72,12 +75,13 @@
  },
  "blockers": [],
  "risks": [
-  "Concurrent agent runs push to this branch. Always fetch and verify containment with `git merge-base --is-ancestor <sha> FETCH_HEAD`; never trust grep over push output - a push of 9c31484 was reported successful while being lost.",
-  "An obligation kind with no handler refuses agents by design. The refusal must name the kind or the policy author sees an unexplained outage."
+  "Concurrent agent runs push to this branch. Fetch and verify containment with `git merge-base --is-ancestor <sha> <remote head>`; never trust grep over push output.",
+  "An obligation kind with no handler refuses agents by design. The refusal must name the kind, or the policy author sees an unexplained outage.",
+  "Heredocs corrupt multi-line input in this environment (three occurrences across two runs, one of them silently truncating a commit message). Write multi-line content with the file editor and pass it to `git commit -F <file>` or `python3 <file>`."
  ],
- "next_task": "NEX-054: implement a redaction obligation with a real adapter, so the fail-closed deny-on-unhandled-obligation path has at least one satisfied case outside tests.",
- "next_action": "1. Read ADR-014 and the obligation handling in application/use_cases/tools.py. 2. Add a redaction obligation kind + adapter. 3. Test the satisfied path and keep the deny path green.",
- "recovery_instructions": "NEX-053 is VERIFIED, pushed, and reflected in PR #5 and issue #2; nothing is in flight. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing (force-push is prohibited). Next: the redaction obligation adapter. Never merge PR #5.",
+ "next_task": "NEX-055: poll CI on the current branch head (which descends from 1878cd1) and promote NEX-054 to VERIFIED on real CI evidence; then take the next dependency-ready governance task.",
+ "next_action": "1. Read the head from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. 2. Confirm 4/4 completed/success on the check-runs API. 3. Promote NEX-054 to VERIFIED in task_statuses. 4. Append the NEX-054 section to PR #5 and comment on issue #2.",
+ "recovery_instructions": "NEX-054 product code is COMMITTED and PUSHED at 1878cd1; containment was verified structurally (merge-base --is-ancestor plus cat-file on the remote head). Nothing is in flight. CI for 1878cd1 was not polled. Read docs/NEXUS/STATE.md. If the branch is behind origin, MERGE origin rather than rebasing, because force-push is prohibited. Never merge PR #5.",
  "ci_status": {
   "head_polled": "c825db61859591a46b5d4fc1d957130f126db9f8",
   "product_commit": "9c31484",
@@ -152,19 +156,19 @@
  },
  "branch_head_observed_at": "2026-11-27T13:44:00Z",
  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
- "commits_this_run": [],
+ "commits_this_run": [
+  "1878cd14578ab454fbc84ca4e73067c6e512943c"
+ ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "c825db61859591a46b5d4fc1d957130f126db9f8",
+  "head": "1878cd14578ab454fbc84ca4e73067c6e512943c",
   "remote_verified": true,
-  "remote_verified_by": "git merge-base --is-ancestor 9c31484 <remote head> and git cat-file -e <remote head>:tests/agent/test_tool_gateway_obligations.py",
+  "remote_verified_by": "git merge-base --is-ancestor 1878cd1 <remote head>, and git cat-file -e <remote head>:src/notes_service/domain/redaction.py",
   "pr_updated": false,
   "issue_updated": false,
-  "delivery_debt": "NONE. PR #5 carries the NEX-053 section and corrected status; issue #2 has the NEX-053 comment.",
-  "pr_5": "open, non-draft, UNMERGED. NEX-053 section appended and CI evidence recorded (2 runs, 4 jobs, all success at c825db6). Awaiting human review.",
-  "tracking_issue_2": "open; NEX-053 VERIFIED comment posted."
+  "delivery_debt": "PR #5 and issue #2 do not yet carry NEX-054. The next run owes both, plus the CI poll."
  },
- "run_summary": "No new product code. This run resolved the verification debt left by NEX-2026-11-27-53: CI on the NEX-052 product commit concluded 4/4 completed/success, so NEX-052 moves from PUSHED to VERIFIED on real CI evidence rather than local gates alone. The earlier 'cancelled' reading was investigated to its cause (supersession by checkpoint pushes) and is now documented so a future run does not mistake it for a failing build.",
+ "run_summary": "Implemented NEX-054. The redaction obligation previously had no adapter, so a policy that said 'allow with redaction' was refused outright. The shape-based credential judgement moved from bootstrap/logging_config.py into domain/redaction.py so the log formatter and the tool gateway share one implementation instead of drifting copies; the formatter re-exports it so no importer changed. InvokeTool now filters the tool result when a redaction obligation is present, on both the direct and the approval-gated path, and records an audit outcome that says redaction fired without naming the withheld fields. Filtering happens on the way out only, so the stored note is untouched. Unenforceable obligations still refuse the whole call. The run also found and corrected a run-integrity problem: it began on main instead of the authorized branch, so the gates were re-run on the feature-branch tree before the commit was made.",
  "head_observation": {
   "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",

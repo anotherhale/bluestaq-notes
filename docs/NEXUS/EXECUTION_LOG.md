@@ -6777,3 +6777,80 @@ work it could not finish and verify.
   PR. Verified by re-fetching the body: NEX-053 present, stale phrase absent.
 - **Issue #2**: NEX-053 VERIFIED comment posted.
 - **Status**: PR #5 open, non-draft, **unmerged**. Delivery debt zero.
+
+## NEX-2026-11-27-56 — NEX-054: the redaction obligation gets a real adapter
+
+- **Run ID**: `NEX-2026-11-27-56`
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `2631f4f` (true remote tip, read from `git ls-remote`; another run had
+  pushed past the `c825db6` named in the previous checkpoint)
+- **Ending commit (product)**: `1878cd1`
+- **Project phase**: Phase 3 (governance)
+
+### What was wrong
+
+ADR-014's fail-closed rule — an obligation with no enforcement adapter denies the call —
+was correct, and it made `redaction` a *refusal*. So a policy author could not express the
+most ordinary governance intent there is: "let this agent read the note, but do not let it
+walk away with the credential inside it". The only lever was deny, which refuses a call
+that should be permitted with a condition. That is a different policy, not a stricter one.
+
+### What changed
+
+- `domain/redaction.py` (new) owns the shape-based judgement of what counts as a
+  credential. It moved out of `bootstrap/logging_config.py` because two callers now need the
+  same answer, and two copies of a security judgement is how one of them silently starts
+  leaking. The log formatter re-exports `redact`/`REDACTED`, so no importer changed.
+- `InvokeTool` applies that judgement to the tool result when the decision carries a
+  `redaction` obligation, on both the direct and the approval-gated path.
+- The audit outcome records **that** redaction fired (`ok (redaction applied; N field(s)
+  withheld)`) and not **which** fields, because the audit trail is readable by more people
+  than the response was.
+- Filtering is on the way out only. The stored note is untouched: the obligation governs
+  what this caller may see, not what the platform may keep.
+- An unenforceable member still refuses the **whole** call. A set is satisfiable only when
+  every member is, so an author cannot smuggle `step-up` alongside a satisfied `redaction`
+  and have the call proceed.
+
+### Tests
+
+`tests/agent/test_tool_gateway_obligations.py` gains `TestRedactionObligationIsEnforced`:
+the returned note body is `REDACTED` while the call is *allowed*, and the audit row is
+distinguishable from an unredacted `ok`. The fail-closed test that previously used
+`redaction` as its example of an unsatisfiable obligation now uses `step-up`, so the deny
+path keeps a real unenforceable member rather than losing coverage.
+
+### Validation
+
+Run bare from the repo root, exactly as CI does:
+
+- `ruff format` → 290 files left unchanged
+- `ruff check` → All checks passed
+- `mypy` → Success, no issues in 138 source files
+- `pytest tests/agent/test_tool_gateway_obligations.py tests/bootstrap tests/architecture` → exit 0
+- `pytest` (full suite) → exit 0
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED.** CI for `1878cd1` was **not polled**
+this run — that is the next run's first action, and NEX-054 is not VERIFIED until it is.
+
+### A run-integrity problem this run found and fixed
+
+The run began on `main`, not on the authorized branch, while carrying uncommitted NEX-054
+work. Nothing was lost: the work was preserved, the authorized branch was fetched, and the
+gates were **re-run on the feature-branch tree** before the commit was made, because a green
+`main` tree says nothing about a feature-branch tree. Recorded here because the failure mode
+is silent — a run that never checks its branch will happily report green gates for the wrong
+code.
+
+### Process note
+
+Heredocs corrupt multi-line input in this environment. This run lost a commit message to it
+(truncated and re-interleaved) and repaired it with `git commit --amend -F <file>`; an
+earlier attempt at the checkpoint update was destroyed the same way and the file was
+verified intact. Multi-line content is now written with the file editor and passed as a
+file.
+
+### Next action
+
+Poll CI on the current branch head (a descendant of `1878cd1`), promote NEX-054 to VERIFIED
+on that evidence, then append the NEX-054 section to PR #5 and comment on issue #2.
