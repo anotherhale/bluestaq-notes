@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
  "run_id": "NEX-2026-11-27-53",
- "timestamp": "2026-11-27T15:20Z",
+ "timestamp": "2026-11-27T15:22Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "f4eae90d81ac33750510f3e8d8d69338c6921d0d",
+ "commit": "5647d42fe30f2155c238f010064ab70c6012c25a",
  "project_phase": "Phase 3 (governance) continues. NEX-047..NEX-050 are merged to main via PR #3. NEX-051 (published policy enforced at the tool gateway) is implemented, tested, committed and pushed, and is awaiting CI + human review in draft PR #5.",
  "active_task": null,
  "task_statuses": {
@@ -14,7 +14,7 @@
   "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed",
   "NEX-047": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a, CI 4/4 green, issue #2 comment 7219198697 posted, PR #3 section appended",
   "NEX-050": "VERIFIED - merged to main via PR #3 (merge commit 4d57f39, parent b0f9b56). Separation of duties on policy publication is in main.",
-  "NEX-051": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb (merge f4eae90). Not VERIFIED: CI polled and in progress at run end; not claimed as passing. Draft PR #5 open."
+  "NEX-051": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at f1cafeb, and **CI 4/4 completed/success at f4eae90** (Backend ruff/mypy/pytest/migrations and Frontend typecheck/lint/test/build, on both push and pull_request events, polled 2026-11-27T15:21Z). Awaiting human review in draft PR #5."
  },
  "completed_tasks": [
   "NEX-051",
@@ -39,7 +39,8 @@
    "pytest full suite: 1275 passed, 4 skipped"
   ],
   "scope": "Run bare from the repo root, exactly as CI does, on the merged tree (f4eae90).",
-  "not_run": "PostgreSQL-marked tests skipped locally; CI's Backend job runs the migration path. CI on f4eae90 had not concluded at run end."
+  "not_run": "PostgreSQL-marked tests skipped locally; CI's Backend job runs the migration path. CI on f4eae90 had not concluded at run end.",
+  "ci": "CI on the product head f4eae90: 4/4 completed/success, both events. This is the first CI evidence for NEX-051."
  },
  "uncommitted_work": false,
  "pr_state": {
@@ -48,11 +49,13 @@
   "draft": true,
   "merged": false,
   "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-  "head_sha": "f4eae90",
+  "head_sha": "5647d42",
   "base": "main",
   "title": "Enforce published governance policy at the tool gateway",
   "note": "Created this run because PR #3 had already been merged by a human at b0f9b56, leaving NEX-050 and NEX-051 on the branch with no PR. The branch was behind main by d6f92d0 (demo dataset #1); a PR opened as-is would have deleted demo_content.py and test_demo_seed.py. Rebase requires a force-push (prohibited), so origin/main was merged in at f4eae90, which restores both files. git diff --diff-filter=D origin/main..HEAD reports no files.",
-  "ci": "polled at run end: in_progress (Backend, Frontend). Not claimed as passing."
+  "ci": "f4eae90 (product head): 4/4 completed/success, polled 2026-11-27T15:21Z. 5647d42 (docs-only head): in_progress at run end; carries only NEXUS state files, so it is not product evidence either way.",
+  "mergeable": true,
+  "changed_files": 18
  },
  "tracking_issue": {
   "issue": 2,
@@ -76,7 +79,7 @@
   "Enforcement is deny-only by design: a published allow rule cannot restore authority. Do not read an allow rule as a grant.",
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
- "next_task": "Poll CI on PR #5 at f4eae90 and fix any failure; then continue the governance backlog (obligations, risk-based approval, deciding-policy-versions in the audit trail).",
+ "next_task": "Continue the governance backlog: obligations, risk-based approval, and deciding-policy-versions in the audit trail. Confirm CI on the docs head 5647d42, then keep PR #5 current for human review.",
  "next_action": "1. Poll CI for 5a96ef6 (do not treat NEX-050 as VERIFIED before it is green). 2. Add a PR #3 section and an issue #2 comment for NEX-050 (delivery debt). 3. Start NEX-051 from BACKLOG.",
  "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for f4eae90 (PR #5). Nothing is uncommitted: HEAD = f4eae90 = origin/feature/agentic-enterprise-platform. If the branch has moved on, re-merge origin/main rather than rebasing (force-push is prohibited). Never merge PR #5.",
  "ci_status": {
