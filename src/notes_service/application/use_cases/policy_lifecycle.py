@@ -59,6 +59,7 @@ from notes_service.domain.governance.policy import (
     deployment_obligation_gaps,
     new_policy_version,
     separation_of_duties,
+    supersedes,
 )
 from notes_service.domain.identity.principal import Principal
 
@@ -253,6 +254,26 @@ def _require_distinct_approver(draft: PolicyVersion, *, approver: str) -> None:
         raise Conflict(str(exc)) from exc
 
 
+def _require_newer_release(draft: PolicyVersion, *, in_force: PolicyVersion | None) -> None:
+    """Turn the domain's "must outrank what is in force" rule into a ``Conflict``.
+
+    Same translation the two separation-of-duties helpers do: the domain raises
+    :class:`InvariantViolation`, and the honest answer to a caller who tried to
+    publish an older approved version is a 409 that says so, not a generic 422.
+    The domain check stays as the backstop for callers that bypass this use case.
+
+    This closes a fail-open, not a tidy-up. ``PublishDraft`` previously retired
+    whatever was in force and published whatever it was handed, so re-publishing a
+    superseded-but-still-``APPROVED`` version silently reverted every tightening
+    made since — and did it under ``policy-publish`` alone, skipping the
+    ``policy-rollback`` scope and its separation-of-duties re-check.
+    """
+    try:
+        supersedes(draft, in_force)
+    except InvariantViolation as exc:
+        raise Conflict(str(exc)) from exc
+
+
 class ApproveDraft:
     """Approve a stored draft so that a second principal may publish it (NEX-065).
 
@@ -325,6 +346,7 @@ class PublishDraft:
         publisher = actor_label(principal)
         _require_two_principals(draft, publisher=publisher)
         current = self._store.published_for(request.policy_id)
+        _require_newer_release(draft, in_force=current)
         published = draft.publish(now=self._clock.now(), published_by=publisher)
         # Retire the outgoing version *before* publishing the new one. If the
         # process dies between the two writes, the store is briefly left with the

@@ -41,6 +41,7 @@ from notes_service.domain.governance.policy import (
     PolicyVersion,
     evaluate,
     new_policy_version,
+    supersedes,
 )
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
@@ -451,3 +452,45 @@ def test_a_half_written_approval_is_refused_at_construction() -> None:
             drafted_by="dana",
             approved_at=NOW,
         )
+
+
+# --------------------------------------------------------------------------- #
+# supersedes: a release must outrank the one in force
+# --------------------------------------------------------------------------- #
+
+
+def _release(version: int) -> PolicyVersion:
+    """A published version carrying a chosen version number, built via the factory."""
+    draft = new_policy_version(
+        policy_id="p", version=version, rules=(_rule(),), rationale="r", drafted_by="dana"
+    )
+    return draft.approve(now=NOW, approved_by="reviewer-1").publish(now=NOW, published_by="alice")
+
+
+def test_supersedes_allows_a_newer_release() -> None:
+    supersedes(_release(3), _release(2))
+
+
+def test_supersedes_allows_the_first_release() -> None:
+    """Nothing in force means nothing to outrank."""
+    supersedes(_release(1), None)
+
+
+def test_supersedes_refuses_an_older_release() -> None:
+    """The fail-open this guard exists to close: publishing a superseded version.
+
+    A retired version is still a well-formed, previously-approved value, so every
+    other check in the lifecycle passes it. Only the version number says it is no
+    longer current.
+    """
+    with pytest.raises(InvariantViolation, match="is already in force and is newer"):
+        supersedes(_release(1), _release(2))
+
+
+def test_supersedes_does_not_refuse_an_equal_version() -> None:
+    """Re-publishing what is already in force is the store's transition to refuse.
+
+    Kept out of this guard so the two failures stay distinguishable: this one
+    answers "is it newer?", the store answers "was it approved?".
+    """
+    supersedes(_release(2), _release(2))

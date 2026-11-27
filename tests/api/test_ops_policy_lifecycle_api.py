@@ -105,6 +105,61 @@ def test_operator_drafts_then_publishes(operator_client: TestClient) -> None:
     assert in_force["published_by"] == f"user-{BOB}"
 
 
+def test_publishing_a_superseded_version_is_a_409(operator_client: TestClient) -> None:
+    """An older approved version cannot displace the one in force.
+
+    The store would accept it — the old version is still ``APPROVED`` — so the
+    refusal has to come from the use case, and it has to reach the client as a
+    ``409`` rather than a ``500`` or a silent success. v1 is approved but never
+    published, which is the only reachable way to get here: publishing v1 would
+    first have to *retire* it, and a retired version is refused earlier.
+    """
+    permissive = {
+        "rules": [
+            {
+                "rule_id": "allow-high-risk",
+                "effect": "allow",
+                "when": {
+                    "kind": "comparison",
+                    "attribute": {"name": "risk", "type": "string"},
+                    "operator": "==",
+                    "value": "high",
+                },
+            }
+        ],
+        "rationale": "permit high-risk actions",
+    }
+    first = operator_client.post(
+        f"{BASE}/dg/versions", json=permissive, headers=auth_headers(ALICE)
+    )
+    assert first.status_code == 201, first.text
+    operator_client.post(f"{BASE}/dg/approve", json={"version": 1}, headers=auth_headers(BOB))
+
+    second = operator_client.post(f"{BASE}/dg/versions", json=DRAFT, headers=auth_headers(ALICE))
+    assert second.status_code == 201, second.text
+    assert second.json()["version"] == 2
+    operator_client.post(f"{BASE}/dg/approve", json={"version": 2}, headers=auth_headers(BOB))
+    live = operator_client.post(
+        f"{BASE}/dg/publish", json={"version": 2}, headers=auth_headers(BOB)
+    )
+    assert live.status_code == 200, live.text
+    assert live.json()["version"] == 2
+
+    downgrade = operator_client.post(
+        f"{BASE}/dg/publish", json={"version": 1}, headers=auth_headers(BOB)
+    )
+    assert downgrade.status_code == 409, downgrade.text
+    assert "is already in force and is newer" in downgrade.json()["error"]["message"]
+
+    # v2 stayed in force: the refused downgrade changed nothing.
+    history = operator_client.get(f"{BASE}/dg/versions", headers=auth_headers(ALICE)).json()
+    assert history["published_version"] == 2
+    assert [(v["version"], v["status"]) for v in history["versions"]] == [
+        (1, "approved"),
+        (2, "published"),
+    ]
+
+
 def test_publisher_cannot_be_chosen_by_the_request(operator_client: TestClient) -> None:
     """``published_by`` is not a request field; ``extra="forbid"`` rejects it."""
     operator_client.post(f"{BASE}/p2/versions", json=DRAFT, headers=auth_headers(ALICE))

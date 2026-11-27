@@ -550,3 +550,139 @@ def test_the_store_reports_itself_as_in_memory(
 ) -> None:
     """A reader must not mistake the demo adapter for durable storage."""
     assert store.name == "in-memory"
+
+
+# --------------------------------------------------------------------------- #
+# Publishing an older approved version is refused, not a silent downgrade
+# --------------------------------------------------------------------------- #
+
+
+def _allow_all() -> PolicyRule:
+    return PolicyRule(rule_id="allow-all", effect=PolicyEffect.ALLOW, when=None)
+
+
+def _approve_only(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    policy_id: str,
+    version: int,
+) -> PolicyVersion:
+    """Approve without publishing — the state that makes the downgrade reachable.
+
+    A *retired* version is already refused by the store's own status transition, so
+    it cannot be the exploit. The reachable case is a version that was approved and
+    then left behind: still ``APPROVED``, never published, and older than what is
+    now in force.
+    """
+    return ApproveDraft(store=store, clock=clock, operator_gate=gate).execute(
+        OPERATOR, ApprovePolicyVersion(policy_id=policy_id, version=version)
+    )
+
+
+def _permissive_v1_denying_v2(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> tuple[PolicyVersion, PolicyVersion]:
+    """v1 allows everything but is never published; v2 denies everything and is.
+
+    Returns ``(stale_v1, in_force_v2)``. Publishing the stale v1 would turn a
+    ``risk=high`` decision from deny back to allow, which is the fail-open these
+    tests pin shut.
+    """
+    draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
+    stale = draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_all(),), rationale="permissive")
+    )
+    _approve_only(store, clock, gate, "p", stale.version)
+
+    in_force = draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="tightened")
+    )
+    _approve_then_publish(store, clock, gate, "p", in_force.version)
+    return store.get("p", stale.version), in_force
+
+
+def test_publishing_a_superseded_version_is_refused(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """A lower version number must not displace the version in force.
+
+    The stale version is still a valid ``APPROVED`` value, so the store accepts it —
+    the use case is the only thing standing between a tightening and its reversal.
+    """
+    stale, in_force = _permissive_v1_denying_v2(store, clock, gate)
+
+    with pytest.raises(Conflict, match="is already in force and is newer"):
+        PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
+            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+        )
+
+    assert store.published_for("p") == store.get("p", in_force.version)
+
+
+def test_a_refused_downgrade_leaves_the_decision_denying(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """The whole point: the deny that v2 introduced survives the attempt.
+
+    Asserted through :func:`evaluate` rather than on the store's status fields,
+    because "the enforcement path still denies" is the property that matters — a
+    status-only assertion could pass while the evaluator disagreed.
+    """
+    stale, _ = _permissive_v1_denying_v2(store, clock, gate)
+    assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.DENY
+
+    with pytest.raises(Conflict):
+        PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
+            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+        )
+
+    assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.DENY
+    assert [v.ref for v in store.all_published()] == ["p@v2"]
+
+
+def test_a_refused_downgrade_leaves_history_untouched(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """v2 must not be retired by an attempt that was refused."""
+    stale, _ = _permissive_v1_denying_v2(store, clock, gate)
+
+    with pytest.raises(Conflict):
+        PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
+            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+        )
+
+    assert [(v.ref, v.status) for v in store.history("p")] == [
+        ("p@v1", PolicyStatus.APPROVED),
+        ("p@v2", PolicyStatus.PUBLISHED),
+    ]
+
+
+def test_rollback_remains_the_supported_way_to_restore_old_rules(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """The downgrade refusal must not block rollback, which is the recorded path.
+
+    Rollback drafts the old rules under the *next* number, so it is always newer
+    than what is in force. If this ever starts failing, the guard has been written
+    too broadly and has blocked the legitimate operation along with the exploit.
+    """
+    _permissive_v1_denying_v2(store, clock, gate)
+
+    rolled_back = RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
+        OPERATOR, RollbackPolicyVersion(policy_id="p", to_version=1, rationale="restore")
+    )
+
+    assert rolled_back.version == 3
+    assert store.published_for("p") == rolled_back
+    assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.ALLOW

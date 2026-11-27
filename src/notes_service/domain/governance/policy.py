@@ -489,6 +489,46 @@ def approval_of_duties(*, author: str | None, approver: str, ref: str) -> None:
         )
 
 
+def supersedes(incoming: PolicyVersion, in_force: PolicyVersion | None) -> None:
+    """Refuse to put a version in force that is older than the one already in force.
+
+    Version numbers are monotonic per policy id, so a *lower* number is by
+    construction an earlier release. Publishing it anyway is not a rollback: a
+    rollback is modelled as re-drafting old rules under the next number precisely
+    so the act of restoring them is recorded (see ``RollbackPolicy``). Publishing
+    the old row itself moves it forward in the lifecycle without moving the
+    policy forward, which produces two effects, both of them failures:
+
+    * **It silently reverts a tightening.** The superseded version was approved
+      and published once, so it is a perfectly valid ``APPROVED`` value — the
+      store will accept it. A policy that had begun denying high-risk actions
+      goes back to allowing them, and the only trace is that the retired version
+      is now the live one.
+    * **It bypasses the rollback scope.** ``RollbackPolicy`` is gated on
+      ``policy-rollback`` and re-checks separation of duties against the rules'
+      original author. Publishing an old version needs only ``policy-publish``, so
+      a principal holding that scope alone could achieve a rollback the rollback
+      path would have refused them.
+
+    Equal versions are not a downgrade and are not refused here: the caller is
+    re-publishing the version already in force, which the store's own transition
+    check turns into an ``InvariantViolation`` ("it is published, not approved").
+    Keeping the two concerns separate means this function answers exactly one
+    question — *is the incoming release newer than the one it would replace?*
+
+    ``in_force`` is ``None`` when nothing is published yet, and that is not a
+    downgrade: the first release of a policy has nothing to outrank.
+    """
+    if in_force is None:
+        return
+    if incoming.version < in_force.version:
+        raise InvariantViolation(
+            f"cannot publish {incoming.ref}: {in_force.ref} is already in force and is "
+            "newer. Publishing an older version would silently revert it and skip the "
+            "rollback scope; roll back instead, which records the restore as a new version."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PolicyVersion:
     """One immutable snapshot of a policy's rules.
@@ -973,4 +1013,5 @@ __all__ = [
     "new_policy_version",
     "new_policy_version_id",
     "separation_of_duties",
+    "supersedes",
 ]
