@@ -7217,3 +7217,27 @@ Implement NEX-058 in one vertical slice: `domain/identity/assurance.py`, `Princi
 comparison, and the three gateway tests. `second-approver` follows on the same distinct-human
 footing.
 
+### Delivery closed (same run, after the ADR commit)
+
+Pushed `28e6c9a` and polled its check-runs to a conclusion rather than recording an
+expectation. All four concluded **success** - Backend (ruff, mypy, pytest, migrations) and
+Frontend (typecheck, lint, test, build), the duplicate pair being the concurrency group.
+
+That is worth stating precisely, because this repo has produced two false alarms on the same
+signal. `cancelled` here means *superseded*, never *failed*: each docs checkpoint is itself a
+commit on the branch, so writing a status about a SHA is what cancels that SHA's run. The
+durable fix, applied last run, is to stop recording a head SHA in prose and poll the current
+head instead - so this entry names `28e6c9a` only because it is the head at the time of
+polling, and `ci_status.head_polled` in the checkpoint carries the same caveat. A reader who
+finds a later head should re-poll that one, not trust this line.
+
+NEX-057 is now COMMITTED, PUSHED and CI PASSED. It is not VERIFIED in the sense that matters,
+because the obligation it describes is still refused by the gateway - the ADR says so plainly
+rather than letting a green build imply enforcement. NEX-058 is the slice that makes it real.
+
+Deliberately not started: NEX-058 needs a domain value object, a Principal field, a
+delegation field, an additive migration and three gateway tests. With under ten minutes left,
+starting it would have left a dirty tree for the next run to discard - the one outcome the
+directive calls a defect. It goes first next run.
+
+
