@@ -111,7 +111,10 @@ class SubprocessGit:
         return result.stdout.strip()
 
     def _push(self, *args: str) -> None:
-        result = self._run("push", "--porcelain", *args, check=False)
+        # The remote must be named explicitly. Without it git treats the first
+        # positional argument (`<sha>:<ref>`) as a repository URL and tries to
+        # resolve the sha as a hostname.
+        result = self._run("push", "--porcelain", self._remote, *args, check=False)
         if result.returncode == 0:
             return
         output = f"{result.stdout}\n{result.stderr}"
