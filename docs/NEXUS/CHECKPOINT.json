@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-68",
-  "timestamp": "2026-11-27T21:58Z",
+  "timestamp": "2026-11-27T22:30Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c2f0ecc",
+  "commit": "90442d9",
   "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius (NEX-063); evaluate() fails closed on any version that is not published (NEX-064); policy authoring refuses an obligation this deployment cannot enforce (NEX-066); and an approval opened under a weaker threshold is no longer spendable under a stricter one (NEX-068). Remaining governance work is breadth: no approve verb, no preview, no non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
