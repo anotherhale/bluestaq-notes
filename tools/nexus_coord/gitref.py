@@ -98,7 +98,15 @@ class SubprocessGit:
     def fetch(self, refspec: str) -> None:
         # A fetch that finds nothing is not an error; the caller treats an
         # absent local ref as "no such claim".
-        self._run("fetch", "--quiet", self._remote, refspec, check=False)
+        #
+        # --force is required: lease and claim commits are unattached root
+        # commits (commit-tree EMPTY_TREE), so a newer one is never a
+        # fast-forward of the previous one. Without --force git rejects the
+        # update, and because check=False the rejection is silent — the local
+        # ref then keeps pointing at the *first* value ever fetched, so every
+        # later read returns stale metadata. That made the lock read as free
+        # after its first holder's expiry (R39).
+        self._run("fetch", "--quiet", "--force", self._remote, refspec, check=False)
 
     def read_message(self, local_ref: str) -> str | None:
         result = self._run("log", "-1", "--format=%B", local_ref, check=False)

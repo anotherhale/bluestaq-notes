@@ -40,6 +40,7 @@ def _cmd_lease(args: argparse.Namespace, manager: LeaseManager) -> int:
         if live is None:
             _emit({"held": False})
             return EXIT_OK
+        verdict = manager.holder_liveness(live.holder)
         _emit(
             {
                 "held": True,
@@ -47,6 +48,7 @@ def _cmd_lease(args: argparse.Namespace, manager: LeaseManager) -> int:
                 "expires_at": live.expires_at,
                 "remaining_seconds": live.remaining(),
                 "mine": live.holder == manager.holder,
+                "holder_liveness": verdict.value,
             }
         )
         return EXIT_OK
@@ -66,8 +68,9 @@ def _cmd_lease(args: argparse.Namespace, manager: LeaseManager) -> int:
         return EXIT_OK
 
     # renew and release both operate on the caller's own lease, identified by
-    # the live ref rather than by local state: a run that resumes in a new
-    # process must still be able to renew.
+    # the live ref rather than by local state. The holder string must match, so
+    # a caller must pass the same --holder it acquired with (the default
+    # host-pid changes every invocation and therefore cannot renew).
     live = manager.current()
     if live is None:
         _emit({"error": "no lease held"})

@@ -24,6 +24,18 @@ expiry travels with the lease so any agent can decide, without trusting the
 holder, whether the lock is still live. Expiry is not correctness: a holder whose
 lease expires mid-run can be superseded, so the holder must renew inside the
 window and must stop writing if renewal fails.
+
+**Bounded, and liveness is reporting only.** Expiry alone makes a crashed run
+block every successor for the full TTL (R38: a dead holder stalled the next run
+for ~23 minutes). It is tempting to shorten that by probing the holder's pid, but
+the coordination protocol is a series of *one-shot* CLI invocations: the pid that
+acquired the lease has already exited by the time any successor inspects it, so a
+pid probe reports "dead" for a perfectly live run. Gating take-over on liveness
+therefore lets two runs hold the lock at once, which was measured, not theorised
+(see the R38 regression test in `tests/coordination/test_lease.py`).
+Mutual exclusion outranks a faster crash recovery, so **expiry is the only thing
+that frees a live lease**. :mod:`nexus_coord.liveness` is still used to *report* a
+holder's state in `lease status`, where a wrong answer costs nothing.
 """
 
 from __future__ import annotations
@@ -36,6 +48,7 @@ import time
 from dataclasses import dataclass
 
 from .gitref import GitRemote, RefExistsError, RefMovedError
+from .liveness import HolderLiveness, classify
 
 LEASE_REF = "refs/locks/nexus/lease"
 
@@ -101,12 +114,38 @@ class LeaseManager:
         ttl: int = DEFAULT_TTL_SECONDS,
         clock: object = time.time,
         run_id: str = "",
+        holder_liveness: object = classify,
     ) -> None:
         self._git = git
         self.holder = holder or default_holder()
         self._ttl = ttl
         self._clock = clock
         self.run_id = run_id
+        # Injectable so a test can pin the liveness verdict without depending on
+        # the host's process table or hostname.
+        self._holder_liveness = holder_liveness
+
+    def _is_reclaimable(self, lease: Lease) -> bool:
+        """Whether ``lease`` may be taken over even though it has not expired.
+
+        **Expiry only.** Liveness is deliberately not consulted here. The
+        coordination protocol is a series of *one-shot* CLI invocations, so a
+        holder's pid has already exited by the time any successor looks at the
+        lease; a pid-based "is the holder dead?" test therefore answers "dead"
+        for every holder, and gating take-over on it lets two runs hold the lock
+        at once. Mutual exclusion is worth more than a faster recovery from a
+        crash, so the expiry bound is the only thing that frees a live lease.
+        Liveness stays available for reporting — see :meth:`holder_liveness`.
+        """
+        return lease.is_expired()
+
+    def holder_liveness(self, holder: str) -> HolderLiveness:
+        """Classify a holder's liveness for operator-facing status output.
+
+        Reporting only: this never decides whether a take-over is allowed.
+        """
+        verdict = self._holder_liveness(holder)  # type: ignore[operator]
+        return verdict if isinstance(verdict, HolderLiveness) else HolderLiveness.UNKNOWN
 
     def _now(self) -> int:
         return int(self._clock())  # type: ignore[operator]
@@ -141,11 +180,15 @@ class LeaseManager:
     def current(self) -> Lease | None:
         """The live lease, or ``None`` when the lock is free.
 
-        An expired lease reads as free: expiry is what makes a crashed run
-        recoverable without human intervention.
+        A lease reads as free only when it has expired. Liveness is deliberately
+        not part of this decision — see :meth:`_is_reclaimable`.
         """
         lease = self._raw()
-        return None if lease is None or lease.is_expired() else lease
+        if lease is None or lease.is_expired():
+            return None
+        if lease.holder == self.holder:
+            return lease
+        return None if self._is_reclaimable(lease) else lease
 
     def acquire(self) -> Lease:
         """Take the lease, or raise :class:`LeaseHeldError`.
@@ -156,7 +199,11 @@ class LeaseManager:
         observed = self._raw()
         now = self._now()
 
-        if observed is not None and observed.holder != self.holder and not observed.is_expired():
+        if (
+            observed is not None
+            and observed.holder != self.holder
+            and not self._is_reclaimable(observed)
+        ):
             raise LeaseHeldError(observed.holder, observed.expires_at, observed.remaining())
 
         expires_at = now + self._ttl

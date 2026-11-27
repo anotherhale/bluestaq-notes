@@ -27,16 +27,20 @@ from .lease import (
     LeaseManager,
     default_holder,
 )
+from .liveness import Holder, HolderLiveness, classify
 
 __all__ = [
     "DEFAULT_TTL_SECONDS",
     "LEASE_REF",
     "Claim",
     "ClaimRegistry",
+    "Holder",
+    "HolderLiveness",
     "Lease",
     "LeaseHeldError",
     "LeaseManager",
     "claim_ref",
+    "classify",
     "default_holder",
     "parse_claim_ref",
 ]

@@ -16,6 +16,7 @@ from nexus_coord.lease import (
     LeaseHeldError,
     LeaseManager,
 )
+from nexus_coord.liveness import HolderLiveness
 
 from .fake_git import FakeGit
 
@@ -201,3 +202,78 @@ def test_force_with_lease_refuses_when_the_remote_moved():
     git.refs[LEASE_REF] = "s2"
     with pytest.raises(RefMovedError):
         git.push_update(LEASE_REF, "s3", expected="s1")
+
+
+# --- R38: a stale lease, and why liveness must NOT decide take-over -------------
+
+
+def _probe_says(git, clock, verdict, holder="hostB-2", ttl=600):
+    """A manager whose liveness probe always returns ``verdict``."""
+    return LeaseManager(
+        git,
+        holder=holder,
+        ttl=ttl,
+        clock=clock,
+        run_id="RUN-B",
+        holder_liveness=lambda h: verdict,
+    )
+
+
+def test_a_live_lease_is_not_reclaimable_even_when_the_holder_pid_is_gone():
+    """R38 regression: liveness must never free an unexpired lease.
+
+    The coordination protocol is a series of one-shot CLI invocations, so the
+    pid that acquired the lease has already exited before any successor looks
+    at it. If take-over were gated on a pid probe, every successor would see
+    "dead" and two runs would hold the lock at once — mutual exclusion lost.
+    This pins the fix: an unexpired lease blocks a successor no matter what the
+    probe claims about the holder.
+    """
+    git, clock, a, _ = managers(ttl=600)
+    a.acquire()  # hostA-1 holds an unexpired lease, and its pid is long gone
+
+    successor = _probe_says(git, clock, HolderLiveness.DEAD)
+
+    # The lock has not expired, so the successor must see it as held...
+    assert successor.current() is not None
+    assert successor.current().holder == "hostA-1"
+    # ...and must not be able to steal it, however dead the probe says it is.
+    with pytest.raises(LeaseHeldError) as err:
+        successor.acquire()
+    assert err.value.holder == "hostA-1"
+    # The original holder still owns it, unchanged.
+    assert a.current() is not None and a.current().holder == "hostA-1"
+
+
+def test_an_expired_lease_is_reclaimable_regardless_of_liveness():
+    """Expiry is the one and only thing that frees a lease."""
+    git, clock, a, _ = managers(ttl=600)
+    a.acquire()
+    clock.advance(601)  # past the TTL
+
+    # Even a probe that insists the holder is alive must not keep a dead lease.
+    successor = _probe_says(git, clock, HolderLiveness.ALIVE)
+    assert successor.current() is None
+    assert successor.acquire().holder == "hostB-2"
+
+
+def test_liveness_is_reported_for_status_but_does_not_gate_takeover():
+    """`lease status` may report a verdict; it must not be a take-over rule."""
+    git, clock, a, _ = managers(ttl=600)
+    a.acquire()
+    rival = _probe_says(git, clock, HolderLiveness.DEAD)
+
+    # Reporting still works...
+    assert rival.holder_liveness("hostA-1") is HolderLiveness.DEAD
+    # ...but the lease is still held.
+    assert rival.current() is not None
+
+
+def test_the_owner_always_sees_its_own_lease():
+    """A holder must never treat its own live lease as reclaimable."""
+    _, _, a, _ = managers(ttl=600)
+    a.acquire()
+
+    a._holder_liveness = lambda h: HolderLiveness.DEAD
+    assert a.current() is not None
+    assert a.current().holder == "hostA-1"

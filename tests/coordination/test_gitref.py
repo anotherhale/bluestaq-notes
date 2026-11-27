@@ -79,3 +79,18 @@ def test_unresolvable_hostname_is_reported_as_a_git_error() -> None:
     with pytest.raises(Exception) as exc:
         git.push_create("refs/locks/nexus/lease", "deadbeef")
     assert "Could not resolve hostname" in str(exc.value)
+
+
+def test_fetch_forces_so_unrelated_root_commits_replace_the_local_ref() -> None:
+    """Lease/claim commits are unattached roots, so a newer one never
+    fast-forwards the previous one. Without --force git rejects the update,
+    and because the fetch is best-effort (check=False) the rejection is
+    silent: the local read ref keeps pointing at the first value ever
+    fetched, so every later read returns stale metadata. That made the lock
+    read as free after its first holder expired (R39)."""
+    git = RecordingGit()
+    git.fetch("refs/locks/nexus/lease:refs/nexus-read/lease")
+
+    (call,) = git.calls
+    assert "--force" in call
+    assert call[0] == "fetch"
