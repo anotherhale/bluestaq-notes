@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
  "run_id": "NEX-2026-11-27-54",
- "timestamp": "2026-11-27T16:33Z",
+ "timestamp": "2026-11-27T09:49Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "3215e08",
+ "commit": "3a8d3b8",
  "project_phase": "Phase 3 (governance) continues. NEX-047..NEX-051 are on the feature branch. NEX-052 (cite the deciding policy versions in the audit trail) is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3215e08 and awaiting CI.",
  "active_task": null,
  "task_statuses": {
@@ -233,7 +233,8 @@
    "Frontend (typecheck, lint, test, build)": "success"
   },
   "verified_at": "2026-11-27T09:45Z",
-  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit. The two docs commits before it (ef81697, 03f4620) show conclusion=cancelled in the runs list because each new push superseded them; that is supersession, not failure."
+  "note": "Verified by polling check-runs on this exact head to completion, not inferred from an earlier commit. The two docs commits before it (ef81697, 03f4620) show conclusion=cancelled in the runs list because each new push superseded them; that is supersession, not failure.",
+  "scope_note": "CI was verified green on 2ae495d. HEAD is now 3a8d3b8, which is ahead of it by documentation-only changes (docs/NEXUS/CHECKPOINT.json, docs/NEXUS/EXECUTION_LOG.md). No Python or TypeScript source differs from the CI-verified tree, so that green result still describes the product code. A fresh workflow run was triggered by the latest push and had not finished when this run ended; it is not claimed as passing."
  },
  "pr": {
   "number": 5,
