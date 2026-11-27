@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-70",
   "timestamp": "2026-11-27T23:49Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "fb1cf68",
+  "commit": "dc8470c",
   "project_phase": "Phase 3 (governance). NEX-065 records a policy approval as an explicit lifecycle transition; NEX-069 makes that migration survive an upgrade of a database that had already published a policy.",
   "active_task": null,
   "task_statuses": {
@@ -237,5 +237,6 @@
     "body_covers_through": "NEX-068",
     "body_updated_this_run": true,
     "note": "Body now carries NEX-052..NEX-068 (40653 chars). Fourteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review."
-  }
+  },
+  "commit_field_semantics": "The commit field always lags the live head by exactly one commit: the commit that updates this file. Do not read a one-commit gap as lost work. Resolve the head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and judge from that."
 }
