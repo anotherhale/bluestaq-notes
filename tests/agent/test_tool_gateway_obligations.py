@@ -11,13 +11,15 @@ These tests pin the three ways obligations can be got wrong:
 * **An unsatisfied obligation must not be an allow.** An ``approval`` obligation
   has to route the call through the real human-approval flow, so the handler does
   not run until a person has approved it.
-* **An obligation with no enforcement adapter must refuse, not be dropped.** The
-  gateway can satisfy ``approval`` (for a human-gated capability), ``redaction``
-  (a real output filter, NEX-054), ``rate-limit`` (NEX-056) and ``step-up``
-  (against the assurance recorded on the delegation, NEX-058); it has no adapter
-  for ``second-approver``. Proceeding anyway would make the policy read as
-  enforced when it is not, so the call is refused and audited. This is the
-  fail-closed half of the control.
+* **An obligation with no adapter for this call must refuse, not be dropped.** The
+  gateway can satisfy ``approval`` (for a human-gated capability), ``second-approver``
+  (the same flow with a two-distinct-human threshold, NEX-059), ``redaction`` (a real
+  output filter, NEX-054), ``rate-limit`` (NEX-056) and ``step-up`` (against the
+  assurance recorded on the delegation, NEX-058). What remains unenforceable is a
+  *mismatch*: a human gate named for a capability the domain does not treat as
+  sensitive, or ``rate-limit`` with no limiter wired. Proceeding anyway would make
+  the policy read as enforced when it is not, so the call is refused and audited.
+  This is the fail-closed half of the control.
 * **Deny still wins.** Obligations on an allow rule that also matched a deny rule
   are irrelevant: the action is refused, and no obligation is reported as a way
   to proceed.
@@ -337,15 +339,21 @@ class TestUnsatisfiableObligationsFailClosed:
     @pytest.mark.parametrize(
         "obligation",
         [
+            PolicyObligation.APPROVAL,
             PolicyObligation.SECOND_APPROVER,
         ],
     )
-    def test_an_obligation_with_no_adapter_refuses_the_call(
+    def test_a_human_gate_on_a_non_sensitive_tool_refuses_the_call(
         self, h: Harness, obligation: PolicyObligation
     ) -> None:
-        # The dangerous outcome is not a refusal: it is running the tool while
-        # quietly ignoring the obligation. The refusal names the obligation so an
-        # operator can see why, and it is audited as DENIED.
+        # Both gate obligations are satisfiable, but only for a capability the
+        # domain already treats as human-gated. ``create_note`` is not one, so a
+        # policy naming either is unenforceable *for this tool*: whether a
+        # capability needs a human is a static decision in code, and a policy
+        # version may tighten an existing gate to two people but may never invent
+        # a human gate for a tool the platform considers ungated. The refusal is
+        # still the point: the dangerous outcome is not a refusal, it is running
+        # the tool while quietly ignoring the obligation.
         _publish(h, (_allow_tool("create_note", obligation),))
         agent, secret = h.secret_for(Capability.CREATE_NOTE)
 

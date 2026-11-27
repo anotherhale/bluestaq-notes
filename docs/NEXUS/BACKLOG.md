@@ -2789,3 +2789,69 @@ gateway never re-derives it. Widening the enum is a vocabulary change and needs 
 **Migration implications:** one additive column, nullable-then-NOT-NULL via server default.
 
 **Next:** after NEX-058 lands, implement `second-approver` on the same distinct-human footing.
+
+## NEX-059 — make `second-approver` a real two-person control
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **IMPLEMENTED + TESTED** (this run); CI verification pending |
+| Dependencies | NEX-058 (distinct-human identity), NEX-053 (delegation model) |
+| Blocks | `step-up`/`second-approver` being the last unimplemented named obligations |
+
+**Objective:** the gateway must stop refusing `second-approver` and enforce it — one
+signature from one human must not authorise a two-person control.
+
+**The failure mode this task exists to prevent.** The obvious implementation — "if the
+obligation is present, accept any approval" — *silently defeats* the control it claims to
+enforce. The request is approved, the action runs, and nothing anywhere records that only
+one person signed. So the threshold must live on the request (`required_approvals`), not be
+re-derived by the gateway at spend time: a gateway that forgot to pass the number would
+otherwise accept one signature for a two-person control.
+
+**Scope delivered**
+
+1. `domain/agent/entities.py` — `ApprovalRequest.required_approvals` (1 or 2, closed
+   vocabulary), `second_approver_user_id`/`second_decided_at`/`second_reason`,
+   `denied_by_user_id`, `approvals_recorded`, `awaiting_second_approval`.
+   `approve(approver_user_id=…)` records the first signature and leaves the status
+   `PENDING`; the **second, distinct** human completes it. Distinctness is enforced in the
+   aggregate, not the use case. `raise_required_approvals()` may only raise (never lower),
+   and refuses once any signature exists — silently un-approving a recorded human decision
+   would rewrite history. `is_usable` fails closed when `approvals_recorded <
+   required_approvals`, so a contradictory row (hand-written UPDATE, partial migration,
+   future writer) never spends a control it never satisfied.
+2. `application/use_cases/tools.py` — `second_approver_required()` derives the threshold
+   from the matched obligations; `_approved_request()` opens the request with it.
+3. `infrastructure/db/models.py` + `agent_repositories.py` — persist the new columns;
+   `consume(request_id, now=)` carries the timestamp.
+4. `migrations/versions/e5a9c3b7d812_two_person_approval.py` — additive, nullable-then-
+   NOT-NULL via `server_default`, the `b7d2c48e91af` pattern.
+5. `tests/agent/test_tool_gateway_obligations.py` — the fail-closed test claimed
+   `second-approver` had no adapter. That is no longer true, so it was retargeted to a
+   non-sensitive tool; the module docstring's "unsupported" claim was corrected rather
+   than left to mislead the next reader.
+
+**Acceptance criteria**
+
+- Raise path: a policy with `second-approver` opens a request needing **two** signatures.
+- One signature: status stays `PENDING`, `is_usable` is false, action is refused.
+- Same human signing twice: refused as an invariant violation, not counted.
+- Second distinct human: approved, usable, consumed once (replay refused).
+- Denial after a partial approval: refused action, and *both* the grant and the refusal
+  remain on the record for the auditor.
+- Fail-closed: a row with `status=APPROVED` but fewer signatures than required is unusable.
+
+**Required tests:** `tests/agent/test_second_approver_obligation.py` — 11 tests covering all
+six paths above plus threshold weakening. **All 11 pass.**
+
+**Security considerations:** the threshold is a property of the persisted request, never a
+gateway argument and never settable from a request body or header. The vocabulary is closed
+at 1–2; widening it needs an ADR (a variable threshold a caller can widen is not a control).
+
+**Migration implications:** additive columns only; no backfill needed because `required_approvals`
+defaults to 1, which is the behaviour every existing row already had.
+
+**Next:** commit, push, poll CI, then report NEX-057/058/059 together to PR #5 and issue #2
+— the interesting fact is that ADR-015 now has two of its three named obligations enforced.

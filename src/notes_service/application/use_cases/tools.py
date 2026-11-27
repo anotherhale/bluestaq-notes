@@ -131,6 +131,16 @@ class _PolicyGate:
     def rate_limit_required(self) -> bool:
         return PolicyObligation.RATE_LIMIT in self.obligations
 
+    @property
+    def second_approver_required(self) -> bool:
+        """Whether the published policy demands two distinct human approvers.
+
+        Implies :attr:`approval_required`: a request that needs two signatures
+        needs approval. A policy author who writes only ``second-approver``
+        therefore gets a gate, not a requirement attached to nothing.
+        """
+        return PolicyObligation.SECOND_APPROVER in self.obligations
+
 
 def _actor_principal(resolved: ResolvedToken) -> Principal:
     """The principal a tool handler acts as: the human who delegated.
@@ -256,6 +266,14 @@ class InvokeTool(UseCase):
         #   floor — that is a separate, explicit refusal below, so "the gateway
         #   cannot enforce step-up" is never confused with "this delegation was
         #   granted at a weaker assurance".
+        # * ``second-approver`` — the same human-approval flow as ``approval``,
+        #   with the threshold raised to two *distinct* humans (NEX-059). It
+        #   implies ``approval``: a request needing two signatures needs one, so
+        #   a policy that names only ``second-approver`` gets a gate. Like
+        #   ``approval`` it is bound to a capability the domain already treats as
+        #   sensitive — policy may tighten an existing human gate to two people,
+        #   it may not invent a human gate for a tool the platform does not
+        #   consider human-gated.
         #
         # Every other obligation is refused here rather than ignored: an obligation
         # with no enforcement adapter that was silently dropped would be worse than
@@ -268,6 +286,7 @@ class InvokeTool(UseCase):
             for obligation in obligations
             if not (
                 (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
+                or (obligation is PolicyObligation.SECOND_APPROVER and tool.requires_approval)
                 or obligation is PolicyObligation.REDACTION
                 or obligation is PolicyObligation.ENHANCED_AUDIT
                 or obligation is PolicyObligation.STEP_UP
@@ -321,7 +340,7 @@ class InvokeTool(UseCase):
                 idempotency_key=idempotency_key,
                 policy_versions=consulted,
             )
-        if tool.requires_approval or gate.approval_required:
+        if tool.requires_approval or gate.approval_required or gate.second_approver_required:
             return self._run_gated(
                 resolved=resolved,
                 tool=tool,
@@ -332,6 +351,10 @@ class InvokeTool(UseCase):
                 policy_versions=consulted,
                 redaction_required=redaction_required,
                 decision_evidence=gate.evidence,
+                # The two-person requirement is stamped on the request itself, so
+                # the human queue shows what is being asked of them and the
+                # gateway cannot forget the threshold when it later spends it.
+                required_approvals=2 if gate.second_approver_required else 1,
             )
         return self._run_direct(
             resolved=resolved,
@@ -700,6 +723,7 @@ class InvokeTool(UseCase):
         policy_versions: tuple[str, ...] = (),
         redaction_required: bool = False,
         decision_evidence: DecisionEvidence | None = None,
+        required_approvals: int = 1,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -721,6 +745,7 @@ class InvokeTool(UseCase):
                 idempotency_key=idempotency_key,
                 policy_versions=policy_versions,
                 decision_evidence=decision_evidence,
+                required_approvals=required_approvals,
             )
 
         # Spend the approval before the side effect, in the same transaction as
@@ -788,6 +813,7 @@ class InvokeTool(UseCase):
         idempotency_key: str,
         policy_versions: tuple[str, ...] = (),
         decision_evidence: DecisionEvidence | None = None,
+        required_approvals: int = 1,
     ) -> NoReturn:
         """Open (or reuse) an approval request and park this attempt, never failing it.
 
@@ -802,7 +828,12 @@ class InvokeTool(UseCase):
         with self._uow_factory() as uow:
             now = self._clock.now()
             request = _open_or_reuse_approval_request(
-                uow, resolved=resolved, tool=tool, resource_ref=resource_ref, now=now
+                uow,
+                resolved=resolved,
+                tool=tool,
+                resource_ref=resource_ref,
+                now=now,
+                required_approvals=required_approvals,
             )
             already_recorded = uow.tool_invocations.find_by_idempotency_key(
                 resolved.agent.id, deferred_key
@@ -1057,6 +1088,7 @@ def _open_or_reuse_approval_request(
     tool: ToolDefinition,
     resource_ref: str,
     now: datetime,
+    required_approvals: int = 1,
 ) -> ApprovalRequest:
     """Reuse this agent's open request for the same action, or open a new one.
 
@@ -1064,6 +1096,12 @@ def _open_or_reuse_approval_request(
     decision: the human revisits the queue and would face the same approval many
     times over. Only a still-decidable request for the identical
     (capability, resource) pair is reused; anything else opens afresh.
+
+    A reused request is *raised* to the threshold the current policy demands, never
+    lowered. Reuse is an efficiency, and it must not become a way to escape a
+    stricter obligation: if the policy gained ``second-approver`` between two
+    advances, an already-approved single-signature request would otherwise be
+    spent under the weaker rule that was in force when it was opened.
 
     ``now`` is the gateway's clock and is used for *both* the reuse test and the
     new request's validity bound, so a request is judged against the same clock
@@ -1076,12 +1114,16 @@ def _open_or_reuse_approval_request(
             and existing.resource_ref == resource_ref
             and not existing.expired_at(now=now)
         ):
+            if existing.required_approvals < required_approvals:
+                existing.raise_required_approvals(required_approvals)
+                uow.approvals.save(existing)
             return existing
     request = ApprovalRequest.open(
         agent=resolved.agent,
         capability=tool.capability,
         resource_ref=resource_ref,
         now=now,
+        required_approvals=required_approvals,
     )
     uow.approvals.add(request)
     return request

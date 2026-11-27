@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -136,6 +136,13 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
             UserId.parse(row.revoked_by_user_id) if row.revoked_by_user_id else None
         ),
         revoke_reason=row.revoke_reason,
+        required_approvals=row.required_approvals,
+        second_approver_user_id=(
+            UserId.parse(row.second_approver_user_id) if row.second_approver_user_id else None
+        ),
+        second_decided_at=row.second_decided_at,
+        second_reason=row.second_reason,
+        denied_by_user_id=(UserId.parse(row.denied_by_user_id) if row.denied_by_user_id else None),
         version=row.version,
     )
 
@@ -480,6 +487,23 @@ class SqlAlchemyApprovalRequestRepository:
                     else None
                 ),
                 revoke_reason=request.revoke_reason,
+                # The two-person control travels with the row from creation. A
+                # save that omitted these would reset the threshold to the column
+                # default and quietly downgrade a request that needs two
+                # signatures back to one.
+                required_approvals=request.required_approvals,
+                second_approver_user_id=(
+                    _as_uuid(request.second_approver_user_id)
+                    if request.second_approver_user_id is not None
+                    else None
+                ),
+                second_decided_at=request.second_decided_at,
+                second_reason=request.second_reason,
+                denied_by_user_id=(
+                    _as_uuid(request.denied_by_user_id)
+                    if request.denied_by_user_id is not None
+                    else None
+                ),
                 version=request.version,
             )
         )
@@ -556,6 +580,19 @@ class SqlAlchemyApprovalRequestRepository:
                     else None
                 ),
                 revoke_reason=request.revoke_reason,
+                required_approvals=request.required_approvals,
+                second_approver_user_id=(
+                    _as_uuid(request.second_approver_user_id)
+                    if request.second_approver_user_id is not None
+                    else None
+                ),
+                second_decided_at=request.second_decided_at,
+                second_reason=request.second_reason,
+                denied_by_user_id=(
+                    _as_uuid(request.denied_by_user_id)
+                    if request.denied_by_user_id is not None
+                    else None
+                ),
                 version=request.version,
             )
         )
@@ -586,6 +623,15 @@ class SqlAlchemyApprovalRequestRepository:
                 # A revoked grant is not spendable even if a concurrent writer
                 # has not yet flipped the status column.
                 ApprovalRequestRow.revoked_at.is_(None),
+                # The two-person control, enforced in the same statement that
+                # spends the grant rather than in a separate read: a row that
+                # requires two signatures and carries one must not be consumed
+                # even if its status column somehow reads approved. Checking it
+                # here means no caller can spend it by skipping the aggregate.
+                or_(
+                    ApprovalRequestRow.required_approvals < 2,
+                    ApprovalRequestRow.second_approver_user_id.is_not(None),
+                ),
             )
             .values(consumed_at=now, version=ApprovalRequestRow.version + 1)
         )

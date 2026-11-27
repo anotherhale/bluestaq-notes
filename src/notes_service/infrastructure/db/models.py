@@ -551,6 +551,22 @@ class ApprovalRequestRow(Base):
     # Why the grant was withdrawn, kept apart from ``reason`` so the approval
     # justification is not lost when the authorisation is taken back.
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Two-person control (NEX-059). ``required_approvals`` is stamped when the
+    # request is opened from a policy that imposes the ``second-approver``
+    # obligation; the two signatory columns record the distinct humans. The
+    # server default of 1 is what every pre-existing row means: one approver was
+    # enough, and no backfill can invent a second signature that never happened.
+    required_approvals: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    second_approver_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    second_decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    second_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    denied_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # Optimistic concurrency for the decision itself. A stale save would rewrite
     # ``status``/``consumed_at`` from a pre-decision copy and silently restore
     # authority the human already withdrew or spent.
@@ -558,6 +574,10 @@ class ApprovalRequestRow(Base):
 
     __table_args__ = (
         CheckConstraint("status IN ('pending','approved','denied','revoked')", name="status_valid"),
+        # A request may require one or two approvers, never more and never zero:
+        # zero would mean "nobody must approve", which is the absence of a control
+        # stored as though it were one.
+        CheckConstraint("required_approvals IN (1,2)", name="required_approvals_valid"),
         Index("ix_agent_approval_requests_agent_status", "agent_id", "status"),
     )
 
