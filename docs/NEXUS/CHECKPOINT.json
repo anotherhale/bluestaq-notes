@@ -31,7 +31,7 @@
     "state": "open",
     "draft": true,
     "merged": false,
-    "body_len": 69961,
+    "body_len": 72415,
     "body_updated_at": "2026-11-27T08:33Z",
     "body_update_scope": "R37 section inserted before the Delivery state section; delivery state refreshed with comment 7213326000 and CI at 6da559d. Read back byte-identical from the API.",
     "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides. NOT updated this run: the window went to the slice, its gates and CI, and no delivery debt was carried in."
@@ -316,11 +316,13 @@
     "ci_verified": true,
     "ci_verifying_sha": "ed641b0",
     "ci_result": "4/4 completed/success (Backend and Frontend, both duplicate check-run sets), polled 2026-11-27T09:46Z",
-    "tracking_issue_updated": false,
-    "pr_updated": false,
-    "delivery_debt": "Two follow-ups deferred deliberately and recorded so the next run does not rediscover them: (1) the run report was not posted to issue #2 or PR #3 this run; (2) NEX-042 has no route-level test proving the ops route reads the operator allowlist from settings - the API tests exercise the use case directly."
+    "tracking_issue_updated": true,
+    "pr_updated": true,
+    "delivery_debt": "One follow-up remains, and it is product work rather than delivery: NEX-042 has no route-level test proving the ops route reads the operator allowlist from settings - the API tests exercise the use case directly. Run report for this run was posted to issue #2 and PR #3 during the same run, so no reporting debt carries forward.",
+    "tracking_issue_ref": "issue #2 comment 7215122677 (NEX-042 run report, lists only, no markdown tables)",
+    "pr_ref": "PR #3 body 69961 -> 72415 chars; NEX-042 section appended and read back verified. Still draft, still unmerged."
   },
-  "run_summary": "NEX-2026-11-27-45. Shipped NEX-042, the audit-chain platform-wide sweep. Reconciled from the true remote head (git ls-remote, not the local tracking ref), which was 5c13d9b - one docs commit ahead of what the prior run's next_action implied. Implemented SweepAuditIntegrity plus its port methods, domain report types, repository queries and an operator-gated ops endpoint: 562 insertions across 9 files. All gates green on the committed tree (ruff format 248 files, ruff check clean, mypy 117 files, pytest 1060 passed / 4 skipped). Committed ed641b0, pushed, verified by ls-remote, CI 4/4 success at that exact SHA. Product delivery finished before the lease was free, so R38's stale lease blocked only the coordination writes that followed it.",
+  "run_summary": "NEX-2026-11-27-45. Shipped NEX-042, the audit-chain platform-wide sweep. Reconciled from the true remote head (git ls-remote, not the local tracking ref), which was 5c13d9b - one docs commit ahead of what the prior run's next_action implied. Implemented SweepAuditIntegrity plus its port methods, domain report types, repository queries and an operator-gated ops endpoint: 562 insertions across 9 files. All gates green on the committed tree (ruff format 248 files, ruff check clean, mypy 117 files, pytest 1060 passed / 4 skipped). Committed ed641b0, pushed, verified by ls-remote, CI 4/4 success at that exact SHA. Product delivery finished before the lease was free, so R38's stale lease blocked only the coordination writes that followed it. Delivery was closed out in the same run: the run report was posted to tracking issue #2 (comment 7215122677) and appended to PR #3 (69961 -> 72415 chars, read back and asserted), so no reporting debt carries into the next run.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "ed641b07cfe7a283cc2cce090b8177efd67c9d02",
