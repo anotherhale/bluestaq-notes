@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-48",
   "timestamp": "2026-11-27T12:12:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "e6f58c0",
+  "commit": "3045a6b",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-045 implemented, NEX-045 awaiting CI. Run NEX-2026-11-27-48 closed the second half of R36: the operator allowlist is now a *stored grant* rather than a static env var. An OperatorGrant carries a scope, a granted_at, optional not_before/expires_at and an optional granted_by, so a grant can expire mid-process without a redeploy and can name its holder. OperatorGate reads now once from its own clock and threads it through both the check and the access-log entry (R29). OPS_OPERATOR_USER_IDS is now the seed path, not the allowlist. GET /api/v1/ops/operator-grants lists every holder with an active scope and the earliest deadline among their grants (None when one is unbounded).",
   "active_task": null,
   "task_statuses": {
@@ -35,7 +35,7 @@
     "status": "VERIFIED - local gates clean and CI 4/4 green at e6f58c0",
     "note": "The slice shipped with zero dedicated tests in the prior segment; this segment added tests/domain/test_operator_grant.py (17), tests/application/test_operator_grants.py (13) and tests/api/test_ops_operator_grants_api.py (4). Expiry - the whole point of the slice - was previously untested."
   },
-  "uncommitted_work": "None for src/ and tests/. The docs commit that writes this file is the final commit of the run.",
+  "uncommitted_work": "None. Working tree clean; HEAD == remote at 3045a6b.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -357,7 +357,7 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "16b0287f846bff6086ef47a37cb8f5f8fa64c0ad",
+  "head_at_checkpoint": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
   "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
   "completed_task_notes": {
@@ -370,10 +370,12 @@
     "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary.",
     "NEX-039": "The first real DecisionProvider adapter, so decisioning stops being a capability the platform can exercise but never use. Product commit 8e670a6, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T19:32Z). Four refusals carry the security argument: a vendor cannot abstain (no 'abstained' outcome on the wire; the caller's threshold decides), the request carries only kind plus sorted candidates (no context hash, no excluded field names, no correlation id), sorting makes order-independence a property of this adapter rather than a hoped-for vendor trait, and a bad answer is an abstention rather than an exception. Construction fails closed on a non-https endpoint or an unbounded name. Two honest limits are recorded in the module docstring: the response size bound is enforced after httpx has read the body, and a rationale is truncated rather than treated as fatal."
   },
-  "branch_head_observed_at": "2026-11-27T11:01Z",
+  "branch_head_observed_at": "2026-11-27T12:16Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "16b0287"
+    "e6f58c0",
+    "217ac7d",
+    "3045a6b"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
@@ -386,24 +388,24 @@
     "issue_updated": true,
     "delivery_debt": "cleared for NEX-044 and NEX-045"
   },
-  "run_summary": "NEX-2026-11-27-48. Closed R36's governance half (NEX-044): per-operation scoping of the operator allowlist. An unscoped allowlist meant the person who tunes withholding thresholds also bought a read of the platform-wide audit sweep; that is a privilege-escalation shape, not a convenience. Grants are now '<user-id>:<scope>' with '*' as the only explicit way to grant everything. 13 files, +360/-47. Gates green on the committed tree: ruff format 257 files, ruff check all passed, mypy 121 files, pytest 1115 passed / 4 skipped / 0 failed. Product commit 16b0287 pushed as a fast-forward 70353c7..16b0287 and ls-remote-verified; CI 4 runs created against that exact head_sha and still in progress when this file was written. Main untouched at d6f92d0. Delivery debt: issue #2 comment and PR #3 section for NEX-044 are owed to the next run.",
+  "run_summary": "NEX-045 (stored operator grants: expiry + named holder) delivered as a full vertical slice and committed at e6f58c0; CI verified 4/4 completed/success. Delivery debt cleared: NEX-044 and NEX-045 reports posted to issue #2 and both sections appended to draft PR #3. Two docs commits (217ac7d, 3045a6b) record the state. Nothing was started after the 10-minute floor because there was not enough clock for a slice plus its integration.",
   "head_observation": {
-    "sha": "16b0287f846bff6086ef47a37cb8f5f8fa64c0ad",
-    "remote_sha": "16b0287f846bff6086ef47a37cb8f5f8fa64c0ad",
+    "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
+    "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "read_from": "git rev-parse HEAD and git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T11:33Z",
-    "note": "The run began on main at d6f92d0 in a fresh shallow clone; the feature branch was fetched and the slice committed directly on the true remote head 70353c7, so no rebase was needed."
+    "at": "2026-11-27T12:16Z",
+    "note": "Local HEAD and the remote ref agree exactly, so the branch is fully pushed. The run began on main at d6f92d0 in a fresh shallow clone; the feature branch was fetched and the slice committed on the true remote head 99faab5, so no rebase was needed."
   },
   "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 19aafa8. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
   "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
   "checkpoint_integrity_note": "The risks array is an append-only ledger of every risk this programme has opened, including closed ones with the evidence that closed them. It must never be replaced with only the live risks: d09695c did exactly that and deleted R35 through R26, which was caught on review of the diff and restored verbatim from the parent commit. If you need a live-only view, derive it by filtering on status - never by rewriting the array.",
   "head_observed": {
-    "sha": "e6f58c037fc24f84bbf3eeac29c3e41f5897323c",
+    "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T12:12Z",
-    "note": "Product commit of this segment; equal to local HEAD after push."
+    "at": "2026-11-27T12:16Z",
+    "note": "Final pushed head of this run, equal to local HEAD."
   },
-  "head_at_checkpoint_note": "This is the last head that received a CI verdict, not necessarily the newest commit. Docs-only commits made after it (such as the one that wrote this file) cannot change a verdict, so chasing HEAD here would recurse forever. Read the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; treat any commit after this one as docs-only unless its diff proves otherwise.",
+  "head_at_checkpoint_note": "Final verified HEAD before the last docs commit was 3045a6b (product commit e6f58c0 plus docs commits 217ac7d and 3045a6b), confirmed with git ls-remote after push. The final docs commit that writes this file necessarily postdates it, so its own SHA cannot appear here; read the branch head with git ls-remote rather than trusting this field for the very last commit.",
   "last_completed_task": {
     "id": "NEX-045",
     "title": "Stored operator grants: expiry and holder visibility (R36 governance, part 2)",
