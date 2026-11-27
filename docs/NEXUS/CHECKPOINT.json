@@ -1,7 +1,7 @@
 {
  "schema_version": 1,
  "run_id": "NEX-2026-11-27-53",
- "timestamp": "2026-11-27T16:05Z",
+ "timestamp": "2026-11-27T16:09Z",
  "branch": "feature/agentic-enterprise-platform",
  "commit": "3215e08",
  "project_phase": "Phase 3 (governance) continues. NEX-047..NEX-051 are on the feature branch. NEX-052 (cite the deciding policy versions in the audit trail) is IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3215e08 and awaiting CI.",
@@ -52,11 +52,11 @@
   "draft": true,
   "merged": false,
   "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-  "head_sha": "3215e08",
+  "head_sha": "d44fe24",
   "base": "main",
   "title": "Enforce published governance policy at the tool gateway",
   "note": "PR #5 carries NEX-051 and now NEX-052. Branch was merged up from origin/main earlier (f4eae90) to avoid reverting the demo dataset; no force-push used. Never merge without human review.",
-  "ci": "3215e08: in_progress at run end (Backend + Frontend, push and pull_request).",
+  "ci": "3215e08 cancelled by supersession; d44fe24 (docs-only child, same product code) in_progress at run end.",
   "mergeable": true,
   "changed_files": 18
  },
@@ -83,12 +83,15 @@
   "Deny requires non-empty matched_rules. Removing that guard denies every tool call in a deployment with no published policy."
  ],
  "next_task": "Phase 3 governance, next dependency-ready slice: obligations carried on a policy decision (an allow that still requires an action), which the security architecture lists alongside deny and which NEX-051/052 do not yet model.",
- "next_action": "1. Poll CI for 3215e08 and record the conclusion. 2. Comment on issue #2 and PR #5 with NEX-052 (delivery debt). 3. Start the obligations slice from BACKLOG.",
+ "next_action": "1. Poll CI for d44fe24 (the docs-only child carrying the NEX-052 product code) and record the conclusion; only then mark NEX-052 VERIFIED. 2. Start the obligations slice: the third policy effect the architecture lists, the only one the gateway does not model.",
  "recovery_instructions": "Read docs/NEXUS/STATE.md, then poll CI for f4eae90 (PR #5). Nothing is uncommitted: HEAD = f4eae90 = origin/feature/agentic-enterprise-platform. If the branch has moved on, re-merge origin/main rather than rebasing (force-push is prohibited). Never merge PR #5.",
  "ci_status": {
-  "commit": "3215e08",
-  "status": "IN_PROGRESS",
-  "note": "Polled at 16:04Z: 4 check runs in_progress (Backend, Frontend; push and pull_request events)."
+  "product_commit": "3215e08",
+  "product_commit_conclusion": "CANCELLED (not failed)",
+  "explanation": "The 3215e08 workflow runs were cancelled because the docs checkpoint push d44fe24 superseded them (branch concurrency cancellation). A cancelled run carries no verdict; it must not be read as a failure or a pass.",
+  "branch_head": "d44fe24",
+  "branch_head_status": "in_progress",
+  "note": "d44fe24 is a docs-only child of 3215e08, so its Backend job compiles and tests the NEX-052 product code. The next run must poll d44fe24 and only then promote NEX-052 to VERIFIED."
  },
  "verified_tasks": [
   "NEX-047",
@@ -140,7 +143,7 @@
  "in_progress_tasks": [],
  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
- "head_at_checkpoint": "3215e08",
+ "head_at_checkpoint": "d44fe24",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
  "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
  "completed_task_notes": {
@@ -156,16 +159,17 @@
  "branch_head_observed_at": "2026-11-27T13:44:00Z",
  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
  "commits_this_run": [
-  "3215e08"
+  "3215e08",
+  "d44fe24"
  ],
  "delivery_state": {
   "branch": "feature/agentic-enterprise-platform",
-  "head": "3215e08",
+  "head": "d44fe24",
   "remote_verified": true,
   "remote_verified_by": "git push reported 6fae5c0..3215e08",
-  "pr_updated": false,
-  "issue_updated": false,
-  "delivery_debt": "OPEN for NEX-052: PR #5 section and issue #2 comment."
+  "pr_updated": true,
+  "issue_updated": true,
+  "delivery_debt": "CLEARED for NEX-052: issue #2 comment 7223211293 posted, PR #5 body grew 5521 -> 8085 bytes with the NEX-052 section."
  },
  "run_summary": "NEX-052 delivered at 3215e08: every audited tool invocation now records the published policy versions that governed it, sealed into the intent hash. Compatibility is the crux - policy_versions is versioned into the sealed payload, so an uncited row hashes with the original v:1 payload byte for byte and the entire pre-existing audit trail still verifies; only a cited row moves to v:2. Migration b7d2c48e91af adds the NOT NULL column, backfills existing rows, then drops the server default so a writer that forgets the column fails loudly rather than asserting 'no policy was cited'. Two real migration bugs were found and fixed: a docstring claiming a dropped default the code kept, and a SQLite batch rebuild that omitted the new column when the add and the default-drop shared one batch.",
  "head_observation": {
