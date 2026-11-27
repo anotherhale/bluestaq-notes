@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-70",
-  "timestamp": "2026-11-27T23:38Z",
+  "timestamp": "2026-11-27T23:49Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "04d52e1",
+  "commit": "c107453",
   "project_phase": "Phase 3 (governance). NEX-065 records a policy approval as an explicit lifecycle transition; NEX-069 makes that migration survive an upgrade of a database that had already published a policy.",
   "active_task": null,
   "task_statuses": {
@@ -20,7 +20,7 @@
     "NEX-067": "VERIFIED - CI 4/4 completed/success at c01fde5 (polled 2026-11-27T22:47Z). derive_assurance() now classifies AMR methods into factor families and requires two independent families; otp+totp and sms+tel read as SINGLE_FACTOR. Closes a fail-open where the step-up obligation was satisfied by one factor spelled twice.",
     "NEX-065": "VERIFIED - CI 4/4 completed/success at 2d59c74 (the docs head descending from the NEX-065 product commit eca18f3), polled 2026-11-27T23:12Z by run 70. eca18f3's own pairs read `cancelled`, which is superseded, not failed. Re-validated locally: 1472 passed / 4 skipped, ruff format+check clean, mypy clean on 140 files.",
     "NEX-069": "VERIFIED - CI 4/4 completed/success at 7a1d5e2, polled 2026-11-27T23:22Z by run 70. The NEX-065 migration required approved_at/approved_by for any in-force row; because a CHECK constraint is table-wide, `alembic upgrade head` failed on any database that had already published a policy. Now tolerates a legacy in-force row with both columns NULL while still refusing a half-written approval. Also fixed the test that had been silently vacuous (it seeded a text id into an INTEGER PK and never reached the migration). 1472 passed / 4 skipped locally; 5 tests fail with the source fix reverted.",
-    "NEX-070": "COMMITTED + PUSHED at 04d52e1 - CI NOT YET POLLED, so not VERIFIED. PublishDraft retired whatever was in force and published whatever it was handed, so a superseded-but-still-APPROVED version was accepted and the policy silently reverted to an older rule set - and did it under policy-publish alone, skipping policy-rollback's scope and its separation-of-duties re-check. domain.governance.policy.supersedes() now refuses a lower version number and the use case turns that into a 409. Rollback still works because it re-drafts old rules under the next number. Local: ruff/mypy clean, pytest exit 0."
+    "NEX-070": "VERIFIED"
   },
   "completed_tasks": [
     "NEX-039",
@@ -115,7 +115,8 @@
     "NEX-066",
     "NEX-067",
     "NEX-065",
-    "NEX-069"
+    "NEX-069",
+    "NEX-070"
   ],
   "in_progress_tasks": [],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
@@ -137,16 +138,18 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "base": "main",
     "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body carries NEX-052..NEX-069 (46209 chars). NEX-070 is not yet in it. Fifteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Automated merging is prohibited.",
-    "body_covers_through": "NEX-069",
-    "body_updated_this_run": false
+    "note": "Body carries NEX-052..NEX-070 (48375 chars) as of run 70. Fifteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Automated merging is prohibited.",
+    "body_covers_through": "NEX-070",
+    "body_updated_this_run": true
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
     "last_reported_task": "NEX-069",
-    "note": "Issue #2 open; comment 7230076705 covers NEX-065 and NEX-069. No comment yet for NEX-070.",
-    "comment_id": 7230076705
+    "note": "Issue #2 open. Comment 7230423658 covers NEX-070 VERIFIED; 7229097083 covers NEX-067. The issue stays open until its acceptance criteria are met.",
+    "comment_id": 7230076705,
+    "latest_comment_id": 7230423658,
+    "latest_comment_covers": "NEX-070"
   },
   "blockers": [],
   "risks": [
@@ -164,10 +167,10 @@
     "Run IDs are assigned independently of the log and have collided twice (NEX-2026-11-27-61 reused, NEX-069 written as NEX-066 in its commit message). Grep EXECUTION_LOG.md and CHECKPOINT.json for the next free ID BEFORE writing the commit message. NEX-070 was confirmed free this run.",
     "PublishDraft now refuses a lower version number, so any future path that legitimately needs to restore an old rule set must go through RollbackPolicy (which re-drafts under the next number). If a caller is added that publishes an explicit version chosen by a human, it must not assume this guard can be bypassed by bumping the number without the rollback scope."
   ],
-  "next_task": "Poll CI on 04d52e1 and promote NEX-070 if green; then the next dependency-ready backlog slice. No carried-over implementation debt.",
-  "next_action": "First: GET /repos/anotherhale/bluestaq-notes/commits/04d52e1/check-runs and require every entry to be status=completed with conclusion=success. Then update CHECKPOINT.json/STATE.md to VERIFIED and add NEX-070 to PR #5 and issue #2 in one update each. Only then start a new slice, from docs/NEXUS/BACKLOG.md.",
+  "next_task": "No carried-over implementation debt. Everything through NEX-070 is VERIFIED. Next: the highest-value dependency-ready backlog slice - read docs/NEXUS/BACKLOG.md, pick one, implement it as a single vertical slice.",
+  "next_action": "Observe/reconcile (CHECKPOINT + STATE + tail of EXECUTION_LOG + git), then execute one slice from the backlog. Do not re-verify NEX-070; it is closed.",
   "recovery_instructions": "Tree is clean at 04d52e1 (NEX-070 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-070 is COMMITTED + PUSHED but NOT VERIFIED - poll CI before claiming otherwise. Everything through NEX-069 is VERIFIED. PR #5 body and issue #2 comment 7230076705 cover through NEX-069. The NEX-069 commit message says NEX-066; that mislabel is documented in EXECUTION_LOG.md and must not be silently rewritten.",
-  "ci_status": "4/4 completed/success at 7a1d5e2 (NEX-069) and at 2d59c74 (NEX-065). 04d52e1 (NEX-070) in progress - not yet read.",
+  "ci_status": "04d52e1 (NEX-070 product head): 4/4 completed/success, polled 2026-11-27T23:48Z - NEX-070 VERIFIED. 7a1d5e2 (NEX-069) 4/4, 2d59c74 (NEX-065) 4/4. c107453 (docs checkpoint) was still in_progress when this file was written; a docs commit only re-runs CI over the same product tree, so it does not gate NEX-070.",
   "commits_this_run": [
     "04d52e1"
   ],
@@ -176,7 +179,7 @@
     "D-070j: the guard lives in the domain, not only the use case - it is an invariant of the version numbering, and the domain check remains the backstop for callers that bypass the use case.",
     "D-070k: refusal surfaces as Conflict (409), not a 422 - the caller is in conflict with current state, not malformed."
   ],
-  "run_summary": "No carried-over debt and no active task, so the run hunted a defect instead of inventing one. Found a fail-open in the policy publish path: a superseded-but-still-APPROVED version could be published, silently reverting a tightening and bypassing the policy-rollback scope and its separation-of-duties re-check. Closed with a domain supersedes() guard translated into a 409. Rollback remains the supported path and is pinned by a test. All local gates green; pushed as 04d52e1. CI not yet polled, so the slice is COMMITTED + PUSHED, not VERIFIED.",
+  "run_summary": "NEX-070: fixed a fail-open in policy publishing. A superseded version is still a valid APPROVED row, so PublishDraft would accept it and silently revert the live policy to older rules; it also bypassed the policy-rollback scope and its separation-of-duties re-check. Added supersedes(incoming, in_force) to the domain and mapped it to 409 in the use case. Verified: 4/4 CI at 04d52e1. Delivered: PR #5 body and issue #2 comment updated.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
     "head": "04d52e1",
@@ -189,7 +192,7 @@
     "issue_comment_covers_through": "NEX-069",
     "docs_head_ci_green": false
   },
-  "branch_head": "04d52e1",
+  "branch_head": "Docs head c107453 (NEX-070 checkpoint) over product head 04d52e1. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {

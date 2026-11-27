@@ -8438,3 +8438,65 @@ rejected (v1 was never created, so the follow-up read 404'd), and the history ro
 Poll CI on `04d52e1` (`gh api repos/anotherhale/bluestaq-notes/commits/04d52e1/check-runs`).
 If all check-runs are `completed/success`, promote NEX-070 to VERIFIED in
 `CHECKPOINT.json`/`STATE.md`, then add it to PR #5 and issue #2 in one update each.
+
+---
+
+## NEX-2026-11-27-70 (continued) — NEX-070 VERIFIED and delivered
+
+**Timestamp:** 2026-11-27T23:50Z
+**Starting commit:** `04d52e1` (product head, pushed by this run before the checkpoint)
+**Ending commit:** `c107453` (docs checkpoint) over `04d52e1`
+**Branch:** `feature/agentic-enterprise-platform`
+
+### What happened
+
+The previous phase of this run left NEX-070 as COMMITTED + PUSHED but not verified, which is a
+deliberate half-step: pushing is not evidence, and only CI on the pushed head can promote a slice.
+This phase did that and closed the delivery debt.
+
+1. Committed the docs checkpoint (`CHECKPOINT.json`, `EXECUTION_LOG.md`, `STATE.md`) as `c107453`
+   and pushed. Verified the remote head with `git ls-remote` rather than trusting the local view.
+2. Polled CI on `04d52e1`: **4/4 `completed/success`** (Backend ruff/mypy/pytest/migrations,
+   Frontend typecheck/lint/test/build, twice each because the concurrency group re-ran the pair).
+   **NEX-070 promoted to VERIFIED on that evidence.**
+3. Updated PR #5 body: 46209 → 48375 chars, now covering NEX-052…NEX-070.
+4. Posted issue #2 comment `7230423658` recording NEX-070 and the board state.
+5. Promoted NEX-070 in `STATE.md` (position table, CI row, tracking-issue row, PR row, section
+   status) and in `CHECKPOINT.json` (`ci_status`, `task_statuses`, `verified_tasks`, `next_task`,
+   `pr_state`, `tracking_issue`, `run_summary`).
+
+### Test results
+
+No new code in this phase, so no new test execution. The evidence for NEX-070 is CI at `04d52e1`,
+not a local run repeated after the fact. Docs gates re-run in the prior phase: `ruff format
+--check` 302 files already formatted; `ruff check` all passed.
+
+### Decisions
+
+- **A docs commit does not gate a slice.** `c107453` was still `in_progress` when the checkpoint
+  was written. A docs commit re-runs CI over the same product tree, so its result adds nothing to
+  NEX-070's verdict. Recorded explicitly in `ci_status` so a later run does not read "in_progress"
+  as unfinished work.
+- **NEX-070 needed no backlog row.** It was a defect found while reconciling, not a planned slice;
+  the checkpoint tracks it under `task_statuses` and `verified_tasks` like any other slice.
+
+### Incident (worth remembering)
+
+The `python3 - <<'PY'` heredoc for the `STATE.md` edits corrupted again — the body echoed itself
+interleaved and died with a `SyntaxError` on a mangled line. **Nothing executed**, and
+`STATE.md` was byte-identical to HEAD afterwards (168419 bytes, matching `git show HEAD:...`), so
+the corruption is in the input path before execution, not in the file. Recovered by doing the five
+edits with `file_editor str_replace` instead. This is the fifth occurrence across runs; the rule
+holds — write the script to a file, or use `file_editor`, never an inline multi-KB heredoc.
+
+### Status
+
+- NEX-070: **VERIFIED** (CI 4/4 at `04d52e1`), **PUSHED**, **PR UPDATED**, **ISSUE UPDATED**.
+- Everything through NEX-070 is VERIFIED. No implementation debt carried forward.
+- PR #5 remains **open and unmerged**, awaiting human review. Automated merging is prohibited.
+
+### Next exact action
+
+Read `docs/NEXUS/BACKLOG.md`, pick the highest-value dependency-ready slice, and implement it as
+one vertical slice. Do not re-verify NEX-070.
+
