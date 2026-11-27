@@ -31,6 +31,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.oidc import VerifiedIdToken
+from notes_service.domain.identity.assurance import (
+    STEP_UP_FLOOR,
+    AuthenticationAssurance,
+)
 from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRelyingParty
 
 ISSUER = "https://idp.example.com"
@@ -309,3 +313,46 @@ def test_authorization_url_carries_pkce_and_nonce() -> None:
     assert "code_challenge_method=S256" in url
     assert f"client_id={CLIENT_ID}" in url
     assert "login_hint=alice%40example.com" in url
+
+
+def test_verified_token_carries_multi_factor_assurance(signing_key: rsa.RSAPrivateKey) -> None:
+    # The mapping is consulted on the real verification path, not merely correct in
+    # isolation: a stepped-up login must reach the caller as multi-factor, or the
+    # step-up obligation would refuse a human who actually satisfied it.
+    verified = _relying_party(signing_key)._verify_id_token(
+        _token(signing_key, acr="urn:acme:multi-factor"), expected_nonce=NONCE
+    )
+
+    assert verified.assurance is AuthenticationAssurance.MULTI_FACTOR
+    assert verified.assurance.meets(STEP_UP_FLOOR)
+
+
+def test_verified_token_carries_amr_derived_assurance(signing_key: rsa.RSAPrivateKey) -> None:
+    verified = _relying_party(signing_key)._verify_id_token(
+        _token(signing_key, amr=["pwd", "otp"]), expected_nonce=NONCE
+    )
+
+    assert verified.assurance is AuthenticationAssurance.MULTI_FACTOR
+
+
+def test_verified_token_without_assurance_claims_is_single_factor(
+    signing_key: rsa.RSAPrivateKey,
+) -> None:
+    # The fail-closed default must survive the whole path, which is where it
+    # matters: a token carrying no acr/amr must not yield step-up authority.
+    verified = _relying_party(signing_key)._verify_id_token(
+        _token(signing_key), expected_nonce=NONCE
+    )
+
+    assert verified.assurance is AuthenticationAssurance.SINGLE_FACTOR
+    assert not verified.assurance.meets(STEP_UP_FLOOR)
+
+
+def test_verified_token_with_negated_acr_is_single_factor(signing_key: rsa.RSAPrivateKey) -> None:
+    # Regression guard for the fail-open this slice fixed: a token whose acr names
+    # multi-factor in order to deny it must not arrive as multi-factor.
+    verified = _relying_party(signing_key)._verify_id_token(
+        _token(signing_key, acr="urn:acme:mfa-not-required"), expected_nonce=NONCE
+    )
+
+    assert verified.assurance is AuthenticationAssurance.SINGLE_FACTOR

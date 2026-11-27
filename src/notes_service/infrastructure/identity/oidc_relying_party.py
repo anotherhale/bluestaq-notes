@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import secrets
 from datetime import UTC, datetime
 from typing import Any
@@ -224,6 +225,74 @@ _MULTI_FACTOR_AMR: frozenset[str] = frozenset(
 )
 
 
+#: Tokens that separate the segments of an ``acr`` value. An ``acr`` is a class
+#: name (``urn:acme:multi-factor``, ``https://idp/loa/mfa``), so a marker has to
+#: be matched as a whole segment rather than as a substring of one.
+_ACR_SEPARATOR = re.compile(r"[^a-z0-9]+")
+
+#: Segments that invert the meaning of a nearby marker. ``mfa-optional``,
+#: ``mfa-not-required`` and ``not-multifactor`` all name multi-factor in order to
+#: say it was *not* performed, and a substring match read every one of them as
+#: stepped up. In an enforcement path that is the difference between granting and
+#: refusing authority, so a marker next to one of these is not counted.
+_ACR_NEGATIONS: frozenset[str] = frozenset(
+    {
+        "absent",
+        "bypass",
+        "bypassed",
+        "disabled",
+        "never",
+        "no",
+        "none",
+        "not",
+        "off",
+        "optional",
+        "skip",
+        "skipped",
+        "unsupported",
+        "without",
+    }
+)
+
+#: ``acr`` segments that name a multi-factor level on their own.
+_ACR_MULTI_FACTOR_TOKENS: frozenset[str] = frozenset({"mfa", "multifactor"})
+
+
+def _acr_tokens(acr: str) -> list[str]:
+    return [token for token in _ACR_SEPARATOR.split(acr.strip().lower()) if token]
+
+
+def _marker_is_negated(tokens: list[str], start: int, span: int) -> bool:
+    before = tokens[start - 1] if start > 0 else None
+    after_index = start + span
+    after = tokens[after_index] if after_index < len(tokens) else None
+    return before in _ACR_NEGATIONS or after in _ACR_NEGATIONS
+
+
+def _acr_names_multi_factor(acr: str) -> bool:
+    """True when ``acr`` positively asserts a multi-factor login.
+
+    Matched by segment, with an adjacent negation vetoing the marker. The veto is
+    deliberately blunt: a compound level such as ``mfa:not-sms`` is read as
+    single-factor because this function cannot tell "multi-factor, but not by SMS"
+    from "multi-factor not required" without a registry of level names it does not
+    have. Understating refuses a step-up; overstating spends one on a login that
+    never happened, so the blunt direction is the safe one.
+    """
+    tokens = _acr_tokens(acr)
+    for index, token in enumerate(tokens):
+        if token in _ACR_MULTI_FACTOR_TOKENS and not _marker_is_negated(tokens, index, 1):
+            return True
+        if (
+            token == "multi"
+            and index + 1 < len(tokens)
+            and tokens[index + 1] == "factor"
+            and not _marker_is_negated(tokens, index, 2)
+        ):
+            return True
+    return False
+
+
 def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
     """Derive authentication assurance from verified ``acr``/``amr`` claims.
 
@@ -237,15 +306,20 @@ def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
 
     * ``amr`` lists a second factor from :data:`_MULTI_FACTOR_AMR` alongside a
       first one, or
-    * ``acr`` names a recognised multi-factor level. Both the ``...:mfa`` style
-      and the numeric OIDC ``loa``/``ial`` conventions are matched by substring,
-      because providers differ and there is no single registry.
+    * ``acr`` names a recognised multi-factor level, matched by segment and
+      refused when a neighbouring segment negates it (see
+      :func:`_acr_names_multi_factor`).
+
+    Numeric NIST level conventions (``aal2``, ``loa3``, ``urn:okta:loa:2``) are
+    deliberately **not** mapped. Several of them describe identity proofing rather
+    than the number of authentication factors, so treating a numeric level as
+    multi-factor would guess at a semantics that differs between providers. They
+    therefore read as single-factor, which refuses a step-up rather than granting
+    one on an assumption. Mapping them is a vocabulary change and needs an ADR.
     """
     acr = claims.get("acr")
-    if isinstance(acr, str) and acr.strip():
-        normalised = acr.strip().lower()
-        if any(marker in normalised for marker in ("mfa", "multi-factor", "multifactor")):
-            return AuthenticationAssurance.MULTI_FACTOR
+    if isinstance(acr, str) and acr.strip() and _acr_names_multi_factor(acr):
+        return AuthenticationAssurance.MULTI_FACTOR
 
     amr = claims.get("amr")
     if isinstance(amr, str):
