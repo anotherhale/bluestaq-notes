@@ -5905,3 +5905,94 @@ integration half that the previous segment had no time for.
   **ISSUE UPDATED**.
 - Next task: **NEX-046** — a durable `OperatorGrantRepository` behind the existing port,
   closing **R40**. The gate and use case do not change; that is what the port is for.
+
+## Run `NEX-2026-11-27-49` — NEX-046: a durable `OperatorGrantRepository` (closes R40)
+
+- **Run ID**: `NEX-2026-11-27-49`
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `c9bb7d6` (equal to local `HEAD` and to
+  `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, so no
+  reconciliation was needed)
+- **Ending commit**: `0e86304` (product slice), plus the docs commit that writes
+  this entry
+- **Tasks completed**: NEX-046
+- **Tasks verified**: NEX-046 locally (gates green); CI not polled
+- **Tasks in progress**: none
+- **Tasks blocked**: none
+
+### What changed
+
+- `application/ports/operator_grants.py` — `replace_configured` added to the port.
+  It exists because a durable store makes the boot-time seed non-idempotent: an
+  appended seed would add the whole configuration on every restart.
+- `infrastructure/db/models.py` — `OperatorGrantRow`, surrogate `id` for insertion
+  order, unique `(user_id, scope, granted_at)`, non-empty-scope CHECK, FKs to
+  `users.id` (CASCADE for the holder, SET NULL for `granted_by`).
+- `infrastructure/db/operator_grants.py` — the durable adapter. Ordering by `id`,
+  idempotent `add`, expiry delegated to `OperatorGrant.is_active` so the rule lives
+  in one place.
+- `infrastructure/security/operator_grants.py` — the in-memory adapter gains
+  `replace_configured` and stays for tests.
+- `bootstrap/container.py` — wires the durable adapter; `_seed_operator_grants`
+  reconciles through `replace_configured`.
+- `migrations/versions/f7b3c0d95a12_operator_grants.py` — the table, no backfill
+  (there is no earlier table whose rows this could reconstruct).
+- `tests/persistence/test_operator_grants.py` — 23 tests.
+- `tests/bootstrap/test_decision_provider_selection.py` — the two selection tests
+  now pass the `engine` fixture. This is a real consequence of the slice, not a
+  test fix-up: `build_container` seeds grants, so it now needs a migrated schema.
+  Assertions unchanged.
+
+### Tests executed
+
+- `pytest`: **1172 passed, 4 skipped, 0 failed** (17.05s)
+- `tests/persistence/test_operator_grants.py`: **23 passed**
+- `ruff format --check`: 268 files already formatted
+- `ruff check`: all passed
+- `mypy`: no issues in 126 source files
+- `alembic heads`: single head `f7b3c0d95a12`; parent `c7a91e3d5b62`; migration
+  suite green including the no-model-drift check
+
+### Decisions
+
+- **Surrogate `id` rather than a composite primary key.** The port promises
+  insertion order and an autoincrement integer is the only portable way to recover
+  it; `granted_at` is a business field whose precision must not be load-bearing for
+  identity.
+- **`replace_configured` on the port rather than a container-side workaround.** The
+  seed path's semantics ("configuration owns its own grants") is a property of the
+  store contract, so it belongs on the port where both adapters must honour it.
+- **No SQL-side expiry filter.** One place evaluates validity; two would drift.
+
+### Risks
+
+- **R40: CLOSED** by this slice.
+- New, recorded rather than hidden: the CHECK constraint and the `UTCDateTime` round
+  trip have only met SQLite locally, and CI at `0e86304` was not polled. Four
+  PostgreSQL-marked tests would exercise both.
+
+### Delivery
+
+- **Commits**: `0e86304`
+- **Push status**: PUSHED, `c9bb7d6..0e86304`; `git ls-remote` returned
+  `0e863043634109e934d1ef5dc67236875f72197e` == `git rev-parse HEAD`
+- **PR #3**: NOT updated this run — outstanding delivery debt
+- **Tracking issue #2**: NOT updated this run — outstanding delivery debt
+- **CI**: NOT POLLED at `0e86304`. Not a pass, not a failure.
+- **Checkpoint**: updated (`run_id`, `commit`, `last_completed_task`, R40 flipped to
+  closed in the append-only ledger, `delivery_state`, `next_task`, `ci_status`).
+  All 40 top-level keys and all 26 risk entries preserved.
+
+### Method note
+
+Two `python3 - <<'PY'` heredocs were corrupted by this terminal's input path (7th and
+8th occurrences of that defect). Both died at parse time before writing, so no file
+was damaged; the work was done with `file_editor` and a script executed from disk.
+The first of the two was an attempt to edit
+`tests/bootstrap/test_decision_provider_selection.py`, which is why that file was
+then edited with `file_editor` instead.
+
+### Next action
+
+Poll CI at `0e86304`, then post the NEX-046 report to issue #2 and append its
+section to draft PR #3. Delivery debt is open until both are done.

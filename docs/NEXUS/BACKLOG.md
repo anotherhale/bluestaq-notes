@@ -2409,3 +2409,53 @@ expiry, never on liveness.
 `host-pid` lease (`Andrews-Mac-mini.local-95179`, expiring `1795775517`) still held the ref, and
 the old code cannot release it. The fix was therefore proven on a scratch repo. The next run
 should confirm acquire -> `mine: true` -> release against the real ref after that expiry.
+
+## NEX-046 (run `NEX-2026-11-27-49`) — R40 CLOSED: a grant that outlives the process
+
+**Status**: TESTED (local gates green) + PUSHED at `0e86304`; CI not yet polled;
+issue #2 comment and PR #3 section still owed.
+
+**Phase**: 5 (durable runtime) · **Priority**: P1 · **Dependencies**: NEX-045 (closed)
+· **Risk closed**: R40
+
+**Objective.** NEX-045 made an operator permission a record with a holder and a
+lifetime, but the only adapter was a process-local dict: a restart forgot every
+bounded grant and each worker held its own copy. It failed closed, so it was never a
+security hole — but an invisible grant cannot be audited, which is the question
+NEX-045 exists to answer.
+
+**Scope.** `SqlAlchemyOperatorGrantRepository` behind the unchanged
+`OperatorGrantRepository` port; `OperatorGrantRow`; migration `f7b3c0d95a12`;
+`replace_configured` added to the port; container wiring; 23 persistence tests.
+
+**Acceptance criteria — met.**
+
+- `OperatorGate` and `ListOperatorGrants` compile and pass unchanged: the port was
+  the seam and the store swapped behind it.
+- A second adapter over the same database file sees a grant the first one wrote.
+- `active_grants` order is stable, by surrogate `id`, never by `granted_at` (two
+  grants in one seed share a timestamp).
+- `add` is idempotent on `(user_id, scope, granted_at)`: re-issuing extends a
+  deadline instead of duplicating.
+- Re-running the seed does not grow the operator set, and does not erase a
+  human-issued grant. This is `replace_configured`, and it exists *because* the
+  store is durable: an appending seed would add the whole configuration per restart.
+- Expiry is evaluated by `OperatorGrant.is_active` in exactly one place, not in SQL.
+- Single Alembic head, correct parent, no model drift.
+
+**Required tests** — `tests/persistence/test_operator_grants.py` (23): restart,
+cross-adapter visibility, insertion order, both expiry boundaries, `not_before`,
+per-user scoping, uniqueness, re-issue extending a deadline, `replace_configured`
+idempotency and its refusal to touch human grants, empty-scope CHECK, user FK,
+cascade delete, table presence.
+
+**Validation.** ruff format 268 files clean, ruff check clean, mypy 126 source files
+clean, `pytest` 1172 passed / 4 skipped / 0 failed. Pushed `c9bb7d6..0e86304`,
+`ls-remote`-verified.
+
+**Recorded limits, not hidden.** The `length(scope) > 0` CHECK and the `UTCDateTime`
+round trip have only met SQLite in this window; four PostgreSQL-marked tests would
+exercise both and were skipped locally. CI at `0e86304` was not polled.
+
+**Next.** NEX-047 — poll CI at `0e86304`, then clear delivery debt: issue #2 comment
+and PR #3 section for NEX-046 (lists, not tables, for issue comments on this repo).

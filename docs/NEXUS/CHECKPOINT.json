@@ -1,18 +1,20 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-48",
-  "timestamp": "2026-11-27T12:12:00Z",
+  "run_id": "NEX-2026-11-27-49",
+  "timestamp": "2026-11-27T12:46:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3045a6b",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-045 implemented, NEX-045 awaiting CI. Run NEX-2026-11-27-48 closed the second half of R36: the operator allowlist is now a *stored grant* rather than a static env var. An OperatorGrant carries a scope, a granted_at, optional not_before/expires_at and an optional granted_by, so a grant can expire mid-process without a redeploy and can name its holder. OperatorGate reads now once from its own clock and threads it through both the check and the access-log entry (R29). OPS_OPERATOR_USER_IDS is now the seed path, not the allowlist. GET /api/v1/ops/operator-grants lists every holder with an active scope and the earliest deadline among their grants (None when one is unbounded).",
+  "commit": "0e86304",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Run NEX-2026-11-27-49 closed R40: operator grants moved from a process-local dict to a table, so a restart no longer forgets a bounded grant and workers no longer hold divergent copies. The port did not change - OperatorGate and ListOperatorGrants depend on OperatorGrantRepository, which is what the port was for. replace_configured is new and load-bearing: with a durable store a seed that only appended would add the whole configuration on every restart, so the seed path now reconciles its own grants and leaves human-issued ones alone.",
   "active_task": null,
   "task_statuses": {
     "R36-read-side": "VERIFIED",
     "R36-auditable-half": "VERIFIED",
     "R36-governance-half": "VERIFIED",
-    "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)"
+    "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)",
+    "NEX-046": "TESTED (local gates) + PUSHED at 0e86304; CI not yet polled"
   },
   "completed_tasks": [
+    "NEX-046",
     "NEX-045",
     "R36-governance-half",
     "R36-auditable-half",
@@ -35,7 +37,7 @@
     "status": "VERIFIED - local gates clean and CI 4/4 green at e6f58c0",
     "note": "The slice shipped with zero dedicated tests in the prior segment; this segment added tests/domain/test_operator_grant.py (17), tests/application/test_operator_grants.py (13) and tests/api/test_ops_operator_grants_api.py (4). Expiry - the whole point of the slice - was previously untested."
   },
-  "uncommitted_work": "None. Working tree clean; HEAD == remote at 3045a6b.",
+  "uncommitted_work": "None at push time. The product slice is committed and pushed at 0e86304; this docs commit follows it and is not implementation.",
   "pr_state": {
     "number": 3,
     "state": "open",
@@ -44,24 +46,13 @@
     "body_len": 96880,
     "body_updated_at": "2026-11-27T12:16Z",
     "body_update_scope": "NEX-044 and NEX-045 report sections appended (oldest first) after the prior body. The AI-disclosure footer was stripped from both sections because it belongs on the issue comment. Read back at 96880 chars and asserted on short substrings, since GitHub re-wraps lines and long phrases fail spuriously.",
-    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides. Both sections the previous checkpoint listed as owed are now present, so the delivery debt it recorded is cleared."
+    "note": "Draft and unmerged. The NEX-046 section is NOT yet appended - delivery debt carried to the next run. Automated merging is prohibited; a human reviewer decides."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "reports_posted_this_segment": [
-      {
-        "task": "NEX-044",
-        "comment_id": 7218021011,
-        "chars": 2917
-      },
-      {
-        "task": "NEX-045",
-        "comment_id": 7218022850,
-        "chars": 5369
-      }
-    ],
-    "note": "Both reports were posted oldest-first and stored byte-identical to what was sent (2917 and 5369 chars). The delivery debt the previous checkpoint carried for these two tasks is cleared. The issue stays open: the program is not done."
+    "reports_posted_this_segment": [],
+    "note": "NEX-046 is NOT yet reported. Outstanding delivery debt carried to the next run. The issue stays open: the program is not done."
   },
   "blockers": [
     {
@@ -142,8 +133,8 @@
     {
       "id": "R26",
       "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
+      "summary": "A field can be persisted, foreign-keyed, and written on every create — and still never be read by the check that needs it.",
+      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check — decide which, in writing.",
       "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
     },
     {
@@ -279,34 +270,22 @@
       "severity": "low",
       "summary": "An operator grant is process-local: a restart forgets every bounded grant.",
       "detail": "NEX-045 stores grants in InMemoryOperatorGrantRepository, seeded from OPS_OPERATOR_USER_IDS at startup. That makes expiry real within a process, but a grant issued through the store is lost on restart, and in a multi-worker deployment each worker holds its own copy, so a grant issued on one worker is invisible to the others. This is the same shape as InMemoryOperatorAccessLog and is honest for a demo adapter (source_name reports 'in-memory' so a reader cannot mistake it for durable). The fix is a durable adapter behind the existing OperatorGrantRepository port; the gate and the use case do not change. Not a security regression: a lost grant fails closed.",
-      "status": "open - needs a durable adapter (follow-up slice)"
+      "status": "closed by NEX-046 (run NEX-2026-11-27-49) at 0e86304 - local gates green, CI not yet polled when the window closed",
+      "closure_evidence": "SqlAlchemyOperatorGrantRepository behind the unchanged OperatorGrantRepository port, plus migration f7b3c0d95a12. Two properties the port promises now survive a table: active_grants ordering is by a surrogate autoincrement id rather than granted_at, because two grants in one seed share a timestamp; and add() is idempotent on the unique (user_id, scope, granted_at) key, so a re-issued grant extends its deadline instead of duplicating. Expiry is still evaluated by OperatorGrant.is_active in exactly one place rather than filtered in SQL, so the two adapters cannot drift. 23 persistence tests cover restart (a second adapter over the same file sees the grant), cross-adapter visibility, insertion order, both expiry boundaries, the empty-scope CHECK, the user FK and cascade delete."
     }
   ],
   "next_task": {
-    "id": "NEX-046",
-    "title": "A durable OperatorGrantRepository (closes R40)",
-    "detail": "Add a SQLAlchemy adapter behind the existing application port (application/ports/operator_grants.py) with an Alembic migration, and keep the in-memory adapter for tests. OperatorGate and ListOperatorGrants must not change: the port exists so the store can be replaced without touching them. R40 says the store is process-local, so a restart forgets a bounded grant and multi-worker deployments diverge; it fails closed, so this is durability, not a security regression. Test the adapter against SQLite the way the other adapters are tested, and assert the expiry boundary survives a round trip through the database, which is where a naive timestamp column would lose precision or timezone."
+    "id": "NEX-047",
+    "title": "Poll CI for NEX-046 and report it, or fix CI if it fails",
+    "detail": "0e86304 is pushed but its CI has not been polled. Poll the check runs and record the verdict, then write the NEX-046 section to draft PR #3 and the comment to issue #2 (lists, never tables - tables make POST /issues/2/comments return HTTP 500 on this repository). If CI fails, fix it on the branch: the slice is a migration plus a new adapter, so the likely failure is a dialect difference in the CHECK constraint (length(scope) > 0) or the UTCDateTime round trip on PostgreSQL, which the local suite skips 4 PostgreSQL-marked tests for."
   },
-  "next_action": "Start NEX-046: add the durable SQLAlchemy adapter for OperatorGrantRepository plus its migration, then run the full gates. Delivery debt is cleared, so the branch, the issue and the PR now agree with each other.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R36 is CLOSED in all three of its halves (read side, auditable half, governance half) - do not redo them. 5. Delivery debt outstanding: poll CI at 16b0287, then write the issue #2 comment and the PR #3 section for NEX-044.",
+  "next_action": "Poll CI at 0e86304, then post the NEX-046 report to issue #2 and append its section to draft PR #3. Delivery debt for NEX-046 is open until both are done.",
+  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. NEX-046 is DONE and PUSHED at 0e86304 - do not redo it. 3. Its CI has not been polled: poll it first, and if it failed read the note in next_task.detail about the CHECK constraint and UTCDateTime round trip on PostgreSQL. 4. Delivery debt: the issue #2 comment and the PR #3 section for NEX-046 are both unwritten. Use lists, not tables, for issue comments on this repository. 5. The lease CLI is `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools.",
   "ci_status": {
-    "commit": "e6f58c0",
-    "observed_at": "2026-11-27T12:14Z",
-    "check_runs": [
-      {
-        "name": "Backend (ruff, mypy, pytest, migrations)",
-        "status": "completed",
-        "conclusion": "success",
-        "count": 2
-      },
-      {
-        "name": "Frontend (typecheck, lint, test, build)",
-        "status": "completed",
-        "conclusion": "success",
-        "count": 2
-      }
-    ],
-    "verdict": "4/4 completed/success at e6f58c0 (one Backend+Frontend pair per push and pull_request event)."
+    "commit": "0e86304",
+    "observed_at": null,
+    "check_runs": [],
+    "verdict": "NOT POLLED. The slice was committed, pushed and ls-remote-verified with about nine minutes left, and the window went to the checkpoint rather than to a poll. Do not read this as a pass."
   },
   "verified_tasks": [
     "NEX-001",
@@ -359,7 +338,7 @@
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
   "head_at_checkpoint": "3045a6b95b7b95af80e3d71056793a47ae375163",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
-  "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
+  "validation_status": "Local gates green on the exact committed tree 0e86304: ruff format --check 268 files already formatted, ruff check all passed, mypy no issues in 126 source files, pytest 1172 passed / 4 skipped / 0 failed. CI at 0e86304: not polled.",
   "completed_task_notes": {
     "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
     "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -373,22 +352,19 @@
   "branch_head_observed_at": "2026-11-27T12:16Z",
   "branch_head_read_from": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
   "commits_this_run": [
-    "e6f58c0",
-    "217ac7d",
-    "3045a6b"
+    "0e86304"
   ],
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "217ac7d",
+    "head": "0e86304",
     "remote_verified": true,
-    "remote_verified_by": "git ls-remote returned 217ac7d8760ce731f8f39c2fda14f761a196d91c == git rev-parse HEAD",
-    "product_commit": "e6f58c0",
-    "docs_commit": "217ac7d",
-    "pr_updated": true,
-    "issue_updated": true,
-    "delivery_debt": "cleared for NEX-044 and NEX-045"
+    "remote_verified_by": "git ls-remote returned 0e863043634109e934d1ef5dc67236875f72197e == git rev-parse HEAD",
+    "product_commit": "0e86304",
+    "pr_updated": false,
+    "issue_updated": false,
+    "delivery_debt": "OPEN for NEX-046: neither the issue #2 comment nor the PR #3 section is written."
   },
-  "run_summary": "NEX-045 (stored operator grants: expiry + named holder) delivered as a full vertical slice and committed at e6f58c0; CI verified 4/4 completed/success. Delivery debt cleared: NEX-044 and NEX-045 reports posted to issue #2 and both sections appended to draft PR #3. Two docs commits (217ac7d, 3045a6b) record the state. Nothing was started after the 10-minute floor because there was not enough clock for a slice plus its integration.",
+  "run_summary": "NEX-046 delivered as a vertical slice and pushed at 0e86304: a durable OperatorGrantRepository behind the unchanged port, with migration f7b3c0d95a12 and 23 persistence tests. R40 is closed in the risk ledger. Local gates green. CI not polled and delivery debt (issue #2 comment, PR #3 section) is open - both are the next run's first actions.",
   "head_observation": {
     "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
     "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
@@ -407,16 +383,17 @@
   },
   "head_at_checkpoint_note": "Final verified HEAD before the last docs commit was 3045a6b (product commit e6f58c0 plus docs commits 217ac7d and 3045a6b), confirmed with git ls-remote after push. The final docs commit that writes this file necessarily postdates it, so its own SHA cannot appear here; read the branch head with git ls-remote rather than trusting this field for the very last commit.",
   "last_completed_task": {
-    "id": "NEX-045",
-    "title": "Stored operator grants: expiry and holder visibility (R36 governance, part 2)",
-    "status": "VERIFIED - local gates clean, CI 4/4 green at e6f58c0",
+    "id": "NEX-046",
+    "title": "A durable OperatorGrantRepository (closes R40)",
+    "status": "IMPLEMENTED + TESTED locally; PUSHED at 0e86304; CI pending",
     "evidence": [
-      "pytest full suite: 1149 passed, 4 skipped, 0 failed",
-      "pytest new: 17 domain + 13 application + 4 API passed",
-      "ruff check clean, ruff format clean, mypy clean (125 files)",
-      "pushed 99faab5..e6f58c0; git ls-remote confirms remote head == local HEAD",
-      "CI: 2 check runs created at e6f58c0, queued/in_progress at run close",
-      "CI 4/4 completed/success at e6f58c0, polled 2026-11-27T12:14Z"
+      "ruff format clean (268 files already formatted)",
+      "ruff check clean",
+      "mypy clean (126 source files)",
+      "pytest 1172 passed / 4 skipped / 0 failed",
+      "23 new persistence tests in tests/persistence/test_operator_grants.py",
+      "alembic single head f7b3c0d95a12, parent c7a91e3d5b62, no model drift",
+      "pushed c9bb7d6..0e86304; git ls-remote returned 0e86304 == git rev-parse HEAD"
     ]
   },
   "closed_items": [
