@@ -6327,3 +6327,54 @@ and is the first task of the next run, alongside the product slice NEX-049.
 
 Statuses, stated precisely: NEX-048 is IMPLEMENTED, TESTED, COMMITTED, PUSHED, **CI PASSED**
 at `810d1dc`, and PR UPDATED is **not** true — the PR body does not yet describe this slice.
+
+## Run NEX-2026-11-27-52 — NEX-049 policy lifecycle over HTTP
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `7011cfa`
+- **Ending commit:** `22124f2`
+- **Phase:** Phase 3 (governance), M3.2
+
+**Task completed:** NEX-049 — `/api/v1/ops/policies` with draft, publish, rollback and
+history, converging on the existing `DraftPolicy` / `PublishDraft` / `RollbackPolicy` /
+`GetPolicyHistory` use cases. No lifecycle rule is duplicated in the router.
+
+**Where the gate lives.** The operator-scope check was added to the *application* use
+cases, not the router. Each use case takes the `Principal` and calls
+`OperatorGate.authorize` before touching the store, so a future caller (an agent, a
+workflow, a CLI) is gated by the same code the HTTP route uses. A gate written in the
+router would have been a second, bypassable copy of an authorization rule.
+
+**Scope is per operation.** `policy-draft`, `policy-publish`, `policy-rollback` and
+`policy-history` are separate scopes. Drafting a policy is not publishing it, and the API
+test asserts a `policy-draft` grant gets 403 on publish and 404 on a policy it never
+drafted. A single `policy-admin` scope would have collapsed a four-step lifecycle with a
+human checkpoint in the middle into one grant.
+
+**A boundary bug the tests caught.** The router passed `str(principal.user_id)` as
+`published_by`, and the domain rejects it: `_validate_identifier` requires a lowercase
+identifier starting with a letter, and a UUID starts with a digit. The fix is at the
+boundary, where the mapping belongs — `_publisher_label` returns `user-<uuid>`. Worth
+recording as a shape: a domain that validates an actor label and a boundary that has a
+UUID need exactly one function between them that knows both, and it must be named so the
+next reader can find it.
+
+**Files changed:** `application/use_cases/policy_lifecycle.py` (gate + per-operation
+scope constants), `bootstrap/container.py` (wire the gate), `presentation/api/__init__.py`
+(register the router), `presentation/schemas.py` (7 request/response models),
+`presentation/api/routers/policies.py` (new), `tests/api/test_ops_policy_lifecycle_api.py`
+(new, 11 tests), `tests/application/test_policy_lifecycle.py` (call sites updated for the
+`Principal` parameter; test count unchanged at 22).
+
+**Validation:** `ruff format --check` clean, `ruff check` clean, `mypy` clean (135 source
+files), `pytest` **1257 passed, 4 skipped**. The four skips are the PostgreSQL-marked
+tests; CI's Backend job runs the migration path.
+
+**Status, stated precisely:** IMPLEMENTED, TESTED, COMMITTED, PUSHED. CI is **UNKNOWN**
+for `22124f2` — the push landed at the budget boundary and was not polled, so it must not
+be reported as green. PR UPDATED is **not** true and issue #2 has not been told about this
+slice; both are delivery debt carried to the next run.
+
+**Next task:** NEX-050 — separation of duties: the principal that drafted a policy version
+must not be the principal that publishes it. Enforced in the application layer, for the
+same reason the gate is.

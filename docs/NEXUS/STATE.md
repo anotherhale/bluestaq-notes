@@ -7,15 +7,46 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance) **open**: **NEX-047 / M3.1 VERIFIED** at `379a98a` (closed typed policy AST, `DRAFT → PUBLISHED → RETIRED` lifecycle, publish retires its predecessor in the same operation, rollback is a new release). **NEX-048 PUSHED** at `810d1dc` — the same port, now with a durable SQLAlchemy adapter so a published policy survives a restart; storage-layer `UNIQUE (policy_id, version_number)` and a partial unique index keeping one `published` row per policy; decode re-validates, so a corrupt row raises and logs instead of silently weakening policy. **Remaining gaps, named:** no HTTP surface (NEX-049), no `approve` pending separation of duties (NEX-050), migration verified on SQLite locally and by CI's Backend migrations job, CI for `810d1dc` **4/4 success**. Earlier detail preserved in the dated sections below. |
+| Project phase | Phase 2 **complete**. Phase 5 (durable runtime): **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance) **open**: **NEX-047 / M3.1 VERIFIED** at `379a98a` (closed typed policy AST, `DRAFT → PUBLISHED → RETIRED` lifecycle, publish retires its predecessor in the same operation, rollback is a new release). **NEX-048 PUSHED** at `810d1dc` — the same port, now with a durable SQLAlchemy adapter so a published policy survives a restart; storage-layer `UNIQUE (policy_id, version_number)` and a partial unique index keeping one `published` row per policy; decode re-validates, so a corrupt row raises and logs instead of silently weakening policy. **NEX-049 PUSHED** at `22124f2` — `/api/v1/ops/policies` exposes draft/publish/rollback/history, gated in the **application** use cases on per-operation operator scopes, so a drafting grant cannot publish. **Remaining gaps, named:** no separation of duties yet — the same principal may draft and publish (NEX-050); CI for `22124f2` **not polled**; PR #3 and issue #2 delivery debt for NEX-048/NEX-049 open. Prior: CI for `810d1dc` **4/4 success**. Earlier detail preserved in the dated sections below. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Base commit (run start) | `d00c661` (run `NEX-2026-11-27-50`; the clone arrived on `main` at `d6f92d0`, the feature branch was already present and `d00c661` was its measured head before this run's commit). Prior: `80114ca`.) |
-| Head commit (measured) | `994c1c8` — `docs(nexus): checkpoint NEX-048 at 810d1dc, hand NEX-049 to next run`, pushed as `810d1dc..994c1c8` and `ls-remote`-verified at `994c1c8999ef849e56f9ac55166f6bcf22e813aa`. The NEX-048 **product** commit beneath it is `810d1dc` (CI 4/4 success). Prior: `810d1dc`, `0ef42ec` (docs), `379a98a` (NEX-047 product). The true branch head is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
+| Head commit (measured) | `22124f2` (NEX-049 product + this docs commit follows it; read the true head from `git ls-remote`). Prior: `994c1c8` — `docs(nexus): checkpoint NEX-048 at 810d1dc, hand NEX-049 to next run`, pushed as `810d1dc..994c1c8` and `ls-remote`-verified at `994c1c8999ef849e56f9ac55166f6bcf22e813aa`. The NEX-048 **product** commit beneath it is `810d1dc` (CI 4/4 success). Prior: `810d1dc`, `0ef42ec` (docs), `379a98a` (NEX-047 product). The true branch head is only trustworthy from `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. |
 | Last CI result | **`810d1dc`: 4/4 `completed/success`, polled 2026-11-27T13:47Z** — Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) on both the `push` and `pull_request` events. The Backend job running migrations is what exercises the Postgres path for migration `4b1e7a9c3f28`. Prior: `19f06a7` 4/4 success. The docs commit `994c1c8` is not polled; it carries only NEXUS state files and reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. See `ci_status` in `CHECKPOINT.json`. |
 | Tracking issue | #2 (open) — **NEX-048 reported** (comment `7220035523`, 3163 chars, HTTP 201). **No issue delivery debt outstanding.** NEX-047 reported (comment `7219198697`), NEX-046 (comment `7218689144`). The issue stays open: the programme is not done. |
 | Draft PR | #3 (draft, unmerged — human review required). Body 108,965 chars as last measured at `16bab4b`. **NEX-048 section NOT yet appended** — deferred to the next run with the CI poll, so the PR body does not yet describe `810d1dc`. Still `draft=true`. Automated merging is prohibited; a human reviewer decides. |
 | CI status | See `ci_status` in `CHECKPOINT.json` — that file carries the per-slice poll results with timestamps and is the authority. Standing rule: a docs commit reads `completed/cancelled` once superseded in the CI concurrency group — neither pass nor fail, and never evidence. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-049 PUSHED (run `NEX-2026-11-27-52`) — the lifecycle, behind a gate the router cannot skip
+
+NEX-047 built the lifecycle and NEX-048 made it durable, but nothing outside a test could
+reach it. `/api/v1/ops/policies` now offers `draft`, `publish`, `rollback` and `history`.
+
+The design point worth recording is *where the authorization went*. The operator-scope
+check lives in the application use cases (`DraftPolicy`, `PublishDraft`, `RollbackPolicy`,
+`GetPolicyHistory`), not in the router. A gate in the router would be a second copy of an
+authorization rule, and the second copy is always the one that gets forgotten when the
+next caller arrives. Putting it in the use case means an agent, a workflow or a CLI added
+later is gated by exactly the code HTTP is gated by.
+
+Scopes are **per operation** — `policy-draft`, `policy-publish`, `policy-rollback`,
+`policy-history`. Drafting a policy is not publishing it. A single `policy-admin` scope
+would have collapsed a lifecycle with a deliberate human checkpoint into one grant. The
+API suite asserts the separation directly: a `policy-draft` grant gets `403` on publish,
+and `404` on a policy it never drafted (existence is not disclosed to a caller who cannot
+see it).
+
+One boundary defect was caught by the tests and is worth naming. The router passed
+`str(principal.user_id)` as `published_by`; the domain's `_validate_identifier` requires a
+lowercase identifier starting with a letter, and a UUID starts with a digit, so publishing
+failed with a `ValidationError`. The fix is one function at the boundary —
+`_publisher_label` returns `user-<uuid>` — because a domain that validates an actor label
+and a boundary that holds a UUID need exactly one place that knows both.
+
+Status: IMPLEMENTED, TESTED, COMMITTED, PUSHED at `22124f2`. CI for that commit is
+**UNKNOWN** — the push landed at the budget boundary and was not polled, so it is not
+green. PR #3 does not yet describe this slice, and issue #2 has not been told about it.
+Both are delivery debt for the next run.
 
 ## NEX-048 PUSHED (run `NEX-2026-11-27-50`) — a published policy that a restart cannot empty
 
