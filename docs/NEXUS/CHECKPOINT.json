@@ -146,7 +146,6 @@
  "in_progress_tasks": [],
  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
- "head_at_checkpoint": "57f50d1",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
  "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
  "completed_task_notes": {
@@ -205,5 +204,12 @@
    "verified_in_run": "NEX-2026-11-27-48",
    "verified_by": "four-process acquire/status/renew/release cycle on the real ref"
   }
- ]
+ ],
+ "head_resolution": {
+  "rule": "The branch head is whatever `git rev-parse HEAD` reports in the checkout. This file never names its own commit, because committing it supersedes any SHA it could record.",
+  "product_commit": "3215e08",
+  "ci_evidence_commit": "57f50d1",
+  "note": "NEX-052 verification is anchored to the CI evidence commit, which is a concluded run and therefore permanent. It is not anchored to the moving head."
+ },
+ "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work."
 }
