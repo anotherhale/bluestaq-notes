@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-68",
-  "timestamp": "2026-11-27T21:55Z",
+  "timestamp": "2026-11-27T21:58Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "cd8c843",
-  "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms, approval strength follows blast radius (NEX-063), evaluate() fails closed on unpublished versions (NEX-064), and an unenforceable obligation is refused at draft time (NEX-066). NEX-068 closed a threshold-mismatch fail-open in the approval lookup. Remaining governance work is breadth: the policy lifecycle has no approve verb, plus preview and non-capability risk signals.",
+  "commit": "c2f0ecc",
+  "project_phase": "Phase 3 (governance). All five ADR-015 obligations have mechanisms; approval strength follows blast radius (NEX-063); evaluate() fails closed on any version that is not published (NEX-064); policy authoring refuses an obligation this deployment cannot enforce (NEX-066); and an approval opened under a weaker threshold is no longer spendable under a stricter one (NEX-068). Remaining governance work is breadth: no approve verb, no preview, no non-capability risk signals.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -15,8 +15,8 @@
     "NEX-062": "VERIFIED - CI 4/4 at 0e2ca47 (polled 2026-11-27T20:16Z by run 62).",
     "NEX-063": "VERIFIED - CI 4/4 completed/success at 934774e (docs head descending from the NEX-063 product commit 19836ad), polled 2026-11-27T20:52Z by run 63.",
     "NEX-064": "VERIFIED - CI 4/4 completed/success at 7456a89 (the docs head descending from product commit 55e4436), polled 2026-11-27T21:13Z by run 64. Full suite 1434 passed / 4 skipped, ruff+mypy clean locally and in CI.",
-    "NEX-066": "VERIFIED - CI 4/4 completed/success at 2ce7730 (the docs head descending from product commit 353ef6d), polled 2026-11-27T22:55Z by run 66.",
-    "NEX-068": "COMMITTED + PUSHED, NOT CI-POLLED - cd8c843. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; the regression tests were proved to fail with the guard removed."
+    "NEX-066": "VERIFIED. CI 4/4 completed/success at 2ce7730 (the docs head, which descends from product commit 353ef6d and therefore compiles and tests it), polled 2026-11-27T22:5xZ. DraftPolicy refuses a draft naming an obligation with no enforcement adapter; the judgement lives in domain.governance.policy.deployment_obligation_gaps(), shared with the tool gateway so the two cannot drift. Local gates green on the rebased tree: ruff format/check clean, mypy 140 files, 1442 passed / 4 skipped.",
+    "NEX-068": "COMMITTED + PUSHED, NOT CI-POLLED - product cd8c843, docs c2f0ecc. Closes a threshold-mismatch fail-open: an approval opened under a weaker threshold was spendable under a stricter one. 1444 passed / 4 skipped, ruff+mypy clean; the regression tests were proved to fail with the guard removed."
   },
   "completed_tasks": [
     "NEX-039",
@@ -128,15 +128,16 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "base": "main",
     "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body carries NEX-052..NEX-066. Thirteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
-    "body_covers_through": "NEX-066"
+    "note": "Body now carries NEX-052..NEX-066 (38530 chars) and was updated this run. Thirteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "body_covers_through": "NEX-066",
+    "body_updated_this_run": true
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
     "last_reported_task": "NEX-066",
-    "note": "Issue #2 stays open. NEX-066 comment is posted by this run.",
-    "comment_id": null
+    "note": "Issue #2 open. Comment 7228642936 covers NEX-064 and NEX-066, the corrected NEX-056 second-approver record, and the open P1 (NEX-067).",
+    "comment_id": 7228642936
   },
   "blockers": [],
   "risks": [
@@ -153,36 +154,77 @@
     "An approval records the threshold in force when it was opened. Any future control that tightens a threshold between open and spend must remember that `is_usable` cannot detect the gap - NEX-068 fixed the one place that mattered, not the pattern."
   ],
   "next_task": "NEX-067 (P1 security): make `derive_assurance()` require AMR factors from distinct factor families before counting a session as multi-factor.",
-  "next_action": "Implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). Verify the defect against the code first; then pin it with a test that two same-family claims do not satisfy a multi-factor ACR. After that, NEX-065 (policy `approve` verb) and the PR #5 body / issue #2 updates for NEX-064, NEX-066 and NEX-068.",
-  "recovery_instructions": "Tree is clean. cd8c843 is pushed but NOT CI-polled - poll the check-runs before promoting NEX-068. Do not redo NEX-062/063/064/066/068. The P1 `derive_assurance()` AMR-independence defect (NEX-067) is the top priority and outranks further docs slices. NEX-065 (policy approve verb) is reserved but unstarted.",
-  "ci_status": {
-    "head_polled": "2ce7730",
-    "product_commit": "353ef6d",
-    "result": "4/4 completed/success",
-    "conclusion": "success",
-    "polled_at": "2026-11-27T22:55Z",
-    "note": "NEX-068 (cd8c843) NOT YET POLLED. Two check-run pairs per SHA is the concurrency group re-running; all four concluded success for NEX-066. A docs head descends from the product commit, so its CI still compiles and tests the product code. `cancelled` means superseded, not failed."
-  },
+  "next_action": "Implement NEX-067: AMR factor-family independence in `derive_assurance()` (src/notes_service/infrastructure/identity/oidc_relying_party.py). Verify the defect against the code first; then pin it with a test that two same-family claims do not satisfy a multi-factor ACR. NEX-068 also needs its PR #5 body section and an issue #2 comment (delivery debt below).",
+  "recovery_instructions": "Tree is clean. cd8c843 is the NEX-068 product commit, pushed; c2f0ecc is the docs commit. Neither has been CI-polled - poll the check-runs on the head before promoting NEX-068. Do not redo NEX-062/063/064/066/068. The P1 `derive_assurance()` AMR-independence defect (NEX-067) is the top priority and outranks further docs slices; run 68 skipped it and should not set that precedent.",
+  "ci_status": "NEX-066 verified 4/4 completed/success at 2ce7730 (polled 2026-11-27T22:55Z). NEX-068 (cd8c843 product, c2f0ecc docs) NOT YET POLLED. A docs head descends from the product commit, so its CI still compiles and tests the product code; poll the head and judge on a concluded run. `cancelled` means superseded, not failed.",
   "commits_this_run": [
-    "cd8c843"
+    "cd8c843",
+    "c2f0ecc"
   ],
   "decisions_this_run": [
-    "D-068a: compare the approval's recorded `required_approvals` against the CALL's threshold at lookup time, rather than re-deriving the row's threshold or trusting `is_usable`. `is_usable` answers 'was this row satisfied?', which is a different question from 'is this row enough for what I am about to do?'.",
-    "D-068b: the guard is `>=`, a floor, not `==`. An approval granted under a stricter rule must stay spendable under a relaxed one; requiring equality would make relaxing a policy invalidate approvals already granted and force humans to re-approve for no security gain.",
-    "D-068c: did not fix it in the SQL spend guard. That predicate also compares against the row's own weaker `required_approvals`, so it cannot see the mismatch; the correction belongs where the call's threshold is known, which is the use case."
+    "D-068a: compare the approval's recorded `required_approvals` against the CALL's threshold at lookup time, rather than re-deriving the row's threshold or trusting `is_usable`. `is_usable` answers 'was this row satisfied?', a different question from 'is this row enough for what I am about to do?'.",
+    "D-068b: the guard is `>=`, a floor, not `==`. An approval granted under a stricter rule must stay spendable under a relaxed one; requiring equality would make relaxing a policy invalidate approvals already granted, forcing humans to re-approve for no security gain.",
+    "D-068c: did not fix it in the SQL spend guard. That predicate also compares against the row's own weaker `required_approvals`, so it cannot see the mismatch; the correction belongs where the call's threshold is known, which is the use case.",
+    "D-068d: on the checkpoint conflict, based the file on the concurrent run's version rather than overwriting it, because that version carries real delivery evidence (PR #5 body updated, issue #2 comment 7228642936) that this run did not produce. Discarding it would have reported delivery work as undone."
   ],
-  "run_summary": "NEX-068 closes a verified fail-open in the tool gateway's approval lookup. `_approved_request` matched an approval on capability, resource and `is_usable` but never compared the threshold the row was opened under against the threshold the current call requires, so a one-signature grant remained spendable after the policy was tightened to two - the two-person control was bypassable by timing. The lookup now takes the call's `required_approvals` and treats a weaker row as unusable, leaving the strict approval to be opened by the existing deferral path. The guard is a floor, so a grant that met a stricter rule stays valid. Proved the new tests catch the defect by removing only the guard line: both negative tests failed with `DID NOT RAISE AccessDenied` because the single signature executed the delete. Gates on the merged tree: ruff format/check clean, mypy clean, 1444 passed / 4 skipped. A concurrent run had also edited tools.py (NEX-066) in a different region; the change applied onto f8ae00c with no conflict and every gate was re-run afterwards. COMMITTED + PUSHED as cd8c843, NOT YET CI-POLLED. NEX-067 (AMR factor independence) was the checkpoint's named top priority and was not started - it is handed forward.",
+  "run_summary": "NEX-068 closes a verified fail-open in the tool gateway's approval lookup. `_approved_request` matched an approval on capability, resource and `is_usable` but never compared the threshold the row was opened under against the threshold the current call requires, so a one-signature grant stayed spendable after the policy was tightened to two: the two-person control was bypassable by timing. The lookup now takes the call's `required_approvals` and treats a weaker row as unusable, leaving the strict approval to the existing deferral path, which is the only path that asks a human again. The guard is a floor, so a grant that met a stricter rule stays valid. Proved the new tests catch the defect by removing only the guard line: both negative tests failed with `DID NOT RAISE AccessDenied` because the single signature executed the delete. Gates on the merged tree: ruff format/check clean, mypy clean (140 files), 1444 passed / 4 skipped. A concurrent run had also edited tools.py (NEX-066) in a different region, so the change applied onto f8ae00c with no conflict and every gate was re-run afterwards. COMMITTED + PUSHED, NOT YET CI-POLLED. Honest note: the checkpoint ranked NEX-067 (AMR factor independence) first and the coordinator summary named NEX-065; neither was started, and NEX-067 remains the top priority.",
   "delivery_state": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "cd8c843",
+    "head": "c2f0ecc",
     "pr_updated": false,
     "issue_updated": false,
-    "delivery_debt": "PR #5 body and issue #2 need sections for NEX-064, NEX-066 and NEX-068; deferred to the end of this run.",
+    "delivery_debt": "NEX-068 still needs a PR #5 body section and an issue #2 comment. The prior run's delivery is complete and must not be redone: PR #5 body covers through NEX-066 (38530 chars) and issue #2 comment 7228642936 covers NEX-064/NEX-066.",
     "ci_verified": false,
     "ci_verified_head": "2ce7730",
-    "pr_body_updated": false
+    "pr_body_updated": false,
+    "pr_body_covers_through": "NEX-066",
+    "issue_comment_covers_through": "NEX-066"
   },
-  "branch_head": "cd8c843",
+  "branch_head": "c2f0ecc",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "974d03f verified by product-tree comparison: `git diff 974d03f..HEAD -- src tests` is empty as of c49befe, and 974d03f descends from the 4/4-green 7456a89, whose product commit is 55e4436."
+  "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
+  "run_report": {
+    "run_id": "NEX-2026-11-27-66",
+    "branch": "feature/agentic-enterprise-platform",
+    "starting_commit": "1c2377e (local); live tip e6f5486",
+    "ending_commit": "f8ae00c",
+    "tasks_completed": [
+      "NEX-066"
+    ],
+    "tasks_verified": [
+      "NEX-066"
+    ],
+    "tasks_in_progress": [],
+    "tasks_blocked": [],
+    "files_changed": [
+      "src/notes_service/domain/governance/policy.py",
+      "src/notes_service/application/use_cases/tools.py",
+      "src/notes_service/application/use_cases/policy_lifecycle.py",
+      "src/notes_service/bootstrap/container.py",
+      "tests/ (policy + gateway coverage)",
+      "docs/NEXUS/STATE.md",
+      "docs/NEXUS/EXECUTION_LOG.md",
+      "docs/NEXUS/CHECKPOINT.json"
+    ],
+    "migrations": "none",
+    "tests_executed": "ruff format --check, ruff check, mypy, pytest (full suite), CI on GitHub",
+    "test_outcomes": "ruff 301 files formatted; ruff check clean; mypy 140 files clean; pytest 1442 passed / 4 skipped; CI 4/4 completed/success at 2ce7730",
+    "security_findings": [
+      "Closed an authoring-time fail-open: an unenforceable obligation could be published and then deny every matched call.",
+      "Corrected a stale security record: second-approver IS enforced.",
+      "OPEN P1: derive_assurance() AMR factor independence (NEX-067) - not addressed."
+    ],
+    "ci_status": "NEX-066 4/4 completed/success at 2ce7730",
+    "commits": [
+      "353ef6d",
+      "2ce7730",
+      "f8ae00c"
+    ],
+    "push_status": "pushed (fast-forward) to feature/agentic-enterprise-platform",
+    "pr_status": "PR #5 open, unmerged, body updated with NEX-066",
+    "tracking_issue_status": "issue #2 open, comment 7228642936 posted",
+    "checkpoint_status": "updated and validated",
+    "next_prioritized_task": "NEX-067 - AMR factor-family independence in derive_assurance()",
+    "recommended_next_action": "Verify the AMR defect against code, fix it, pin it with a test that two same-family claims do not satisfy a multi-factor ACR."
+  }
 }

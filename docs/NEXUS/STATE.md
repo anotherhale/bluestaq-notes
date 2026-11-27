@@ -12,8 +12,8 @@ truth; this file records intent and reconciliation.
 | Starting commit (run 68) | `f8ae00c` (live tip; concurrent runs advance it constantly). |
 | Head commit (measured) | Product commit `cd8c843` (NEX-068), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
 | Last CI result | **`2ce7730` (NEX-066 docs head): 4/4 `completed/success`**, polled 2026-11-27T22:55Z — NEX-066 VERIFIED. **NEX-068 (`cd8c843`) not yet polled.** |
-| Tracking issue | #2 (open) — last reported **NEX-063** (comment `7227893354`). Issue stays open; NEX-064 and NEX-066 comments pending. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-064** evidence; NEX-066 and NEX-068 pending. Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| Tracking issue | #2 (open) — **comment `7228642936`** covers NEX-064, NEX-066, the corrected NEX-056 record and the open P1. Issue stays open; **NEX-068 comment pending**. |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated by run 66**, carries NEX-052…**NEX-066** (38530 chars). **NEX-068 section pending.** Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | **Open P1** | `derive_assurance()` AMR factor independence (21:18Z review). **Still not addressed** — run 68 fixed a different defect instead. Top priority next run as **NEX-067**. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
