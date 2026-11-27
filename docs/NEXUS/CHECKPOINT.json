@@ -150,7 +150,7 @@
  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
  "delivery_notes": "PR #3 description was not rewritten this run; NEX-050 is recorded in the commit message and the execution log only. The next run owes PR #3 and issue #2 delivery for NEX-050.",
- "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
+ "validation_status": "No source code changed after the green product tree. Product commit 3215e08 is CI-verified 4/4 at 57f50d1. Since then only docs/NEXUS and docs/ADR changed (4c48847, 48230e0, cb047a5, ef81697). Local gate re-run this run: `.venv/bin/ruff format --check` -> 288 files already formatted (exit 0). pytest/mypy were NOT re-run this run because no Python source changed; their last green run covers the identical src/ and tests/ tree.",
  "completed_task_notes": {
   "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
   "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
@@ -212,7 +212,13 @@
   "rule": "The branch head is whatever `git rev-parse HEAD` reports in the checkout. This file never names its own commit, because committing it supersedes any SHA it could record.",
   "product_commit": "3215e08",
   "ci_evidence_commit": "57f50d1",
-  "note": "NEX-052 verification is anchored to the CI evidence commit, which is a concluded run and therefore permanent. It is not anchored to the moving head."
+  "note": "Product commit 3215e08 carries the NEX-052 code and its 4/4 CI evidence at 57f50d1. Every commit after it is NEXUS state or ADR documentation. Derive the head with `git rev-parse HEAD` rather than trusting a stored SHA.",
+  "state_commits": [
+   "4c48847",
+   "48230e0",
+   "cb047a5",
+   "ef81697"
+  ]
  },
  "checkpoint_self_reference_note": "If a verifier compares a head SHA in this file against `git rev-parse HEAD` it will always fail: this file is committed, so it is stale by construction. Compare ci_evidence_commit against the check-runs API instead, or compare `git status --porcelain` against uncommitted_work.",
  "last_run": "NEX-2026-11-27-54",

@@ -6655,3 +6655,34 @@ allows the call but attaches required actions, so the decision must carry them b
 the caller and into the audit trail. Read the obligation contract in
 `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` first, and write an ADR if the gateway's
 return type must change shape.
+
+### Second slice - ADR-014, the obligations decision (docs only)
+
+With the pending item closed and the clock showing roughly 15 minutes, implementing
+obligations was considered and declined: it changes the shape of `PolicyDecision`, which
+every enforcement path consumes, and the repository's rule is that a shape change gets an
+ADR before code. Writing the ADR is the correct first step and fits the remaining budget;
+implementing it would not.
+
+- **Commit:** `ef81697` docs(adr): obligations are a separate decision axis
+- **Files:** `docs/ADR/ADR-014-obligations-as-separate-axis.md` (new), `docs/ADR/README.md`,
+  `docs/NEXUS/DECISIONS.md` (D-054), `docs/NEXUS/CHECKPOINT.json`
+- **Status:** DECIDED. Implementation NOT started.
+
+The decision in one line: `PolicyEffect` keeps two members, and obligations become a tuple
+on `PolicyDecision`. Effect answers *may this proceed at all*; obligations answer *what must
+happen for it to proceed*. A third enum member would collapse both and lose the
+"allowed and conditional" case that is the whole point.
+
+The load-bearing rule: **an obligation the gateway has no handler for denies.** Without it,
+the type could only land once every obligation kind existed, because the intermediate state
+would fail open. With it, the feature lands incrementally and a missing handler is a
+refusal, not a skip.
+
+Implementation is scoped into three separately committable steps, recorded in
+`CHECKPOINT.json` → `next_task`. Step 1 is domain-only and cannot fail open; that is the
+one to start with.
+
+### Format gate
+
+`.venv/bin/ruff format --check`: 288 files already formatted (ADR-014 added one).
