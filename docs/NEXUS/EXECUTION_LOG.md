@@ -6722,3 +6722,40 @@ state. A 200 is therefore not evidence - read `isDraft` back. Same class of trap
 threshold for starting ADR-014 step 1 (domain + codec + tests, a security-sensitive slice),
 so the run stopped with the tree clean and the next action recorded rather than beginning
 work it could not finish and verify.
+
+## NEX-2026-11-27-55 — 2026-11-27T16:56Z
+
+- **Run ID**: NEX-2026-11-27-55
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `57f50d1`
+- **Ending commit**: `9521442` (product commit `9c31484`)
+- **Tasks completed**: NEX-053 (obligations carried on the policy decision and enforced at
+  the tool gateway) — IMPLEMENTED, TESTED, COMMITTED, PUSHED. CI unpolled, so not VERIFIED.
+- **Tasks started**: none beyond the slice.
+- **Files changed**: `domain/governance/policy.py`, `domain/governance/__init__.py`,
+  `infrastructure/governance/policy_codec.py`, `application/use_cases/tools.py`,
+  `presentation/api/routers/policies.py`, `presentation/schemas.py`,
+  `tests/agent/test_tool_gateway_obligations.py` (new, 14 tests).
+- **Tests executed**: `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/mypy`,
+  `.venv/bin/python -m pytest`.
+- **Test results**: format 289 unchanged; check clean; mypy clean (137 files);
+  pytest 1306 tests, 0 failures, 0 errors, 4 skipped (exit 0).
+- **Decisions**: implemented ADR-014 (already written by the previous run) rather than
+  re-deciding it. Kept `PolicyEffect` at two members. Enforced `approval` only, and only
+  for domain-sensitive capabilities; refused every other obligation with an audited denial
+  rather than dropping it. Omitted `obligations` from the codec when empty to keep stored
+  rows byte-identical.
+- **Risks identified**: an obligation vocabulary wider than its enforcement adapters is a
+  footgun — the fail-closed refusal is what keeps it honest, and it must not be relaxed to
+  make a policy author's intent "work". `second-approver` and `step-up` have no mechanism
+  yet and must stay refused.
+- **Commits created**: `9c31484` (product), two merge commits absorbing concurrent
+  remote pushes.
+- **Push status**: PUSHED and verified — `git merge-base --is-ancestor 9c31484 <remote>`
+  and `git cat-file -e <remote>:tests/agent/test_tool_gateway_obligations.py` both succeed
+  on remote head `9521442`.
+- **PR updates**: none this run (PR #5 description still owes NEX-053).
+- **CI results**: not polled; the run ended before the head's runs concluded.
+- **Checkpoint status**: updated.
+- **Next action**: poll CI for the current head; then append the NEX-053 section to PR #5
+  and comment on issue #2.
