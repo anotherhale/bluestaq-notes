@@ -126,4 +126,15 @@ def auth_headers(user_id: str) -> dict[str, str]:
     return {"X-Demo-User-ID": user_id}
 
 
-__all__ = ["ALICE", "BOB", "CAROL", "DAVE", "auth_headers"]
+def operator_grant(user_id: str, *operations: str) -> str:
+    """Build one ``<user-id>:<scope>`` entry for ``ops_operator_user_ids``.
+
+    A helper rather than a literal so a test that widens a grant to ``"*"`` has to
+    say so, instead of the widening being invisible in a comma-joined string.
+    """
+    if not operations:
+        raise ValueError("a grant must name at least one operation, or '*'")
+    return ",".join(f"{user_id}:{operation}" for operation in operations)
+
+
+__all__ = ["ALICE", "BOB", "CAROL", "DAVE", "auth_headers", "operator_grant"]

@@ -64,7 +64,7 @@ def _use_case(
     return SweepAuditIntegrity(
         uow_factory=lambda: SqlAlchemyUnitOfWork(session_factory),
         operator_gate=OperatorGate(
-            operator_ids=frozenset(UserId.parse(raw) for raw in operators),
+            operator_scopes={UserId.parse(raw): frozenset({"*"}) for raw in operators},
             access_log=InMemoryOperatorAccessLog(),
             clock=SystemClock(),
         ),

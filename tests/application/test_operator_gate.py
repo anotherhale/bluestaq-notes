@@ -24,7 +24,7 @@ import pytest
 
 from notes_service.application.errors import ResourceNotFound
 from notes_service.application.ports.clock import Clock
-from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.operator_gate import WILDCARD, OperatorGate
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.security.operator_access_log import (
@@ -59,8 +59,15 @@ def _gate(
     access_log: InMemoryOperatorAccessLog | None = None,
     now: datetime | None = None,
 ) -> OperatorGate:
+    """A gate where every listed operator holds every scope.
+
+    The tests below are about *who* may read, not *what*; granting ``"*"`` here
+    keeps them focused on that. Scoping has its own tests further down, which
+    build the map directly rather than going through this helper — otherwise a
+    bug that widened a scope would be invisible to them.
+    """
     return OperatorGate(
-        operator_ids=operators,
+        operator_scopes={user: frozenset({WILDCARD}) for user in operators},
         access_log=access_log or InMemoryOperatorAccessLog(),
         clock=FixedClock(now or datetime(2026, 11, 27, 10, 0, tzinfo=UTC)),
     )
@@ -122,7 +129,7 @@ def test_recent_is_newest_first_and_capped() -> None:
 
     for offset, operation in enumerate(("a", "b", "c")):
         OperatorGate(
-            operator_ids=frozenset({ALICE}),
+            operator_scopes={ALICE: frozenset({WILDCARD})},
             access_log=access_log,
             clock=FixedClock(base + timedelta(minutes=offset)),
         ).authorize(_principal(ALICE), operation=operation)
@@ -145,3 +152,100 @@ def test_recent_with_a_non_positive_limit_returns_nothing() -> None:
 def test_capacity_must_be_positive() -> None:
     with pytest.raises(ValueError):
         InMemoryOperatorAccessLog(capacity=0)
+
+
+# -- per-operation scoping (NEX-044) ----------------------------------------
+#
+# A flat allowlist grants every operational view to every listed operator. That
+# is escalation by default: the person who reads advisory withholding totals to
+# tune a threshold has no reason to read the platform-wide audit sweep. These
+# tests pin that a grant is narrow unless it says otherwise.
+
+
+def _scoped_gate(
+    scopes: dict[UserId, frozenset[str]],
+    *,
+    access_log: InMemoryOperatorAccessLog | None = None,
+) -> OperatorGate:
+    """Build the gate from an explicit scope map, bypassing ``_gate``'s wildcard."""
+    return OperatorGate(
+        operator_scopes=scopes,
+        access_log=access_log or InMemoryOperatorAccessLog(),
+        clock=FixedClock(datetime(2026, 11, 27, 10, 0, tzinfo=UTC)),
+    )
+
+
+def test_a_named_scope_permits_that_operation() -> None:
+    _scoped_gate({ALICE: frozenset({"withholding-report"})}).authorize(
+        _principal(ALICE), operation="withholding-report"
+    )
+
+
+def test_a_scope_does_not_leak_to_another_operation() -> None:
+    """The core of NEX-044: one grant, one view."""
+    gate = _scoped_gate({ALICE: frozenset({"withholding-report"})})
+    with pytest.raises(ResourceNotFound):
+        gate.authorize(_principal(ALICE), operation="audit-integrity")
+
+
+def test_a_scoped_refusal_records_nothing() -> None:
+    """A listed operator refused an out-of-scope read leaves no entry.
+
+    The record must mean "this person read this", never "this person tried".
+    """
+    access_log = InMemoryOperatorAccessLog()
+    gate = _scoped_gate({ALICE: frozenset({"withholding-report"})}, access_log=access_log)
+
+    with pytest.raises(ResourceNotFound):
+        gate.authorize(_principal(ALICE), operation="audit-integrity")
+
+    assert access_log.recent(limit=10) == ()
+
+
+def test_the_wildcard_permits_every_operation() -> None:
+    gate = _scoped_gate({ALICE: frozenset({WILDCARD})})
+    for operation in ("withholding-report", "audit-integrity", "operator-access-report"):
+        gate.authorize(_principal(ALICE), operation=operation)
+
+
+def test_an_operator_with_no_scopes_admits_nobody() -> None:
+    """A listed id with an empty scope set is not an operator.
+
+    Otherwise an empty value in configuration would read as "unrestricted",
+    which is exactly the fail-open shape this gate exists to prevent.
+    """
+    gate = _scoped_gate({ALICE: frozenset()})
+    with pytest.raises(ResourceNotFound):
+        gate.authorize(_principal(ALICE), operation="withholding-report")
+    assert gate.operator_ids == frozenset()
+
+
+def test_scopes_for_reports_the_grants_and_nothing_for_strangers() -> None:
+    gate = _scoped_gate({ALICE: frozenset({"withholding-report", WILDCARD})})
+    assert gate.scopes_for(ALICE) == frozenset({"withholding-report", WILDCARD})
+    assert gate.scopes_for(BOB) == frozenset()
+
+
+def test_an_operation_name_is_matched_exactly() -> None:
+    """No prefix, case-insensitive or substring matching on a security check."""
+    gate = _scoped_gate({ALICE: frozenset({"withholding-report"})})
+    for near_miss in ("withholding", "withholding-report-2", "Withholding-Report"):
+        with pytest.raises(ResourceNotFound):
+            gate.authorize(_principal(ALICE), operation=near_miss)
+
+
+def test_a_scope_map_is_copied_so_later_mutation_cannot_widen_a_grant() -> None:
+    """The gate snapshots its input.
+
+    A caller that mutates the dict it passed in — a test, or a future reload path —
+    must not be able to grant itself an operation after construction.
+    """
+    scopes: dict[UserId, frozenset[str]] = {ALICE: frozenset({"withholding-report"})}
+    gate = _scoped_gate(scopes)
+    scopes[ALICE] = frozenset({WILDCARD})
+    scopes[BOB] = frozenset({WILDCARD})
+
+    with pytest.raises(ResourceNotFound):
+        gate.authorize(_principal(ALICE), operation="audit-integrity")
+    with pytest.raises(ResourceNotFound):
+        gate.authorize(_principal(BOB), operation="withholding-report")

@@ -16,6 +16,39 @@ from typing import Annotated, Literal
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from notes_service.domain.identity.value_objects import UserId
+
+OPERATOR_WILDCARD = "*"
+"""Scope token meaning "every operational view" (see ``OperatorGate``)."""
+
+
+def _parse_operator_grant(entry: str) -> tuple[UserId, str]:
+    """Split one ``<user-id>:<scope>`` grant, rejecting anything malformed.
+
+    Kept a module function rather than a method so the field validator and the
+    ``operator_scopes`` property cannot disagree about what a valid grant is: they
+    call the same parser, so a value that validates is a value that parses.
+    """
+    text = entry.strip()
+    user_text, separator, scope = text.partition(":")
+    if not separator:
+        raise ValueError(
+            f"ops_operator_user_ids entry {entry!r} must be '<user-id>:<scope>' "
+            f"(use {OPERATOR_WILDCARD!r} to grant every operation)"
+        )
+    scope = scope.strip()
+    if not scope:
+        raise ValueError(f"ops_operator_user_ids entry {entry!r} names no scope")
+    # Parse with ``uuid`` rather than ``UserId.parse``: the domain raises a
+    # ``DomainError`` for a malformed id, which pydantic would not wrap into a
+    # startup ``ValidationError``, so the operator would see a domain traceback
+    # instead of the offending configuration entry.
+    try:
+        user_id = UserId(str(uuid.UUID(user_text.strip())))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise ValueError(f"ops_operator_user_ids entry {entry!r} has a non-UUID user id") from exc
+    return user_id, scope
+
 
 class Environment(StrEnum):
     DEVELOPMENT = "development"
@@ -113,10 +146,17 @@ class Settings(BaseSettings):
     decisioning_http_timeout_seconds: float = 5.0
 
     # -- operations -------------------------------------------------------
-    # User ids allowed to read process-wide operational totals (the advisory
-    # withholding aggregate). EMPTY BY DEFAULT, and empty means *nobody*: the
-    # aggregate spans every tenant, so it must be granted explicitly rather than
-    # inherited by being logged in. Anyone not listed gets 404, not 403.
+    # Who may read which process-wide operational view, as ``<user-id>:<scope>``
+    # entries. EMPTY BY DEFAULT, and empty means *nobody*: every operational view
+    # spans all tenants, so it must be granted explicitly rather than inherited by
+    # being logged in. Anyone not granted the named operation gets 404, not 403.
+    #
+    # A scope is the operation a use case names (``withholding-report``,
+    # ``audit-integrity``, ``operator-access-report``) or ``*`` for every
+    # operation. A scope that is not named is not granted, so reading one
+    # operational view never implies reading another.
+    #
+    # Examples: ``ops_operator_user_ids=1111...:withholding-report,2222...:*``
     ops_operator_user_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # -- logging ----------------------------------------------------------
@@ -158,21 +198,34 @@ class Settings(BaseSettings):
     @field_validator("ops_operator_user_ids")
     @classmethod
     def _validate_operator_ids(cls, value: list[str]) -> list[str]:
-        """Reject a malformed id at startup rather than at request time.
+        """Reject a malformed grant at startup rather than at request time.
 
-        The gate compares ``UserId`` values, so a typo would otherwise match
-        nobody and the endpoint would look broken for the one operator it was
-        meant to serve. Failing here names the offending value in the startup
-        error instead.
+        The gate compares ``UserId`` values and exact operation names, so a typo
+        in either half would otherwise match nobody and the endpoint would look
+        broken for the one operator it was meant to serve. Failing here names the
+        offending value in the startup error instead.
+
+        A bare id with no ``:`` is rejected rather than read as "all operations".
+        Silently widening an unscoped legacy entry into a wildcard grant is the
+        escalation this field exists to prevent.
         """
-        for candidate in value:
-            try:
-                uuid.UUID(candidate)
-            except (ValueError, AttributeError, TypeError) as exc:
-                raise ValueError(
-                    f"ops_operator_user_ids contains a non-UUID id: {candidate!r}"
-                ) from exc
+        for entry in value:
+            _parse_operator_grant(entry)
         return value
+
+    @property
+    def operator_scopes(self) -> dict[UserId, frozenset[str]]:
+        """The allowlist as ``user id -> permitted operations``.
+
+        Built from the validated entries. Several entries for one user union
+        their scopes, so a deployment can grant one person two views without
+        repeating every operation on one line.
+        """
+        scopes: dict[UserId, set[str]] = {}
+        for entry in self.ops_operator_user_ids:
+            user_id, scope = _parse_operator_grant(entry)
+            scopes.setdefault(user_id, set()).add(scope)
+        return {user_id: frozenset(ops) for user_id, ops in scopes.items()}
 
     @field_validator("decisioning_http_endpoint")
     @classmethod

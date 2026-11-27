@@ -58,7 +58,7 @@ def _use_case(
     return GetWithholdingReport(
         withholding_recorder=_recorder(),
         operator_gate=OperatorGate(
-            operator_ids=operators,
+            operator_scopes={user: frozenset({"*"}) for user in operators},
             access_log=access_log or InMemoryOperatorAccessLog(),
             clock=SystemClock(),
         ),

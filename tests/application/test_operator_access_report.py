@@ -64,7 +64,7 @@ def _use_case(
     return GetOperatorAccessReport(
         access_log=access_log or InMemoryOperatorAccessLog(),
         operator_gate=OperatorGate(
-            operator_ids=operators,
+            operator_scopes={user: frozenset({"*"}) for user in operators},
             access_log=access_log or InMemoryOperatorAccessLog(),
             clock=SystemClock(),
         ),

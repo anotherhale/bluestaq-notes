@@ -124,7 +124,6 @@ from notes_service.application.use_cases.permissions import (
 from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
-from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from notes_service.infrastructure.decisioning.http_provider import HttpDecisionProvider
@@ -420,12 +419,14 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
 
     # One gate for every platform-wide operational view. Parsed here, inside
     # build_container, so the allowlist is converted once per process rather than
-    # once per request. ``Settings`` has already validated every value is a UUID;
-    # an unset allowlist yields an empty set, which the gate treats as "nobody".
-    # Sharing one gate is the point of R36: two copies of this check can drift,
-    # and only one of them would have grown the access record.
+    # once per request. ``Settings`` has already validated every value is a
+    # ``<user-id>:<scope>`` grant; an unset allowlist yields an empty map, which
+    # the gate treats as "nobody". Sharing one gate is the point of R36: two
+    # copies of this check can drift, and only one of them would have grown the
+    # access record. Scoping is NEX-044: each grant names the operations it
+    # covers, so reading one operational view never implies reading another.
     operator_gate = OperatorGate(
-        operator_ids=frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids),
+        operator_scopes=settings.operator_scopes,
         access_log=operator_access_log,
         clock=clock,
     )

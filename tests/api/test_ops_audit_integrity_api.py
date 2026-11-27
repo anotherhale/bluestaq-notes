@@ -23,7 +23,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import ALICE, BOB, auth_headers
+from tests.conftest import ALICE, BOB, auth_headers, operator_grant
 
 PATH = "/api/v1/ops/audit-integrity"
 
@@ -38,7 +38,9 @@ def _client(app: FastAPI, **settings_updates: object) -> TestClient:
 
 @pytest.fixture
 def operator_client(app: FastAPI) -> TestClient:
-    return _client(app, ops_operator_user_ids=[ALICE])
+    # Scoped to this endpoint's operation: the grant must not carry
+    # over to another /ops view (NEX-044).
+    return _client(app, ops_operator_user_ids=[operator_grant(ALICE, "audit-integrity")])
 
 
 def test_operator_sweeps_an_empty_deployment(operator_client: TestClient) -> None:
