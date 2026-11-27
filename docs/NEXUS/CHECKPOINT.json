@@ -32,23 +32,20 @@
     "number": 3,
     "state": "open",
     "draft": true,
-    "counters": {
-      "additions": 40639,
-      "deletions": 28,
-      "changed_files": 141,
-      "commits": 185
-    },
-    "counters_measured_at": "2026-11-25T19:46Z, read from the PR object at head cd235d8. Re-measure before quoting; any later commit changes them.",
-    "body_updated": "PATCHed 2026-11-25T19:45Z: NEX-039 section appended, 59,330 -> 62,844 chars, read back byte-equal and asserted on four substrings (NEX-039, HttpDecisionProvider, R37, the 8e670a6 CI line). PR #3 remains DRAFT and UNMERGED - human review required.",
-    "head_read_from": "GET /repos/anotherhale/bluestaq-notes/pulls/3 (.head.sha) = cd235d8; git ls-remote agreed before the PR body was patched. Never read the head from this file.",
-    "last_observed": "2026-11-25T19:46Z"
+    "merged": false,
+    "body_len": 69961,
+    "body_updated_at": "2026-11-27T08:33Z",
+    "body_update_scope": "R37 section inserted before the Delivery state section; delivery state refreshed with comment 7213326000 and CI at 6da559d. Read back byte-identical from the API.",
+    "note": "Draft and unmerged. Automated merging is prohibited; a human reviewer decides."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment_id": 7172513048,
-    "last_comment_len": 2614,
-    "last_comment_scope": "NEX-039 VERIFIED with CI evidence at 8e670a6, R37 opened, NEX-040 named. Lists only, no markdown table (a table in an issue comment body returns HTTP 500 here). Posted and read back byte-equal."
+    "last_comment_id": 7213326000,
+    "last_comment_len": 3495,
+    "last_comment_scope": "R37 CLOSED - defect, three ordered streaming rules, why the tests are evidence, the residual duration limit, validation, CI at 6da559d, commits. Read back byte-identical, 8/8 substring assertions.",
+    "prior_comment_id": 7213047814,
+    "prior_comment_scope": "NEX-039/040/041"
   },
   "blockers": [],
   "risks": [
@@ -218,7 +215,7 @@
     }
   ],
   "next_task": "NEX-042",
-  "next_action": "1. Post the R37 run report to tracking issue #2 and add an R37 section to PR #3's body (lists only in the issue comment - a markdown table returns HTTP 500). 2. Start NEX-042 from the top of docs/NEXUS/BACKLOG.md: acquire the lease, claim the task, then implement one vertical slice. CI at 6da559d is already green, so no CI work is outstanding.",
+  "next_action": "Start NEX-042 from the top of docs/NEXUS/BACKLOG.md. First acquire the lease (refs/locks/nexus/lease) and claim the task, then implement one vertical slice, run the four gates (ruff format, ruff check, mypy, pytest), commit, push, poll CI on the SHA that actually runs, and update issue #2 plus PR #3. Nothing is outstanding for R37.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD`; the local origin/* ref is stale-prone and is not evidence. 2. Read this file and docs/NEXUS/STATE.md whole; `tail -60` the execution log. 3. NEX-040 was verification-only: no product code changed and none was needed. Do not re-open it looking for a missing commit. 4. NEX-041 fixed a real `git push` defect in 497ab77 (missing remote argument); tests/coordination/test_gitref.py pins the argv shape. 5. CI is green 4/4 at 497ab77. Docs-only 042e2b6 does not need product CI. 6. Proceed to NEX-042 from the backlog.",
   "ci_status": {
     "product_slice_sha": "2d58e22",
@@ -298,11 +295,14 @@
   ],
   "delivery_state": {
     "pushed": true,
-    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 6da559def058cc74e0ec50d5f4178250666dbe6e after the push",
+    "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned 606805f81b7d8e50673d8d9d8acb60a02ffdbd67 after the push",
     "ci_verified": true,
-    "delivery_debt": "The R37 run report has NOT yet been posted to tracking issue #2 or PR #3. This run pushed and verified CI but reached the reporting boundary with the window spent on reconciliation, gates and CI polling. Posting the report is the next run's step 1 after it polls nothing new (CI is already known). Issue comments must use lists - a markdown table body returns HTTP 500 on this repository."
+    "ci_verifying_sha": "6da559d",
+    "tracking_issue_updated": true,
+    "pr_updated": true,
+    "delivery_debt": "none outstanding. Issue #2 comment 7213326000 and PR #3 body were both read back from the API and compared byte-for-byte against the local source."
   },
-  "run_summary": "NEX-2026-11-27-44. Closed R37 and verified it end to end. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming, in three ordered rules, pinned by six tests of which three fail against the old code. The run rebased the tree from 042e2b6 onto the true remote head f92262a (read with git ls-remote, not the stale local tracking ref), re-ran every gate, committed 2d58e22 (implementation) and 6da559d (docs), pushed both, and polled CI to 4/4 green at 6da559d. Remaining debt: the R37 report is not yet posted to issue #2 or PR #3.",
+  "run_summary": "NEX-2026-11-27-44. Closed R37, verified it, and delivered it. The HttpDecisionProvider 64 KiB response cap was enforced against response.content - a body httpx had already buffered - so it bounded parsing and not memory. It is now enforced while streaming in three ordered rules, pinned by six tests of which three fail against the old code. The run reconciled from the true remote head (git ls-remote, not the stale local tracking ref), rebased 042e2b6 -> f92262a, re-ran every gate, committed 2d58e22 (implementation), 6da559d and 606805f (coordination state), pushed all three, polled CI to 4/4 green at 6da559d, posted the run report to issue #2 (comment 7213326000) and added the R37 section to PR #3, verifying both by byte-for-byte read-back. No new slice was started: ~10 minutes remained at the reporting boundary and the protocol forbids starting a slice with less than 10.",
   "head_observation": {
     "note": "POINT-IN-TIME observation, not the current head. Saving this file creates another commit, so any head recorded here is stale by one commit. Never read the current head from this file.",
     "last_observed_sha": "cd235d87043201c7e4ffbb8504fc720ef4a7233f",
