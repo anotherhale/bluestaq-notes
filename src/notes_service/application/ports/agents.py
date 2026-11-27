@@ -42,6 +42,34 @@ class AgentRepository(Protocol):
         """
         ...
 
+    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
+        """Every agent in the deployment, oldest first, capped at ``limit``.
+
+        The one unscoped enumeration, and it exists for exactly one caller: the
+        operator-gated platform-wide audit sweep. ``list_for_owner`` refuses to
+        be unscoped for a good reason — a user must not enumerate another user's
+        agents — and that reason still holds here, which is why this method
+        lives behind an operator allowlist at the use-case layer rather than
+        being reachable from any user-facing path.
+
+        Capping is part of the contract, not a caller's courtesy: an unbounded
+        scan of a large deployment is a denial-of-service on the database. The
+        caller compares the rows returned against :meth:`count_all_for_integrity_sweep`
+        to report ``truncated``, so a partial sweep cannot be mistaken for a
+        complete one.
+        """
+        ...
+
+    def count_all_for_integrity_sweep(self) -> int:
+        """How many agents exist in the deployment, for the sweep's coverage claim.
+
+        Exists so the sweep can say "verified 40 of 300" rather than "verified
+        40". A count is one indexed aggregate; the alternative — inferring
+        truncation from ``len(rows) == limit`` — cannot tell a full page from a
+        prefix of more.
+        """
+        ...
+
     def save(self, agent: AgentIdentity) -> None: ...
 
 

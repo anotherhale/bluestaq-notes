@@ -16,7 +16,10 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
-from notes_service.presentation.schemas import WithholdingReportResponse
+from notes_service.presentation.schemas import (
+    ChainAuditReportResponse,
+    WithholdingReportResponse,
+)
 
 router = APIRouter(prefix="/ops", tags=["ops"])
 
@@ -37,3 +40,25 @@ def get_withholding_report(
     """
     snapshot = container.get_withholding_report().run(principal)
     return WithholdingReportResponse.from_snapshot(snapshot)
+
+
+@router.get(
+    "/audit-integrity",
+    response_model=ChainAuditReportResponse,
+    summary="Verify every agent's audit chain in the deployment (operators only)",
+    dependencies=[RateLimitDep],
+)
+def sweep_audit_integrity(
+    principal: PrincipalDep, container: ContainerDep
+) -> ChainAuditReportResponse:
+    """Recompute every agent's audit chain and report each contradiction.
+
+    The per-agent endpoint (``/agents/{id}/tool-invocations/verification``) lets
+    an owner check their own agent. This is the platform's own check: one call
+    that walks every chain, so a broken trail is found by the operator rather
+    than waiting for the affected owner to look. ``verified`` is true only for a
+    *complete* sweep with no findings; a capped sweep reports ``truncated`` and
+    is never ``verified``, so a partial pass cannot be read as an all-clear.
+    """
+    report = container.sweep_audit_integrity().run(principal)
+    return ChainAuditReportResponse.from_report(report)

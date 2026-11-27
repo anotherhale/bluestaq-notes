@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -201,6 +201,21 @@ class SqlAlchemyAgentRepository:
             .all()
         )
         return [_agent_to_domain(row) for row in rows]
+
+    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
+        # Deterministic order so a capped sweep always covers the same agents;
+        # ``id`` breaks ties when two agents share a ``created_at``.
+        rows = (
+            self._session.execute(
+                select(AgentRow).order_by(AgentRow.created_at, AgentRow.id).limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        return [_agent_to_domain(row) for row in rows]
+
+    def count_all_for_integrity_sweep(self) -> int:
+        return int(self._session.execute(select(func.count()).select_from(AgentRow)).scalar_one())
 
     def save(self, agent: AgentIdentity) -> None:
         """Persist the aggregate, refusing to overwrite a newer stored version.

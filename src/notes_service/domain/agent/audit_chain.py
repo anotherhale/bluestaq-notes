@@ -201,6 +201,53 @@ class ChainVerdict:
         return self.first_break.reason if self.first_break is not None else None
 
 
+@dataclass(frozen=True, slots=True)
+class ChainAuditFinding:
+    """One agent whose trail did not verify during a platform-wide sweep.
+
+    A finding names the agent and its owner because that is the only form in
+    which an integrity alert is actionable: an operator told "one of your chains
+    is broken" has nothing to investigate. This is why the sweep that produces
+    findings is operator-gated rather than available to any authenticated
+    caller — see ``GetWithholdingReport`` for the same reasoning applied to
+    counts.
+    """
+
+    agent_id: str
+    owner_user_id: str
+    checked: int
+    reason: str
+    first_break_sequence: int
+
+
+@dataclass(frozen=True, slots=True)
+class ChainAuditReport:
+    """The result of verifying every agent's trail in one deployment.
+
+    ``agents_checked`` against ``agents_total`` is the honesty of the sweep. A
+    sweep that silently examined the first fifty agents and reported "all
+    verified" would be worse than no sweep, so a capped run sets ``truncated``
+    and the caller cannot mistake a partial sweep for a complete one. The same
+    principle as ``ChainVerdict.checked``: a pass must carry the size of the
+    thing it passed over.
+    """
+
+    agents_total: int
+    agents_checked: int
+    truncated: bool
+    broken: tuple[ChainAuditFinding, ...]
+
+    @property
+    def verified(self) -> bool:
+        """True only when a complete sweep found no contradiction.
+
+        A truncated sweep is never ``verified``: the unexamined agents could
+        each be broken, so the honest answer to "is every chain intact" is
+        "unknown", and ``truncated`` is how the caller tells that apart.
+        """
+        return not self.truncated and not self.broken
+
+
 class VerifiableEntry(Protocol):
     """Everything the verifier needs from one audited entry."""
 
@@ -423,6 +470,8 @@ def verify_chain(
 __all__ = [
     "GENESIS_HASH",
     "ChainAnchor",
+    "ChainAuditFinding",
+    "ChainAuditReport",
     "ChainBreak",
     "ChainVerdict",
     "VerifiableEntry",

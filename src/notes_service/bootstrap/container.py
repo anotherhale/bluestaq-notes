@@ -56,6 +56,7 @@ from notes_service.application.use_cases.agents import (
     VerifyToolInvocationChain,
 )
 from notes_service.application.use_cases.approval_advisory import RecommendApprovalDecision
+from notes_service.application.use_cases.audit_sweep import SweepAuditIntegrity
 from notes_service.application.use_cases.authentication import (
     BeginLogin,
     CompleteLogin,
@@ -264,6 +265,8 @@ class Container:
     recommend_approval_decision: Callable[[], RecommendApprovalDecision]
     # Process-wide operational totals, gated on ``ops_operator_user_ids``.
     get_withholding_report: Callable[[], GetWithholdingReport]
+    # Platform-wide audit-chain verification, gated on ``ops_operator_user_ids``.
+    sweep_audit_integrity: Callable[[], SweepAuditIntegrity]
 
 
 def build_container(settings: Settings, engine: Engine | None = None) -> Container:
@@ -409,6 +412,16 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         operator_ids = frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids)
         return GetWithholdingReport(
             withholding_recorder=withholding_recorder,
+            operator_ids=operator_ids,
+        )
+
+    def make_sweep_audit_integrity() -> SweepAuditIntegrity:
+        # Same allowlist as the withholding report. The sweep names agents and
+        # their owners, so ordinary authentication must not reach it; an unset
+        # allowlist yields an empty set, which the use case treats as "nobody".
+        operator_ids = frozenset(UserId.parse(raw) for raw in settings.ops_operator_user_ids)
+        return SweepAuditIntegrity(
+            uow_factory=uow_factory,
             operator_ids=operator_ids,
         )
 
@@ -560,4 +573,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         evaluate_decision=make_decision_evaluator,
         recommend_approval_decision=make_recommend_approval_decision,
         get_withholding_report=make_get_withholding_report,
+        sweep_audit_integrity=make_sweep_audit_integrity,
     )

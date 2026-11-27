@@ -19,7 +19,7 @@ from notes_service.application.use_cases.agents import IssuedToken, ResolvedToke
 from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.tools import ToolResult
-from notes_service.domain.agent.audit_chain import ChainVerdict
+from notes_service.domain.agent.audit_chain import ChainAuditReport, ChainVerdict
 from notes_service.domain.agent.decisioning import AbstentionReason
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
@@ -848,6 +848,56 @@ class WithholdingReportResponse(ResponseModel):
             over_cap_advisories_total=snapshot.over_cap_advisories_total,
             over_cap_fields_total=snapshot.over_cap_fields_total,
             over_cap_rate=snapshot.over_cap_rate,
+        )
+
+
+class ChainAuditFindingResponse(ResponseModel):
+    """One agent whose trail failed verification during a platform sweep.
+
+    Names the agent and its owner because an integrity alert is only actionable
+    when it says *which* chain broke; that is why the sweep that produces these
+    is operator-gated.
+    """
+
+    agent_id: str
+    owner_user_id: str
+    checked: int
+    reason: str
+    first_break_sequence: int
+
+
+class ChainAuditReportResponse(ResponseModel):
+    """Platform-wide audit-integrity sweep result, for operators.
+
+    ``verified`` is true only for a *complete* sweep with no findings. When
+    ``truncated`` is true the sweep stopped at the cap, so ``verified`` is false
+    even with no findings — the unexamined agents could each be broken, and the
+    honest answer is "unknown" rather than a false all-clear.
+    """
+
+    verified: bool
+    agents_total: int
+    agents_checked: int
+    truncated: bool
+    broken: list[ChainAuditFindingResponse]
+
+    @classmethod
+    def from_report(cls, report: ChainAuditReport) -> ChainAuditReportResponse:
+        return cls(
+            verified=report.verified,
+            agents_total=report.agents_total,
+            agents_checked=report.agents_checked,
+            truncated=report.truncated,
+            broken=[
+                ChainAuditFindingResponse(
+                    agent_id=finding.agent_id,
+                    owner_user_id=finding.owner_user_id,
+                    checked=finding.checked,
+                    reason=finding.reason,
+                    first_break_sequence=finding.first_break_sequence,
+                )
+                for finding in report.broken
+            ],
         )
 
 
