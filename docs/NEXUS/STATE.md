@@ -10,13 +10,56 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `c01fde5` (NEX-067, CI-verified), pushed; read the live head with `git rev-parse HEAD`. Never trust a SHA recorded in this file. |
-| Last CI result | **`c01fde5` (NEX-067 head): 4/4 `completed/success`**, polled 2026-11-27T22:47Z — **NEX-067 VERIFIED**. NEX-068 remains verified at `f63ac1b`. |
+| Head commit (measured) | Product head `04d52e1` (NEX-070, pushed; CI pending), over `d1532ac`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`7a1d5e2` (NEX-069 head): 4/4 `completed/success`**, polled 2026-11-27T23:22Z — **NEX-069 VERIFIED**. `2d59c74` (NEX-065): 4/4. `04d52e1` (NEX-070) is **COMMITTED + PUSHED, CI not yet polled**. |
 | Tracking issue | #2 (open) — **comment `7229097083`** covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body **updated this run**, carries NEX-052…**NEX-067** (42794 chars). Fourteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | None outstanding from the 21:18Z review — **NEX-067 closed it** (`c01fde5`). Next security work is the NEX-065 `approve` verb (see BACKLOG). |
+| Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-069** (46209 chars) as of run 70; NEX-070 not yet added. Fifteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | None outstanding. The 21:18Z review P1 was closed by NEX-067; NEX-065/069 closed the approval-record and upgrade defects. Run 70 closed a further fail-open: a superseded policy version could be published (see NEX-070 below). |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-070 (run `NEX-2026-11-27-70`) — a superseded policy version could be published
+
+**Status: COMMITTED + PUSHED, CI NOT YET POLLED.** Product `04d52e1`. This is *not* VERIFIED;
+the next run must poll CI on the head and only then promote it.
+
+**The defect.** `PublishDraft` read the version in force, retired it, and published whatever it
+was handed. A superseded version is still a perfectly valid `APPROVED` value — it was approved
+and published once — so the store accepted it. The result was a policy that silently reverted to
+an older rule set: a policy that had begun denying high-risk actions went back to allowing them,
+with no rollback record and no trace beyond "the retired version is now live".
+
+It was also a scope bypass. `RollbackPolicy` is gated on `policy-rollback` and re-checks
+separation of duties against the rules' original author. Publishing the old row directly needed
+only `policy-publish`, so a principal holding that scope alone could achieve a rollback the
+rollback path would have refused them. Fail-open, same class as NEX-064/NEX-067/NEX-068: a
+control existed and the enforcement path did not consult it.
+
+**Fix.** `supersedes(incoming, in_force)` in `domain/governance/policy.py` refuses
+`incoming.version < in_force.version`. The use case translates its `InvariantViolation` into a
+`Conflict`, the same way the two separation-of-duties helpers do, so a client gets a **409** that
+names the reason rather than a generic 422. Equal versions are deliberately *not* refused here —
+re-publishing the version already in force is the store's own transition check to refuse
+("it is published, not approved"), and keeping the two questions separate keeps the errors
+distinguishable (D-070i). `in_force is None` (nothing published yet) is not a downgrade.
+
+**Rollback still works**, which is the whole point of the guard rather than a blanket refusal:
+`RollbackPolicy` drafts the old rules under the *next* version number, so it is always newer than
+what is in force. Pinned by `test_rollback_remains_the_supported_way_to_restore_old_rules` — if
+that ever fails, the guard has been written too broadly.
+
+**Evidence.** Domain unit tests for `supersedes` (newer allowed, first release allowed, older
+refused, equal not refused by this guard). Application tests assert the deny v2 introduced still
+holds *through `evaluate()`*, not merely on status fields, and that history is untouched. The API
+test proves the 409 over HTTP with `published_version` still reported as 2.
+
+**Validation (local, on the committed tree).** `.venv/bin/ruff format` clean; `ruff check`
+"All checks passed!"; `mypy` "no issues found in 140 source files"; full `pytest` exit 0, zero
+failures. Run bare, exactly as CI does.
+
+**Next.** Poll CI on `04d52e1`; if green, promote NEX-070 to VERIFIED and add it to PR #5 and
+issue #2. The earlier NEX-069 checkpoint itself was never separately polled — its product commit
+`7a1d5e2` was, and that is what carries the code.
 
 ## NEX-067 (run `NEX-2026-11-27-69`) — MFA requires independent factor families, not distinct method names
 

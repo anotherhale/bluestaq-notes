@@ -8359,3 +8359,82 @@ commit message, not after.
 - **Issue #2:** no comment for NEX-069 yet
 - **Next:** poll CI on `7a1d5e2`, then report NEX-065 (now verified) and NEX-069
   together in one PR body update and one issue comment
+
+---
+
+## Run `NEX-2026-11-27-70` (continued) — NEX-070: a superseded policy version could be published
+
+**Timestamp:** 2026-11-27T23:3xZ · **Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `d1532ac` (live remote tip) · **Ending commit:** `04d52e1` (pushed)
+
+### Why this slice
+
+The checkpoint carried no debt and named no task: `active_task: null`, everything through NEX-069
+verified, PR #5 and issue #2 current. Per the directive, the run did not wait for a prompt — it
+looked for a real defect. Reviewing `PublishDraft` alongside the other lifecycle use cases showed
+the publish path never consulted the version number, so an older approved version could displace
+the one in force.
+
+### The defect
+
+`PublishDraft` retired whatever was in force and published whatever it was handed. A superseded
+version is still a valid `APPROVED` value, so the store accepted it and the policy silently
+reverted to an older rule set. Two consequences, both failures:
+
+- **Silent reversal of a tightening.** A policy that had begun denying high-risk actions went
+  back to allowing them, with no rollback record.
+- **Scope bypass.** `RollbackPolicy` needs `policy-rollback` and re-checks separation of duties
+  against the original author. Publishing the old row directly needed only `policy-publish`.
+
+Same fail-open class as NEX-064/NEX-067/NEX-068: the control existed, the enforcement path did
+not consult it.
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `domain/governance/policy.py` | `supersedes(incoming, in_force)` — refuses a lower version number; `None` in-force is not a downgrade; equal versions are left to the store's transition check. |
+| `application/use_cases/policy_lifecycle.py` | `_require_newer_release()` translates the domain's `InvariantViolation` into `Conflict` (409), matching the separation-of-duties helpers. Wired into `PublishDraft.execute`. |
+| `tests/domain/test_governance_policy.py` | 4 unit tests for `supersedes`. |
+| `tests/application/test_policy_lifecycle.py` | 4 tests: refusal, the deny survives *through `evaluate()`*, history untouched, and rollback still works. |
+| `tests/api/test_ops_policy_lifecycle_api.py` | HTTP regression test: the 409, the message, and `published_version == 2` afterwards. |
+
+### Decisions
+
+- **D-070i:** `supersedes` answers only "is the incoming release newer?". Equal versions are the
+  store's transition check to refuse. Two questions, two errors, both diagnosable.
+- **D-070j:** the guard lives in the domain, not the use case. It is an invariant of the version
+  numbering, and the domain check stays as the backstop for callers that bypass the use case.
+- **D-070k:** refusal is a `Conflict`, not an `InvariantViolation` surfaced as 422 — a caller who
+  tried to publish an older approved version is in conflict with current state, not malformed.
+
+### Tests executed
+
+- `.venv/bin/ruff format` → clean
+- `.venv/bin/ruff check` → **All checks passed!**
+- `.venv/bin/mypy` → **no issues found in 140 source files**
+- `.venv/bin/python -m pytest` → **exit 0, zero failures**
+
+Two mistakes in the API test were caught and fixed rather than papered over: `rules: []` is
+rejected (v1 was never created, so the follow-up read 404'd), and the history route is
+`/{policy_id}/versions` returning `{versions, published_version}` — not a bare list, and not the
+`/history` path guessed first. Both were verified against the router and schema before editing.
+
+### Delivery
+
+- **Commit:** `04d52e1` — `fix(governance): refuse publishing a superseded policy version`
+- **Push:** `d1532ac..04d52e1`, fast-forward, verified with `git ls-remote`
+- **Commit message integrity checked:** 26 lines, zero corruption markers (the heredoc
+  corruption has bitten this repo before; the message was written with `file_editor`)
+- **PR #5:** open, unmerged — body not yet extended with NEX-070
+- **Issue #2:** no comment yet for NEX-070
+
+### Status
+
+**COMMITTED + PUSHED. Not VERIFIED** — CI on `04d52e1` has not been polled.
+
+### Next exact action
+
+Poll CI on `04d52e1` (`gh api repos/anotherhale/bluestaq-notes/commits/04d52e1/check-runs`).
+If all check-runs are `completed/success`, promote NEX-070 to VERIFIED in
+`CHECKPOINT.json`/`STATE.md`, then add it to PR #5 and issue #2 in one update each.
