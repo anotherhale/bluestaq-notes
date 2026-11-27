@@ -1900,3 +1900,44 @@ evidence.
    24 files. It stays **draft** until a human decides; NEXUS must not merge it.
 3. **Tracking issue #2** carries 42 comments; the next phase section should be written
    when obligations lands, not before.
+
+## Run NEX-2026-11-27-55 — obligations enforced at the tool gateway (NEX-053)
+
+- **Branch**: `feature/agentic-enterprise-platform` · **HEAD at checkpoint**: `9521442`
+  (the checkpoint commit that writes this file lands one commit later)
+- **Status**: NEX-053 is **IMPLEMENTED + TESTED + COMMITTED + PUSHED**, CI **unpolled**.
+  It is *not* VERIFIED and must not be counted as such until a run polls the current head.
+- **Slice**: ADR-014's obligation axis, implemented. `PolicyObligation` is a closed
+  vocabulary (approval, second-approver, step-up, redaction, rate-limit, enhanced-audit).
+  `PolicyRule` carries obligations; a deny carrying one raises at construction, and a
+  duplicate raises. `evaluate()` unions the obligations of every matching allow and drops
+  them when a deny also matched. `PolicyDecision.is_satisfied` is stricter than `allowed`
+  so a caller cannot read the weaker property and stop reading.
+- **Fail-closed enforcement**: the gateway satisfies only `approval`, and only where the
+  domain already treats the capability as sensitive (`ApprovalRequest.open` refuses to gate
+  a non-sensitive one, so policy cannot invent a human gate). Every other obligation is
+  refused with an audited denial, never silently skipped.
+- **Codec compatibility**: `obligations` is omitted when empty, so a rule without them
+  encodes to the exact bytes it did before and no stored row needs rewriting. An unknown
+  obligation name on decode is an error, not a drop.
+- **Local gates on the pushed tree**: ruff format 289 files unchanged, ruff check clean,
+  mypy clean (137 source files), pytest 1306 tests / 0 failures / 0 errors / 4 skipped.
+- **Concurrent-run hazard observed**: another run pushed to this branch twice during this
+  run. Both times the push was rejected, the new remote head was merged (never rebased,
+  never force-pushed), and containment was verified with
+  `git merge-base --is-ancestor <sha> <remote>` plus `git cat-file -e <remote>:<path>`.
+  Grepping push output for a SHA gave a false positive once — use `merge-base`, not text.
+
+**Next best actions**
+
+1. **Poll CI for the current branch head** from `git ls-remote origin
+   feature/agentic-enterprise-platform` — do not poll a SHA written in these files, because
+   writing them is itself a commit that supersedes it. Only a concluded green run promotes
+   NEX-053 to VERIFIED.
+2. **Append the NEX-053 section to PR #5** and comment on issue #2 — delivery debt for this
+   slice, owed by the next run.
+3. **Next slice**: an obligation *satisfaction* adapter for `redaction` (the second kind
+   with a real mechanism behind it), or `enhanced-audit` if the audit trail already has the
+   extra fields. Do not add a handler for `step-up` or `second-approver` until the identity
+   model can distinguish assurance levels and count distinct approvers — an obligation
+   "satisfied" by a weaker check than its name promises is worse than a refusal.
