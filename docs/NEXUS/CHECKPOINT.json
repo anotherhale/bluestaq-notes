@@ -263,16 +263,18 @@
     }
   ],
   "next_task": "R36-governance-half",
-  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything; confirm the docs head b7078c8's CI finished green and record it. Then take R36's governance half: the operator allowlist has no expiry, no per-operation scoping, and no way to read the current holders. Scope a grant with an operation and an expiry, add a way to read current holders, and keep the gate's record-on-grant behaviour.",
+  "next_action": "Run `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` before planning anything - the branch head is now d178de6. Then take R36's governance half: the operator allowlist is a static env var with no expiry, no per-operation scoping and no way to read current holders. Scope a grant with an operation and an expiry, expose the current holders, and keep the gate's record-on-grant behaviour and its 404-not-403 refusal.",
   "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust the local origin/* ref or any head field in this file. 2. Run the lease CLI as `python -c 'from nexus_coord.cli import main; raise SystemExit(main())' lease <verb>` with PYTHONPATH=tools; there is no `python -m nexus_coord` and no --repo flag. 3. Exit 2 from acquire means a lease is held - stop and re-read this file. A legacy `host-pid` lease cannot be released by anyone; let it expire. 4. R39 and R36's auditable half are CLOSED - do not redo them. 5. Delivery debt outstanding: issue #2 comment + PR #3 body for the R36 read side.",
   "ci_status": {
     "product_slice_sha": "19aafa8",
     "product_slice_result": "4/4 completed/success at 19aafa8",
-    "docs_head_sha": "written by the docs commit after this file",
-    "docs_head_result": "Docs commits touch only docs/NEXUS, so they cannot change the product verdict at 19aafa8.",
+    "docs_head_sha": "d178de6 (docs-only commits b7078c8 and d178de6 both ran full CI and passed)",
+    "docs_head_result": "4/4 completed/success at d178de6.",
     "polled_at": "2026-11-27T11:04Z",
     "polled_with": "GET /repos/anotherhale/bluestaq-notes/commits/19aafa8/check-runs",
-    "standing_rule": "A commit superseded in the concurrency group reads queued/null forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed."
+    "standing_rule": "A commit superseded in the concurrency group reads queued/null forever; read the check runs of the head that actually ran and confirm head_sha matches the sha being claimed.",
+    "final_head_sha": "d178de6",
+    "final_head_result": "4/4 completed/success at d178de6, polled 2026-11-27T11:15Z, every check run reporting that head_sha."
   },
   "verified_tasks": [
     "NEX-001",
@@ -322,7 +324,7 @@
   "in_progress_tasks": [],
   "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
   "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
+  "head_at_checkpoint": "d178de6d0380f6e9f44c9dcec754e4bb3ef2d9ed",
   "delivery_notes": "GitHub markdown TABLES in an issue comment body make POST /issues/{n}/comments return HTTP 500 on this repository; the same prose without a table posts 201. Bisected this run with the probe comment 7167365125 (PATCH-ed with header-only, then the full table-free body). Use lists, not tables, for issue comments here. PR bodies with tables are fine - PATCH /pulls/3 accepted them.",
   "validation_status": "Local gates green on the exact committed tree (64759f4, the product slice): ruff format --check 249 files already formatted, ruff check all passed, mypy no issues in 117 source files, pytest 1068 passed / 4 skipped / 0 failed. CI green at 64759f4: 4/4 completed/success (Backend + Frontend, one pair per push and pull_request event), every check run reporting head_sha 64759f4. The docs commit 3534897 is documentation only and carries no source change, so the 64759f4 gates are the applicable evidence for it.",
   "completed_task_notes": {
@@ -344,15 +346,15 @@
     "pushed": true,
     "push_verified_by": "git ls-remote origin refs/heads/feature/agentic-enterprise-platform returned b7078c85f90f23bbef929ff9105a68d6b4132f56, equal to local git rev-parse HEAD",
     "ci_verified": true,
-    "ci_verifying_sha": "19aafa8",
-    "ci_result": "4/4 completed/success at 19aafa8, polled 2026-11-27T11:04Z. Every check run reported head_sha 19aafa8.",
+    "ci_verifying_sha": "d178de6",
+    "ci_result": "4/4 completed/success at the final head d178de6, polled 2026-11-27T11:15Z. Every check run reported head_sha d178de6. The product slice at 19aafa8 was independently 4/4 completed/success, polled 2026-11-27T11:04Z.",
     "tracking_issue_updated": true,
     "tracking_issue_detail": "Issue #2 comment id 7216799351 posted (HTTP 201, 3266 chars stored vs 3274 local - GitHub line-ending normalisation, not truncation). Lists only, no tables.",
     "pr_updated": "PR #3 body PATCHed from 82079 to 84930 chars with the R36 read-side section. Still draft, still open, still unmerged. Read back and asserted on 4 substrings.",
-    "delivery_debt": "None outstanding at the docs commit. CI for the docs head b7078c8 was still running when this file was written; a docs commit cannot change the product verdict at 19aafa8.",
+    "delivery_debt": "None. Issue #2 commented, PR #3 body extended, CI green at the final head. Nothing is owed to the next run except the next slice.",
     "main_untouched_at": "d6f92d072456e6e0150212047da564dc727d5c20"
   },
-  "run_summary": "NEX-2026-11-27-48. Closed the read side of R36 and cleared the run's delivery. Started from the true remote head 7ac7230 (git ls-remote; the run began on main at d6f92d0 in a fresh clone and fast-forwarded the feature branch). OperatorAccessLog had a writer and no reader, so privileged reads of platform-wide views were recorded and unreachable. GetOperatorAccessReport reads the log gate-first, the read is itself recorded as a granted operator read, and the snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. 6 files, +563/-1. Gates green on the committed tree: ruff format, ruff check, mypy 121 files, 32 targeted tests. Committed 19aafa8, pushed, ls-remote-verified. CI polled: 4/4 completed/success at 19aafa8. Delivery completed in-run: issue #2 comment 7216799351 and PR #3 body extended to 84930 chars, still draft and unmerged. Docs commit b7078c8 pushed and ls-remote-verified.",
+  "run_summary": "NEX-2026-11-27-48. Closed the read side of R36 and completed the run's delivery. Started from the true remote head 7ac7230 (git ls-remote; the run began on main at d6f92d0 in a fresh clone and fast-forwarded the feature branch). OperatorAccessLog had a writer and no reader, so privileged reads of platform-wide views were recorded and unreachable. GetOperatorAccessReport reads the log gate-first, the read is itself recorded as a granted operator read, and the snapshot names the log and its capacity so a bounded process-local ring is not mistaken for a durable history. 6 files, +563/-1, 19 new tests. Gates green on the committed tree: ruff format, ruff check, mypy 121 files, 32 targeted tests. Product commit 19aafa8 and docs commits b7078c8 and d178de6 all pushed and ls-remote-verified; CI 4/4 completed/success at 19aafa8 and again at d178de6. Delivery completed in-run: issue #2 comment 7216799351, PR #3 body extended 82079 to 84930 chars and still draft and unmerged. Main untouched at d6f92d0.",
   "head_observation": {
     "sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
     "remote_sha": "19aafa84f2d55619ebb6edbcb333dbe0de1e28b3",
