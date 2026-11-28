@@ -29,17 +29,21 @@ the set of holders this view reports is the set the gate would admit at the same
 instant. Reading the clock twice would let a grant expire between the gate's
 check and this report — the R29 disagreement in miniature.
 
-It takes no unit of work: reading grants mutates nothing.
+It takes no unit of work: neither reading nor issuing a grant touches content,
+and the grant store owns its own session (see the adapter).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from notes_service.application.errors import Conflict
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.operator_grants import OperatorGrantRepository
-from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.operator_gate import WILDCARD, OperatorGate
+from notes_service.domain.errors import ValidationError
 from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import UserId
@@ -156,8 +160,153 @@ def _summarise(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorHolder, ...]:
     return tuple(holders)
 
 
+ISSUE_OPERATION = "operator-grant-issue"
+"""The scope that gates *issuing* a grant.
+
+Deliberately not the same token as ``OPERATION``. Reading who holds a grant and
+handing one out are different authorities, and a deployment that wants only a
+few people able to widen the allowlist can say so by granting this scope to
+narrower set than ``operator-access-report``. Reusing the read scope here would
+have made every auditor able to mint operators, which is the escalation this
+whole subsystem exists to make visible.
+"""
+
+KNOWN_OPERATOR_OPERATIONS = frozenset(
+    {
+        ISSUE_OPERATION,
+        OPERATION,
+        "audit-integrity",
+        "policy-approve",
+        "policy-draft",
+        "policy-history",
+        "policy-publish",
+        "policy-rollback",
+        "withholding-report",
+    }
+)
+"""Every scope this build knows how to check.
+
+A grant naming anything else would be stored, listed, and then enforce nothing,
+because no use case ever asks for that token. Refusing an unknown scope turns a
+silent no-op into a loud request error for the operator who typed it. Adding a
+new operational view means adding its token here in the same change — the set is
+the single place that answers "what can an operator scope actually cover".
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class IssueOperatorGrantRequest:
+    """A bounded grant one operator asks to hand to another user.
+
+    ``expires_at`` is required and there is no ``granted_by`` field: the issuer is
+    the authenticated principal, stamped by the application layer. A request body
+    that could name its own issuer would let a caller attribute a widening to
+    someone else.
+
+    There is no ``rationale`` field, deliberately: the grant row has no column for
+    one, so a required free-text field would be validated and then discarded — worse
+    than absent, because it reads as a record that is never written. Intent is
+    carried today by ``granted_by`` plus the gate's access log, which records the
+    issuer, the ``operator-grant-issue`` operation, and the instant.
+    """
+
+    user_id: UserId
+    scope: str
+    expires_at: datetime
+
+
+class IssueOperatorGrant:
+    """Issue a time-bounded operator grant to another user (NEX-074).
+
+    Until this slice ``OperatorGrant`` carried ``expires_at`` and ``granted_by``
+    and the store was durable, but nothing could ever *write* a human-issued
+    grant: the only writer was the configuration seed path, which issues unbounded
+    grants with ``granted_by=None``. So the bounded, attributable grant — the
+    whole point of the record — was unreachable, and the documented remedy for a
+    lapsed incident grant ("issue it through the store") had no caller.
+
+    Four refusals make this safe, and each is a real escalation if omitted:
+
+    * **Bounded only.** An unbounded grant comes from deployment configuration,
+      where it is reviewed with the deployment. An operator may extend access for
+      a window, never permanently.
+    * **No self-grant.** An operator cannot widen their own authority, which is
+      the human form of the rule that an agent may never grant itself permission.
+    * **Attenuation.** Every scope issued must already be held by the issuer. A
+      grant can narrow authority across people, never amplify it: an operator with
+      ``withholding-report`` cannot mint a ``policy-publish`` holder.
+    * **Known scope.** See :data:`KNOWN_OPERATOR_OPERATIONS`.
+    """
+
+    def __init__(
+        self,
+        *,
+        grants: OperatorGrantRepository,
+        operator_gate: OperatorGate,
+        clock: Clock,
+        user_exists: Callable[[UserId], bool],
+    ) -> None:
+        self._grants = grants
+        self._operator_gate = operator_gate
+        self._clock = clock
+        self._user_exists = user_exists
+
+    def execute(self, principal: Principal, request: IssueOperatorGrantRequest) -> OperatorGrant:
+        # Gate first, exactly like every other operator use case: a refused caller
+        # reaches no store and leaves no trace.
+        self._operator_gate.authorize(principal, operation=ISSUE_OPERATION)
+
+        if request.user_id == principal.user_id:
+            raise Conflict(
+                "an operator cannot issue a grant to themselves; a second operator must issue it"
+            )
+        if not self._user_exists(request.user_id):
+            # A grant to a user id that does not exist would confer nothing and
+            # would sit in the holder report looking like a live operator.
+            raise ValidationError(f"no such user {request.user_id}")
+        if request.scope not in KNOWN_OPERATOR_OPERATIONS:
+            raise ValidationError(
+                f"unknown operator scope {request.scope!r}; "
+                f"expected one of {sorted(KNOWN_OPERATOR_OPERATIONS)}"
+            )
+        self._require_attenuation(principal, request.scope)
+
+        now = self._clock.now()
+        if request.expires_at <= now:
+            raise ValidationError("an operator grant must expire in the future")
+        grant = OperatorGrant(
+            user_id=request.user_id,
+            scope=request.scope,
+            granted_at=now,
+            granted_by=principal.user_id,
+            expires_at=request.expires_at,
+        )
+        self._grants.add(grant)
+        return grant
+
+    def _require_attenuation(self, principal: Principal, scope: str) -> None:
+        """Refuse a scope the issuer does not hold.
+
+        Checked against the gate's live scopes rather than against configuration,
+        so an issuer whose own grant has lapsed cannot use a stale memory of it to
+        hand the same scope onward. A wildcard holder may issue anything, because
+        the wildcard already covers it.
+        """
+        held = self._operator_gate.scopes_for(principal.user_id)
+        if WILDCARD in held or scope in held:
+            return
+        raise Conflict(
+            f"an operator may only issue a scope they hold; "
+            f"{principal.user_id} does not hold {scope!r}"
+        )
+
+
 __all__ = [
+    "ISSUE_OPERATION",
+    "KNOWN_OPERATOR_OPERATIONS",
     "OPERATION",
+    "IssueOperatorGrant",
+    "IssueOperatorGrantRequest",
     "ListOperatorGrants",
     "OperatorGrantSnapshot",
     "OperatorHolder",

@@ -21,11 +21,15 @@ from notes_service.application.use_cases.operator_access_report import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
 )
+from notes_service.application.use_cases.operator_grants import IssueOperatorGrantRequest
+from notes_service.domain.identity.value_objects import UserId
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     ChainAuditReportResponse,
     OperatorAccessReportResponse,
+    OperatorGrantIssueRequest,
     OperatorGrantReportResponse,
+    OperatorGrantResponse,
     WithholdingReportResponse,
 )
 
@@ -131,3 +135,35 @@ def list_operator_grants(
     """
     snapshot = container.list_operator_grants().run(principal)
     return OperatorGrantReportResponse.from_snapshot(snapshot)
+
+
+@router.post(
+    "/operator-grants",
+    response_model=OperatorGrantResponse,
+    status_code=201,
+    summary="Issue a bounded operator grant to another user (operators only)",
+    dependencies=[RateLimitDep],
+)
+def issue_operator_grant(
+    body: OperatorGrantIssueRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> OperatorGrantResponse:
+    """Hand a named operator scope to another user, until a stated deadline.
+
+    The counterpart to the read-only holder report: the platform could list grants
+    but never create one, so the bounded, attributable grant its record was built
+    for was unreachable. The issuer is the caller — the body carries no
+    ``granted_by`` — and the use case refuses a self-grant, an unbounded deadline,
+    a scope the issuer does not itself hold, and an unknown scope. A non-operator
+    gets ``404`` like every other ops endpoint.
+    """
+    grant = container.issue_operator_grant().execute(
+        principal,
+        IssueOperatorGrantRequest(
+            user_id=UserId.parse(body.user_id),
+            scope=body.scope,
+            expires_at=body.expires_at,
+        ),
+    )
+    return OperatorGrantResponse.from_domain(grant)

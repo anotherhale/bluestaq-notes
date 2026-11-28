@@ -93,7 +93,10 @@ from notes_service.application.use_cases.notes import (
 )
 from notes_service.application.use_cases.operator_access_report import GetOperatorAccessReport
 from notes_service.application.use_cases.operator_gate import OperatorGate
-from notes_service.application.use_cases.operator_grants import ListOperatorGrants
+from notes_service.application.use_cases.operator_grants import (
+    IssueOperatorGrant,
+    ListOperatorGrants,
+)
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
     ChangeMemberRole,
@@ -301,6 +304,8 @@ class Container:
     # the question a static allowlist could not answer: it held strings, not
     # holders.
     list_operator_grants: Callable[[], ListOperatorGrants]
+    # Handing a grant to another user, bounded and attributable (NEX-074).
+    issue_operator_grant: Callable[[], IssueOperatorGrant]
     # The policy lifecycle (NEX-047/NEX-048). Durable: a published version is
     # what a past decision was made against, so it must survive a restart.
     draft_policy: Callable[[], DraftPolicy]
@@ -546,6 +551,21 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             clock=clock,
         )
 
+    # The write side of the grant store. Bounded-only and attenuation-checked in
+    # the use case, so this wiring only has to answer "does that user exist" — and
+    # it answers from the same user repository every other use case reads.
+    def make_issue_operator_grant() -> IssueOperatorGrant:
+        def user_exists(user_id: UserId) -> bool:
+            with uow_factory() as uow:
+                return uow.users.get(user_id) is not None
+
+        return IssueOperatorGrant(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+            clock=clock,
+            user_exists=user_exists,
+        )
+
     # Policy versions are stored, not held in memory: the published version in
     # force is evidence for decisions already taken, so it must outlive the
     # process that published it (NEX-048).
@@ -736,6 +756,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         sweep_audit_integrity=make_sweep_audit_integrity,
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
+        issue_operator_grant=make_issue_operator_grant,
         draft_policy=make_draft_policy,
         approve_draft=make_approve_draft,
         publish_draft=make_publish_draft,

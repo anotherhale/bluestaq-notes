@@ -37,6 +37,7 @@ from notes_service.domain.agent.value_objects import (
 )
 from notes_service.domain.governance.policy import PolicyVersion
 from notes_service.domain.identity.entities import User
+from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
 from notes_service.domain.notes.note import Note
@@ -947,6 +948,45 @@ class OperatorGrantReportResponse(ResponseModel):
             holder_count=snapshot.holder_count,
             as_of=snapshot.as_of,
             source_name=snapshot.source_name,
+        )
+
+
+class OperatorGrantIssueRequest(StrictModel):
+    """Ask to issue a bounded operator grant to another user (NEX-074).
+
+    There is no ``granted_by`` field and no unbounded form: the issuer is the
+    authenticated caller, stamped by the use case, and a grant issued this way
+    always expires. A body that could name its own issuer, or omit the deadline,
+    would let a caller attribute a widening to someone else or make it permanent.
+    """
+
+    user_id: str
+    scope: str = Field(min_length=1, max_length=64)
+    expires_at: datetime
+
+
+class OperatorGrantResponse(ResponseModel):
+    """The single grant that was just written.
+
+    Echoed back so the issuer can confirm the exact scope, subject, and deadline
+    that landed — the store is append-only and a mistaken grant is fixed by
+    letting it lapse, not by editing it.
+    """
+
+    user_id: str
+    scope: str
+    granted_by: str
+    granted_at: datetime
+    expires_at: datetime
+
+    @classmethod
+    def from_domain(cls, grant: OperatorGrant) -> OperatorGrantResponse:
+        return cls(
+            user_id=str(grant.user_id),
+            scope=grant.scope,
+            granted_by=str(grant.granted_by),
+            granted_at=grant.granted_at,
+            expires_at=grant.expires_at,
         )
 
 
