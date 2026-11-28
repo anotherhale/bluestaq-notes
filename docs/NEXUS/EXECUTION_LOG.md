@@ -9249,3 +9249,95 @@ them is CI on `4fa0463`.
 
 NEX-076 is closed. The next run selects the next dependency-ready slice from `BACKLOG.md`. Do not
 re-implement NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058.
+
+---
+
+## Run 77 — `NEX-2026-11-27-77` — 2026-11-28T03:30Z–03:50Z
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `fe4eaea` (docs checkpoint of NEX-076); product head `9f9a70f` |
+| Ending commit | the docs checkpoint commit written by this run |
+| Tasks completed | **NEX-077** |
+| Tasks verified | **NEX-077** — CI 4/4 `completed/success` on `9f9a70f` |
+| Tasks in progress | none |
+| Tasks blocked | none |
+
+### What this run did
+
+Run 76 closed with a named follow-up: NEX-076 stored an operator-grant rationale that no read
+path returned. `ListOperatorGrants` folds per-scope grants into one `OperatorHolder` row per
+user, and a fold cannot carry per-grant provenance — a holder with three grants has three
+issuers and three reasons. The stored justification was write-only.
+
+NEX-077 adds `OperatorGrantDetail` (one row per active grant: `user_id`, `scope`, `granted_by`,
+`rationale`, `granted_at`, `expires_at`), exposed as `OperatorGrantSnapshot.grants` with
+`grant_count`, next to the unchanged `holders` summary, and as `OperatorGrantDetailResponse`
+over HTTP. Both views are projected from the same `active_grants()` tuple at the same instant,
+so they cannot disagree about which grants are active.
+
+### Files changed
+
+- `src/notes_service/application/use_cases/operator_grants.py`
+- `src/notes_service/presentation/schemas.py`
+- `tests/application/test_operator_grants.py`
+- `tests/api/test_ops_operator_grants_api.py`
+
+No migration. No dependency change.
+
+### Validation
+
+- Targeted suites: 28 passed (`tests/application/test_operator_grants.py`,
+  `tests/api/test_ops_operator_grants_api.py`).
+- **Mutation control:** forcing `rationale=None` in the detail — the exact pre-NEX-077
+  behaviour — fails **4 tests** (2 application, 2 API). The new assertions are load-bearing.
+  Source restored, tests green again.
+- Full suite: **1574 passed / 4 skipped** (baseline 1569 + 5 new), 30.21s.
+- `ruff format` (2 files reformatted, 312 unchanged), `ruff check` clean, `mypy` clean
+  (143 source files).
+
+### Commits
+
+- `9f9a70f` — `feat(ops): report the reason a human issued an operator grant (NEX-077)`
+- the docs checkpoint commit that carries this entry
+
+### Push / CI / GitHub
+
+- Pushed `fe4eaea..9f9a70f` to `feature/agentic-enterprise-platform`.
+- CI on `9f9a70f`: **4/4 `completed/success`** (backend ×2, frontend ×2), polled
+  2026-11-28T03:44Z. Read on the product SHA itself, not on a docs descendant, so no
+  supersession ambiguity.
+- PR #5 untouched this run: its body still ends at NEX-076. **Delivery debt for the next run.**
+- Issue #2: no comment added; the issue stays open.
+
+### Decisions
+
+- **D-077a.** Provenance is exposed additively, as a detail list, not by reshaping the holder
+  summary. A fold cannot express per-grant provenance, and replacing `holders` would break the
+  consumer contract for no gain.
+- **D-077b.** One `active_grants()` tuple, one instant, two projections — summary and detail
+  cannot drift.
+- **D-077c.** NEX-076's disclosure question is answered for operators only: the listing is
+  operator-gated, so the reason reaches the auditor and no wider audience.
+
+### Risks
+
+- PR #5 now stacks **twenty-three** slices (NEX-052..NEX-077). A 64 KB body and 23+ commits is
+  not reviewable well. Splitting is the owner's decision; recorded, not acted on.
+- Pre-NEX-074 grant rows still carry no rationale — deliberate, unfabricatable.
+
+### Process notes (for the next run)
+
+- `python3` on `PATH` here is a uv-archive interpreter whose **stdout is swallowed** by the
+  tool harness: `python3 -c 'print("x")'` produces no output, while `/usr/bin/python3` does.
+  Use `/usr/bin/python3` for any inspection script whose output you need to read.
+- A heredoc (`python3 - <<'EOF'`) failed silently again — exit 1, nothing written. The working
+  pattern remains: `file_editor create` a script, run it, delete it.
+- `file_editor` has no `multi_edit` command; multiple `str_replace` calls in one message work.
+
+### Next action
+
+Append the NEX-077 section to PR #5's body, then select the next dependency-ready slice from
+`docs/NEXUS/BACKLOG.md`. Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or
+NEX-058.

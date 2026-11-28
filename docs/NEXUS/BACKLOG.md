@@ -3344,3 +3344,55 @@ one; a configuration grant cannot carry a fabricated one; the schema and domain 
 **Follow-ups recorded by this slice (not part of it).** Expose the rationale on the grant read path
 (a disclosure decision — the issue response already echoes it, listings do not), and ask the owner
 whether PR #5's twenty-two stacked slices should be split before review.
+
+
+## NEX-077 — Expose per-grant provenance (issuer and reason) on the read path
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `9f9a70f`; CI pending at the time of writing. 1574 passed / 4 skipped locally |
+| Priority | P1 — NEX-076 stored a justification no read path returned; a write-only audit field is not an audit trail |
+| Dependencies | NEX-076 (the rationale exists), NEX-074 (issuer), NEX-072 (durable access log) |
+| Architecture | `application/use_cases/operator_grants.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** NEX-076 recorded `granted_by` and `rationale` on an operator grant, but nothing
+read them back. `ListOperatorGrants` folded per-scope grants into one `OperatorHolder` row per
+user, and a fold cannot carry per-grant provenance: a holder with three grants has three issuers
+and three reasons, so a single field on the holder row would either pick one arbitrarily or drop
+them all. The stored justification was therefore write-only — one step short of an audit trail an
+auditor can actually read.
+
+**Delivered.**
+
+- `OperatorGrantDetail` — a frozen dataclass with one row per *active* grant: `user_id`, `scope`,
+  `granted_by`, `rationale`, `granted_at`, `expires_at`.
+- `OperatorGrantSnapshot.grants` (detail rows) and `grant_count`, alongside the unchanged
+  `holders` summary.
+- `OperatorGrantDetailResponse` in `presentation/schemas.py`; `OperatorGrantReportResponse`
+  now carries `grants`.
+
+**Design note — detail is additive, not a replacement.** Both views are built from the same
+`active_grants()` tuple at the same instant, so they cannot describe different sets; the detail
+adds provenance without changing what the summary means. Keeping `holders` avoids breaking the
+existing consumer contract (and its tests) for a field that is still the right answer to "who holds
+what, in total".
+
+**Tests.**
+
+- `tests/application/test_operator_grants.py` — a human-issued grant reports its issuer and reason;
+  a configuration grant reports neither (null, not invented); two grants for one holder keep their
+  own reasons (the case a fold cannot express); the detail excludes an expired grant, so detail
+  and summary describe the same active set; `grant_count == len(grants)`.
+- `tests/api/test_ops_operator_grants_api.py` — the round-trip test now asserts the reason is
+  readable in the *listing* response, not merely that the POST returned `200`.
+
+**Mutation control.** Forcing `rationale=None` in the detail (the pre-NEX-077 behaviour) fails
+four tests — two application, two API — so the new assertions are load-bearing rather than vacuous.
+
+**Acceptance criteria.** An operator listing grants can read, per grant, who issued it and why;
+a configuration grant honestly reports no issuer and no reason; the summary and the detail agree on
+the active set; an expired grant appears in neither.
+
+**Remaining.** Nothing for the read path. The disclosure question NEX-076 raised is answered here
+for operators (the listing is operator-gated); non-operator callers still see nothing.

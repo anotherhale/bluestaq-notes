@@ -9,15 +9,47 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 75) | `f307999` (docs tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `319a3dd` (**NEX-075, VERIFIED** — CI 4/4 `completed/success`, polled 2026-11-28T02:45Z), over `e375a1f` (NEX-074, VERIFIED), `09888ac` (NEX-073, VERIFIED) and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`319a3dd` (NEX-075): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T02:45Z — VERIFIED.** Prior: `e375a1f` (NEX-074) 4/4 `completed/success` 2026-11-28T02:20Z; `09888ac` (NEX-073) 4/4 2026-11-28T01:56Z; `38292d2` (NEX-058) backend 2/2, frontend 1/2 (the race); `3c26957` (NEX-072) 4/4. |
-| Tracking issue | #2 (open) — **comment `7232583113`** covers NEX-075 (VERIFIED, CI 4/4); `7231968445` covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-075** (60453 chars, updated 2026-11-28T02:46Z; exactly one NEX-075 section, NEX-074 intact). Twenty slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | None outstanding. Run 76 (NEX-076) closed the last named follow-up from run 74: a human-issued operator grant now must state *why* it was issued, and that reason is persisted. Run 75 (NEX-075) gave the operator access log a bounded retention window. Run 74 (NEX-074) made the operator-grant record writable: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. |
+| Starting commit (run 77) | `9f9a70f` was this run's product head; the docs tip moves constantly. |
+| Head commit (measured) | Product head `9f9a70f` (**NEX-077, VERIFIED** — CI 4/4 `completed/success`, polled 2026-11-28T03:44Z), over `fe4eaea` (docs checkpoint of NEX-076), `b3c75e0` (NEX-076, VERIFIED), `4fa0463` (NEX-076 docs) and `319a3dd` (NEX-075, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`9f9a70f` (NEX-077): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T03:44Z — VERIFIED.** Prior: `4fa0463` (NEX-076) 4/4 2026-11-28T03:22Z; `319a3dd` (NEX-075) 4/4 2026-11-28T02:45Z; `e375a1f` (NEX-074) 4/4 2026-11-28T02:20Z; `09888ac` (NEX-073) 4/4 2026-11-28T01:56Z. |
+| Tracking issue | #2 (open) — `7232583113` covers NEX-075 (VERIFIED, CI 4/4); `7231968445` covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-076**; NEX-077 is not yet appended. Twenty-three slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | None outstanding. Run 77 (NEX-077) closed the follow-up run 76 recorded: the issuer and reason of every active operator grant are now readable on the ops listing, so the stored justification is an audit trail rather than a write-only field. Run 76 (NEX-076) made a human-issued grant state *why*. Run 75 (NEX-075) gave the operator access log a bounded retention window. Run 74 (NEX-074) made the operator-grant record writable. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-077 (run `NEX-2026-11-27-77`) — the reason a grant was issued is now readable
+
+**Status: VERIFIED.** Product commit `9f9a70f`; CI **4/4 `completed/success`** (backend ×2,
+frontend ×2), polled 2026-11-28T03:44Z. Local gates: 1574 passed / 4 skipped, ruff format+check
+clean, mypy clean.
+
+**The gap.** NEX-076 made a human-issued grant state *why*, and stored it. Nothing read it back.
+`ListOperatorGrants` folds per-scope grants into one `OperatorHolder` row per user, and a fold
+cannot carry per-grant provenance: a holder with three grants has three issuers and three reasons.
+The justification was write-only — a field that reads as evidence but never reaches the auditor.
+
+**Delivered.** `OperatorGrantDetail` (one row per active grant: `user_id`, `scope`, `granted_by`,
+`rationale`, `granted_at`, `expires_at`), exposed as `OperatorGrantSnapshot.grants` with
+`grant_count`, alongside the unchanged `holders` summary. `OperatorGrantDetailResponse` carries it
+over HTTP.
+
+**Design note — additive, not a replacement.** Both views are built from the same `active_grants()`
+tuple at the same instant, so they cannot describe different sets. `holders` stays: it is still the
+right answer to "who holds what, in total", and replacing it would break the consumer contract for
+no gain.
+
+**Mutation control.** Forcing `rationale=None` in the detail (the pre-NEX-077 behaviour) fails four
+tests — two application, two API. The assertions are load-bearing, not vacuous.
+
+**Tests.** `tests/application/test_operator_grants.py` (+4: issuer/reason reported; a configuration
+grant reports neither; two grants for one holder keep their own reasons; an expired grant appears
+in neither view). `tests/api/test_ops_operator_grants_api.py` — the round-trip test now asserts the
+reason is readable in the listing, not merely that the POST returned `200`.
+
+**Next.** The read path is closed. Remaining follow-up: ask the owner whether PR #5's stacked
+slices should be split before review (a human decision).
 
 ## NEX-076 (run `NEX-2026-11-27-76`) — a human-issued grant must say why
 
