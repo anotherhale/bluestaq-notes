@@ -12214,3 +12214,107 @@ Both artifacts were written with `file_editor` and published with `--body-file`.
 stdin carried prose through the shell four different ways on this host (truncation, self-interleaving,
 hang, parse error), and one publisher returned exit 0 while dropping a paragraph. Reading the landed
 body back is the only check that survives that.
+
+## Run 99b — NEX-099 close-out: a structural guard, because prose counted paths wrong twice
+
+**Run ID:** `NEX-2026-11-28-99b` · **Branch:** `feature/agentic-enterprise-platform` · **Starting head:** `09658db`
+
+### Selection
+
+Run 99 closed the fifth identity path and left one open P1: its own docstring had enumerated the
+paths as three, then four, while a fifth authenticated unchecked. The written list is the defect —
+`ensure_tenant_access` is only a seam if *every* provider routes through it, and nothing mechanical
+said so. This run pins the seam so the enumeration stops being load-bearing. Reconciliation confirmed
+no product change was outstanding: `demo_provider.py` already called the seam at `20bd267`, and the
+tree was clean apart from one untracked test file written but not committed.
+
+### Delivered
+
+| File | Change |
+| --- | --- |
+| `tests/architecture/test_identity_paths.py` | new, 261 lines; 7 tests (6 parametrised providers + 1 anti-vacuity) |
+
+Discovery is structural. Every class under `src/notes_service/infrastructure/identity` that defines
+`authenticate(self, context)` is a provider, and each must satisfy one of: call `ensure_tenant_access`;
+delegate to another provider's `authenticate` (the routing composite, covered transitively); or
+delegate to an injected collaborator whose class body in this tree reaches the seam — the session
+cookie path, whose rule lives in `ResolveSession.run`. The last form is checked against the real class
+body, so moving the check out of `ResolveSession` reddens the session test rather than vacating it.
+
+`NON_PROVIDER_MODULES` names `context.py` and `oidc_relying_party.py` with the reason each cannot
+establish an identity; a second test fails when an exclusion goes stale, so the next module cannot
+hide in an unread file.
+
+### The detector was caught being too lenient
+
+The first version matched *references* to the seam. Probing it with an import that is never called
+returned green — a mention is not enforcement. `_calls_seam` now requires an `ast.Call`, and accepts
+`resolve_tenant_access` (which only reports) solely when the `DENIED` status it must be compared
+against also appears, so a result computed and discarded cannot satisfy the test.
+
+### Load-bearing, proved by four probes rather than asserted
+
+| Probe | Expected | Observed |
+| --- | --- | --- |
+| A — import the seam, never call it | demo red | demo red (after tightening) |
+| B — remove the seam from `ResolveSession.run` | session red, others green | exactly `SessionIdentityProvider` red |
+| C — remove the seam from `demo_provider.py` | demo red | exactly `DemoIdentityProvider` red |
+| D — add a sixth `SamlIdentityProvider` with no seam | discovered and red, no edit to the test | discovered and red |
+
+All probe artifacts were removed and `git diff` was empty before the real commit.
+
+### Validation (bare, exactly as CI runs them)
+
+- `ruff format --check` → 328 files already formatted (327 + the new test) — this also covers
+  Python inside Markdown fences, which a scoped `ruff format src tests` would have missed.
+- `ruff check` → All checks passed
+- `mypy` → Success: no issues found in 144 source files
+- `pytest` (full) → **1791 passed, 4 skipped** (run 99's verified baseline was 1784 + these 7)
+
+### Commit hygiene
+
+The commit message was first written through a shell heredoc and arrived corrupted — truncated and
+self-interleaved, the exact failure this repository has recorded four times. Nothing was pushed at
+that point, so it was amended with `--file` from a `file_editor`-written message; the landed body is
+28 clean lines. Recorded here because the lesson had been written down and was still repeated:
+prose destined for a commit, a file, or a publisher does not go through a heredoc.
+
+### Delivery
+
+Commit `bdc0308` pushed to `feature/agentic-enterprise-platform`; remote head read back with
+`git ls-remote`, not `git rev-parse origin/<branch>` (this clone's refspec maps only `main`).
+CI on `bdc0308` was in progress at the time of the product commit, so this run's first checkpoint
+claimed **COMMITTED + PUSHED** with **CI PENDING** — not CI PASSED. That was then resolved (below).
+
+### Close-out: CI concluded, status promoted, verdict delivered
+
+Per the rule that a status is promoted only on evidence, the two runs created for `bdc0308` were read
+again with `gh run view --json jobs` once they had concluded:
+
+| Run | Event | Conclusion | Backend | Frontend |
+| --- | --- | --- | --- | --- |
+| `46158409114` | push | `completed/success` | 12/12 steps, 0 failed, 0 skipped | 11/11 steps, 0 failed, 0 skipped |
+| `46158414451` | pull_request | `completed/success` | 12/12 steps, 0 failed, 0 skipped | 11/11 steps, 0 failed, 0 skipped |
+
+Both green, per run **and** per job, so **NEX-099b was promoted to VERIFIED** at `bdc0308`. Note the
+reading mechanism: `gh run watch --exit-status` returns 0 even for a *cancelled* run, so the verdict
+came from the jobs API, not from a watch exit code.
+
+Delivered to both surfaces, each read back rather than trusted on exit code:
+
+- **PR #5** — NEX-099b section appended with `gh pr edit --body-file`; the **landed** body was fetched
+  from the API and compared byte-for-byte against the sent file: identical, 2650 lines, with the
+  heading and the four-probe table present.
+- **Issue #2** — verdict posted as comment `7241302373`; landed body fetched back and compared:
+  identical, 72 lines.
+
+A shell heredoc corrupted a `python3` one-liner while updating the checkpoint here too. What is
+observed: the mangled text repeated itself into the terminal, and the file on disk was unchanged and
+still valid JSON (`ci_status` still read PENDING). So nothing was corrupted — but that is the
+atomic-write rule doing the work, not luck: the script had to reach `os.replace` to publish, and it
+never did. The fields were then edited with `file_editor` instead, one at a time. The lesson stands
+unchanged and was repeated anyway: prose and multi-line Python do not go through a heredoc here.
+
+No production source changed in this close-out. The only edits are state records: `STATE.md`,
+`CHECKPOINT.json`, and this log.
+
