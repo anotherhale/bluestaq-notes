@@ -116,7 +116,7 @@
       "docs_head_result": "4/4 completed/success, polled 2026-11-28T06:47Z"
     },
     "nex085_ci": "4/4 success on `d9d0a3a`: runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z.",
-    "final_head_ci": "Final head `c56563c` (the promotion commit) also concluded 4/4 success: runs `46120502261` (pull_request) and `46120498874` (push), Backend and Frontend each `success`, polled 2026-11-28T07:19Z. The tree is unchanged by that commit (docs only), so this is the third green conclusion over the same product tree."
+    "final_head_ci": "Final head `c56563c` (the promotion commit) also concluded 4/4 success: runs `46120502261` (pull_request) and `46120498874` (push), Backend and Frontend each `success`, polled 2026-11-28T07:19Z. The tree is unchanged by that commit (docs only), so this is the third green conclusion over the same product tree. A third docs-only head `2f58931` also concluded 4/4 success (polled 07:22Z). Every docs-only commit since c698979 carries an identical product tree (`git diff c698979 <head> -- src/ tests/` empty), so once the tree is green once, the remaining docs commits cannot change the verdict. Do NOT chase this regress: each state write advances the head past the commit that records it."
   },
   "uncommitted_work": false,
   "pr_state": {
