@@ -12682,3 +12682,62 @@ step — not from a run-level conclusion alone, and not from a `gh run watch --e
 The verdict sits on the product commit itself rather than a docs-only head, which is the strongest
 anchor this repository permits. **NEX-101 is therefore VERIFIED**, promoted on this evidence and
 not before it.
+
+### NEXUS-103 — delivery phase (completed after the PUSHED checkpoint)
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEXUS-2026-11-28-103` (continued) |
+| Starting commit | `ff8b6e63` (product, CI-verified) |
+| Ending commit | `dd38945` (docs-only state record) → plus one delivery-evidence commit |
+| Branch | `feature/agentic-enterprise-platform` |
+| Tasks completed | NEX-101 promotion to VERIFIED; BACKLOG backfill for NEX-100 and NEX-101; DECISIONS entry; delivery to PR #5 and issue #2 |
+
+**What happened after the checkpoint.** The checkpoint was written with the push and delivery as
+*intent*, because it must exist before the commit that carries it. This phase turned that intent
+into measured fact — and the distinction mattered, because the checkpoint originally said
+"NEX-101 posted after CI concluded", which was not yet true.
+
+**Order of operations, and why.** The docs commit was deliberately held until both product runs
+concluded. A product and a docs push share a concurrency group, so committing state first would
+have cancelled the product run — leaving zero check-runs at `ff8b6e63` and the whole slice with no
+evidence. The cheaper order was the more expensive mistake. The state commit `dd38945` was pushed
+afterwards and could not supersede anything, which is exactly why its own green CI is *not*
+substituted for the product verdict.
+
+**Negation sweep.** After promoting NEX-101 to VERIFIED, grepping the negation across `STATE.md`
+and `CHECKPOINT.json` produced two hits. They were classified, not bulk-replaced: the
+`task_status_legend` asserted a *present* status ("is ... NOT VERIFIED") and was therefore false
+and fixed; the `decisions_this_run` entry was a truthful record of a mid-run decision and was
+annotated as superseded rather than rewritten, because rewriting it would falsify the history that
+explains why the statuses were kept distinct at all.
+
+**BACKLOG was two slices behind.** The last entry was NEX-099 — NEX-100 and NEX-101 had both been
+delivered without a backlog row. Both were backfilled, since a backlog that silently omits verified
+work makes the next run's "what is left" answer wrong.
+
+**Delivery verified by reading back, not by exit code.** `gh pr edit` exited 0 and printed a URL;
+that is a publisher's stamp, not proof the artifact landed. The PR body and the issue comment were
+both fetched from the API and compared against the intended files: PR body 2785 → 2786 lines with
+the delta being the trailing newline, NEX-100 section above still intact; issue comment 49/49 lines,
+exact match, no truncation or interleaving, AI-authorship disclosure present. Given this host's
+history of a publisher returning exit 0 while dropping a paragraph, the read-back is the assertion.
+
+**CI.**
+- Product `ff8b6e63`: runs `46163954848` (push), `46163960436` (pull_request) — both
+  `completed/success`, Backend 12/12, Frontend 11/11, zero failed, zero skipped.
+- Docs `dd38945`: runs `46164343898`, `46164338226` — both `completed/success`, same counts. Read
+  per job and per step; noted explicitly as a *docs* verdict, not the NEX-101 verdict.
+
+**Files changed this phase:** `docs/NEXUS/BACKLOG.md`, `CHECKPOINT.json`, `DECISIONS.md`,
+`EXECUTION_LOG.md`, `STATE.md`. No product source, test, migration or dependency changed.
+
+**Risks.** None new. The residual limit of NEX-101 (a static proof, not a runtime one) is recorded
+in the backlog row, `DECISIONS.md`, the PR body and the issue comment rather than left implicit.
+
+**Next exact action.** Select the next dependency-ready slice from `BACKLOG.md`, excluding the three
+closed families (paging NEX-082…NEX-098; auth guards NEX-099b/NEX-100; operator-gate boundaries
+NEX-101). Preferred shape: extend the structural-guard approach to a control that still relies on
+convention, or close a P2 agent-platform gap. Prove the guard load-bearing by mutation, run the gates
+bare, commit, push, read CI at the product commit per run/per job/per step, then deliver to PR #5 and
+issue #2 and read both back.

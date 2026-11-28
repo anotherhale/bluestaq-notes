@@ -26,6 +26,8 @@ truth; this file records intent and reconciliation.
 
 **Status: VERIFIED at product `ff8b6e63`.** CI `completed/success` on both runs, read per job and per step (Backend 12/12, Frontend 11/11, zero failed, zero skipped). The verdict anchors on the product commit itself.
 
+**Delivery, measured.** The docs-only state record `dd38945` was pushed and confirmed with `git ls-remote` (remote head and local HEAD identical). Its own CI also concluded `completed/success` — runs `46164343898` and `46164338226`, again per job and per step — but that verdict covers only the docs commit: the NEX-101 verdict is the one anchored on `ff8b6e63`. The state commit was deliberately pushed *after* both product runs concluded, so it could not supersede them in the concurrency group; the product evidence was therefore never at risk. NEX-101 was appended to PR #5's body and posted to issue #2 as comment `7242131778`, and **both were read back from the API** rather than inferred from the publisher's exit code: the PR body matched the intended text (2785 vs 2786 lines, the one-line delta being the trailing newline), the NEX-100 section above it was intact, and the issue comment matched exactly at 49 lines with no truncation or interleaving.
+
 `application/use_cases/operator_gate.py` is the single enforcement point in front of every
 platform-wide operational view. It decides whether the caller holds a live grant scoped to the
 operation, refuses with `ResourceNotFound`, and records exactly one access entry. Fourteen use cases
