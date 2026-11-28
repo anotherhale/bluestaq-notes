@@ -173,9 +173,9 @@
     "PR #5 stacks twenty-three slices; the reviewer's 'consider a split' note stands and is a human decision.",
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect."
   ],
-  "next_task": "NEX-077 is VERIFIED. Pick the next dependency-ready backlog slice. Do NOT re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. Two delivery/decision items remain and are not slices: (a) append the NEX-077 section to PR #5's body (delivery debt), and (b) ask the owner whether PR #5's twenty-three stacked slices should be split before review.",
-  "next_action": "Append NEX-077 to PR #5's body, then select the next dependency-ready slice from BACKLOG.md.",
-  "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this file's commit field always lags by one. 3. NEX-077 is VERIFIED (CI 4/4 on 9f9a70f). Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. 4. PR #5 is open, draft=false, unmerged, body carries NEX-052..NEX-076; NEX-077 still needs appending. Never merge it. 5. Next: append NEX-077 to PR #5, then pick the next dependency-ready slice from BACKLOG.md.",
+  "next_task": "NEX-077 is VERIFIED and PR #5's body now carries it, so there is no delivery debt. Pick the next dependency-ready backlog slice. Do NOT re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058, and do NOT re-append NEX-077 to PR #5 - it is already there.",
+  "next_action": "Select the next dependency-ready slice from BACKLOG.md and implement it.",
+  "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this file's commit field always lags by one. 3. NEX-077 is VERIFIED (CI 4/4 on 9f9a70f) and PR #5's body carries it - do not re-append. Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. 4. PR #5 is open, draft=false, unmerged. Never merge it. 5. Next: pick the next dependency-ready slice from BACKLOG.md.",
   "ci_status": "9f9a70f: 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T03:44Z.",
   "commits_this_run": [
     {
@@ -198,11 +198,11 @@
     "pr_state": "open",
     "pr_draft": false,
     "pr_merged": false,
-    "pr_note": "PR #5 open, unmerged. Body carries NEX-052..NEX-076; NEX-077 not yet appended (delivery debt for the next run). Automated merging is prohibited - a human decides.",
+    "pr_note": "PR #5 open, unmerged, draft=false. Body carries NEX-052..NEX-077 (66208 chars, NEX-077 appended and its heading corrected to ## in the same run). Automated merging is prohibited - a human decides.",
     "issue": 2,
     "issue_state": "open",
     "issue_note": "Issue #2 open. Latest comment 7232583113 covers NEX-075. No comment added this run; the issue stays open because the programme is not done.",
-    "delivery_debt": "PR #5 body carries through NEX-076; the NEX-077 section still needs appending."
+    "delivery_debt": "None outstanding. PR #5's body carries every slice through NEX-077."
   },
   "branch_head": "9f9a70f (NEX-077 product commit). This checkpoint is written by a later docs commit.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
@@ -227,17 +227,16 @@
     "recommended_next_action": "Append NEX-077 to PR #5's body, then take the next dependency-ready slice from BACKLOG.md."
   },
   "pr": {
-    "body_covers_through": "NEX-076",
-    "body_updated_this_run": false,
-    "note": "Body carries NEX-052..NEX-076; NEX-077 must be appended by the next run. Never merge without human review.",
-    "body_chars": 60453
+    "body_covers_through": "NEX-077",
+    "body_updated_this_run": true,
+    "note": "Body carries NEX-052..NEX-077. NEX-077 was appended after the docs checkpoint commit and its heading level corrected from ### to ## (it had nested under NEX-076). Never merge without human review.",
+    "body_chars": 66208
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "validation_status": "NEX-077: IMPLEMENTED + TESTED + COMMITTED + PUSHED + CI PASSED + VERIFIED. Local: 1574 passed / 4 skipped, ruff format+check clean, mypy clean (143 files). Mutation control: rationale forced to None fails 4 tests.",
   "next_actions": [
-    "Append the NEX-077 section to PR #5's body.",
-    "Select the next dependency-ready slice from BACKLOG.md.",
+    "Select the next dependency-ready slice from BACKLOG.md and implement it.",
     "Ask the owner whether PR #5's twenty-three stacked slices should be split before review."
   ],
   "last_ci_result": {
