@@ -8876,3 +8876,78 @@ check-run pairs for one SHA is normal, and the verdict is taken from pairs whose
 - No production files changed. No new slice started: the clock was under the 10-minute
   threshold from the point NEX-073 was closed, and starting one would have risked an
   uncommitted tree.
+
+## Run `NEX-2026-11-27-74` — an operator can issue an operator grant at last (NEX-074)
+
+- **Timestamp:** 2026-11-28T02:00Z–02:14Z
+- **Starting commit:** `94f8ba1` (docs tip); product base `09888ac`
+- **Ending commit:** `e375a1f` (product); docs commit follows
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Run ID:** `NEX-2026-11-27-74`
+
+### Task completed
+
+**NEX-074 — issue a bounded, attributable operator grant.** IMPLEMENTED + TESTED + COMMITTED + PUSHED.
+**Not VERIFIED:** CI on `e375a1f` was not polled.
+
+The gap was not a missing feature but an unreachable one. `OperatorGrant` carried `expires_at` and
+`granted_by`; the store was durable since NEX-072; the holder report could read every grant. But no
+code path could *write* a human-issued grant — the only writer was the deployment-configuration seed,
+which issues unbounded grants with `granted_by=None`. So the bounded, attributable, time-limited
+grant the record was designed for could not exist, and the documented remedy for a lapsed incident
+grant ("issue a new one through the store") had no caller.
+
+`IssueOperatorGrant` plus `POST /ops/operator-grants` is that caller. Four refusals, each a real
+escalation if omitted:
+
+| Refusal | Why it matters |
+| --- | --- |
+| An unbounded grant | A grant with no deadline is a permanent widening; permanent grants come from reviewed deployment configuration, never from a request |
+| A self-grant | The human form of "an agent may never grant itself permission" |
+| A scope the issuer does not hold | Attenuation: a grant may narrow authority across people, never amplify it. Checked against the gate's **live** scopes, so a lapsed issuer cannot delegate a stale one |
+| An unknown scope | A token no use case asks for would be stored, listed, and enforce nothing |
+
+The issuer is the authenticated principal, stamped by the application layer. The request body carries
+no `granted_by`, so a caller cannot attribute a widening to someone else — the same rule that keeps
+`owner_id` out of note bodies. `ISSUE_OPERATION` is a scope of its own, distinct from the read-side
+`operator-access-report`: reading who holds a grant and minting one are different authorities.
+
+### Decision: no `rationale` field (D-074a)
+
+An earlier draft required a free-text `rationale`. The grant row has no column for one, so the field
+would have been validated and discarded — worse than absent, because it reads in the API contract as
+a record that is never written. It was removed from the use case, the schema, the router and the test,
+and the removal is stated in the commit message so a future reader does not "restore" it. Intent is
+carried by `granted_by` and the gate's access log. Persisting a rationale needs a column and a
+migration; that is follow-up work, recorded in BACKLOG.md.
+
+### Bookkeeping defect found and corrected
+
+The code cited `NEX-074`, but no such entry existed in `BACKLOG.md` — the id was invented during
+implementation. Rather than renumber the work, the backlog entry was written this run, so the commit
+message and the backlog now agree. Recorded because a task id in code that the backlog has never
+heard of is how a delivery record silently drifts from reality.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format --check` | 307 files already formatted |
+| `ruff check` | All checks passed |
+| `mypy` | Success: no issues in 141 source files |
+| `pytest` (full) | 1545 passed / 4 skipped |
+| `pytest tests/application/test_issue_operator_grant.py` | 11 passed |
+
+### Tooling note
+
+Two heredoc appends corrupted their input mid-command (the BACKLOG append and a `python3 - <<PY`
+checkpoint edit). Both were caught before landing: the BACKLOG file was restored with
+`git checkout --` and re-appended from a `file_editor`-written temp file, and the Python script
+failed to parse so nothing was written. The rule already in memory holds and was re-proven: **write
+the payload with `file_editor`, then `cat` or run it.** A heredoc is not safe for multi-line content
+in this environment.
+
+### Next action
+
+Read check-runs on `e375a1f`; if 4/4 `completed/success`, promote NEX-074 to VERIFIED. Then append
+the NEX-074 section to PR #5's body, which still stops at NEX-073.

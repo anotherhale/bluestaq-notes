@@ -3201,3 +3201,42 @@ absence check is *not* the sole evidence: line ~111 (`Temp`) is followed by
 `api.getNoteSync(note.id)?.folder_id === null`, and line ~290 (`Temporary access`) is followed by
 `expect(api.getNote(note.id)).rejects.toMatchObject({ status: 404 })`. Those backend assertions
 carry the real proof, so the DOM check is a UI hint, not the verdict.
+
+## NEX-074 — Let an operator issue a bounded, attributable operator grant
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **COMMITTED + PUSHED** at `e375a1f`; CI **UNKNOWN** — not yet polled |
+| Priority | P1 — an incident remedy with no caller is a remedy that does not exist |
+| Dependencies | NEX-072 (durable `operator_access_log`), the operator-grant store and `OperatorAccessLog` port |
+| Architecture | `application/use_cases/operator_grants.py`, `application/ports/operator_grants.py`, ADR-008 (404-vs-403), ADR-015 |
+
+**Objective.** `OperatorGrant` carried `expires_at` and `granted_by`, the store was durable, and
+the holder report could read it — but no code path could *write* a human-issued grant. The only
+writer was the deployment-configuration seed, which issues unbounded grants with
+`granted_by=None`. The bounded, attributable grant the record exists for was unreachable.
+
+**Delivered.** `IssueOperatorGrant` use case, container wiring, `POST /ops/operator-grants`
+(`OperatorGrantIssueRequest`). Four refusals: an unbounded grant; a self-grant; a scope the issuer
+does not hold (attenuation, checked against the gate's *live* scopes so a lapsed issuer cannot
+delegate a stale one); and an unknown scope that no use case asks for. The issuer is stamped by
+the application layer from the authenticated principal — the body carries no `granted_by`, so a
+caller cannot attribute a widening to someone else. `ISSUE_OPERATION` is a distinct scope from
+the read-side `operator-access-report`: reading who holds a grant and minting one are different
+authorities.
+
+**Deliberately omitted: `rationale`.** The grant row has no column for it, so a required
+free-text field would be validated and thrown away — a record that reads as evidence but is
+never written. Intent is carried by `granted_by` and the gate's access log.
+
+**Follow-up (not a defect).** Persisting an issuance rationale needs a column and a migration;
+until then nothing may promise one.
+
+**Tests.** 11 in `tests/application/test_issue_operator_grant.py`, including a positive pin on
+what the stored row actually records (`granted_by`, `expires_at`, `granted_at`, `is_active`).
+Full suite 1545 passed / 4 skipped; ruff format+check and mypy (141 files) clean locally.
+
+**Acceptance criteria.** An operator can issue a bounded grant; the stored row names the issuer;
+a non-operator, a self-grant, an over-broad scope and an unknown scope are each refused; no
+request body can set the issuer.

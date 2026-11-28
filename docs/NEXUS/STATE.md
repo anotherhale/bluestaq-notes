@@ -9,15 +9,30 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `09888ac` (**NEX-073, VERIFIED** — CI 4/4 `completed/success`, polled 2026-11-28T01:56Z), over `dcd01e0` and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`09888ac` (NEX-073): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T01:56Z. Both frontend runs passed — on `38292d2` one of two had failed, so CI independently confirms the flake is gone.** Prior: `38292d2` (NEX-058): backend 2/2 success, frontend 1/2 (the race). `3c26957` (NEX-072): 4/4 success. |
+| Starting commit (run 74) | `94f8ba1` (docs tip; concurrent runs advance it constantly). |
+| Head commit (measured) | Product head `e375a1f` (**NEX-074** — COMMITTED + PUSHED, **CI unread**), over `09888ac` (NEX-073, VERIFIED — CI 4/4 `completed/success`, polled 2026-11-28T01:56Z) and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`e375a1f` (NEX-074): UNKNOWN — not polled.** Prior: **`09888ac` (NEX-073): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T01:56Z.** Both frontend runs passed — on `38292d2` one of two had failed, so CI independently confirms the flake is gone. Prior: `38292d2` (NEX-058): backend 2/2 success, frontend 1/2 (the race). `3c26957` (NEX-072): 4/4 success. |
 | Tracking issue | #2 (open) — **comment `7231968445`** covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-073** (54625 chars) after run 73's catch-up; it had stopped at NEX-072. Nineteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. (This row previously said "Draft"; it is not — that was stale.) |
-| **Open P1** | None outstanding. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. Run 71 closed an unsatisfiable-control defect: every two-person approval was undecidable through the API (see NEX-071 below). |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-073** (54625 chars); NEX-074's section is not appended yet. Nineteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | None outstanding. Run 74 (NEX-074) made the operator-grant record writable for the first time: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-074 closed (run `NEX-2026-11-27-74`) — the operator grant finally has a writer
+
+Product commit `e375a1f`. **COMMITTED + PUSHED; CI unread — not VERIFIED.**
+
+`OperatorGrant` carried `expires_at` and `granted_by`, the store was durable since NEX-072, and the
+holder report could read every grant — but nothing could *issue* one. The only writer was the
+deployment-configuration seed, which issues unbounded grants with `granted_by=None`, so the bounded,
+attributable grant the record exists for was unreachable and the documented incident remedy had no
+caller. `POST /ops/operator-grants` is that caller, with four refusals (unbounded, self-grant,
+over-broad, unknown scope) and the issuer stamped by the application layer — never from the body.
+
+A `rationale` field was removed rather than shipped: the grant row has no column for one, so a
+required free-text field would be validated and discarded. Persisting one needs a migration and is
+follow-up work.
 
 ## NEX-058 closed (run `NEX-2026-11-27-73`) — a fail-closed `step-up` is now explainable
 

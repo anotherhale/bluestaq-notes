@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-73",
-  "timestamp": "2026-11-28T02:09Z",
+  "run_id": "NEX-2026-11-27-74",
+  "timestamp": "2026-11-28T02:13Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": {
-    "product_head": "09888ac",
+    "product_head": "e375a1f",
     "note": "Product head, not the docs tip. This file's own commit can never be the tip; resolve with git ls-remote origin refs/heads/feature/agentic-enterprise-platform."
   },
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049, NEX-058, NEX-065..NEX-072 verified. NEX-058's last open scope item (the claim-shape diagnostic that explains a fail-closed step-up) closed this run. Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-073 verified. NEX-074 (run 74) is COMMITTED+PUSHED and awaits CI: an operator can now issue a bounded, attributable operator grant, which was previously impossible.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -26,7 +26,8 @@
     "NEX-070": "VERIFIED",
     "NEX-071": "VERIFIED - CI 4/4 completed/success at adcb75e (the docs head, which descends from the product commit a5d2710 and therefore compiles and tests it), polled 2026-11-28T00:33Z by run 71. Both pairs concluded success (concurrency group re-runs the pair; the completed pair is the verdict). DecideApprovalRequest now admits a tenant approver holding OrgPermission.APPROVE_AGENT_ACTION in an operational organization the agent's owner also actively belongs to, for the second signature of a required_approvals==2 request only. 11 new tests; full suite green locally; ruff format/check + mypy clean on 140 files.",
     "NEX-072": "VERIFIED - CI 4/4 completed/success at 3c26957 (both check-run pairs: Backend ruff+mypy+pytest+migrations and Frontend typecheck+lint+test+build), polled 2026-11-28T00:52Z by run 72. SqlAlchemyOperatorAccessLog is a second adapter behind the unchanged OperatorAccessLog port; append-only, ordered by surrogate id, user_id not a cascading FK, adapter commits its own session. Migration a1c7e2f60b93 upgrades and downgrades cleanly. 1501 passed / 4 skipped, mypy clean on 141 files.",
-    "NEX-073": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 09888ac, and CI 4/4 completed/success (backend x2, frontend x2) read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed: CI evidence the flake is gone. Three absence-only assertions made non-vacuous in frontend/src/App.test.tsx: the two search tests now assert the filtered-in and filtered-out note in one waitFor, and the tenant-isolation test seeds a note for Bob and anchors on it before asserting Alice's note is absent. Root cause is the loading-state swap (loadingNotes empties the list during the identity-keyed refetch), not mere assertion ordering. Proved the isolation test can catch a leak: a temporary FakeApiClient with canRead()=true and listNotes forced to view:'all' makes the new assertion fail on 'Alice private'. Local gates: 127 passed / 9 files, tsc -b --force clean, eslint clean, vite build ok, 20/20 repeat runs 0 failures."
+    "NEX-073": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 09888ac, and CI 4/4 completed/success (backend x2, frontend x2) read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed: CI evidence the flake is gone. Three absence-only assertions made non-vacuous in frontend/src/App.test.tsx: the two search tests now assert the filtered-in and filtered-out note in one waitFor, and the tenant-isolation test seeds a note for Bob and anchors on it before asserting Alice's note is absent. Root cause is the loading-state swap (loadingNotes empties the list during the identity-keyed refetch), not mere assertion ordering. Proved the isolation test can catch a leak: a temporary FakeApiClient with canRead()=true and listNotes forced to view:'all' makes the new assertion fail on 'Alice private'. Local gates: 127 passed / 9 files, tsc -b --force clean, eslint clean, vite build ok, 20/20 repeat runs 0 failures.",
+    "NEX-074": "COMMITTED + PUSHED at e375a1f; CI UNKNOWN - not yet polled. POST /ops/operator-grants issues a bounded grant with the issuer stamped by the application layer. Refuses an unbounded grant, a self-grant, a scope the issuer does not hold, and an unknown scope. No rationale field: the grant row has no column for one, so a required free-text field would be validated and discarded. 1545 passed / 4 skipped, ruff+mypy clean on 141 files, 11 new tests."
   },
   "completed_tasks": [
     "NEX-039",
@@ -62,7 +63,8 @@
     "NEX-070",
     "NEX-071",
     "NEX-072",
-    "NEX-073"
+    "NEX-073",
+    "NEX-074"
   ],
   "verified_tasks": [
     "NEX-001",
@@ -150,7 +152,7 @@
     "mergeable": true,
     "body_covers": "NEX-052..NEX-073",
     "body_chars": 54625,
-    "head": "not recorded here — read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+    "head": "not recorded here \u2014 read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
     "note": "Body was stale at NEX-072; run 73 appended NEX-073. Prior STATE row called it a draft, which was wrong.",
     "merging": "prohibited for automated runs; awaiting human review"
   },
@@ -162,44 +164,33 @@
   },
   "blockers": [],
   "risks": [
-    "The access log is durable but unbounded: nothing prunes it. A retention policy is a follow-up, not a defect.",
-    "The log records user_id as a value, not a FK, so a query joining to users will silently drop rows for deleted accounts. Deliberate (the record must outlive the account).",
-    "PR #5 body still lacks NEX-058..NEX-073 sections; the body is the outstanding delivery debt.",
-    "NEX-073's fix is test-only and locally green, but CI has not been read for 09888ac. Treat CI as UNKNOWN until polled; do not report CI PASSED."
+    "NEX-074 is COMMITTED+PUSHED but NOT VERIFIED: CI on e375a1f has not been read. Do not report CI PASSED.",
+    "An operator-grant rationale is not persisted (no column). Intent rests on granted_by plus the gate access log; adding a column needs a migration.",
+    "The access log is durable but unbounded: nothing prunes it. A retention policy is follow-up work, and the retention window is a compliance decision that needs an ADR line first.",
+    "PR #5 body covers NEX-052..NEX-073; the NEX-074 section is not appended yet."
   ],
-  "next_task": "PR #5 body catch-up is DONE (NEX-073 appended at run 73; body 54625 chars, covers NEX-052..NEX-073). Do not repeat it. Next: decide the operator_access_log retention policy — it needs an ADR line before any code, because the retention window is a compliance decision, not an implementation detail. Do not re-implement NEX-058 or NEX-073.",
-  "next_action": "1) gh run list --branch feature/agentic-enterprise-platform and read the check-runs on 09888ac; if all completed/success, mark NEX-073 VERIFIED-by-CI. 2) Named follow-up candidates: retention policy for operator_access_log (run 72's follow-up), PR #5 body catch-up for NEX-058..NEX-073. 3) Otherwise take whatever BACKLOG.md ranks highest among unblocked work.",
-  "recovery_instructions": "HEAD should be the docs commit that carries this checkpoint, one commit after 09888ac (the NEX-073 product commit). The `commit` field can never name the commit that writes it, so resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-073 is test-only and IMPLEMENTED/TESTED/COMMITTED/PUSHED but NOT yet VERIFIED-by-CI: run 74 must read check-runs on 09888ac before promoting it.",
+  "next_task": "Read CI on e375a1f and promote NEX-074 to VERIFIED if 4/4 completed/success; then append the NEX-074 section to PR #5's body. Do NOT re-implement NEX-074, NEX-058 or NEX-073. After that, the operator_access_log retention ADR line is the last open P1-adjacent item.",
+  "next_action": "1) Read check-runs on e375a1f (gh run list --branch feature/agentic-enterprise-platform). 2) Append the NEX-074 section to PR #5's body, which stops at NEX-073. 3) Write the operator_access_log retention ADR line.",
+  "recovery_instructions": "HEAD is the docs commit carrying this checkpoint, one commit above the NEX-074 product commit e375a1f. Resolve the true head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform. NEX-074 is NOT VERIFIED until CI on e375a1f is read.",
   "ci_status": {
-    "09888ac": {
-      "result": "4/4 completed/success (backend x2, frontend x2)",
-      "polled": "2026-11-28T01:56Z",
-      "note": "NEX-073 test-only. Both frontend pairs green."
-    },
-    "38292d2": {
-      "result": "backend 2/2 success; frontend 1/2 success (one failure = the pre-existing App.test.tsx race)",
-      "polled": "2026-11-28T01:19Z",
-      "note": "Superseded by 09888ac, which fixed that race."
+    "e375a1f": {
+      "result": "UNKNOWN - not polled",
+      "note": "NEX-074 product commit."
     }
   },
   "commits_this_run": [
     {
-      "sha": "38292d2",
-      "subject": "fix(identity): log the claim shape behind a single-factor assurance",
-      "state": "PUSHED"
-    },
-    {
-      "sha": "09888ac",
-      "subject": "test(frontend): make absence assertions non-vacuous in App.test.tsx (NEX-073)",
+      "sha": "e375a1f",
+      "subject": "feat(ops): let an operator issue a bounded, attributable operator grant (NEX-074)",
       "state": "PUSHED"
     }
   ],
   "decisions_this_run": [
-    "D-058a: the diagnostic describes the claim SHAPE and never a claim value. acr is an IdP-chosen class name and amr can name methods personal to the account; the shape answers the operator's question without putting a claim value in the log.",
-    "D-058b: the line fires only when the derivation lands below STEP_UP_FLOOR. A satisfying login logs nothing, so the signal does not drown on every normal MFA login.",
-    "D-058c: the acr marker scan is shared by enforcement and the diagnostic so the two cannot disagree about which segment is the marker. It returns EVERY marker and the veto applies per-marker: a first version returned only the first marker, which would have silently changed enforcement for mfa-optional:multi-factor."
+    "D-074a: no rationale field. The grant row has no column, so a required field would be validated and discarded - a record that reads as evidence but is never written. Persisting one needs a migration.",
+    "D-074b: attenuation is checked against the gate's LIVE scopes, not the scopes the issuer held earlier, so a lapsed issuer cannot delegate a stale authority.",
+    "D-074c: ISSUE_OPERATION is its own scope, distinct from the read-side operator-access-report: reading who holds a grant and minting one are different authorities."
   ],
-  "run_summary": "Run 73 closed NEX-073 (the App.test.tsx flake) as a test-quality fix rather than a re-run-until-green. Audited every absence-only waitFor in the file, found three where absence was the whole evidence (the two search tests and, most importantly, the tenant-isolation test), and made each anchor on a positive assertion. Proved the isolation test can actually catch a leak with a deliberately leaky FakeApiClient. Also corrected the BACKLOG record that had cleared the search tests without auditing them, keeping the correction visible rather than rewriting history. CI for 09888ac is unread - the explicit handoff to run 74.",
+  "run_summary": "Run 74 closed the gap that made the operator-grant record unwritable: OperatorGrant carried expires_at and granted_by, the store was durable and the holder report could read it, yet nothing could issue one. The only writer was the deployment-configuration seed, which issues unbounded grants with granted_by=None. IssueOperatorGrant plus POST /ops/operator-grants is that writer, with four refusals and the issuer stamped by the application layer. A rationale field was removed rather than shipped, because the row has no column for it. Also corrected a bookkeeping defect found mid-run: the code cited task id NEX-074, which had never been added to BACKLOG.md; the entry now exists.",
   "delivery_state": {
     "pr": 5,
     "pr_state": "open",
@@ -215,23 +206,21 @@
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint's own commit field can never name the commit that writes it; it lags the head by exactly one commit. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": {
-    "run_id": "NEX-2026-11-27-73",
+    "run_id": "NEX-2026-11-27-74",
     "branch": "feature/agentic-enterprise-platform",
-    "starting_commit": "13e0dfc",
-    "ending_commit": "38292d2 (product); docs commit follows",
+    "starting_commit": "94f8ba1",
+    "ending_commit": "e375a1f (product); docs commit follows",
     "tasks_completed": [
-      "NEX-058"
+      "NEX-074"
     ],
-    "tasks_verified": [
-      "NEX-058"
-    ],
+    "tasks_verified": [],
     "tasks_in_progress": [],
     "tasks_blocked": [],
-    "ci_status": "backend 2/2 completed/success; frontend 1/2 success (one pre-existing App.test.tsx flake, NEX-073, in untouched code)",
-    "push_status": "13e0dfc..38292d2 fast-forward, verified with git ls-remote",
-    "pr_status": "PR #5 open, unmerged; body still needs a NEX-058 section",
+    "ci_status": "UNKNOWN - e375a1f not polled",
+    "push_status": "94f8ba1..e375a1f fast-forward, verified with git ls-remote",
+    "pr_status": "PR #5 open, unmerged; body still stops at NEX-073",
     "issue_status": "issue #2 open, no comment this run",
-    "recommended_next_action": "NEX-073 (de-race App.test.tsx) is the cheapest way to restore gate trust; otherwise read BACKLOG.md and take the highest-value dependency-ready slice. Do not re-implement NEX-058."
+    "recommended_next_action": "Poll CI on e375a1f; if 4/4 success promote NEX-074. Then append its PR section."
   },
   "pr": {
     "body_covers_through": "NEX-068",
@@ -240,10 +229,10 @@
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-073 VERIFIED-by-CI: check-runs on 09888ac are 4/4 completed/success (backend x2, frontend x2), read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed — CI evidence that the vacuous-assertion fix removed the flake.",
+  "validation_status": "NEX-074: IMPLEMENTED + TESTED + COMMITTED + PUSHED at e375a1f. NOT VERIFIED - CI unread. Local: 1545 passed / 4 skipped, ruff format+check clean (307 files), mypy clean (141 files).",
   "next_actions": [
     "Write the ADR line for operator_access_log retention (window + who may purge), then the retention slice. This is the last open P1-adjacent item.",
-    "Consider asking the owner whether PR #5's 19 stacked slices should be split before review — it is a reviewer-experience risk, not a code risk.",
+    "Consider asking the owner whether PR #5's 19 stacked slices should be split before review \u2014 it is a reviewer-experience risk, not a code risk.",
     "Re-poll PR #5 CI on the docs tip if a green tip is needed; last evidence is 09888ac = 4/4 success."
   ]
 }
