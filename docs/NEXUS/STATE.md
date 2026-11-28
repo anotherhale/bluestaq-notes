@@ -10,8 +10,8 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `a5d2710` (**NEX-071, IMPLEMENTED/TESTED/PUSHED — CI unpolled**), over `a179b07`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`04d52e1` (NEX-070 head): 4/4 `completed/success`**, polled 2026-11-27T23:48Z — **NEX-070 VERIFIED**. `a5d2710` (NEX-071) **not yet polled** — first action next run. `7a1d5e2` (NEX-069): 4/4 at 23:22Z. |
+| Head commit (measured) | Product head `a5d2710` (**NEX-071, VERIFIED** — CI 4/4 at the docs head `adcb75e`), over `a179b07`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`adcb75e` (NEX-071 docs head, descends from product `a5d2710`): 4/4 `completed/success`**, polled 2026-11-28T00:33Z — **NEX-071 VERIFIED**. `04d52e1` (NEX-070): 4/4 at 2026-11-27T23:48Z. `7a1d5e2` (NEX-069): 4/4 at 23:22Z. |
 | Tracking issue | #2 (open) — **comment `7230423658`** covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-070** (48375 chars) as of run 70; NEX-071 not yet added. Fifteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | **Open P1** | None outstanding. Run 71 closed an unsatisfiable-control defect: every two-person approval was undecidable through the API (see NEX-071 below). |
@@ -20,7 +20,7 @@ truth; this file records intent and reconciliation.
 
 ## NEX-071 (run `NEX-2026-11-27-71`) — the second signature had no authorised source
 
-**Status: IMPLEMENTED / TESTED / COMMITTED / PUSHED (`a5d2710`). CI not yet polled.**
+**Status: VERIFIED.** Product `a5d2710`; CI 4/4 `completed/success` at the docs head `adcb75e` (polled 2026-11-28T00:33Z). Delivered: PR #5 body (50507 chars) and issue #2 comment `7230990964`.
 
 **The defect.** `DecideApprovalRequest` admitted only the agent's owner, and the aggregate
 correctly refuses the owner signing twice. Two correct rules together made **every**

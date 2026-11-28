@@ -21,7 +21,7 @@
     "NEX-065": "VERIFIED - CI 4/4 completed/success at 2d59c74 (the docs head descending from the NEX-065 product commit eca18f3), polled 2026-11-27T23:12Z by run 70. eca18f3's own pairs read `cancelled`, which is superseded, not failed. Re-validated locally: 1472 passed / 4 skipped, ruff format+check clean, mypy clean on 140 files.",
     "NEX-069": "VERIFIED - CI 4/4 completed/success at 7a1d5e2, polled 2026-11-27T23:22Z by run 70. The NEX-065 migration required approved_at/approved_by for any in-force row; because a CHECK constraint is table-wide, `alembic upgrade head` failed on any database that had already published a policy. Now tolerates a legacy in-force row with both columns NULL while still refusing a half-written approval. Also fixed the test that had been silently vacuous (it seeded a text id into an INTEGER PK and never reached the migration). 1472 passed / 4 skipped locally; 5 tests fail with the source fix reverted.",
     "NEX-070": "VERIFIED",
-    "NEX-071": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at a5d2710; CI not yet polled. DecideApprovalRequest now admits a tenant approver holding OrgPermission.APPROVE_AGENT_ACTION in an operational organization the agent's owner also actively belongs to, for the second signature of a required_approvals==2 request only. 11 new tests; full suite green locally; ruff format/check + mypy clean on 140 files."
+    "NEX-071": "VERIFIED - CI 4/4 completed/success at adcb75e (the docs head, which descends from the product commit a5d2710 and therefore compiles and tests it), polled 2026-11-28T00:33Z by run 71. Both pairs concluded success (concurrency group re-runs the pair; the completed pair is the verdict). DecideApprovalRequest now admits a tenant approver holding OrgPermission.APPROVE_AGENT_ACTION in an operational organization the agent's owner also actively belongs to, for the second signature of a required_approvals==2 request only. 11 new tests; full suite green locally; ruff format/check + mypy clean on 140 files."
   },
   "completed_tasks": [
     "NEX-039",
@@ -131,7 +131,7 @@
       ".venv/bin/python -m pytest -> exit 0, zero failures (full suite)",
       ".venv/bin/python -m pytest tests/agent/test_approval_second_signer.py -> 11 passed"
     ],
-    "ci": "NEX-071 (a5d2710) NOT yet polled - that is the first action of the next run. Everything through NEX-070 remains VERIFIED."
+    "ci": "NEX-071 VERIFIED: 4/4 completed/success at adcb75e (docs head over product a5d2710), polled 2026-11-28T00:33Z. Everything through NEX-071 is VERIFIED."
   },
   "uncommitted_work": null,
   "pr_state": {
@@ -160,10 +160,13 @@
     "The second approver is authorised by organization membership only; there is no per-agent allowlist. Acceptable while tenants are small and admin-held, but worth revisiting when agent ownership spans teams (candidate ADR).",
     "NEX-071's CI verdict is unpolled at checkpoint time; do not treat the slice as CI-PASSED until a run polls it."
   ],
-  "next_task": "Poll CI for NEX-071 at a5d2710 and record the verdict; then take the next highest-value dependency-ready backlog slice from docs/NEXUS/BACKLOG.md. Do not re-implement NEX-071.",
-  "next_action": "1) Poll GET /repos/anotherhale/bluestaq-notes/commits/<docs-head>/check-runs until every check-run has status=completed; judge on that. 2) Append the verdict to EXECUTION_LOG.md and update STATE.md + this checkpoint. 3) Then pick the next dependency-ready backlog slice.",
+  "next_task": "No carried-over implementation debt. Everything through NEX-071 is VERIFIED. Next: the highest-value dependency-ready backlog slice - read docs/NEXUS/BACKLOG.md, pick one, implement it as a single vertical slice. Do not re-implement NEX-071.",
+  "next_action": "Read docs/NEXUS/BACKLOG.md and implement the highest-value dependency-ready slice as one vertical slice. A known candidate, surfaced but not yet scoped: second-signer authority is tenant-scoped with no per-agent allowlist - decide whether that warrants an ADR before tenants grow.",
   "recovery_instructions": "Tree is clean at 04d52e1 (NEX-070 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-070 is COMMITTED + PUSHED but NOT VERIFIED - poll CI before claiming otherwise. Everything through NEX-069 is VERIFIED. PR #5 body and issue #2 comment 7230076705 cover through NEX-069. The NEX-069 commit message says NEX-066; that mislabel is documented in EXECUTION_LOG.md and must not be silently rewritten.",
-  "ci_status": "04d52e1 (NEX-070 product head): 4/4 completed/success, polled 2026-11-27T23:48Z - NEX-070 VERIFIED. 7a1d5e2 (NEX-069) 4/4, 2d59c74 (NEX-065) 4/4. c107453 (docs checkpoint) was still in_progress when this file was written; a docs commit only re-runs CI over the same product tree, so it does not gate NEX-070.",
+  "ci_status": {
+    "adcb75e": "4/4 completed/success (NEX-071 docs head, descends from product a5d2710) - polled 2026-11-28T00:33Z by run 71",
+    "04d52e1": "4/4 completed/success (NEX-070) - polled 2026-11-27T23:48Z"
+  },
   "commits_this_run": [
     {
       "sha": "a5d2710",
@@ -178,18 +181,13 @@
     "APPROVE_AGENT_ACTION is a distinct OrgPermission rather than a reuse of MANAGE_ORGANIZATION, so a role can co-sign a sensitive agent action without being able to reshape the organization. ORG_SECURITY_ADMIN/ORG_AUDITOR stay read-only, preserving the separation of duties the matrix was built for.",
     "Second-signer authority is scoped to a shared operational tenant rather than to any org admin globally: an approver must share an active organization with the agent's owner, so authority cannot reach agents outside their tenant."
   ],
-  "run_summary": "Recovered NEX-071 from a prior run's uncommitted state, finished validation, and committed + pushed it. The slice closes a fail-closed-but-unsatisfiable control: every required_approvals==2 approval (second-approver policies and HIGH-risk capabilities) could never complete because only the owner could decide and the aggregate refuses a self-second-signature.",
+  "run_summary": "NEX-071 recovered from a prior run's uncommitted state, validated, committed, pushed and CI-verified. Closes an unsatisfiable-control defect: every required_approvals==2 approval (second-approver policies, HIGH-risk capabilities) was undecidable because only the owner could decide and the aggregate refuses a self-second-signature.",
   "delivery_state": {
-    "branch": "feature/agentic-enterprise-platform",
-    "head": "04d52e1",
-    "pr_updated": false,
-    "issue_updated": false,
-    "delivery_debt": "NEX-070 needs a PR #5 body update and an issue #2 comment once CI confirms it. Also: CI for 04d52e1 has not been read.",
-    "ci_verified": false,
-    "ci_verified_head": "7a1d5e2",
-    "pr_body_covers_through": "NEX-069",
-    "issue_comment_covers_through": "NEX-069",
-    "docs_head_ci_green": false
+    "pr": 5,
+    "issue": 2,
+    "pr_body_chars": 50507,
+    "issue_comment": "7230990964",
+    "note": "PR #5 body carries NEX-052..NEX-071. Issue #2 comment 7230990964 covers NEX-071."
   },
   "branch_head": "Docs head fb1cf68 (NEX-070 VERIFIED promotion) over product head 04d52e1. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",

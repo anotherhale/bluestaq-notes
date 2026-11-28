@@ -8563,3 +8563,26 @@ and the 404 rule for an unauthorised caller.
 Poll CI for `a5d2710` (check-runs until every one is `status=completed`), record
 the verdict here and in the checkpoint, then take the next dependency-ready
 backlog slice. Do not re-implement NEX-071.
+
+### Run NEX-2026-11-27-71 — CI verdict (appended after the poll)
+
+**NEX-071 VERIFIED.** CI 4/4 `completed/success` at `adcb75e`, the docs head descending from
+product commit `a5d2710`, polled 2026-11-28T00:33Z. Both check-run pairs concluded success — the
+concurrency group re-runs the pair, and the completed pair is the verdict. Delivered: PR #5 body
+(50507 chars, now carrying NEX-052..NEX-071) and issue #2 comment `7230990964`.
+
+Everything through NEX-071 is VERIFIED. PR #5 remains open and unmerged, awaiting human review.
+
+### Incident — the run workspace was deleted mid-run
+
+At 17:32 local the entire automation workspace directory was removed by the environment, taking
+the clone with it (both `bluestaq-notes/` and its parent were empty). **No work was lost**: the
+product commit `a5d2710` and the docs commit `adcb75e` had already been pushed, and the re-clone
+showed `EXECUTION_LOG.md` at exactly 463992 bytes — byte-identical to the pre-wipe size. This is
+why the protocol pushes before it reports.
+
+Worth recording for the next run: this session also hit the known heredoc corruption (the CI
+verdict append echoed its own body and never executed), *and* the corruption check itself was
+masked because the `cd` in the same command had already failed. Two independent failures in one
+command made the output confusing. The rule still holds: never a heredoc, always
+`file_editor create` + run the file.
