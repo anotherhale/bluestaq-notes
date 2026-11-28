@@ -1,19 +1,21 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-90",
-  "timestamp": "2026-11-28T09:19:40Z",
+  "run_id": "NEX-2026-11-28-91",
+  "timestamp": "2026-11-28T10:30Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "fc20956a7a6729800cc2ea121b1bbbf3bec4d408",
-  "branch_head": "fc20956 (docs: promote NEX-089 to VERIFIED on CI 4/4) - read the live tip with git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-089 VERIFIED. NEX-089 (run 89) windowed GET /agents/{id}/approvals, which read every approval the agent had ever opened and filtered status in Python; meta.total was len(items), so a bounded page reported its own window as the total. CI 4/4 success on docs head c5a1250 (product tree identical to b3130ce).",
+  "commit": "aa4b2c8",
+  "branch_head": "aa4b2c8 (fix(agent-runs): page the run history and report its true size) plus this run's docs commit - read the live tip with git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-089 VERIFIED. NEX-090 (run 91) paged GET /agent-runs, whose store listing was capped at 50 rows while the route reported PageMeta(total=len(items)) and accepted no limit/offset - an agent with 60 runs answered items:50, total:50, limit:50, a complete-looking history of fifty, with no way to reach runs 51-60 at all.",
   "active_task": null,
   "task_statuses": {
     "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
     "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
     "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
-    "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126.",
+    "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb. Delivered to PR #5 body and issue #2 comment 7236123126.",
     "NEX-087": "VERIFIED - product 82d8a64, CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request). Delivered to PR #5 body and issue #2 comment 7236499955.",
-    "NEX-088": "VERIFIED - CI 4/4 completed/success (runs 46127299155 push and 46127304188 pull_request on docs head 592ba07, product tree identical to 06b5b32; also 46127157086 on 06b5b32 itself). Delivered to PR #5 and issue #2."
+    "NEX-088": "VERIFIED - product 06b5b32, CI 4/4 completed/success on docs head 592ba07. Delivered to PR #5 and issue #2.",
+    "NEX-089": "VERIFIED - product b3130ce, CI 4/4 completed/success on docs head c5a1250 (runs 46129490407 push, 46129494580 pull_request). Delivered to PR #5 body and issue #2 comment 7237162851.",
+    "NEX-090": "COMMITTED aa4b2c8, PUSHED, CI NOT READ - therefore NOT VERIFIED. Implemented and locally tested: full suite 1717 passed / 4 skipped, ruff format and check clean, mypy clean on 143 files, mutation control caught. NOT delivered to PR #5 or issue #2."
   },
   "completed_tasks": [
     "NEX-084",
@@ -25,90 +27,71 @@
   ],
   "verified_tasks_up_to": "NEX-089",
   "in_progress_tasks": [],
-  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. NEX-089 is VERIFIED: CI 4/4 completed/success on docs head c5a1250, whose product tree is identical to product commit b3130ce. A verdict may be anchored to a docs head only when `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty, so the green run tested the identical tree. A run superseded in the concurrency group reads completed/cancelled - never a failure, never evidence. Recurring quirk: pushing product and docs as separate commits on one branch cancels the product commit's own runs, so the verdict must be taken from the docs head and licensed by the empty product diff.",
+  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. NEX-090 is NOT VERIFIED: its product commit aa4b2c8 is pushed but no CI verdict has been read, so it appears in neither completed_tasks nor verified_tasks_up_to. Recording it as VERIFIED would be the exact substitution NEX-090 exists to fix - a plausible stand-in for the exact value. A verdict may be anchored to a docs head only when `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty, so the green run tested the identical tree. A run superseded in the concurrency group reads completed/cancelled - never a failure, never evidence. Recurring quirk: pushing product and docs as separate commits on one branch cancels the product commit's own runs, so the verdict must be taken from the docs head and licensed by the empty product diff.",
   "validation": {
     "commands_run_on_committed_tree": [
       "ruff format . : 321 files left unchanged",
-      "ruff format --check : 321 files already formatted",
       "ruff check . : All checks passed",
       "mypy : Success, no issues in 143 source files",
-      "pytest (full suite, bare) : exit 0, 1710 passed, 4 skipped, 31.66s",
-      "pytest --collect-only : 1714 tests collected (feature-only suites confirmed present; worktree holds the same 102 test files as HEAD)",
-      "pytest tests/application/test_audit_sweep.py : green",
-      "pytest tests/application/test_policy_lifecycle.py : green",
-      "pytest tests/agent/test_risk_based_approval.py : green",
-      "pytest tests/api/test_agents_api.py : 65 passed",
-      "mutation 1: router back to total=len(items) -> 2 paging tests fail; restored green",
-      "mutation 2: store status filter removed from page AND count query -> status-fidelity test fails; restored green"
+      "pytest (full suite, bare) : exit 0, 1717 passed, 4 skipped, 32.55s",
+      "pytest tests/agent/test_agent_runs.py tests/api/test_agent_runs_api.py : 37 passed",
+      "ruff format docs/NEXUS/{STATE,BACKLOG,EXECUTION_LOG}.md : 3 files left unchanged",
+      "mutation: use case back to total=len(items) -> the 60-run regression fails; restored green"
     ],
-    "new_tests": 6,
-    "collection_evidence": "1714 collected vs 1710 passed + 4 skipped; the previous run's inconclusive collection evidence was re-verified here rather than assumed.",
+    "new_tests": 7,
     "ci": {
-      "verdict": "PASSED",
-      "commit": "c5a1250",
-      "product_commit": "b3130ce",
-      "runs": {
-        "push": {
-          "id": "46129490407",
-          "conclusion": "success"
-        },
-        "pull_request": {
-          "id": "46129494580",
-          "conclusion": "success"
-        }
-      },
-      "jobs": {
-        "Backend (ruff, mypy, pytest, migrations)": "success",
-        "Frontend (typecheck, lint, test, build)": "success"
-      },
-      "anchor_justification": "b3130ce's own runs (46129413548 push / 46129417285 pull_request) read completed/cancelled because the docs push superseded them. Evidence is anchored to c5a1250, whose product tree is identical: `git diff --stat b3130ce c5a1250 -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty; only docs/NEXUS/ files differ."
+      "verdict": "NOT READ",
+      "commit": "aa4b2c8",
+      "note": "No CI verdict was read this run. NEX-090 is therefore not VERIFIED. The next run must poll the check-runs for the live head before promoting it."
     }
   },
-  "uncommitted_work": "none - run 90 changed no files; it delivered existing verified state to GitHub",
+  "uncommitted_work": "docs only at checkpoint-write time: STATE.md, BACKLOG.md, EXECUTION_LOG.md and this file. The product slice is committed as aa4b2c8. Nothing from the product slice is left uncommitted.",
   "pr_state": {
     "number": 5,
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "target": "main",
     "draft": false,
-    "delivered_through": "NEX-089 - body updated in run 90: status table splits NEX-052..NEX-080 (per-section evidence) from NEX-081..NEX-089 (VERIFIED, CI cited), and the NEX-089 section no longer says 'CI UNREAD'",
-    "pending": "none",
+    "delivered_through": "NEX-089 - body carries NEX-052..NEX-089 with NEX-081..NEX-089 marked VERIFIED and CI cited",
+    "pending": "NEX-090 is NOT in the body - outstanding delivery debt for the next run",
     "merged": false,
     "rule": "Automated merging is prohibited. Remains open for human review."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "delivered_through": "NEX-089 (run 90 verification comment 7237162851, carrying both CI run ids; NEX-089 delivery comment 7237110664; NEX-088 at 7236832249)",
-    "pending": "none"
+    "delivered_through": "NEX-089 (verification comment 7237162851; delivery comment 7237110664)",
+    "pending": "NEX-090 is NOT delivered - outstanding delivery debt for the next run"
   },
   "blockers": [],
   "risks": [
-    "NEX-082/086/087/088/089 are one family: a derived or bounded value standing in for an exact one. The PageMeta(total=len(items)) sweep is complete on this surface; grep for totals, counts and 'oldest' values that are inferred from a page instead of asked for.",
-    "list_for_agent (delegations) and list_pending_for_agent remain unpaginated and are not on a listing route today; revisit if one is added."
+    "NEX-082/086/087/088/089/090 are one family: a derived or bounded value standing in for an exact one. The PageMeta(total=len(items)) sweep is now complete on every paginated listing surface. Grep for totals, counts and 'oldest' values inferred from a page instead of asked for.",
+    "list_for_agent (delegations) and list_pending_for_agent remain unpaginated and are not on a listing route today; revisit if one is added.",
+    "NEX-090's CI is unread, so the slice is pushed but unproven. If the verdict is red the next run must fix forward, not re-record."
   ],
-  "next_task": "NEX-090 - next dependency-ready Phase 3 governance slice (see BACKLOG.md)",
-  "next_action": "Take NEX-090: the next dependency-ready Phase 3 governance slice from BACKLOG.md. Do not redo NEX-077..NEX-089. Search pattern that keeps paying: a total, a count, or an 'oldest' value inferred from a page instead of asked for. The PageMeta(total=len(items)) surface is swept; the unpaginated leftovers (list_for_agent, list_pending_for_agent) are not on a listing route.",
-  "recovery_instructions": "Read this file and STATE.md first; git wins over both. Branch must be feature/agentic-enterprise-platform. If the working tree is dirty, inspect the diff before discarding anything - the last run should have left it clean. Do not trust the SHA in `commit`; read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. No NEX debt remains up to NEX-089: product, docs, PR #5 body and issue #2 are all current. Start the next slice at NEX-090. Never merge PR #5.",
+  "next_task": "NEX-090 verification - read CI for aa4b2c8, then deliver to PR #5 and issue #2",
+  "next_action": "Read CI for the live head (git ls-remote origin refs/heads/feature/agentic-enterprise-platform, then the check-runs for that sha). Promote NEX-090 to VERIFIED only on four completed/success check-runs; if the docs commit reads completed/cancelled (superseded), anchor to the docs head and license it with an empty `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/`. Then append NEX-090 to PR #5's body and comment on issue #2 in one pass. Do not redo NEX-077..NEX-089.",
+  "recovery_instructions": "Read this file and STATE.md first; git wins over both. Branch must be feature/agentic-enterprise-platform - run 91 began on main and had to switch, so check `git branch --show-current` before any git operation. If the working tree is dirty, inspect the diff before discarding anything. Do not trust the SHA in `commit`; read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-090 is committed and pushed but has NO CI verdict and NO PR/issue delivery - those are the two debts. Never merge PR #5.",
   "ci_status": {
-    "product_commit": "b3130ce",
-    "docs_head": "c5a1250",
-    "result": "PASSED",
-    "detail": "4/4 completed/success on c5a1250 (runs 46129490407 push, 46129494580 pull_request), Backend and Frontend each green in both. Product tree identical to b3130ce, so NEX-089 is VERIFIED. b3130ce's own runs were superseded and read cancelled."
+    "product_commit": "aa4b2c8",
+    "docs_head": "this run's docs commit",
+    "result": "NOT READ",
+    "detail": "No CI verdict was read. The last read verdict remains c5a1250 -> 4/4 completed/success (NEX-089)."
   },
   "commits_this_run": [
-    "b3130ce - fix(agents): page the approval history and report its true total",
-    "docs commit recorded in branch_head - NEX-089 state, log, backlog, checkpoint"
+    "aa4b2c8 - fix(agent-runs): page the run history and report its true size",
+    "docs commit - NEX-090 state, log, backlog, checkpoint"
   ],
   "decisions_this_run": [
-    "Windowed only the reporting path. list_for_agent keeps limit=None = whole history because the tool gateway needs every live approval to authorise a sensitive action; paging that read would trade a reporting defect for an enforcement one. The only other consumer was confirmed by grep to be the router.",
-    "meta.total is a COUNT over the same filtered set as the page, not len(items) - the auditor's signal that an answer is complete.",
-    "limit is bounded ge=1, le=200 so a caller cannot reopen the unbounded read by asking."
+    "meta.total is a COUNT over the same agent-scoped set as the page, not len(items). The count is scoped by agent_id because an unscoped count discloses another agent's volume - the leak NEX-088's mutation check found in this same shape of code.",
+    "resumable_only is exempt from paging. It is the recovery set, so a window would silently abandon runs. Its meta describes the set actually returned rather than echoing a limit the request did not apply.",
+    "limit is bounded ge=1, le=200 so a caller cannot reopen the unbounded read by asking.",
+    "list_for_agent orders by (created_at DESC, id DESC) so offset paging cannot duplicate or skip a row when created_at ties."
   ],
-  "run_summary": "Run 89 delivered and VERIFIED NEX-089: GET /agents/{id}/approvals is now paged with a status-filtered COUNT behind meta.total, instead of reading the agent's entire unpruned approval history and reporting the page size as the total. Six tests, two mutation controls (both caught), full suite 1710 passed / 4 skipped / 1714 collected, gates clean. Committed b3130ce, docs c5a1250, both pushed; CI 4/4 completed/success on c5a1250 with an empty product diff to b3130ce, so the verdict covers the shipped code. Delivered to PR #5 and issue #2.",
-  "docs_head_delivered": "c5a1250 (NEX-089 record) then this commit (VERIFIED promotion + CI evidence)",
+  "run_summary": "Run 91 recovered an interrupted NEX-090 (product layers implemented, gates green, mutation outcome unread) and found two defects in it that the handover recorded as done: the resumable listing echoed a limit it never applied, and the paging bounds were declared but untested. Both fixed with tests that fail without the fix. The slice replaces the store's fixed 50-row cap and a page-derived total with a caller-owned window and an agent-scoped COUNT, which is the last paginated listing in the NEX-082..NEX-090 family. Gates green (1717 passed, 4 skipped). Committed aa4b2c8 and pushed. CI NOT read, so NEX-090 is IMPLEMENTED/TESTED/COMMITTED/PUSHED but NOT VERIFIED, and it is not yet delivered to PR #5 or issue #2 - both are next run's work.",
+  "docs_head_delivered": "this run's docs commit (NEX-090 record; not a CI verdict)",
   "delivery_this_run": {
-    "pr": "PR #5 body updated via gh pr edit (OPEN, non-draft, unmerged)",
-    "issue": "issue #2 comment 7237162851 recording the CI verdict and the anchor justification",
-    "files_changed": "none in the repository before this checkpoint commit"
+    "pr": "none - not updated this run",
+    "issue": "none - not updated this run",
+    "files_changed": "src (4 files), tests (2 files), docs/NEXUS (4 files)"
   }
 }

@@ -3982,3 +3982,88 @@ verdict is anchored to `c5a1250` and to the empty product diff that licenses tha
 
 ---
 
+## NEX-090 — Page the run history, and make the total a count rather than the page size (run `NEX-2026-11-28-91`)
+
+**Status: COMMITTED `aa4b2c8` · PUSHED · CI not yet read** (not VERIFIED until a CI verdict is read).
+
+`GET /agent-runs?agent_id=…` is how a client reads what an agent has run. The store's listing was
+capped at 50 rows, the use case returned that capped list unchanged, and the route described it with
+`PageMeta(total=len(items), limit=len(items), offset=0)`. So an agent with 60 runs answered
+`items: 50, total: 50, limit: 50` — a complete-looking history of fifty — and there was no
+`limit`/`offset` on the route to reach runs 51–60 at all.
+
+This is the same family as NEX-082/086/087/088/089: a derived or bounded value standing in for the
+exact one. What makes this instance worse than a plain `total` bug is that the *escape hatch* was
+also missing. Every earlier slice could at least be paged once the total was honest; here the
+window was fixed at 50 and nothing in the request could move it.
+
+### The fix
+
+- `AgentRunRepository.count_for_agent(agent_id)` — a `COUNT(*)` scoped by the same `agent_id` as the
+  listing, so a page and its total describe one set. An unscoped count would disclose how many runs
+  another agent has scheduled, which is the leak the listing is scoped to avoid.
+- `ListAgentRuns.run(...)` now takes `limit`/`offset`, returns an `AgentRunPage(items, total)`, and
+  derives the total from the count rather than from `len(items)`. Both statements run inside one
+  unit of work, so the page and its total are read at the same moment.
+- The route takes `limit` (`ge=1, le=200`, default 50) and `offset` (`ge=0`) as `Query` parameters.
+  `le=200` keeps one request from reloading the history the window exists to bound.
+- `list_for_agent` orders by `(created_at DESC, id DESC)`. Offset paging over a non-deterministic
+  order can return a row twice and skip another as the windows shift, and two runs planned in the
+  same instant are exactly when `created_at` alone ties.
+
+The ad-hoc `_page` helper is removed: with `meta` no longer implying "this is everything", nothing
+needs it.
+
+### What was deliberately *not* windowed
+
+`resumable_only=True` returns the whole set and ignores `limit`/`offset`. It is the recovery set — a
+client resuming interrupted work must see every run that needs resuming, so a window there would
+silently abandon runs. Its `meta` describes the set it actually returned (`limit=len(items),
+offset=0`) rather than echoing a `limit` the request did not apply; a `limit: 1` beside three items
+would read as a truncated page when nothing was truncated.
+
+### Tests — built to fail against the old answer
+
+Application level (`tests/agent/test_agent_runs.py`), because the boundary is the use case:
+
+- `test_a_page_reports_the_true_total_and_offset_walks_the_rest` — plans **60** runs, then asserts
+  `len(items) == 50`, `total == 60`, that `offset=50` returns the remaining 10 with the same total,
+  and that the two pages together contain each run id exactly once. The count-bound tests deliberately
+  exceed the default window; a three-run test passes even with the cap in place, which is how this
+  defect survived the suite.
+- `test_the_resumable_set_is_returned_whole_not_windowed` — 55 pending runs with `limit=50` still
+  returns 55. A window would abandon five resumable runs.
+
+HTTP level (`tests/api/test_agent_runs_api.py`):
+
+- `test_listing_reports_the_whole_history_not_the_window`, `test_paging_reaches_past_the_default_window`,
+  `test_the_total_counts_only_this_agents_runs` — the contract and its per-agent scoping.
+- `test_resumable_listing_is_never_windowed` — `limit=1` over three pending runs returns three items,
+  `total: 3`, and `meta.limit: 3`, pinning that the meta does not claim a window it did not apply.
+- `test_paging_parameters_are_validated` — `limit=0`, `limit=201` and `offset=-1` answer 422;
+  `limit=200, offset=0` answers 200. Without `ge=1`, `limit=0` would answer an empty page that reads
+  as an empty history.
+
+### Validation
+
+`ruff format` (321 files, unchanged), `ruff check` (All checks passed), `mypy` (143 source files, no
+issues), `pytest` full suite exit 0 — **1717 passed, 4 skipped**, run bare as `.github/workflows/ci.yml`
+does.
+
+Falsifiability, one mutation applied and reverted: the use case back to `total = len(items)` →
+`test_a_page_reports_the_true_total_and_offset_walks_the_rest` fails. **Caught.** The resumable test
+correctly stays green under that mutation, since it does not use the count.
+
+### Security
+
+Read-only, unchanged scope, no migration, no new authority. Ownership is still enforced before the
+read and still answers 404 (not 403) to a non-owner, now including on a paged request — the paging
+parameters cannot be used to probe another user's agent.
+
+### Remaining
+
+`list_for_agent` (delegations) and `list_pending_for_agent` remain unpaginated and are still not on a
+listing route; they are unchanged here rather than speculatively reworked.
+
+---
+

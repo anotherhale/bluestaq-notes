@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-089 VERIFIED**. **NEX-089** (run 89) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and filtered status in Python; `meta.total` was `len(items)`, so a bounded page reported its own window as the total. **VERIFIED — CI 4/4 `completed/success`** on docs head `c5a1250`, product tree identical to `b3130ce`. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail; the count is now an agent-scoped `SELECT count(*)` and the scope itself is pinned by a test. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-089 VERIFIED**; **NEX-090 COMMITTED, CI not read**. **NEX-090** (run 91) paged `GET /agent-runs`, whose store listing was capped at 50 rows while the route reported `PageMeta(total=len(items))` and accepted no `limit`/`offset` — an agent with 60 runs answered a complete-looking history of fifty with no way to reach the rest. `meta.total` is now a `COUNT` over the same agent-scoped set and the window is the caller's. Prior: **NEX-089** (run 89, product `b3130ce`, **CI 4/4 success** on docs head `c5a1250`) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and reported the page size as the total. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 90) | `fc20956` — the run-89 close-out head, read with `git ls-remote` this run. |
-| Head commit (measured) | Product **`b3130ce`** (NEX-089, **VERIFIED** via docs head `c5a1250`); docs head **`c5a1250`** carries the record. Prior: **`06b5b32`** (NEX-088, **CI 4/4 success** on docs head `592ba07`). Prior: **`82d8a64`** (NEX-087, **CI 4/4 success** on docs head `cf44c89`). Prior: **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | `c5a1250` (NEX-089 docs head, product tree identical to `b3130ce`) — **4/4 `completed/success`**, runs `46129490407` (push) and `46129494580` (pull_request), each with Backend and Frontend green, polled 02:14Z. So NEX-089 is **VERIFIED**. `b3130ce`'s own runs read `completed/cancelled` — superseded by the docs push, never evidence. Prior: `592ba07` (NEX-088 docs head, product tree identical to `06b5b32`) — **4/4 `completed/success`**, runs `46127299155` (push) and `46127304188` (pull_request); plus `46127157086` on `06b5b32` itself, 2/2. Prior: `cf44c89` (NEX-087 docs head, product tree identical to `82d8a64`) — **4/4 `completed/success`**, runs `46125167112` (push) and `46125170933` (pull_request), polled 08:22:33Z. Prior: `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z. |
-| Tracking issue | #2 (open) — `7237162851` covers **NEX-089's CI verdict** (run 90), the run ids and the empty-diff anchor stated as an argument; `7237110664` covers the NEX-089 implementation itself; `7236832249` covers NEX-088. Earlier: `7236499955` NEX-087; `7236123126` NEX-086; `7235822904` NEX-085; `7235362658` NEX-083 (posted by a **concurrent** run at 06:32:43Z, claims verified independently here); `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-089**, and its status block now splits NEX-052…NEX-080 (per-section evidence) from NEX-081…NEX-089 (**VERIFIED**, CI cited); the NEX-089 section no longer says "CI UNREAD" (run 90 fix). **No NEX delivery debt remains.** Thirty-three slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | **None outstanding as of NEX-089** — CI concluded 4/4 on `c5a1250`; NEX-089 is delivered to PR #5 and issue #2. Prior fixes: NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. |
+| Starting commit (run 91) | `4302966` — the run-90 close-out head, matched by `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` this run (local HEAD identical, no divergence). |
+| Head commit (measured) | Product **`aa4b2c8`** (NEX-090, **COMMITTED · PUSHED · CI not read**); docs head this run's docs commit descends from it. Prior: **`b3130ce`** (NEX-089, **VERIFIED** via docs head `c5a1250`); **`06b5b32`** (NEX-088, **CI 4/4 success** on docs head `592ba07`); **`82d8a64`** (NEX-087, **CI 4/4 success** on docs head `cf44c89`); **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | `c5a1250` (NEX-089 docs head, product tree identical to `b3130ce`) — **4/4 `completed/success`**, runs `46129490407` (push) and `46129494580` (pull_request), each with Backend and Frontend green, polled 02:14Z. **NEX-090's CI has not been read** — its product commit `aa4b2c8` is pushed but unproven, so NEX-090 is **not VERIFIED**. Prior: `592ba07` (NEX-088 docs head, product tree identical to `06b5b32`) — **4/4 `completed/success`**, runs `46127299155` (push) and `46127304188` (pull_request); plus `46127157086` on `06b5b32` itself, 2/2. Prior: `cf44c89` (NEX-087 docs head, product tree identical to `82d8a64`) — **4/4 `completed/success`**, runs `46125167112` (push) and `46125170933` (pull_request), polled 08:22:33Z. Prior: `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z. |
+| Tracking issue | #2 (open) — last comment `7237162851` covers **NEX-089's CI verdict** (run 90); `7237110664` covers the NEX-089 implementation; `7236832249` covers NEX-088. **NEX-090 is not yet delivered to the issue.** Earlier: `7236499955` NEX-087; `7236123126` NEX-086; `7235822904` NEX-085; `7235362658` NEX-083; `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
+| PR #5 | **#5 (open, `draft=false`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-089**, with NEX-081…NEX-089 marked VERIFIED and CI cited. **NEX-090 is not yet in the body** — outstanding delivery debt. Thirty-four slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **NEX-090 delivery debt** — the slice is committed and pushed but its CI verdict is unread, so it is not VERIFIED, and neither PR #5 nor issue #2 mentions it. Prior fixes: NEX-089 windowed the approval history and counted the status it returns; NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
@@ -3319,3 +3319,63 @@ No NEXUS delivery debt remains through NEX-088. The next run starts clean:
 
 **Do not redo** NEX-088 or anything before it. **Do not** re-append NEX-078…NEX-088 to PR #5's
 body — all of them are already in it.
+
+## NEX-090 (run `NEX-2026-11-28-91`) — the run history was capped at 50 and had no way past it
+
+**Status: COMMITTED `aa4b2c8` · PUSHED · CI not read.** Not VERIFIED. Not delivered to PR #5 or
+issue #2 — that is the outstanding debt this run leaves.
+
+`GET /agent-runs?agent_id=…` read an agent's runs through a store listing capped at 50 rows. The use
+case returned that capped list unchanged and the route described it with
+`PageMeta(total=len(items), limit=len(items), offset=0)`. An agent with 60 runs answered
+`items: 50, total: 50, limit: 50` — a complete-looking history of fifty — and the route accepted no
+`limit`/`offset` at all, so runs 51–60 were unreachable through the API.
+
+This is the NEX-082/086/087/088/089 family (a bounded or derived value standing in for the exact
+one), with an extra edge: on the earlier surfaces the total lied but paging worked, so the defect was
+recoverable by turning the page. Here the escape hatch was missing too.
+
+`meta.total` is now a `COUNT` scoped by the same `agent_id` as the listing, asked for directly rather
+than inferred from a page. The route takes `limit` (`ge=1, le=200`, default 50) and `offset` (`ge=0`).
+`list_for_agent` orders by `(created_at DESC, id DESC)`, because offset paging over a
+non-deterministic order can duplicate one row and skip another as the windows shift.
+
+`resumable_only` is deliberately *not* windowed: it is the recovery set, so a window there would
+silently abandon runs. Its `meta` describes the set it actually returned rather than echoing a
+`limit` the request did not apply — found and fixed this run, because the first version reported
+`limit=1` beside three returned items, which reads as a truncated page that was not truncated. The
+existing test could not see it: it passed `limit=1` and asserted only `total`.
+
+`test_paging_parameters_are_validated` was added for the same reason. `ge=1, le=200, ge=0` were
+declared but unasserted; `limit=0` is not a harmless degenerate case, it returns an empty page a
+client reads as an empty history.
+
+The suite did not catch the original defect because every fixture held three runs, and three runs
+pass with the cap in place. The new regression plans **60**, asserts `total == 60`, that `offset=50`
+returns the remaining 10 with the same total, and that the two pages together contain every run id
+exactly once.
+
+Gates on the committed tree: `ruff format` 321 files unchanged, `ruff check` all passed, `mypy` clean
+on 143 files, full suite exit 0 — **1717 passed, 4 skipped**. Mutation control: use case back to
+`total = len(items)` → the 60-run regression fails; restored green.
+
+Security surface unchanged — read-only, no migration, no new authority. The count is scoped by agent
+for the same reason the listing is: an unscoped count discloses another agent's volume, which is the
+leak NEX-088's mutation check found in the same shape of code.
+
+## Next best actions (run `NEX-2026-11-28-91`, superseding the list above)
+
+1. **Read CI for `aa4b2c8`.** `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`,
+   then the check-runs for that sha. Promote NEX-090 to VERIFIED only on four `completed`/`success`
+   check-runs. A docs commit reads `completed/cancelled` once superseded in the concurrency group —
+   superseded, never failed — in which case anchor the verdict to the docs head and license it with
+   `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` being empty.
+2. **Clear the delivery debt.** PR #5's body covers through NEX-089 and issue #2's last comment is
+   `7237162851`. Both are silent on NEX-090. Update both in one pass; do not open a second PR —
+   thirty-four slices already stack in #5.
+3. **Then take the next dependency-ready slice.** Check what `BACKLOG.md` still lists as open rather
+   than assuming a successor exists. Do not start a new slice with under 10 minutes of window left.
+
+**Do not redo** NEX-090 or anything before it. **Do not** re-append NEX-078…NEX-089 to PR #5's body —
+all of them are already in it. Only NEX-090 is missing.
+

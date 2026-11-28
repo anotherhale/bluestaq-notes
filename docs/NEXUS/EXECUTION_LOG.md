@@ -10717,3 +10717,110 @@ value inferred from a page instead of asked for; the `PageMeta(total=len(items))
 swept, and the remaining unpaginated reads are not on a listing route.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-91` — NEX-090: the run history was capped at 50 and had no way past it
+
+**Run ID** `NEX-2026-11-28-91` · **Timestamp** 2026-11-28T10:30Z · **Branch**
+`feature/agentic-enterprise-platform` · **Starting commit** `4302966` (the run-90 close-out head,
+confirmed against `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`).
+
+### Observation and recovery
+
+The task handover recorded NEX-090 as in progress with all layers implemented, gates green, and a
+mutation check whose outcome had not been read. Reconciliation found the working tree dirty with the
+six expected files modified and nothing else, the branch correct, and local HEAD equal to the remote
+feature head — so no divergence to resolve and no work to preserve or discard.
+
+Two things the handover recorded were not true of the tree as found, and both were fixed rather than
+recorded:
+
+1. **The router reported a window it had not applied.** `resumable_only` deliberately ignores
+   `limit`/`offset`, but the response echoed the caller's `limit`. A request with `limit=1` over
+   three pending runs returned three items under `meta.limit: 1` — a page that says it truncated and
+   did not. The resumable branch now describes the set it returned. The existing test could not see
+   this: it passed `limit=1` and asserted only `total`.
+2. **The paging bounds had no test.** `ge=1, le=200, ge=0` were declared but unasserted, so a later
+   edit could have dropped them silently. `limit=0` in particular is not a harmless degenerate case:
+   it returns an empty page that a client reads as an empty history. Added
+   `test_paging_parameters_are_validated`.
+
+### The defect
+
+`GET /agent-runs?agent_id=…` read an agent's runs through a store listing capped at 50 rows. The use
+case returned that capped list unchanged and the route described it as
+`PageMeta(total=len(items), limit=len(items), offset=0)`. An agent with 60 runs answered
+`items: 50, total: 50, limit: 50` — a complete-looking history of fifty — and the route accepted no
+`limit` or `offset`, so runs 51–60 were unreachable through the API entirely.
+
+Same family as NEX-082/086/087/088/089 (a bounded or derived value standing in for the exact one),
+but with an extra edge: on those surfaces the total was wrong while paging still worked, so the
+defect was recoverable by turning the page. Here the escape hatch was missing too.
+
+### The fix
+
+- `AgentRunRepository.count_for_agent(agent_id)` — `COUNT(*)` scoped by the same `agent_id` as the
+  listing. Scoped, because an unscoped count discloses how many runs another agent has scheduled;
+  that is the exact leak NEX-088's mutation check found in the same shape of code.
+- `ListAgentRuns.run(...)` takes `limit`/`offset` and returns `AgentRunPage(items, total)`; the total
+  comes from the count, not `len(items)`. Page and count are read in one unit of work.
+- Route gains `limit` (`ge=1, le=200`, default 50) and `offset` (`ge=0`).
+- `list_for_agent` orders by `(created_at DESC, id DESC)`. Offset paging over a non-deterministic
+  order can duplicate one row and skip another as the windows shift; same-instant runs are exactly
+  when `created_at` alone ties.
+- The ad-hoc `_page` helper is deleted — nothing needs it now that `meta` no longer claims to be
+  everything.
+
+### Tests
+
+Application level (the boundary is the use case):
+
+- `test_a_page_reports_the_true_total_and_offset_walks_the_rest` — plans **60** runs, asserts
+  `len(items) == 50`, `total == 60`, that `offset=50` yields the remaining 10 with the same total, and
+  that the two pages together contain every run id exactly once. It exceeds the default window on
+  purpose: every pre-existing fixture held three runs, which pass with the cap still in place. That
+  is how this survived the suite.
+- `test_the_resumable_set_is_returned_whole_not_windowed` — 55 pending runs with `limit=50` still
+  returns 55.
+
+HTTP level: five tests covering the whole-history total, paging past the default window, per-agent
+scoping of the total, the resumable set's completeness *and* its honest meta, and parameter
+validation.
+
+### Validation
+
+On the tree as committed: `ruff format` 321 files unchanged, `ruff check` all passed, `mypy` clean on
+143 source files, `pytest` full suite exit 0 — **1717 passed, 4 skipped**, run bare as
+`.github/workflows/ci.yml` does.
+
+Falsifiability, one mutation applied then reverted from a saved copy: use case back to
+`total = len(items)` → `test_a_page_reports_the_true_total_and_offset_walks_the_rest` fails, with the
+observed value reported by the assertion. **Caught.** The resumable test stays green under that
+mutation, correctly: it never reads the count.
+
+### Security
+
+Read-only, unchanged authority, no migration. Ownership is still enforced before the read and still
+answers 404 rather than 403 to a non-owner, now including on a paged request — so `limit`/`offset`
+cannot become a probe for another user's agent.
+
+### Status
+
+| Item | Status |
+| --- | --- |
+| NEX-090 implementation | IMPLEMENTED, TESTED locally |
+| NEX-090 commit | committed and pushed this run |
+| NEX-090 CI | **not read this run** — not VERIFIED |
+| PR #5 / issue #2 | not updated this run |
+| Checkpoint | rewritten atomically, validated with `json.load` before replace |
+
+**Truthful status:** NEX-090 is IMPLEMENTED · TESTED. It is not VERIFIED, because no CI verdict was
+read. Recording it as VERIFIED would be exactly the substitution this slice is about — a plausible
+stand-in for the exact value.
+
+**Next exact action:** read CI for this run's head
+(`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, then the check-runs for that
+sha). Promote NEX-090 to VERIFIED only on four `completed`/`success` check-runs; a docs commit reads
+`completed/cancelled` once superseded in the concurrency group, which is superseded, never failed.
+Then append NEX-090 to PR #5's body and comment on issue #2.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
