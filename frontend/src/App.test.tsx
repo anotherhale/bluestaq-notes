@@ -44,7 +44,9 @@ describe("App — identity and ownership", () => {
     await boot(api);
 
     expect(await screen.findByText("Alice Anderson")).toBeInTheDocument();
-    expect(screen.getByText("Alice private")).toBeInTheDocument();
+    // The notes list is fetched in a second effect keyed on the resolved
+    // identity, so a synchronous read here can beat it to the DOM.
+    expect(await screen.findByText("Alice private")).toBeInTheDocument();
     expect(screen.queryByText("Bob private")).not.toBeInTheDocument();
   });
 
