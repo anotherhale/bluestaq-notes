@@ -3605,3 +3605,48 @@ the error contract is caught here.
 
 **Remaining.** None for implementation. The only open item is documentation delivery: append this
 section to PR #5's body and comment on issue #2.
+
+## NEX-085 — The strongest grant in the system could not be revoked (run `NEX-2026-11-28-85`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Access Center |
+| Priority | P1 — a configuration-seeded wildcard operator was unrevokable through the platform |
+| Status | **PUSHED** — `c698979` on the feature branch; local gates green (pytest 1679 passed / 4 skipped, exit 0); CI not yet polled |
+| Dependencies | NEX-079 (revocation path), NEX-084 (attenuation) — both met |
+| Architecture | `application/use_cases/operator_grants.py` (`RevokeOperatorGrant`, `REVOCABLE_OPERATOR_SCOPES`); `presentation/schemas.py` docstring; tests at `tests/api/test_ops_operator_grant_revoke_api.py`; no migration |
+
+**Objective.** `RevokeOperatorGrant` reused `KNOWN_OPERATOR_OPERATIONS` — the *issue*
+allowlist — as its scope guard. That set deliberately omits `"*"`, because issuing amplifies
+authority and the wildcard should be a deployment decision, not a request. Reusing it on the
+revoke path meant a revocation refused the wildcard as an *unknown scope*. The consequence was
+that the strongest grant in the system — a wildcard operator seeded from configuration — could
+not be stood down through the running platform at all, only by editing the deployment seed and
+restarting. That is precisely the "edit configuration to revoke" hole NEX-079 existed to close,
+reappearing one level up.
+
+**Delivered.**
+
+- `REVOCABLE_OPERATOR_SCOPES = KNOWN_OPERATOR_OPERATIONS | {WILDCARD}`, used on the revoke
+  path only. The issue path keeps rejecting `"*"`: revoking removes authority, so the
+  fail-closed direction is to *permit* it; issuing adds authority, so the fail-closed
+  direction there is to *refuse* it. One set per direction, not one set shared.
+- The asymmetry is documented at the definition and at the use site, so the two allowlists
+  cannot be re-conflated by a future refactor without a failing test.
+- Naming `"*"` is a *specific* revocation, not a blanket "revoke everything": revocation is
+  keyed by `(user, scope)`, so an explicit grant held beside the wildcard survives. The audit
+  entry still names the single authority removed.
+
+**Validation.** Full suite `1679 passed, 4 skipped`, exit 0. `ruff format --check` clean;
+`ruff check` clean; `mypy` clean on 143 source files. Mutation control **observed failing**:
+with `src/.../operator_grants.py` stashed, both wildcard-revocation tests fail with `422`
+(the old "unknown scope" refusal), so the assertions are not vacuous. An unknown scope is
+still refused, proving the new set did not become a wildcard-only hole.
+
+**Tests.** `test_the_wildcard_grant_can_be_revoked` — a wildcard holder loses access to an
+unrelated operator view after revocation; `test_revoking_the_wildcard_leaves_an_explicit_scope_in_place`
+— an explicit grant survives the wildcard revocation; `test_an_unknown_scope_is_still_refused_now_that_the_wildcard_is_accepted`
+— a bogus scope is still a validation error.
+
+**Remaining.** Append this section to PR #5's body and comment on issue #2; poll CI on
+`c698979` and record the outcome.

@@ -10119,3 +10119,45 @@ from `docs/NEXUS/BACKLOG.md`. Do not re-verify NEX-077…NEX-084 — all are VER
 CI — and do not re-append any of those sections to PR #5.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-85` — NEX-085: the wildcard operator grant was unrevokable
+
+- **Starting commit:** `4cadf4c` (docs head after NEX-084 promotion)
+- **Ending commit:** `c698979`
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Task:** NEX-085 — allow `RevokeOperatorGrant` to name the wildcard scope.
+
+### What changed
+
+- `application/use_cases/operator_grants.py`: new `REVOCABLE_OPERATOR_SCOPES =
+  KNOWN_OPERATOR_OPERATIONS | {WILDCARD}`; `RevokeOperatorGrant` guards on it. Issue path
+  unchanged — still refuses `"*"`.
+- `presentation/schemas.py`: `OperatorGrantRevokeRequest` docstring records that `"*"` is a
+  specific revocation, not "revoke everything".
+- `tests/api/test_ops_operator_grant_revoke_api.py`: three new tests (wildcard revoke removes
+  access; explicit scope survives a wildcard revoke; unknown scope still refused).
+
+### Validation
+
+- Mutation control **observed failing**: with the source fix stashed, both wildcard tests
+  fail `422` — the assertions are real.
+- Full suite `1679 passed, 4 skipped`, exit 0. `ruff format --check` clean, `ruff check`
+  clean, `mypy` clean on 143 files.
+
+### Not done, deliberately
+
+- **CI not polled this run.** ~400 s remained at commit time; polling plus a checkpoint write
+  plus a final poll does not fit. The status is **PUSHED**, not VERIFIED. The next run polls
+  `c698979` first.
+- **PR #5 body / issue #2 not updated.** Same reason. This is recorded delivery debt for the
+  next run and is the first thing after the CI poll, not a second slice.
+- **No second slice.** Under 10 minutes remained after integration.
+
+### Next action
+
+Poll CI on `c698979` (Backend + Frontend, pull_request and push). If 4/4 success, promote
+NEX-085 to VERIFIED in `BACKLOG.md`, `CHECKPOINT.json`, `STATE.md`, append the section to
+PR #5's body (assert it is not already there), and comment on issue #2. Do not re-verify
+NEX-077…NEX-084.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
