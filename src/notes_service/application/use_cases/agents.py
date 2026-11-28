@@ -563,6 +563,20 @@ class RevokeApprovalRequest(UseCase):
             return request
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalRequestPage:
+    """One page of an agent's approval history plus the history's exact size.
+
+    ``total`` counts the whole requested set, not the page. A page is capped, so a
+    page-derived total equals the page size and makes "3 denied approvals" look
+    like the complete answer when it is the first 3 of 300 — an auditor cannot
+    then tell a finished review from a truncated one.
+    """
+
+    items: list[ApprovalRequest]
+    total: int
+
+
 class ListApprovalRequests(UseCase):
     """List approval requests for one of the caller's agents.
 
@@ -572,6 +586,21 @@ class ListApprovalRequests(UseCase):
     what makes a decision reviewable after the fact: a decided approval used to
     disappear from the only read path, so an approver could not confirm what they
     had approved, and an auditor could not see the grant at all through the API.
+
+    Bounded and server-side filtered (NEX-089)
+    -------------------------------------------
+
+    The history is never pruned and grows with every approval an agent opens, yet
+    this read loaded all of it and filtered by status in Python — one ``GET``
+    fetching every approval ever opened in order to return a subset. The status
+    filter and the window now happen in the store, and the total is a ``COUNT``
+    over the same filtered set, so ``meta.total`` is the size of the answer rather
+    than of the window.
+
+    Both reads happen in one transaction, so the page and its total cannot straddle
+    a commit boundary; under ``READ COMMITTED`` a concurrent open may still land
+    between the two statements, and the count answers "how many are there now",
+    which is the honest answer and is never derived from the page.
     """
 
     def run(
@@ -580,17 +609,17 @@ class ListApprovalRequests(UseCase):
         *,
         agent_id: str,
         status: str | None = None,
-    ) -> list[ApprovalRequest]:
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ApprovalRequestPage:
         wanted = ApprovalStatus(status) if status is not None else ApprovalStatus.PENDING
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            if wanted is ApprovalStatus.PENDING:
-                return uow.approvals.list_pending_for_agent(agent.id)
-            return [
-                request
-                for request in uow.approvals.list_for_agent(agent.id)
-                if request.status is wanted
-            ]
+            items = uow.approvals.list_for_agent(
+                agent.id, status=wanted, limit=limit, offset=offset
+            )
+            total = uow.approvals.count_for_agent(agent.id, status=wanted)
+            return ApprovalRequestPage(items=items, total=total)
 
 
 class GetApprovalRequest(UseCase):
@@ -686,6 +715,7 @@ class VerifyToolInvocationChain(UseCase):
 
 
 __all__ = [
+    "ApprovalRequestPage",
     "DecideApprovalRequest",
     "GetAgent",
     "GrantDelegation",

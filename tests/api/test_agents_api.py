@@ -932,3 +932,132 @@ class TestApprovalRevocationHttp:
         )
 
         assert response.status_code == 404, response.text
+
+
+class TestApprovalListingIsPaged:
+    """An approval history is never pruned, so its read must be a window.
+
+    The listing used to read every approval the agent ever opened and report
+    ``total = len(items)``, which is a bounded-looking response that is actually
+    unbounded: the body grew with the agent's whole history and the meta could not
+    tell a complete set from the first page of thousands. These pin the window and,
+    more importantly, that ``meta.total`` counts the *status*, not the page —
+    a total equal to the page size is the same lie as no paging at all.
+    """
+
+    @staticmethod
+    def _open(
+        client: TestClient, agent_id: str, refs: list[str], *, owner: str = ALICE
+    ) -> list[dict]:
+        opened = []
+        for ref in refs:
+            response = client.post(
+                f"/api/v1/agents/{agent_id}/approvals",
+                headers=auth_headers(owner),
+                json={"capability": DELETE, "resource_ref": ref},
+            )
+            assert response.status_code == 201, response.text
+            opened.append(response.json())
+        return opened
+
+    def test_the_default_page_is_capped_and_the_total_is_the_whole_set(
+        self, client: TestClient
+    ) -> None:
+        agent = register_agent(client, capabilities=[DELETE])
+        self._open(client, agent["id"], ["note-1", "note-2", "note-3"])
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=2", headers=auth_headers(ALICE)
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert len(body["items"]) == 2
+        assert body["meta"] == {"total": 3, "limit": 2, "offset": 0}
+
+    def test_every_page_draws_from_the_same_total(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[DELETE])
+        opened = self._open(client, agent["id"], ["note-1", "note-2", "note-3"])
+
+        first = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=1&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()
+        second = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=1&offset=1",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert first["meta"] == {"total": 3, "limit": 1, "offset": 0}
+        assert second["meta"] == {"total": 3, "limit": 1, "offset": 1}
+        assert len(first["items"]) == len(second["items"]) == 1
+        assert first["items"][0]["id"] != second["items"][0]["id"]
+        assert {first["items"][0]["id"], second["items"][0]["id"]} <= {
+            item["id"] for item in opened
+        }
+
+    def test_an_offset_past_the_end_is_empty_but_still_counts_the_set(
+        self, client: TestClient
+    ) -> None:
+        agent = register_agent(client, capabilities=[DELETE])
+        self._open(client, agent["id"], ["note-1", "note-2"])
+
+        body = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=10&offset=5",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert body["items"] == []
+        assert body["meta"]["total"] == 2
+
+    def test_total_counts_the_requested_status_not_the_pending_queue(
+        self, client: TestClient
+    ) -> None:
+        """The store must filter, not the caller: a status total is that status only."""
+        agent = register_agent(client, capabilities=[DELETE])
+        opened = self._open(client, agent["id"], ["note-1", "note-2", "note-3"])
+        decided = client.post(
+            f"/api/v1/agents/approvals/{opened[0]['id']}/decision",
+            headers=auth_headers(ALICE),
+            json={"approve": False, "reason": "not this one"},
+        )
+        assert decided.status_code == 200, decided.text
+
+        body = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?status=denied",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert [item["id"] for item in body["items"]] == [opened[0]["id"]]
+        assert body["meta"]["total"] == 1
+
+        pending = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals", headers=auth_headers(ALICE)
+        ).json()
+        assert pending["meta"]["total"] == 2
+        assert opened[0]["id"] not in [item["id"] for item in pending["items"]]
+
+    def test_the_window_cannot_be_disabled(self, client: TestClient) -> None:
+        """``limit=0`` or an oversized limit must not reopen the unbounded read."""
+        agent = register_agent(client, capabilities=[DELETE])
+
+        zero = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=0", headers=auth_headers(ALICE)
+        )
+        huge = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=201", headers=auth_headers(ALICE)
+        )
+
+        assert zero.status_code == 422, zero.text
+        assert huge.status_code == 422, huge.text
+
+    def test_paging_does_not_bypass_ownership(self, client: TestClient) -> None:
+        agent = register_agent(client, ALICE, capabilities=[DELETE])
+        self._open(client, agent["id"], ["note-1", "note-2", "note-3"])
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/approvals?limit=1&offset=0&status=denied",
+            headers=auth_headers(BOB),
+        )
+
+        assert response.status_code == 404, response.text

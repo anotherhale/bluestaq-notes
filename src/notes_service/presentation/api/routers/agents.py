@@ -232,12 +232,33 @@ def list_approval_requests(
             "other value reads the agent's full history so a decision stays reviewable."
         ),
     ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> ApprovalRequestListResponse:
-    requests = container.list_approval_requests().run(
-        principal, agent_id=str(agent_id), status=status.value
+    """Approvals this agent opened, one status at a time.
+
+    A non-owner gets 404, never 403, so the route cannot probe for another user's
+    agent. Paging is explicit here rather than the unpaginated ``_page`` helper:
+    an agent's approval history is never pruned, so a fixed default window keeps
+    one request from loading every approval it ever opened. The status filter and
+    the window are applied in the store.
+
+    ``meta.total`` is the number of approvals in this status, not of ``items``. A
+    window that reported its own size would make "3 denied approvals" and "the
+    first 3 of 300" indistinguishable, which is exactly what an auditor must be
+    able to tell apart.
+    """
+    page = container.list_approval_requests().run(
+        principal,
+        agent_id=str(agent_id),
+        status=status.value,
+        limit=limit,
+        offset=offset,
     )
-    items = [ApprovalRequestResponse.from_domain(request) for request in requests]
-    return ApprovalRequestListResponse(items=items, meta=_page(items))
+    items = [ApprovalRequestResponse.from_domain(request) for request in page.items]
+    return ApprovalRequestListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.get(

@@ -535,17 +535,55 @@ class SqlAlchemyApprovalRequestRepository:
         )
         return [_approval_to_domain(row) for row in rows]
 
-    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
-        rows = (
-            self._session.execute(
-                select(ApprovalRequestRow)
-                .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
-                .order_by(ApprovalRequestRow.requested_at)
-            )
-            .scalars()
-            .all()
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ApprovalRequest]:
+        """An agent's approval requests, optionally one status, optionally paged.
+
+        ``status`` is pushed into SQL rather than filtered after the read: it is a
+        stored column, so the database's answer and the domain's ``status`` field
+        are the same value, and selecting in the store is what lets a page of one
+        status be a page of *that* status rather than "the first N rows overall,
+        most of which are discarded".
+
+        ``limit=None`` reads the whole history. The tool gateway needs exactly
+        that (NEX-089): it must see every live approval to decide whether a
+        sensitive action is authorised, and a bounded read there would silently
+        refuse actions whose approval fell outside the page.
+        """
+        statement = (
+            select(ApprovalRequestRow)
+            .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
+            .order_by(ApprovalRequestRow.requested_at)
         )
+        if status is not None:
+            statement = statement.where(ApprovalRequestRow.status == status.value)
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_approval_to_domain(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId, *, status: ApprovalStatus | None = None) -> int:
+        """Count an agent's approvals with a ``COUNT`` aggregate, not a page.
+
+        The count is filtered by the same ``agent_id`` and ``status`` the listing
+        is, so a page and its total describe one set. An unscoped count here would
+        disclose how many approvals another agent has opened, exactly the leak the
+        tool-invocation total is scoped to avoid.
+        """
+        statement = (
+            select(func.count())
+            .select_from(ApprovalRequestRow)
+            .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
+        )
+        if status is not None:
+            statement = statement.where(ApprovalRequestRow.status == status.value)
+        return int(self._session.execute(statement).scalar_one())
 
     def save(self, request: ApprovalRequest) -> None:
         """Persist the decision, refusing to overwrite a newer stored version.

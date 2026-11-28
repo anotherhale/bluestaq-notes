@@ -19,6 +19,7 @@ from notes_service.domain.agent.tools import ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
     AgentId,
     ApprovalRequestId,
+    ApprovalStatus,
     DelegatedAuthorizationId,
 )
 from notes_service.domain.identity.value_objects import UserId
@@ -135,11 +136,57 @@ class ApprovalRequestRepository(Protocol):
 
     def list_pending_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]: ...
 
-    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ApprovalRequest]:
         """Every approval request for an agent, newest state included.
 
         The tool gateway needs *approved* requests, not only pending ones, so
         this is broader than :meth:`list_pending_for_agent`.
+
+        Bounded reads and server-side status selection (NEX-089)
+        -------------------------------------------------------
+
+        This list grows without bound: an agent's approval history is never
+        pruned, and every gateway invocation appends nothing but every *opening*
+        of a sensitive action does. The original signature returned the whole
+        history, and the reporting use case then filtered it in Python — so one
+        ``GET`` loaded every approval an agent had ever opened, in order to
+        return the ones with a particular status. That is the same unbounded
+        read NEX-086 fixed for the revocation history.
+
+        ``status`` selects in the store, not in the caller. ``ApprovalStatus``
+        is a stored column (:class:`ApprovalRequestRow.status`), never derived,
+        so filtering on it in SQL cannot disagree with filtering the same value
+        in Python — the consistency worry that keeps ``revoked_grants`` in Python
+        does not apply here.
+
+        ``limit=None`` keeps the whole-history behaviour that the tool gateway
+        depends on: it needs every live approval to decide whether an action is
+        authorised, so bounding it would break enforcement, not just reporting.
+        A serving path always passes a limit.
+        """
+        ...
+
+    def count_for_agent(self, agent_id: AgentId, *, status: ApprovalStatus | None = None) -> int:
+        """The exact number of an agent's approval requests, without loading them.
+
+        A paged report must state the size of the *set*, not of the page it
+        happened to return. Without this, ``meta.total`` came from ``len(items)``,
+        which for a bounded page equals the page size — so "this agent has 3
+        denied approvals" was indistinguishable from "the first 3 of many", and
+        an auditor reading a window could not tell a complete answer from a
+        truncated one. That is the reassuring-direction error NEX-086 removed from
+        the revocation history.
+
+        ``status`` must match the filter the page used, or the total bounds a
+        different set than the page and ``offset + len(page) < total`` decides
+        "there is another page" from two inconsistent numbers.
         """
         ...
 
