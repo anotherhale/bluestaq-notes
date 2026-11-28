@@ -167,13 +167,16 @@
     "mergeable": true,
     "body_covers": "NEX-052..NEX-078",
     "body_updated_this_run": true,
-    "note": "PR #5 open and unmerged for human review. NEXUS never merges."
+    "note": "PR #5 open and unmerged for human review. NEXUS never merges. | Run NEX-2026-11-27-79: body still ends at NEX-077; NEX-078 and NEX-079 remain unappended. Both are reported on issue #2 (7233539283, 7234071012)."
   },
   "tracking_issue": {
-    "number": 2,
+    "issue": 2,
     "state": "open",
-    "latest_comment": "7233539283",
-    "latest_comment_covers": "NEX-078 VERIFIED + two PR #5 security findings closed"
+    "last_reported_task": "NEX-079",
+    "comment_id": 7234071012,
+    "nex078_comment_id": 7233539283,
+    "stale_note_corrected": "The prior 'no comment yet for NEX-078 or NEX-079' was false. NEX-078 had already been reported in 7233539283. Disproved by reading the issue's comments, not by reasoning about the file.",
+    "delivery_debt": "PR #5's body ends at NEX-077. NEX-078 and NEX-079 are reported on issue #2 but are absent from the PR description."
   },
   "blockers": [],
   "risks": [
