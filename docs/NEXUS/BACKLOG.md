@@ -3560,7 +3560,7 @@ update issue #2 (both still end at NEX-081).
 | --- | --- |
 | Phase | 3 (governance) / platform operations — Access Center |
 | Priority | P1 — a bounded authority could be converted into a longer one by its holder |
-| Status | **COMMITTED + PUSHED** at `09cc4ad`; local gates green; CI `in_progress` at the stop boundary — **not** VERIFIED |
+| Status | **VERIFIED** — `09cc4ad`, CI 4/4 success (Backend + Frontend, pull_request and push events, polled 2026-11-28 run 84) |
 | Dependencies | NEX-045 (operator grant store), NEX-074 (writable grant record), NEX-078 (aware `expires_at`), NEX-079 (revocation) — all met |
 | Architecture | `application/use_cases/operator_grants.py` (`IssueOperatorGrant`, `_require_attenuation`); tests at `tests/application/test_issue_operator_grant.py` and `tests/api/test_ops_operator_grants_api.py`; no migration |
 
@@ -3603,5 +3603,5 @@ deadline. API level: the 409 survives the store round trip through `TestClient`,
 nested envelope `body["error"]["code"] == "conflict"` rather than a bare status, so a change to
 the error contract is caught here.
 
-**Remaining.** Poll CI on `09cc4ad`; on 2/2 success promote to VERIFIED, then append this
+**Remaining.** None for implementation. The only open item is documentation delivery: append this
 section to PR #5's body and comment on issue #2.

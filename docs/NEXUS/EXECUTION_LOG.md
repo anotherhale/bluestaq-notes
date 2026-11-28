@@ -10039,3 +10039,83 @@ No migration. No new authority: this only restricts what a grant holder may alre
 
 Poll CI on `09cc4ad`; on 2/2 success promote NEX-084 to VERIFIED and append its section to
 PR #5's body (assert `body.count("## NEX-084 ") == 0` first), then comment on issue #2.
+
+---
+
+## Run `NEX-2026-11-28-84` — verification and delivery close-out
+
+| Field | Value |
+| --- | --- |
+| Start commit | `453e134` (prior verified product head, NEX-083) |
+| Product commit | `09cc4ad` — NEX-084 fix (produced and committed in the first half of this run) |
+| Docs head at entry | `c04a554` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Phase | 3 (governance) / platform operations |
+
+This entry closes out a run that was split by the clock. The NEX-084 slice itself was
+implemented, tested, committed (`09cc4ad`) and pushed in the first half; the run stopped with
+CI still `in_progress`. The second half — recorded here — did only the things that were
+owed on a completed product commit: verify, promote, deliver, checkpoint.
+
+### Tasks completed and verified
+
+- **NEX-084 — a delegated operator grant may not outlive the grant it was delegated from.**
+  Now **VERIFIED**. CI on `09cc4ad` concluded **4/4 `completed/success`**: Backend (ruff, mypy,
+  pytest, migrations) and Frontend (typecheck, lint, test, build), on both the `pull_request`
+  and `push` events. Polled at `1795848155` (2026-11-28T06:42Z).
+
+### What was done in this half
+
+- Polled CI on `09cc4ad` and read all four check-runs to a terminal conclusion, rather than
+  inferring success from a local run. The product commit's own CI is the verdict; the docs
+  commit's CI is not ([learned in `9336ba3` vs `139edf6`]).
+- Promoted NEX-084 to VERIFIED in `docs/NEXUS/STATE.md` (five rows: phase, head commit,
+  last CI result, the NEX-084 section header, and the "Open P1: none" summary),
+  `docs/NEXUS/BACKLOG.md` (status row and remaining-work paragraph), and
+  `docs/NEXUS/CHECKPOINT.json` (`verified_tasks`, `completed_tasks`, `in_progress_tasks`,
+  `validation_status`, `delivery_state`, `next_task`).
+- Every one of those edits was an asserted single-match replacement, not a blind `sed`. An
+  edit that silently matches zero times would otherwise read as a promotion.
+- Grepped the whole of both files for the stale markers afterwards (`CI unread`,
+  `not yet appended`, `in_progress.*NEX-084`). One survived — a `**Status:**` line inside the
+  NEX-084 section of `STATE.md` — and was fixed. Promoting one field leaves its neighbours
+  stale; this is the second run in a row where a grep for the old status words caught a
+  leftover the targeted edit had missed.
+- Updated CHECKPOINT atomically: temp file → validated with `json.tool` → `os.replace`.
+  Confirmed no top-level key was dropped.
+
+### Delivery
+
+- **PR #5 body:** appended the NEX-084 section. Section counts were **asserted from the live
+  API before and after the write**: `NEX-082`=1, `NEX-083`=1, `NEX-084`=0 before; 1/1/1 after.
+  The body went 87112 → 90541 bytes. The append script refuses to run if `## NEX-084 ` is
+  already present, so a re-run cannot duplicate a section — the failure mode that nearly
+  happened two runs ago. The AI-disclosure line remains the final line of the body.
+- **Tracking issue #2:** no new comment. A **concurrent** NEXUS run posted `7235362658` for
+  NEX-083 at 06:32:43Z, 103 s into this run. Its claims were checked independently here and
+  are accurate; posting a second comment for the same slice would be noise. The issue stays
+  open — PR #5 is unmerged.
+
+### Tests executed
+
+No new code this half. The product half ran the full suite: `1678 passed, 4 skipped` (exit 0),
+`ruff format --check` 321 files clean, `ruff check` clean, `mypy` clean on 143 source files,
+plus a mutation control that was **observed failing** with the temporal comparison disabled
+(3/3 new tests).
+
+### Not done, deliberately
+
+- **No new slice started.** ~12 minutes remained at close-out. The rule is at least 10 minutes
+  *after* integration, and integration was not yet finished.
+- **Open P1: none.** NEX-083 and NEX-084 both closed on polled CI. The next run selects a new
+  slice from `BACKLOG.md` rather than re-verifying anything.
+- **PR #5 still stacks twenty-eight slices.** That is a genuine reviewer concern (a split may
+  be warranted) but it is a human decision, not an autonomous one.
+
+### Next action
+
+Read `docs/NEXUS/CHECKPOINT.json` and `STATE.md`, then select the next dependency-ready slice
+from `docs/NEXUS/BACKLOG.md`. Do not re-verify NEX-077…NEX-084 — all are VERIFIED with polled
+CI — and do not re-append any of those sections to PR #5.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._

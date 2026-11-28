@@ -88,11 +88,10 @@
     "NEX-080",
     "NEX-081",
     "NEX-082",
-    "NEX-083"
-  ],
-  "in_progress_tasks": [
+    "NEX-083",
     "NEX-084"
   ],
+  "in_progress_tasks": [],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on the branch tree. COMMITTED + PUSHED is not VERIFIED. NEX-083 became VERIFIED this run by reading CI on 453e134, whose product tree is identical to c16dd9b's (proved with git diff -- src/ tests/, empty). NEX-084 is COMMITTED + PUSHED with green local gates and is deliberately absent from verified_tasks.",
   "validation": {
     "commands_run_on_committed_tree": [
@@ -104,7 +103,7 @@
     ],
     "not_run_this_run": "CI on 09cc4ad was in_progress at the stop boundary - see ci_status."
   },
-  "uncommitted_work": "none - the docs commit carrying this checkpoint is the run's last commit; product commit 09cc4ad is pushed",
+  "uncommitted_work": false,
   "pr_state": {
     "number": 5,
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
@@ -132,7 +131,7 @@
     "The keyset cursor assumes positions only ever increase.",
     "Concurrent NEXUS runs share this branch and /tmp: one posted issue #2 comment 7235362658 during this run and created /tmp/checkpoint_new.json. Re-read GitHub and use unique temp paths."
   ],
-  "next_task": "NEX-084 verification and delivery. Poll CI for 09cc4ad (paired push + pull_request runs) and promote NEX-084 to VERIFIED on both concluding success. Then append the NEX-084 section to PR #5's body (assert the heading count is 0 first - a blind append duplicates, and this exact mistake was nearly repeated this run) and comment on issue #2. Do NOT re-append NEX-082 or NEX-083: both are already in the body exactly once. Then take the next dependency-ready P1/P2 slice from BACKLOG.md.",
+  "next_task": "No open P1 remains; NEX-083 and NEX-084 are both VERIFIED on polled CI. NEXT RUN: select the next dependency-ready slice from docs/NEXUS/BACKLOG.md (declared candidate work, not a re-verification job). Do NOT redo or re-verify NEX-084, NEX-083, NEX-082, NEX-081, NEX-080, NEX-079, NEX-078 or NEX-077 - all VERIFIED with polled CI. Do NOT re-append any NEX-077..NEX-084 section to PR #5: all eight are present exactly once (assert with body.count('## NEX-0NN ')==1 before any append). One genuine delivery item remains for a human, not the agent: PR #5 stacks twenty-eight slices and a reviewer may reasonably ask for it to be split.",
   "next_action": "1. gh run list --branch feature/agentic-enterprise-platform --limit 4; read the conclusion of both runs on 09cc4ad. 2. On 2/2 success move NEX-084 into verified_tasks. 3. Append the NEX-084 section to PR #5, verify by read-back. 4. Comment on issue #2. 5. Take the next slice if at least 10 minutes remain.",
   "recovery_instructions": "Read this file and STATE.md, then resolve the true head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform - never trust the commit field, which lags the head by one docs commit by construction. NEX-084 is committed and pushed with green local gates and a mutation control proven to fail; only its CI conclusion is outstanding.",
   "ci_status": {
@@ -153,10 +152,50 @@
     "A state file can be stale in the reassuring direction (run 83 recorded two slices of delivery debt that did not exist). GitHub prose is read from the API and section counts asserted before any append."
   ],
   "run_summary": "Run 84 delivered NEX-084: operator-grant delegation attenuated scope but not lifetime, so a holder of a one-hour incident grant could issue the same scope for thirty days and hand on authority they never had. IssueOperatorGrant now reads the issuer's live grants once, at the gate's clock, and refuses with 409 when the requested expiry outlives the furthest instant they hold that scope until; a wildcard covers scope and horizon, and an unbounded own grant leaves the ceiling unbounded so settings-seeded operators are unaffected. Local gates green: ruff format/check clean, mypy clean 143 files, full pytest 1678 passed / 4 skipped exit 0. The three new tests were made to fail before being trusted - disabling the comparison fails all three. Two stale records were also corrected: NEX-083 was already CI-verified and already delivered, and the delivery debt run 83 recorded did not exist.",
-  "delivery_state": "Branch pushed to 09cc4ad. PR #5 (open, draft=false, mergeable) carries NEX-052..NEX-083, each present exactly once; issue #2's latest comment covers NEX-083. NEX-084 is committed, pushed and locally verified but not yet in either - one slice of genuine delivery debt, to be cleared once its CI is read.",
-  "branch_head": "resolve with git ls-remote origin refs/heads/feature/agentic-enterprise-platform; never trust a stored SHA",
+  "delivery_state": {
+    "pr_number": 5,
+    "state": "open",
+    "draft": false,
+    "mergeable": true,
+    "body_sections_through": "NEX-084",
+    "sections_appended_this_run": [
+      "NEX-084"
+    ],
+    "section_counts_verified_from_api": {
+      "NEX-082": 1,
+      "NEX-083": 1,
+      "NEX-084": 1
+    },
+    "tracking_issue": 2,
+    "issue_comment_this_run": null,
+    "note": "NEX-084 was the last delivery debt and is now cleared. Issue #2 already carries comment 7235362658 for NEX-083, posted by a CONCURRENT run at 06:32:43Z; its claims were verified independently here, so run 84 posted no duplicate. A further issue comment is optional, not owed."
+  },
+  "branch_head": "c04a554",
   "head_drift_policy": "The commit field names the product commit whose tree CI is reading. NEXUS checkpoint updates are docs-only commits, so the tip advances one commit past commit every time this file is written. On reconciliation compare the product tree, not the SHA: git diff <commit>..HEAD -- src/ tests/ being empty means commit still describes what CI verified.",
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with git ls-remote.",
   "concurrency_note": "A second NEXUS run is active on this branch: issue #2 comment 7235362658 appeared at 06:32:43Z, 103 seconds into this run, and was not written by it. Its claims were checked and accurate. Any run starting here must re-read PR #5's body and issue #2 before posting, and must anchor to git ls-remote because the other run's docs commits advance the tip independently.",
-  "run_report": "NEX-084: bound a delegated operator grant by the issuer's own deadline (temporal attenuation). 3 files, +277/-12. 1678 passed / 4 skipped, ruff + mypy clean, mutation control fails 3/3. Also reconciled two stale-in-the-reassuring-direction records: NEX-083 was already VERIFIED and delivered; the recorded delivery debt did not exist. ENDING: 09cc4ad plus one docs commit; CI on 09cc4ad in_progress at the stop boundary."
+  "run_report": "NEX-084: bound a delegated operator grant by the issuer's own deadline (temporal attenuation). 3 files, +277/-12. 1678 passed / 4 skipped, ruff + mypy clean, mutation control fails 3/3. Also reconciled two stale-in-the-reassuring-direction records: NEX-083 was already VERIFIED and delivered; the recorded delivery debt did not exist. ENDING: 09cc4ad plus one docs commit; CI on 09cc4ad in_progress at the stop boundary.",
+  "validation_status": {
+    "local_gates": {
+      "ruff_format_check": "pass (321 files already formatted)",
+      "ruff_check": "pass (All checks passed!)",
+      "mypy": "pass (143 source files, no issues)"
+    },
+    "ci": {
+      "commit": "09cc4ad",
+      "total_check_runs": 4,
+      "successful": 4,
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "checks": {
+        "Backend (ruff, mypy, pytest, migrations)": "completed/success",
+        "Frontend (typecheck, lint, test, build)": "completed/success"
+      },
+      "polled_at_epoch": 1795848155,
+      "verdict": "NEX-084 VERIFIED"
+    },
+    "docs_head_ci": "c04a554 docs-only; not a verdict on the product tree"
+  }
 }
