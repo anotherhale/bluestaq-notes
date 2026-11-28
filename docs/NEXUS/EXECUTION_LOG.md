@@ -8586,3 +8586,46 @@ verdict append echoed its own body and never executed), *and* the corruption che
 masked because the `cd` in the same command had already failed. Two independent failures in one
 command made the output confusing. The rule still holds: never a heredoc, always
 `file_editor create` + run the file.
+
+## NEX-2026-11-27-72 — NEX-072: the operator access log is durable
+
+**Run ID:** NEX-2026-11-27-72
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `07b3f50` (live remote tip, reached by fast-forward from `adcb75e`; the
+`07b3f50` docs checkpoint was a concurrent run's, merged cleanly — docs-only, no code overlap)
+**Ending commit (product):** `3c26957`
+
+**Task completed:** NEX-072 — a durable, table-backed `OperatorAccessLog` adapter.
+Closes R36's recorded residual: "adapter is process-local and bounded". The record that a
+privileged read of a platform-wide operational view was *granted* now survives a restart and is
+shared across workers, instead of living in one process's bounded ring.
+
+**Files changed:**
+- `src/notes_service/infrastructure/db/models.py` — `OperatorAccessRow` model
+- `src/notes_service/infrastructure/db/operator_access_log.py` — `SqlAlchemyOperatorAccessLog`
+- `src/notes_service/bootstrap/container.py` — wire the durable adapter
+- `migrations/versions/a1c7e2f60b93_operator_access_log.py` — table + 3 indexes, no backfill
+- `tests/persistence/test_operator_access_log.py` — 9 tests
+
+**Tests executed:** `ruff format`, `ruff check`, `mypy`, full `pytest`, persistence subset,
+`alembic upgrade head` + `downgrade -1` on a fresh sqlite DB.
+**Outcomes:** ruff format clean after one reformat of the new test; ruff check all passed; mypy
+clean over 141 files; **1501 passed, 4 skipped**; 9 persistence tests pass; migration up and down
+both clean (table + 3 indexes created, then dropped).
+
+**Decisions:** D-072a order by surrogate `id` not `at`; D-072b `user_id` a plain indexed value,
+not a cascading FK, so deleting a user does not erase what they read; D-072c the adapter commits
+its own session so the access record lands even if the caller's content transaction rolls back;
+D-072d no backfill (the ring was never durable).
+
+**Security:** the audit of a privileged read was previously partial-but-complete-looking (one
+worker's ring presented as the whole record). This slice removes that failure mode.
+
+**Commits:** `3c26957` — `feat(governance): store the operator access log so a privileged read survives a restart`
+**Push status:** pushed `07b3f50..3c26957`, fast-forward, verified with `git ls-remote`.
+**CI:** polled this run — see `ci_status` in `CHECKPOINT.json`. A second check-run pair re-runs
+the same commit via the branch concurrency group; the completed pair is the verdict.
+
+**Next:** read `docs/NEXUS/BACKLOG.md` and pick the highest-value dependency-ready slice. Do not
+re-implement NEX-072. A named follow-up, not a defect: the log is durable but unbounded — a
+retention policy is a separate slice.
