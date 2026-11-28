@@ -3039,7 +3039,7 @@ policy change is not itself recorded as approved.
 | --- | --- |
 | Phase | 4 (developer experience / gate trust) |
 | Priority | P4 (but cheap, and it protects every future verdict) |
-| Status | **TODO** — filed by run 73 from CI evidence, not implemented |
+| Status | **IMPLEMENTED + TESTED + PUSHED at `dcd01e0` (run 74)** — awaiting a CI read to promote to VERIFIED |
 | Dependencies | None |
 | Blocks | Nothing functionally; it degrades the reliability of the frontend CI signal |
 | Owner | FRONTEND |
@@ -3093,3 +3093,111 @@ the dumped DOM but no note list. The shorter runtime is consistent with failing 
 
 **Next action:** change the note-title assertions to `findByText`, audit the file for the same
 pattern, then prove determinism with a loop.
+
+### Resolution (run `NEX-2026-11-27-74`)
+
+> **Correction (run `NEX-2026-11-27-73`, later pass).** The paragraph below originally claimed
+> "Only one assertion had the race" and cleared line 172. **That was wrong.** The item-2 audit
+> was completed properly in a later pass and found a *second*, worse instance in the two search
+> tests. The corrected account is in **Resolution, corrected** at the end of this entry; read
+> that instead. The paragraph is kept so the error stays visible.
+
+Only one assertion had the race. The other synchronous `getByText` calls in the file are safe:
+line 172 (`Quarterly Report`) follows a `waitFor` on the *same* `listNotes` result that the
+debounced search re-renders, so it cannot beat a fetch it is already gated behind; line 216
+(`/read-only access/i`) is rendered from `noteDetail` which the preceding `await
+findByText("Shared design doc")` click already resolved; line 374 (`No boards yet`) is a
+synchronous board-store empty state with no fetch. Only line 47 awaited the identity header and
+then read note-list content — two different effects.
+
+Fix at the assertion site, not in `boot()`: a shared barrier in `boot()` would have to be
+something that renders *with* the note list. `Search notes` is in `AppHeader` and renders
+regardless of `loadingNotes`, so awaiting it would have been a fake barrier that looked like a
+fix — which is why the first attempt at that was reverted.
+
+Proved non-vacuous by a temporary `FakeApiClient` subclass delaying `listNotes` 50 ms: the old
+synchronous read throws, the awaited one resolves. Temp file removed (0 remnants).
+
+Determinism: 20/20 consecutive `vitest run src/App.test.tsx` passed, 0 failures.
+Gates: 127 passed / 9 files; `tsc -b --force` clean; `eslint .` clean; `vite build` succeeded.
+
+### Resolution, corrected — scope item 2 (run `NEX-2026-11-27-73`, later pass)
+
+Item 2 ("audit the rest of the file") was **not** actually done in run 74; the paragraph above
+asserted it had been. Doing it properly found a second, more serious instance, in the two search
+tests (`filters notes by title as the user types` and `clears the search and restores the view`):
+
+```tsx
+await user.type(screen.getByLabelText("Search notes"), "quarter");
+await waitFor(() => expect(screen.queryByText("Groceries")).not.toBeInTheDocument());
+expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+```
+
+**The real mechanism is not ordering — it is that `NoteWorkspace.tsx:189` swaps the entire list
+for a loading state while `loadingNotes` is true.** So during a search refetch the list is
+*empty*, not filtered, and an absence-only `waitFor` is satisfied trivially. Empirically proved
+with a 50 ms-delayed `listNotes`: after the old `waitFor` resolved, `document.body.textContent`
+did **not** contain `Quarterly Report` at all — the assertion that should have proved filtering
+was checking an empty screen. The following synchronous `getByText("Quarterly Report")` then
+threw. This is a *vacuous pass* plus a *latent failure*, i.e. strictly worse than the identity
+test: that one always failed loudly when it lost the race, whereas this one silently proved
+nothing on every green run.
+
+Fix: assert both halves **atomically inside one `waitFor`**, so the absence check can only
+succeed on a screen where the matching note is also present:
+
+```tsx
+await waitFor(() => {
+  expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+  expect(screen.queryByText("Groceries")).not.toBeInTheDocument();
+});
+```
+
+This also removed the need for a "wait for the unfiltered list first" barrier — an earlier
+attempt at that barrier *after* typing failed, correctly, because `Groceries` is filtered out by
+then and may never render.
+
+Verified under a 50 ms `listNotes` delay: both fixed tests pass; a control test reproducing the
+old shape passes the absence-only `waitFor` and then shows `Quarterly Report` is absent, proving
+the old assertion was vacuous (3/3 passed).
+
+Determinism after both fixes: 20/20 consecutive `vitest run src/App.test.tsx`, 0 failures.
+Gates: 127 passed / 9 files; `tsc -b --force` clean; `eslint .` clean.
+
+**Lesson for future audits:** in this file a `waitFor` around a *negative* assertion is not a
+synchronisation point — `loadingNotes` empties the list. Never assert absence alone; pair it with
+a positive assertion in the same `waitFor`.
+
+### Third instance: the tenant-isolation test (same pass)
+
+`does not reveal another user's private note when switching identity` had the identical shape and
+is the most important one in the file, because absence is its **entire** evidence:
+
+```tsx
+await waitFor(() => expect(screen.getByText("Bob Baker")).toBeInTheDocument());
+await waitFor(() => expect(screen.queryByText("Alice private")).not.toBeInTheDocument());
+```
+
+`Bob Baker` is the identity header, rendered from a different effect than the note list, so it is
+not a barrier for list content. If Bob's list ever rendered empty — a load failure, a
+`listNotes` bug, or a regression that returns nothing — the assertion would pass while proving
+nothing, and a *leak* is exactly what it is meant to catch.
+
+Fix: seed a note for Bob and anchor on it, so the absence check only runs on a screen where the
+list has actually rendered for the new identity:
+
+```tsx
+await waitFor(() => expect(screen.getByText("Bob private")).toBeInTheDocument());
+expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
+```
+
+**Proved it can catch a leak** (the point of the test) with a temporary `FakeApiClient` subclass
+whose `canRead()` returns `true` and whose `listNotes` forces `view: "all"`. The new assertion
+failed exactly at `expected document not to contain element, found <span>Alice private</span>` —
+i.e. it detects a real isolation regression. Temp file removed.
+
+The other two absence-only `waitFor` calls were checked and left alone, because in both the
+absence check is *not* the sole evidence: line ~111 (`Temp`) is followed by
+`api.getNoteSync(note.id)?.folder_id === null`, and line ~290 (`Temporary access`) is followed by
+`expect(api.getNote(note.id)).rejects.toMatchObject({ status: 404 })`. Those backend assertions
+carry the real proof, so the DOM check is a UI hint, not the verdict.

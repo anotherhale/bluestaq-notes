@@ -53,14 +53,17 @@ describe("App — identity and ownership", () => {
   it("does not reveal another user's private note when switching identity", async () => {
     const api = new FakeApiClient();
     api.seedNote(FAKE_ALICE, "Alice private");
+    api.seedNote(FAKE_BOB, "Bob private");
 
     const user = await boot(api);
     expect(await screen.findByText("Alice private")).toBeInTheDocument();
 
     await selectIdentity(user, "bob@example.com");
 
-    await waitFor(() => expect(screen.getByText("Bob Baker")).toBeInTheDocument());
-    await waitFor(() => expect(screen.queryByText("Alice private")).not.toBeInTheDocument());
+    // Anchor on Bob's own note: the list is emptied while it refetches, so an
+    // absence-only check would pass vacuously and could never catch a leak.
+    await waitFor(() => expect(screen.getByText("Bob private")).toBeInTheDocument());
+    expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
   });
 });
 
@@ -170,8 +173,13 @@ describe("App — search", () => {
 
     await user.type(screen.getByLabelText("Search notes"), "quarter");
 
-    await waitFor(() => expect(screen.queryByText("Groceries")).not.toBeInTheDocument());
-    expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+    // Assert both halves in one waitFor: the list is swapped for a loading
+    // state during the refetch, so an absence check on its own passes while
+    // the list is still empty and proves nothing.
+    await waitFor(() => {
+      expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+      expect(screen.queryByText("Groceries")).not.toBeInTheDocument();
+    });
   });
 
   it("clears the search and restores the view", async () => {
@@ -181,7 +189,10 @@ describe("App — search", () => {
     const user = await boot(api);
 
     await user.type(screen.getByLabelText("Search notes"), "quarter");
-    await waitFor(() => expect(screen.queryByText("Groceries")).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+      expect(screen.queryByText("Groceries")).not.toBeInTheDocument();
+    });
 
     await user.click(screen.getByRole("button", { name: "Clear search" }));
     await waitFor(() => expect(screen.getByText("Groceries")).toBeInTheDocument());
