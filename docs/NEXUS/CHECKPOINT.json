@@ -62,8 +62,8 @@
   },
   "validation_status": {
     "ci": "PASSED at product d47d15e - run 46169388330, completed/success, Backend 12/12 and Frontend 11/11 steps, zero failed, zero skipped, zero in any other state.",
-    "local": "Not re-run this run: no source change. Prior run on the same tree: ruff format 332 clean, ruff check clean, mypy 144 files clean, pytest 1946 passed / 4 skipped.",
-    "status_record_commit": "This run's docs commit is docs/NEXUS/ only; its own CI is not an anchor and is not needed. Product verdict + empty product diff is the licence. Structural lag documented in STATE.md.",
+    "local": "Re-run on this tree: pytest 1946 passed / 4 skipped, 38.35s, exit 0 (an earlier segment of this run ran the rest bare: ruff format 332 files clean, ruff check clean, mypy 144 source files clean).",
+    "status_record_commit": "This run's docs commit is docs/NEXUS/ only; numstat on BACKLOG.md confirms 74 added / 0 deleted, so the product verdict plus an empty product diff is the licence for VERIFIED. The docs commit's own CI run was IN PROGRESS when this file was written and is therefore UNREAD, not PASSED -- not an anchor either way, and not claimed as green.",
     "verdict": "VERIFIED"
   }
 }
