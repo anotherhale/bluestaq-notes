@@ -10,18 +10,20 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. **NEX-079** (run 79): an operator grant can now be **revoked** — the last live authority in the system that had no way to end early. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 77) | `9f9a70f` was this run's product head; the docs tip moves constantly. |
-| Head commit (measured) | Product head `3a05db2` (**NEX-081**, COMMITTED + PUSHED, **CI not polled**), over docs head `aaeeb8e` / `b18e56d` / product `9336ba3` (NEX-080, VERIFIED 4/4), `a0c8ee0` (NEX-079, VERIFIED 4/4), `6637c50` (NEX-078, VERIFIED 4/4). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **Not polled this run** — `3a05db2` (NEX-081) is COMMITTED + PUSHED, **not VERIFIED**. Last conclusive: `139edf6`/`9336ba3` (NEX-080) 4/4 `completed/success`, polled 2026-11-28T04:55Z. Prior verified: `a0c8ee0` (NEX-079) 4/4 2026-11-27T21:20Z; `6637c50` (NEX-078) 4/4 20:43Z; `9f9a70f` (NEX-077) 4/4 2026-11-28T03:44Z; `4fa0463` (NEX-076) 4/4 03:22Z; `319a3dd` (NEX-075) 4/4 02:45Z; `e375a1f` (NEX-074) 4/4 02:20Z; `09888ac` (NEX-073) 4/4 01:56Z. |
-| Tracking issue | #2 (open) — `7234295952` covers **NEX-080** (VERIFIED, CI 4/4). **NEX-081 is not yet reported** (delivery debt, one slice). Earlier: `7234071012` NEX-079; `7233539283` NEX-078; `7232583113` NEX-075; `7231968445` NEX-073; `7230423658` NEX-070; `7229097083` NEX-067; `7228764536` NEX-068; `7228642936` NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-080**; **NEX-081 is not yet appended** (one slice of debt). Twenty-five slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | **None.** NEX-081 (run 81) closed a verification-coverage gap rather than a P1: `SweepAuditIntegrity` examined only the oldest `max_agents` agents and gave the operator no way to reach the rest, so on a large deployment the **newest** trails — the likeliest to have been tampered with — fell outside the check permanently. `GET /api/v1/ops/audit-integrity?offset=N` now returns `offset`/`next_offset`, the listing is ordered `(created_at, id)` so a page boundary is total, and `verified` requires `offset == 0` so a clean later page cannot read as a deployment-wide all-clear. **COMMITTED + PUSHED at `3a05db2`; CI not polled, so not VERIFIED.** Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
+| Head commit (measured) | Docs head `85a013c` (**NEX-081**, VERIFIED 4/4), over product head `3a05db2` (NEX-081), `aaeeb8e` (checkpoint repair), `139edf6` / product `9336ba3` (NEX-080, VERIFIED 4/4), `a0c8ee0` (NEX-079, VERIFIED 4/4), `6637c50` (NEX-078, VERIFIED 4/4). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | `85a013c` (NEX-081 docs head; product `3a05db2`) **4/4 `completed/success`** (Backend ×2, Frontend ×2), polled 2026-11-28T05:18Z. Prior: `139edf6`/`9336ba3` (NEX-080) 4/4 04:55Z; `a0c8ee0` (NEX-079) 4/4 2026-11-27T21:20Z; `6637c50` (NEX-078) 4/4 20:43Z; `9f9a70f` (NEX-077) 4/4 2026-11-28T03:44Z; `4fa0463` (NEX-076) 4/4 03:22Z; `319a3dd` (NEX-075) 4/4 02:45Z; `e375a1f` (NEX-074) 4/4 02:20Z; `09888ac` (NEX-073) 4/4 01:56Z. |
+| Tracking issue | #2 (open) — `7234571708` covers **NEX-081** (VERIFIED, CI 4/4). Earlier: `7234295952` NEX-080; `7234071012` NEX-079; `7233539283` NEX-078; `7232583113` NEX-075; `7231968445` NEX-073; `7230423658` NEX-070; `7229097083` NEX-067; `7228764536` NEX-068; `7228642936` NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-081** (79014 chars). Twenty-six slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **None.** NEX-081 (run 81) closed a verification-coverage gap rather than a P1: `SweepAuditIntegrity` examined only the oldest `max_agents` agents and gave the operator no way to reach the rest, so on a large deployment the **newest** trails — the likeliest to have been tampered with — fell outside the check permanently. `GET /api/v1/ops/audit-integrity?offset=N` now returns `offset`/`next_offset`, the listing is ordered `(created_at, id)` so a page boundary is total, and `verified` requires `offset == 0` so a clean later page cannot read as a deployment-wide all-clear. **VERIFIED: CI 4/4 `completed/success` on `85a013c` (2026-11-28T05:18Z).** Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-081 (run `NEX-2026-11-28-81`) — a capped sweep excluded the newest trails, permanently
 
-**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED at `3a05db2`. CI NOT POLLED — not VERIFIED.**
+**Status: VERIFIED.** Product `3a05db2`, docs head `85a013c`; CI 4/4 `completed/success` on
+`85a013c` (Backend ×2, Frontend ×2, polled 2026-11-28T05:18Z). `85a013c` descends from
+`3a05db2` and differs only in state docs, so the product tree under test is NEX-081's.
 
 **The gap.** `SweepAuditIntegrity` (NEX-042) walks the deployment's agent chains and asks the
 one question no owner can: *is any trail in this deployment broken*. It reads
@@ -65,10 +67,12 @@ load-bearing rather than assumed: removing the `offset == 0` term from `verified
 fail, and the guard was re-verified present before the commit. A test never seen fail is a
 hypothesis, not evidence.
 
-**Not done, and deliberately.** CI was not polled; the commit landed at the close of the
-window. NEX-081 is COMMITTED + PUSHED, not VERIFIED. PR #5's body and issue #2 do not yet
-carry it — one slice of delivery debt, recorded in `CHECKPOINT.json` rather than left to be
-rediscovered.
+**Delivery, and it happened this time.** CI polled to 4/4 success, then NEX-081 was appended to
+PR #5's body (now NEX-052..NEX-081) and reported on issue #2 as comment `7234571708`. That
+clears the delivery debt this section originally recorded. While appending, a stale line inside
+the NEX-080 section — "Backend 2/2 still in_progress, Not VERIFIED" — was corrected to the
+polled result (4/4 on `139edf6`). Delivery debt that reads *pessimistically* is still debt: it
+invites a redundant re-check next run.
 
 ## NEX-080 (run `NEX-2026-11-27-80`) — the revocation was recorded, nothing read it
 
@@ -3034,3 +3038,20 @@ other run's NEX-077 references were left untouched.
    with under 10 minutes left on the clock.
 
 **Do not redo** NEX-078, NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058 — all VERIFIED.
+
+## Next best actions (run `NEX-2026-11-28-82`, superseding the lists above)
+
+1. **Select the next dependency-ready slice from `BACKLOG.md`.** Phase 3 (M3.1–M3.4) is now
+   fully VERIFIED and `ROADMAP.md` says so; the remaining value is Phase 4 (admin console
+   frontend) and the tail of the backend gaps. Nothing is carried over from run 81.
+2. **Carry the chosen slice through the CI poll in the same run.** Runs 80 and 81 both stopped
+   at COMMITTED + PUSHED, leaving the tree in a state that was built and locally tested but
+   unproven. Polling CI and delivering to the PR/issue is part of the slice, not a follow-up.
+3. **Keep reporting truthful in both directions.** This run found `ROADMAP.md` claiming three
+   Phase 3 milestones were NOT STARTED when all four were verified, and a `next_task` telling
+   the next run to redo PR and issue delivery that was already done. A state file that
+   under-reports completion costs a whole run in redundant work.
+
+**Do not redo** NEX-081, NEX-080, NEX-079, NEX-078, NEX-077, NEX-076, NEX-075, NEX-074 or
+NEX-073 — all VERIFIED with polled CI. Do not re-append NEX-078…NEX-081 to PR #5's body;
+all four are in it.

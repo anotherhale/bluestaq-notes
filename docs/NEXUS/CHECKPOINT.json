@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-28-81",
   "timestamp": "2026-11-28T05:15Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3a05db2",
+  "commit": "85a013c",
   "project_phase": "Phase 2/3/5 largely delivered. NEX-081 (this run) makes a capped audit-integrity sweep finishable: the cap bounded one response but silently excluded every agent past it, permanently, and those were the newest trails. Next: poll CI for 3a05db2, then take the next dependency-ready slice from BACKLOG.md.",
   "active_task": null,
   "task_statuses": {
@@ -32,7 +32,7 @@
     "NEX-079": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at a0c8ee0, CI 4/4 completed/success (Backend x2 + Frontend x2, every conclusion success, polled 2026-11-27T21:20Z).",
     "NEX-080": "VERIFIED. Product 9336ba3, docs checkpoint 139edf6; CI 4/4 completed/success on both (Backend x2, Frontend x2, polled 2026-11-28T04:55Z). The 9336ba3 backend pair reads completed/cancelled - superseded by the docs push, not a failure; the docs head compiles and tests the same product tree and concluded green.",
     "NEX-042": "VERIFIED (product) + EXTENDED by NEX-081. The sweep existed and was operator-gated, but a capped run examined only the oldest max_agents agents and offered no cursor, so the agents past the cap were never verified at all.",
-    "NEX-081": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3a05db2. CI NOT YET POLLED - this run ended at the window, so NEX-081 is NOT VERIFIED. Local: 16 targeted tests pass, full suite green, ruff format+check clean, mypy clean on 143 files. Mutation control: removing the `offset == 0` term from ChainAuditReport.verified fails test_a_clean_second_page_is_not_an_all_clear (observed failing, then restored)."
+    "NEX-081": "VERIFIED. CI 4/4 completed/success at 85a013c (product 3a05db2), polled 2026-11-28T05:18Z. Local: 16 targeted tests pass, full suite green, ruff format+check clean, mypy clean on 143 files. Mutation control: removing the `offset == 0` term from ChainAuditReport.verified fails test_a_clean_second_page_is_not_an_all_clear (observed failing, then restored). Delivered to PR #5 body and issue #2 comment 7234571708."
   },
   "completed_tasks": [
     "NEX-039",
@@ -146,7 +146,9 @@
     "NEX-075",
     "NEX-076",
     "NEX-078",
-    "NEX-079"
+    "NEX-079",
+    "NEX-080",
+    "NEX-081"
   ],
   "in_progress_tasks": [
     "NEX-081 (CI verification pending)"
@@ -163,27 +165,27 @@
     "mutation_control": [
       "Removed `self.offset == 0` from ChainAuditReport.verified; test_a_clean_second_page_is_not_an_all_clear failed. Restored and re-verified the guard is present before commit."
     ],
-    "not_run_this_run": "CI was not polled; the commit landed at the close of the window."
+    "not_run_this_run": "Nothing. CI was polled to conclusion this run and delivery was completed."
   },
-  "uncommitted_work": false,
+  "uncommitted_work": "None.",
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
     "merged": false,
     "mergeable": true,
-    "body_covers": "NEX-052..NEX-080",
+    "body_covers": "NEX-052..NEX-081",
     "body_updated_this_run": true,
-    "note": "PR #5 open and unmerged for human review; NEXUS never merges. Body now carries NEX-052..NEX-080. Only NEX-079 and NEX-080 were actually missing: NEX-078 had already been appended by the previous run while the checkpoint still recorded it as absent - the stale-record pattern again, in the opposite direction from the usual one."
+    "note": "PR #5 open, unmerged, draft=false, mergeable=true. Body now carries NEX-052..NEX-081 (79014 chars). Also corrected a stale line inside the NEX-080 section that still read Backend 2/2 in_progress / not VERIFIED; NEX-080 concluded 4/4 success on 139edf6. Automated merging is prohibited."
   },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
-    "last_reported_task": "NEX-080",
-    "comment_id": 7234295952,
+    "last_reported_task": "NEX-081",
+    "comment_id": 7234571708,
     "nex078_comment_id": 7233539283,
     "stale_note_corrected": "The prior 'no comment yet for NEX-078 or NEX-079' was false. NEX-078 had already been reported in 7233539283. Disproved by reading the issue's comments, not by reasoning about the file.",
-    "delivery_debt": "None. PR #5 body and issue #2 are current through NEX-080."
+    "delivery_debt": "None. PR #5 body carries NEX-052..NEX-081 and issue #2 comment 7234571708 covers NEX-081."
   },
   "blockers": [],
   "risks": [
@@ -194,10 +196,10 @@
     "A paging sweep relies on the listing order being TOTAL. It is (created_at, id); loosening that to created_at alone would let an OFFSET page skip an agent and still return a full page, reporting complete coverage of a set it never saw.",
     "GitHub delivery lags the branch: PR #5's body and issue #2 do not yet carry NEX-081."
   ],
-  "next_task": "NEX-082 - poll CI for 3a05db2 and promote NEX-081 to VERIFIED if 4/4 succeeds, then append NEX-081 to PR #5's body and post an issue #2 comment, then take the next dependency-ready slice from BACKLOG.md. Do NOT redo NEX-081 (the sweep cursor is done and pushed) and do NOT re-append NEX-078..NEX-080 - those are already in the PR body.",
-  "next_action": "Select the next dependency-ready slice from BACKLOG.md. Delivery debt is zero; NEX-080 is verified at 139edf6 with CI 4/4.",
+  "next_task": "NEX-082 - pick the next dependency-ready slice from BACKLOG.md. Phase 3 milestones M3.1-M3.4 are all VERIFIED and ROADMAP.md now says so, so the next value is in Phase 4 (admin console frontend) or a remaining P4/backend gap. Read STATE.md 'Next best actions' and BACKLOG.md tail for candidates and choose by dependency readiness. Do NOT redo NEX-081 (done, verified, delivered) and do NOT re-append NEX-078..NEX-081 to PR #5 - all four are in the body.",
+  "next_action": "Run 82 starts clean: nothing is pending from run 81. No delivery debt, no unverified slice, tree clean, CI green. Select the next slice from BACKLOG.md and execute it end to end - including polling CI, which is the step runs 80 and 81 both dropped.",
   "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform && git pull --ff-only`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this checkpoint lags it by the docs commit that writes it. 3. NEX-078 is VERIFIED at product commit 6637c50 with CI 4/4. Do not re-implement it. 4. Run `.venv/bin/python -m pytest`, `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/python -m mypy` bare, exactly as CI does. 5. Take the next dependency-ready slice from BACKLOG.md. Never merge PR #5.",
-  "ci_status": "3a05db2 (NEX-081): NOT POLLED. Prior: 139edf6 (NEX-080) 4/4 success 2026-11-28T04:55Z.",
+  "ci_status": "85a013c (NEX-081 docs head over product 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:18Z. Prior: 139edf6/9336ba3 (NEX-080) 4/4 success 04:55Z; a0c8ee0 (NEX-079) 4/4 2026-11-27T21:20Z; 6637c50 (NEX-078) 4/4 20:43Z.",
   "commits_this_run": [
     "3a05db2 feat(audit-sweep): let a capped integrity sweep be finished (NEX-081)",
     "docs commit: NEX-081 checkpoint (this file) - see git log, it cannot name itself"
@@ -214,15 +216,15 @@
     "pr_state": "open",
     "pr_draft": false,
     "pr_merged": false,
-    "pr_note": "PR #5 open, unmerged, draft=false. Body carries NEX-052..NEX-080. Automated merging is prohibited.",
+    "pr_note": "PR #5 open, unmerged, draft=false. Body carries NEX-052..NEX-081. Automated merging is prohibited.",
     "issue": 2,
     "issue_state": "open",
-    "issue_note": "Issue #2 open, latest comment 7234295952 covers NEX-080. Stays open: the programme is not done.",
-    "delivery_debt": "PR #5 body and issue #2 do not yet carry NEX-081. One slice of debt."
+    "issue_note": "Issue #2 open, latest comment 7234571708 covers NEX-081. Stays open: the programme is not done.",
+    "delivery_debt": "NONE - cleared this run (NEX-081 in both PR body and issue)."
   },
   "branch_head": "resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a stored SHA",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "`commit` names 3a05db2, the product commit this file's content describes. Because this file is committed on top of it, `commit` lags the branch head by exactly one commit. Resolve the head with git ls-remote; do not 'fix' the lag.",
+  "commit_note": "85a013c is the docs checkpoint this run pushed. The final commit of this run (which promotes NEX-081 to VERIFIED) cannot name itself; resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": "NEX-079: give an operator grant a way to end early. Before this a grant ended only by expiry, so a mistaken hand-out was stuck for its term and a configuration grant (granted_by IS NULL) could not be ended at all without editing the seed and redeploying. Revocation is recorded on the row, not applied by DELETE, because the point of keeping a grant is that an audit can read what authority existed; a delete erases the grant and the evidence it was removed. 12 files, +720/-10. 11 new API tests. Full suite green locally. Two pre-existing-test/migration defects found and fixed before commit (duplicate index; stale column-set assertion).",
   "pr": {
     "body_covers_through": "NEX-077",
@@ -232,11 +234,11 @@
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-081 IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3a05db2; CI NOT POLLED. Local: 16 targeted tests green, full suite green, ruff format+check clean, mypy clean on 143 files.",
+  "validation_status": "NEX-081 VERIFIED: CI 4/4 completed/success at 85a013c (product 3a05db2), polled 2026-11-28T05:18Z. Local: 16 targeted tests green, full suite green, ruff format+check clean, mypy clean on 143 files. Mutation control observed failing.",
   "next_actions": [
     "Poll CI for 3a05db2; promote NEX-081 to VERIFIED on 4/4 success.",
     "Append NEX-081 to PR #5's body and comment on issue #2 (one slice of delivery debt).",
     "Pick the next dependency-ready backlog slice; NEX-081 is closed."
   ],
-  "last_ci_result": "Not polled this run. Prior: 139edf6 4/4 success, 2026-11-28T04:55Z."
+  "last_ci_result": "85a013c (NEX-081 docs head over product 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:18Z. Prior: 139edf6/9336ba3 (NEX-080) 4/4 success 04:55Z; a0c8ee0 (NEX-079) 4/4 2026-11-27T21:20Z; 6637c50 (NEX-078) 4/4 20:43Z."
 }

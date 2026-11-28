@@ -57,10 +57,10 @@ interruption without duplicating side effects.
 
 | Milestone | Status | Depends on |
 | --- | --- | --- |
-| M3.1 Governance policy model + versioning | IN PROGRESS - domain + lifecycle done (NEX-047, 379a98a); durable adapter + HTTP next | M1.2 |
-| M3.2 Audit integrity (append-only, tamper-evident) | NOT STARTED | M2.5 |
-| M3.3 Separation of duties / approval workflows | NOT STARTED | M3.1 |
-| M3.4 System One / Jev classifier integration | NOT STARTED | M2.5 |
+| M3.1 Governance policy model + versioning | **VERIFIED** — typed AST with immutable published versions (NEX-047 `379a98a`), durable `PolicyVersionRepository` (NEX-048), lifecycle + three-way SoD on publish (NEX-065, NEX-078 `6637c50`) | M1.2 |
+| M3.2 Audit integrity (append-only, tamper-evident) | **VERIFIED** — per-agent hash-chained trails; deployment-wide operator sweep (NEX-042), now pageable via `offset`/`next_offset` so a capped sweep can be finished rather than excluding the newest trails forever (NEX-081 `3a05db2`). This table said NOT STARTED long after both slices had shipped. | M2.5 |
+| M3.3 Separation of duties / approval workflows | **VERIFIED** — author/approver/publisher all pairwise distinct, enforced in domain, use cases and a DB CHECK (NEX-078); a real second-approver control (NEX-059); risk-based approval with a threshold floor (NEX-063, ADR-016); assurance held to two independent factor families (NEX-067) | M3.1 |
+| M3.4 System One / Jev classifier integration | **VERIFIED, with no live-vendor default** — an advisory classifier reaches deterministic policy through the gateway; no default code path calls a live vendor (NEX-040) | M2.5 |
 
 ## Phase 4 — Admin console (frontend)
 

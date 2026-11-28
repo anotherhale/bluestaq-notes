@@ -9700,3 +9700,67 @@ rediscovered.
 NEX-078..080 missing. That was stale in the *pessimistic* direction — the dangerous one, since
 it invites a duplicate re-append. Corrected from the checkpoint's own NEX-080 evidence rather
 than by re-reading the PR, and the row now says NEX-080 is in the body.
+## Run 82 — 2026-11-28T05:01Z → 05:26Z — `feature/agentic-enterprise-platform`
+
+**Run ID:** `NEX-2026-11-28-82`
+**Starting commit:** `85a013c` (docs head; product `3a05db2`)
+**Ending commit:** this commit — resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+**Scope:** verification closure and state reconciliation. No product code changed.
+
+### What this run was for
+
+Run 81 shipped NEX-081 (a capped audit-integrity sweep can now be finished) and got as far as
+COMMITTED + PUSHED, but ended without polling CI. That left NEX-081 in the one status that is
+worse than "not started": *built, tested locally, and unproven*. Two runs in a row (80, 81) had
+now dropped the CI poll, so the queue held two slices of unverified belief about the tree.
+
+This run did the last mile of run 81 rather than starting a new slice. That is the right trade:
+a third unverified slice does not compound value, it compounds risk.
+
+### Evidence
+
+| Item | Result |
+| --- | --- |
+| CI `85a013c` (NEX-081 docs head, product `3a05db2`) | **4/4 `completed/success`** — Backend ×2, Frontend ×2, polled 2026-11-28T05:18Z |
+
+`85a013c` differs from `3a05db2` only in state docs, so the product tree under test *is*
+NEX-081's. **NEX-081 is VERIFIED.**
+
+### State corrections made
+
+1. **NEX-081 promoted from `IMPLEMENTED + TESTED + COMMITTED + PUSHED; CI NOT POLLED` to
+   `VERIFIED`** in `STATE.md` (status line, head-commit row, last-CI row, Open-P1 row),
+   `BACKLOG.md` (status row and "Remaining"), and `CHECKPOINT.json`
+   (`task_statuses`, `validation_status`, `ci_status`, `last_ci_result`, `verified_tasks`).
+   A status promoted in one file and left stale in another is how the last several runs
+   lost time, so every occurrence was edited, not just the headline.
+
+2. **`ROADMAP.md` Phase 3 was badly stale and wrong in the dangerous direction.** It listed
+   M3.2 (audit integrity) and M3.3 (separation of duties) as **NOT STARTED**, and M3.1 as
+   IN PROGRESS, when all four Phase 3 milestones are built, tested and CI-verified. A roadmap
+   that under-reports completion invites the next run to re-plan finished work. All four rows
+   now carry VERIFIED, with the slices and commits that earned it.
+
+3. **`CHECKPOINT.json` `next_task` rewritten.** It previously instructed the next run to poll
+   CI for `3a05db2`, append NEX-081 to PR #5, and comment on issue #2 — all three of which run
+   81 had already done. A stale *instruction* costs more than a stale SHA: it reads as a fresh
+   plan and gets followed. It now names what **not** to redo.
+
+### Verification notes
+
+`next_task` and `commit` cannot name the commit that writes them; that is a permanent
+one-commit lag, documented in the checkpoint's `commit_note` rather than chased.
+
+### Delivery state at close
+
+- PR #5: open, `draft=false`, `mergeable=true`, body carries NEX-052…**NEX-081**.
+- Issue #2: open; comment `7234571708` reports NEX-081 (VERIFIED, CI 4/4).
+- No new blockers, no new risks, no migrations.
+- **No delivery debt, no unverified slice, tree clean** — the first run in three to hand over
+  a fully settled state.
+
+### Next action
+
+Run 82 hands over a clean board. The next run selects a fresh slice from `BACKLOG.md` (Phase 4
+admin console, or the next remaining backend gap) and must carry it all the way through the CI
+poll, which is the step runs 80 and 81 both dropped.

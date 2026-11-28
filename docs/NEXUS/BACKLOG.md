@@ -3460,7 +3460,7 @@ for operators (the listing is operator-gated); non-operator callers still see no
 | --- | --- |
 | Phase | 3 (governance) / platform operations |
 | Priority | P1 — the check covered the OLDEST agent trails and could never reach the newest |
-| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `3a05db2`; **CI not polled**, so not VERIFIED |
+| Status | **VERIFIED** — CI 4/4 `completed/success` at `85a013c` (Backend ×2, Frontend ×2, polled 2026-11-28T05:18Z); product commit `3a05db2` |
 | Dependencies | NEX-042 (the sweep, operator-gated) — met; closes its cap gap |
 | Architecture | `application/ports/agents.py`, `application/use_cases/audit_sweep.py`, `domain/agent/audit_chain.py`, `infrastructure/db/agent_repositories.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
 
@@ -3508,4 +3508,5 @@ page after the first never reports `verified`. ✅ A negative offset is refused 
 non-operator gets 404 regardless of the offset. ✅ A non-operator cannot distinguish a valid
 from an invalid offset.
 
-**Remaining.** Poll CI for `3a05db2`; append NEX-081 to PR #5's body and comment on issue #2.
+**Remaining.** Nothing for this slice. CI 4/4 at `85a013c`; PR #5's body carries NEX-081 and
+issue #2 comment `7234571708` reports it.
