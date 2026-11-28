@@ -3381,8 +3381,12 @@ all of them are already in it.
 
 ## NEX-091 (run `NEX-2026-11-28-92`) — external IdP identities can be linked, listed and unlinked
 
-**Status: COMMITTED `977b21f` · PUSHED · NOT VERIFIED.** CI run `46134525416` was `queued` when this
-was written; no verdict has been read. PR #5 body section and issue #2 comment are outstanding.
+**Status: VERIFIED — CI 4/4 `completed/success` on docs head `6f8ca19`** (runs `46134645157` push, `46134650328` pull_request; Backend and Frontend both green), product tree identical to `977b21f`. Delivered to PR #5 (body) and issue #2 (comment `7237852341`).
+
+`977b21f`'s own runs read `completed/cancelled` — superseded in the concurrency group by the docs push, never evidence in either direction. The verdict is anchored to the docs head
+and licensed by an **empty product diff**: `git diff 977b21f 6f8ca19` touches only
+`docs/NEXUS/{BACKLOG.md,CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}`, so the green runs tested
+exactly the tree `977b21f` ships.
 
 OIDC login needs a durable binding from an IdP `(provider, subject)` pair to a local account, and an
 operator needs to create and revoke it. This slice adds the three operations end to end: repository
@@ -3421,13 +3425,15 @@ all passed, `mypy` clean on **144** files, full suite **1740 passed / 4 skipped*
 
 ## Next best actions (run `NEX-2026-11-28-92`, superseding every list above)
 
-1. **Read the CI verdict for `977b21f`** (run `46134525416`). Mark NEX-091 VERIFIED only when every
-   check-run is `completed`/`success`. This is the same debt runs 80 and 81 left behind: a slice that
-   is built, locally tested and pushed but unproven is not delivered.
-2. **Deliver NEX-091 to PR #5 and issue #2.** The body currently ends at NEX-090 and the tracking
-   issue's last comment covers NEX-090 only.
-3. **Then select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`, and do not start
-   one with under 10 minutes of window left.
+No NEXUS delivery debt remains through NEX-091. The next run starts clean:
 
-**Do not redo** NEX-091 or anything before it. **Do not** re-append NEX-079…NEX-091 to PR #5's body
-until step 2 is actually done — only NEX-091 is missing.
+1. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`. Check what the backlog
+   still lists as open rather than assuming a successor exists.
+2. **Carry the shape forward**: a test that fails without the fix, a mutation that proves the test
+   bites, and a CI verdict read rather than assumed. Anchor a verdict to a head whose runs actually
+   concluded — a superseded run reading `cancelled` is not a pass, and this run needed an empty
+   product diff to license the anchor.
+3. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+
+**Do not redo** NEX-091 or anything before it. **Do not** re-append NEX-079…NEX-091 to PR #5's body —
+all of them are already in it.

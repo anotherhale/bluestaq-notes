@@ -4070,8 +4070,7 @@ listing route; they are unchanged here rather than speculatively reworked.
 
 ## NEX-091 — Link, list and unlink external IdP identities (run `NEX-2026-11-28-92`)
 
-**Status: COMMITTED `977b21f` · PUSHED · NOT VERIFIED** — CI run `46134525416` was `queued` at write
-time and no verdict has been read. PR #5 body section and issue #2 comment outstanding.
+**Status: VERIFIED** — product `977b21f`, CI **4/4 `completed/success`** on docs head `6f8ca19` (runs `46134645157` push, `46134650328` pull_request), polled 10:21Z. Delivered to PR #5 and issue #2 (comment `7237852341`) in run 92.
 
 OIDC login (NEX-002) resolves an incoming `(provider, subject)` pair to a local account through
 `external_identities`, but nothing exposed the write path: there was no way for an operator to create
@@ -4126,7 +4125,12 @@ that asserts a pristine world fails the moment the fixture becomes realistic.
 `ruff format` clean (1 reformatted, 323 unchanged) · `ruff check` all passed · `mypy` clean on **144**
 files · full suite **1740 passed / 4 skipped**, exit 0.
 
-### Outstanding
+### CI verdict — read, not assumed
 
-1. Read run `46134525416` to conclusion; mark VERIFIED only on `completed/success`.
-2. Append this slice to PR #5's body and comment on issue #2.
+`977b21f`'s own runs read `completed/cancelled` (superseded in the concurrency group by the docs
+push), which is never evidence in either direction. The verdict was taken on the docs head
+`6f8ca19` — **4/4 `completed/success`** on both events — and is licensed by an **empty product
+diff**: `git diff 977b21f 6f8ca19` touches only the four `docs/NEXUS/` files, so the green runs
+tested exactly the tree `977b21f` ships.
+
+Nothing outstanding: the slice is in PR #5's body and reported on issue #2.

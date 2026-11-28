@@ -1,22 +1,22 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-92",
-  "timestamp": "2026-11-28T10:19Z",
+  "timestamp": "2026-11-28T10:22Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "977b21f",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-090 VERIFIED. NEX-091 (this run) delivered external IdP identity linking: link, list and unlink. Next: select the next dependency-ready slice.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-091 VERIFIED. NEX-091 delivered external IdP identity linking (link, list, unlink). Next: select the next dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
-    "NEX-091": "IMPLEMENTED + TESTED + COMMITTED (977b21f) + PUSHED. NOT VERIFIED: CI run 46134525416 was queued at write time and its verdict has not been read. PR #5 and issue #2 delivery for NEX-091 also outstanding.",
+    "NEX-091": "VERIFIED - CI 4/4 completed/success on docs head 6f8ca19 (runs 46134645157 (push) and 46134650328 (pull_request)), product tree identical to 977b21f; delivered to PR #5 and issue #2 this run",
     "NEX-090": "VERIFIED - CI 4/4 completed/success on docs head ea0a696 (product aa4b2c8)"
   },
   "completed_tasks": [
+    "NEX-091",
     "NEX-090",
     "NEX-089",
     "NEX-088",
     "NEX-087",
-    "NEX-086",
-    "NEX-085"
+    "NEX-086"
   ],
   "validation": {
     "commands_run_on_committed_tree": [
@@ -28,44 +28,45 @@
     ],
     "not_run": "No PostgreSQL-marked tests locally (4 skipped by marker); CI's Backend job runs the migration path."
   },
-  "uncommitted_work": "docs only at checkpoint-write time: STATE.md, BACKLOG.md, EXECUTION_LOG.md and this file. The product slice is committed as 977b21f and pushed.",
+  "uncommitted_work": false,
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
-    "body_covers": "NEX-052..NEX-090; NEX-091 NOT yet appended",
-    "nex_091_in_body": false
+    "body_covers": "NEX-052..NEX-091; NEX-091 marked VERIFIED with CI cited",
+    "nex_091_in_body": true
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "last_comment": "7237454626",
-    "last_comment_covers": "NEX-090 CI verdict and delivery",
-    "nex_091_reported": false
+    "last_comment": "7237852341",
+    "last_comment_covers": "NEX-091 CI verdict and delivery",
+    "nex_091_reported": true
   },
   "blockers": [],
   "risks": [
-    "NEX-091's CI verdict is UNREAD. The slice is committed and pushed but unproven. If run 46134525416 concludes red, the next run must fix forward, not re-record.",
-    "NEX-091's PR #5 body section and issue #2 comment are outstanding. Do not claim DELIVERED for it until both exist.",
-    "An IdP subject is opaque and may contain '/', '@' or '+'. Never put one in a path segment: a subject-in-path route returned 404 without reaching the use case. Address identity links by their own id.",
-    "Linking is a takeover route. Any future change to LinkExternalIdentity must keep the privilege-escalation guard (403 on a more privileged target) and the system-wide (provider, subject) uniqueness (422 rather than a silent rebind)."
+    "An IdP subject is opaque and may contain '/', '@' or '+'. Never put one in a path segment: a subject-in-path route failed to match and answered 404 without reaching the use case, so an existing link looked absent. Address identity links by their own id.",
+    "Linking is a takeover route. Any future change to LinkExternalIdentity must keep the privilege-escalation guard (403 on a more privileged target) and the system-wide (provider, subject) uniqueness (422 rather than a silent rebind of another account).",
+    "NEX-091's HTTP tests assert list contents delta-style, not absolutely: seeded demo users already hold a `demo` identity link. An absolute count asserts the seed, not the change."
   ],
-  "next_task": "Read the CI verdict for 977b21f (run 46134525416) and mark NEX-091 VERIFIED only if every check-run is completed/success. Then append NEX-091 to PR #5's body and comment on issue #2. Both are delivery debts, not optional follow-ups.",
-  "next_action": "Poll run 46134525416 to conclusion, deliver NEX-091 to PR #5 and issue #2, then select the next dependency-ready slice from BACKLOG.md / ROADMAP.md.",
-  "recovery_instructions": "Read this file and STATE.md first; git wins over both. Branch must be feature/agentic-enterprise-platform. Never trust the SHA in `commit`; read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-091 is committed and pushed at 977b21f with local gates green but NO CI verdict and NO PR/issue delivery - those are the two debts. Poll run 46134525416. Never merge PR #5.",
-  "ci_status": "UNREAD for 977b21f. Run 46134525416 was `queued` when this checkpoint was written (GitHub reported it 3s into its life). No verdict has been observed in either direction, so NEX-091 is NOT VERIFIED. Prior slice NEX-090 remains VERIFIED on docs head ea0a696 (4/4 completed/success).",
+  "next_task": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md. NEX-091 is VERIFIED and delivered; nothing is carried over. Hold the next slice to the same standard: a test that fails without the fix, a mutation that proves the test bites, and a verdict read rather than assumed.",
+  "next_action": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md. NEX-091 is VERIFIED and delivered; nothing is carried over. Hold the next slice to the same standard: a test that fails without the fix, a mutation that proves the test bites, and a verdict read rather than assumed.",
+  "recovery_instructions": "Read this file and STATE.md first; git wins over both. Branch must be feature/agentic-enterprise-platform. Never trust the SHA in `commit`; read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-091 is VERIFIED at 977b21f (CI 4/4 on 6f8ca19) and delivered to PR #5 and issue #2. There is no outstanding delivery debt. Never merge PR #5.",
+  "ci_status": "GREEN on 6f8ca19. Runs 46134645157 (push) and 46134650328 (pull_request) each read 4/4 completed/success - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both success. The product commit 977b21f has zero check-runs of its own: the docs push superseded it in the concurrency group before any reported, so its runs read completed/cancelled - never evidence in either direction. The verdict is anchored to the docs head and licensed by an empty product diff (git diff 977b21f 6f8ca19 touches only docs/NEXUS/{BACKLOG.md,CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}).",
   "commits_this_run": [
     "977b21f - feat(identity): link, list and unlink external IdP identities (NEX-091)",
-    "docs commit - NEX-091 state, log, backlog, checkpoint (this commit)"
+    "6f8ca19 - docs(nexus): record NEX-091 as committed and pushed with CI unread (that commit's own subject line, phrased for the state at that moment; superseded by the verdict recorded in ci_status and task_statuses)",
+    "docs commit - promote NEX-091 to VERIFIED after reading the CI verdict (this commit)"
   ],
   "decisions_this_run": [
     "Unlink addresses the link by its own id, not (provider, subject). An IdP subject carries '/', '@' or '+'; a subject-in-path route failed to match and returned 404 without reaching the use case, so id-addressing removes the escaping problem.",
     "Re-linking the same (provider, subject) to the same user is idempotent; binding a pair owned by a different account is refused 422 rather than silently rebinding another user's login.",
     "Unlink revokes only the sessions minted from that exact (provider, subject), in the same transaction, so a live cookie from the removed link cannot outlive it.",
     "An admin may not link an identity to a more privileged account (403). Linking is a takeover route, so the operation must not escalate.",
-    "Test assertions on the identity list are delta-based, not absolute: seeded demo users already carry a `demo` link, so an absolute count asserted the seed rather than the change under test."
+    "Test assertions on the identity list are delta-based, not absolute: seeded demo users already carry a `demo` link, so an absolute count asserted the seed rather than the change under test.",
+    "The CI verdict is anchored to the docs head because the product commit was superseded in the concurrency group before any check-run reported. An empty product diff is what licenses that anchor; 'cancelled' is never a pass."
   ],
-  "run_summary": "Run 92 completed NEX-091, the external IdP identity-linking slice: ports, SQLAlchemy adapter, three use cases, three HTTP endpoints and 23 tests (10 application, 13 HTTP). The HTTP tests were the part left unwritten by the interrupted prior segment; writing them surfaced that seeded users already hold a `demo` link, so three assertions were rewritten to be delta-based rather than absolute. Gates green: ruff format/check, mypy 144 files, full suite 1740 passed / 4 skipped. Committed 977b21f and pushed (remote head verified by ls-remote). CI run 46134525416 was queued at write time and its verdict has NOT been read, so NEX-091 is recorded as pushed-but-unproven.",
-  "docs_head_delivered": null,
-  "delivery_this_run": "None yet for NEX-091. Outstanding: PR #5 body section and issue #2 comment."
+  "run_summary": "Run 92 recovered an interrupted NEX-091 (implementation and local gates green, HTTP tests missing), wrote the 13 HTTP tests, found that seeded demo users already carry a `demo` identity link and rewrote three absolute-count assertions to be delta-based, then committed 977b21f and pushed it. Read the CI verdict rather than assuming it: the product commit's own runs read completed/cancelled (superseded), so the verdict was taken on the docs head 6f8ca19 - 4/4 completed/success on both the push and pull_request events - and licensed by an empty product diff. Delivered to PR #5 (body) and issue #2 (comment 7237852341). NEX-091 is VERIFIED.",
+  "docs_head_delivered": "6f8ca19",
+  "delivery_this_run": "PR #5 body appended with the NEX-091 section (verified by reading the live body: NEX-091 present, NEX-090 intact at 3 references, 0 x 'CI UNREAD'); issue #2 comment 7237852341."
 }

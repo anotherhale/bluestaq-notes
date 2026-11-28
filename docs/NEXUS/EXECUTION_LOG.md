@@ -11003,3 +11003,118 @@ check-run is `completed`/`success`; then append NEX-091 to PR #5's body and comm
 Both are delivery debts, not optional follow-ups.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+---
+
+## Run NEX-2026-11-28-92 (final segment) — NEX-091 VERIFIED and delivered
+
+**Timestamp:** 2026-11-28T10:23Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `977b21f` (product) · **Ending commit:** docs promotion commit
+**Docs head delivered:** `6f8ca19`
+
+### Tasks
+
+| Task | Outcome |
+| --- | --- |
+| NEX-091 external IdP identity linking | **VERIFIED**, delivered to PR #5 and issue #2 |
+| NEX-092 | not started — 15-minute window, one slice rule |
+
+No new slice was started. The window held 15 minutes on entry, which is inside the
+"do not start a new slice with under 10 minutes" guard once integration is reserved; the run
+instead closed the outstanding delivery debt, which is the only work that made NEX-091 real.
+
+### The verdict, and why it needed an argument
+
+`977b21f`'s own CI runs (`46134525416` push, `46134529681` pull_request) both read
+**`completed/cancelled`**. `gh run watch --exit-status` returned **exit 0** on that cancelled run —
+`--exit-status` reflects the watch, not the conclusion, so the exit code alone would have read as
+a pass. What the run actually reported was:
+
+> `X Canceling since a higher priority waiting request for ci-CI-refs/heads/feature/agentic-enterprise-platform exists`
+
+The docs push (`6f8ca19`, generated while recording state) entered the same concurrency group and
+cancelled the product commit's runs before any check-run reported. So the product commit finished
+with **zero check-runs of its own** — not a failure, but nothing to read either.
+
+The verdict was therefore taken on the tree that *did* conclude: `6f8ca19`, where **both**
+`46134645157` (push) and `46134650328` (pull_request) read **4/4 `completed/success`** — Backend
+(ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build). Per job, not just per
+run.
+
+`6f8ca19` is only allowed to stand in for `977b21f` because the product diff between them is
+**empty**: `git diff --stat 977b21f 6f8ca19` touches exactly four files, all under `docs/NEXUS/`.
+The green runs tested the identical product tree. That is the whole licence — an empty diff, stated
+and checked, not an assumption that a docs commit is "probably harmless".
+
+**Lesson.** A commit that is superseded in a concurrency group ends with no runs at all. Neither
+`cancelled` nor `gh run watch --exit-status` returning 0 is evidence. Read `conclusion` per run and
+per job, and make sure the head you read is the head you claim.
+
+### Delivery
+
+| Surface | Change | Verified by reading it back |
+| --- | --- | --- |
+| Issue #2 | comment `7237852341` | posted, URL returned |
+| PR #5 body | NEX-091 section appended | live body: `NEX-091` present, `NEX-090` intact (3), **0** × `CI UNREAD` |
+
+The PR body was re-fetched after the edit and compared against the intended file; the only
+difference was the trailing blank line GitHub normalises. Presence of the new text is the weak
+assertion — the useful check was that the *stale* strings were gone.
+
+### Files changed
+
+- `docs/NEXUS/CHECKPOINT.json` — NEX-091 `VERIFIED`, CI verdict with both run ids and the
+  empty-diff licence, three risks (opaque subjects never in a path; linking is a takeover route;
+  delta-style list assertions), no blockers, no delivery debt.
+- `docs/NEXUS/STATE.md` — status block rewritten from NOT VERIFIED; Next Best Actions cleared of the
+  completed debt.
+- `docs/NEXUS/BACKLOG.md` — NEX-091 status line; "Outstanding" replaced by the CI-verdict section.
+- `docs/NEXUS/EXECUTION_LOG.md` — this entry.
+
+### Promotion sweep
+
+The negation grep (`NOT VERIFIED`, `CI UNREAD`, "no verdict has been read", "outstanding") was run
+across the checkpoint, STATE, BACKLOG and the live PR body. Five hits, each classified rather than
+deleted:
+
+| Hit | Verdict |
+| --- | --- |
+| `CHECKPOINT.json:71` | my own delivery note quoting the stale string as evidence — kept |
+| `CHECKPOINT.json:54` | "There is no outstanding delivery debt" — correct, kept |
+| `CHECKPOINT.json:58` | bare commit subject read as present status — **annotated** |
+| `BACKLOG.md:2531`, `:2622` | NEX-047-era history, outside this run's scope — kept |
+| PR body `:1598` | "NEX-081 is … not VERIFIED" — true when written, historical section — kept |
+
+A promotion that edits only the machine-readable fields is half-done; the prose surfaces are where
+a stale claim survives.
+
+### Validation
+
+No product code changed in this segment. The product tree under CI is `977b21f`, unchanged since the
+previous segment, where the local gates read: format 324 files clean, `ruff check` all passed,
+`mypy` clean over 144 files, `pytest` **1740 passed, 4 skipped**.
+
+### Security findings
+
+None new. The three NEX-091 invariants are recorded in the checkpoint risks: opaque subjects must
+never be routed as path segments (a matched-failure that answered `404`, hiding an existing link);
+linking keeps its privilege guard (`403` on a more privileged target) and system-wide
+`(provider, subject)` uniqueness (`422`, never a silent rebind); unlink revokes only sessions minted
+from that exact pair.
+
+### Git
+
+- `977b21f` — `feat(identity): link, list and unlink external IdP identities (NEX-091)`
+- `6f8ca19` — `docs(nexus): record NEX-091 as committed and pushed with CI unread`
+- promotion commit — `docs(nexus): record NEX-091 as VERIFIED after reading CI`
+
+Push status: `6f8ca19` pushed and confirmed via `git ls-remote`. PR #5 open, **not draft**, **not
+merged**; merging is prohibited.
+
+### Next action
+
+Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md`. Nothing through NEX-091 is
+outstanding — no verdict unread, no surface undelivered. Carry the run's shape forward: a test that
+fails without the fix, a mutation that proves the test bites, and a CI verdict read per run and per
+job rather than inferred from an exit code.
