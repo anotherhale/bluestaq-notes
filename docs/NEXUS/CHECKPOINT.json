@@ -74,8 +74,7 @@
   "run_summary": "Run 104 closed NEX-102 (body-identity structural guard) from PUSHED to VERIFIED on its CI evidence, pushed the promotion records, delivered to PR #5 and issue #2, and read both bodies back. Reconciled a material surprise: the owner had squash-merged PR #5 thirty-six seconds before the promotion push, so main carries the test but not the promotion records - recorded precisely rather than smoothed over. Two incidents disclosed: a self-interleaving heredoc that wrote nothing, and a stray log line removed with the file confirmed byte-identical.",
   "push_status": {
     "branch": "feature/agentic-enterprise-platform",
-    "head": "4a076bf324f1b51f2fe7eee22b8876dd3c2e6fcc",
-    "remote_head": "4a076bf324f1b51f2fe7eee22b8876dd3c2e6fcc",
+    "head": "Resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. This file cannot hold the hash of the commit that contains it, so no literal here is ever the live head. The last commit known to be pushed and confirmed on the remote at the time of writing was 4a076bf (promotion records); a later docs-only commit recording this run's merge reconciliation follows it.",
     "verified_with": "git ls-remote",
     "pushed": true
   },
