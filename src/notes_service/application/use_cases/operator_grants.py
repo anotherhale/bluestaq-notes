@@ -339,6 +339,23 @@ new operational view means adding its token here in the same change — the set 
 the single place that answers "what can an operator scope actually cover".
 """
 
+REVOCABLE_OPERATOR_SCOPES = KNOWN_OPERATOR_OPERATIONS | {WILDCARD}
+"""Every scope a revocation may name, which is everything issuable plus the wildcard.
+
+``KNOWN_OPERATOR_OPERATIONS`` is the *issue* allowlist, and issuing is an
+amplifying act — the wildcard is deliberately not there, because handing one out
+widens authority and that should be a deployment decision, not a request. Revoking
+is the opposite: it *removes* authority, so the fail-closed direction is to permit
+it. Excluding the wildcard from revocation (NEX-085) left the strongest grant in
+the system unremovable through the running platform: a configuration-seeded
+wildcard operator could only be stood down by editing the deployment seed, which
+is exactly the "edit configuration to revoke" hole NEX-079 existed to close.
+
+Naming ``"*"`` is not "revoke everything": a holder with the wildcard *and* an
+explicit scope keeps the explicit one, so the audit entry still names the single
+authority removed.
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class IssueOperatorGrantRequest:
@@ -529,6 +546,7 @@ class RevokeOperatorGrant:
 
     * **Unknown scope.** Revoking a token no use case checks would report success
       while changing nothing. Refused, so a typo is a loud error, mirroring issue.
+      The wildcard is *not* unknown: see :data:`REVOCABLE_OPERATOR_SCOPES`.
     * **No self-revoke.** An operator cannot revoke their own grant. Removing your
       own authority is not a security improvement the platform needs an operator
       for, and allowing it is the mirror image of self-grant: a single compromised
@@ -558,10 +576,10 @@ class RevokeOperatorGrant:
         # Gate first, exactly like issue: a refused caller reaches no store.
         self._operator_gate.authorize(principal, operation=REVOKE_OPERATION)
 
-        if request.scope not in KNOWN_OPERATOR_OPERATIONS:
+        if request.scope not in REVOCABLE_OPERATOR_SCOPES:
             raise ValidationError(
                 f"unknown operator scope {request.scope!r}; "
-                f"expected one of {sorted(KNOWN_OPERATOR_OPERATIONS)}"
+                f"expected one of {sorted(REVOCABLE_OPERATOR_SCOPES)}"
             )
         if request.user_id == principal.user_id:
             raise Conflict(
@@ -582,6 +600,7 @@ __all__ = [
     "ISSUE_OPERATION",
     "KNOWN_OPERATOR_OPERATIONS",
     "OPERATION",
+    "REVOCABLE_OPERATOR_SCOPES",
     "REVOKE_OPERATION",
     "IssueOperatorGrant",
     "IssueOperatorGrantRequest",

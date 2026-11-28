@@ -1134,9 +1134,12 @@ class OperatorGrantRevokeRequest(StrictModel):
     "this person must no longer hold this permission", and a row id would force the
     caller to list first, then race a re-issue between the list and the revoke.
 
-    There is no ``revoked_by`` field and no way to revoke "everything": the revoker
-    is the authenticated caller, stamped by the use case, and a request must name
-    exactly the authority it removes so the audit entry is specific.
+    There is no ``revoked_by`` field: the revoker is the authenticated caller,
+    stamped by the use case. A request names exactly the authority it removes so
+    the audit entry is specific — including ``"*"``, which names the wildcard
+    grant and nothing else. Revoking the wildcard removes the strongest grant a
+    holder can carry while leaving any explicit scopes beside it in place, so it
+    is a specific revocation rather than a blanket "revoke everything" (NEX-085).
     """
 
     user_id: str

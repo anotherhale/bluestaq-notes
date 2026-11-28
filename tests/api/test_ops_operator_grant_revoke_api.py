@@ -239,3 +239,88 @@ def test_a_body_cannot_name_its_own_revoker(revoker_client: TestClient) -> None:
         headers=auth_headers(ALICE),
     )
     assert response.status_code == 422, response.text
+
+
+def test_the_wildcard_grant_can_be_revoked(app: FastAPI) -> None:
+    """The strongest grant in the system must be removable through the platform.
+
+    ``"*"`` covers every operation, so an operator holding it is the most
+    powerful actor there is. Until NEX-085 the revoke guard reused the *issue*
+    allowlist, which deliberately excludes ``"*"``: revocation therefore refused
+    the wildcard as an unknown scope, and a configuration-seeded wildcard
+    operator could be stood down only by editing the deployment seed — the very
+    "edit configuration to revoke" hole NEX-079 existed to close. Revocation
+    removes authority, so the fail-closed direction is to permit it.
+    """
+    client = _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-revoke"),
+            operator_grant(BOB, "*"),
+        ],
+    )
+    withholding = "/api/v1/ops/withholding-report"
+    assert client.get(withholding, headers=auth_headers(BOB)).status_code == 200
+
+    revoked = client.post(REVOKE_PATH, json=_revoke_body(scope="*"), headers=auth_headers(ALICE))
+    assert revoked.status_code == 200, revoked.text
+    assert revoked.json()["grants_revoked"] == 1
+
+    assert client.get(withholding, headers=auth_headers(BOB)).status_code == 404
+
+
+def test_revoking_the_wildcard_leaves_an_explicit_scope_in_place(app: FastAPI) -> None:
+    """Naming ``"*"`` is a specific revocation, not "revoke everything".
+
+    Revocation is keyed by ``(user, scope)``, so removing the wildcard must leave
+    any explicit grant beside it live. If it also removed those, ``"*"`` would be
+    a blanket wipe wearing a scope's name, and the audit entry would understate
+    what the responder actually took away.
+    """
+    client = _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-revoke"),
+            operator_grant(ALICE, "operator-access-report"),
+            operator_grant(BOB, "*"),
+            operator_grant(BOB, "withholding-report"),
+        ],
+    )
+    withholding = "/api/v1/ops/withholding-report"
+
+    revoked = client.post(REVOKE_PATH, json=_revoke_body(scope="*"), headers=auth_headers(ALICE))
+    assert revoked.status_code == 200, revoked.text
+
+    # The explicit scope survives the wildcard's removal, so BOB still reads it.
+    assert client.get(withholding, headers=auth_headers(BOB)).status_code == 200
+
+    holders = client.get(GRANTS_PATH, headers=auth_headers(ALICE))
+    assert holders.status_code == 200, holders.text
+    bob = next(row for row in holders.json()["holders"] if row["user_id"] == BOB)
+    assert bob["scopes"] == ["withholding-report"], "only the explicit scope must remain"
+
+
+def test_an_unknown_scope_is_still_refused_now_that_the_wildcard_is_accepted(
+    app: FastAPI,
+) -> None:
+    """Widening the guard to ``"*"`` must not widen it to everything.
+
+    The wildcard was added to the revocable set precisely *because* it names a
+    real, enforced grant. A token no use case checks still names nothing, so it
+    stays a ``422`` — otherwise a typo would report a revocation that removed no
+    authority, the exact "don't claim what you didn't do" failure a ``409`` for a
+    no-op revocation already guards against.
+    """
+    client = _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-revoke"),
+            operator_grant(BOB, "*"),
+        ],
+    )
+    response = client.post(
+        REVOKE_PATH,
+        json=_revoke_body(scope="not-a-real-scope"),
+        headers=auth_headers(ALICE),
+    )
+    assert response.status_code == 422, response.text
