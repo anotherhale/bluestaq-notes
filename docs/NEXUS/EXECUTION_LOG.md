@@ -10639,3 +10639,81 @@ a comfortable 10 minutes for a new slice plus its gates, commit, and push.
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
 
 
+
+## Run `NEX-2026-11-28-90` — delivery closure: the NEX-089 verdict reaches PR #5 and issue #2
+
+**Run ID** `NEX-2026-11-28-90` · **Branch** `feature/agentic-enterprise-platform` ·
+**Starting commit** `fc20956` · **Ending commit** this docs commit ·
+**Phase** Phase 3 (governance), NEX-047..NEX-089 VERIFIED.
+
+This run started no new slice. It existed because run 89 finished with a verdict it had read but a
+delivery surface that still disagreed with it, and a disagreement between what the repository says
+and what GitHub says is exactly the thing the next run must not inherit.
+
+### What was actually wrong
+
+Three artefacts contradicted the same fact in three different ways.
+
+1. **PR #5's status block** said "IMPLEMENTED, TESTED, COMMITTED, PUSHED, CI PASSED for NEX-052 and
+   NEX-053". Two task ids, roughly thirty-six slices stale.
+2. **PR #5's NEX-089 section** still said `CI UNREAD — not VERIFIED`, because run 89 wrote that
+   section before it had polled the runs.
+3. **`CHECKPOINT.json`** declared `status_semantics` = "NEX-089 is COMMITTED and PUSHED (b3130ce) but
+   NOT VERIFIED: run 89 read no CI verdict", and pinned `commit` to `c5a1250` while the branch tip was
+   `fc20956`. The run 89 promotion had updated `verified_tasks_up_to` and `ci_status` but left the
+   prose field behind, so the file asserted both that the task was verified and that it was not.
+
+The third one is the interesting failure. `verified_tasks_up_to: NEX-089` and
+`"NEX-089 is ... NOT VERIFIED"` were in the same JSON object. A recovery read that trusted the
+prose would have re-verified a verified task; a read that trusted the field would have been right
+by luck. Promotion edited the machine-readable fields and skipped the narrative one.
+
+### What changed
+
+- PR #5 body: status block replaced with a range table — NEX-052..NEX-080 per-section evidence,
+  NEX-081..NEX-089 VERIFIED with CI cited — and the NEX-089 section rewritten to VERIFIED carrying
+  runs `46129490407` (push) and `46129494580` (pull_request), both `completed/success`, plus the
+  empty-product-diff justification for anchoring to `c5a1250`.
+- Issue #2 comment `7237162851`: the verdict, both run ids, and the anchor argument stated as an
+  argument rather than an assertion.
+- `CHECKPOINT.json` atomically rewritten: `run_id` 90, `commit` `fc20956`, `status_semantics`
+  rewritten to say VERIFIED and to record the recurring product-then-docs cancellation quirk,
+  `recovery_instructions` and `next_action` updated to point at NEX-090 with the honest note that
+  no delivery debt remains.
+
+### A tooling note worth keeping
+
+The first patch attempt used `python3 - <<'PY'` with a long markdown literal. The heredoc
+self-interleaved and corrupted mid-write, exactly the failure recorded twice before in agent memory
+— and this time it did not fail cleanly: it left the target file *larger* than before with the patch
+unapplied, so `grep` found the new text nowhere and the byte count had risen by ~550. Re-fetching
+the body from GitHub with `gh pr view --json body` restored a known-good copy, and the patch was
+rewritten as a file (`/tmp/patch_pr5.py`) and run. Its own trailer assertion was wrong on the first
+run (literal `*` against a `_..._` emphasis line) and correctly aborted before writing, which is what
+a write guard is for.
+
+### Tests
+
+No code changed, so no gates were owed and none were claimed. The verdict being delivered was read
+in run 89: 4/4 `completed/success` on `c5a1250`, Backend and Frontend green in both runs.
+
+### Status
+
+| Item | Status |
+| --- | --- |
+| NEX-089 promotion to VERIFIED | VERIFIED (CI read, anchored, justified) |
+| PR #5 body | PR UPDATED |
+| Issue #2 | PR UPDATED (comment `7237162851`) |
+| Checkpoint | rewritten atomically, JSON validated by `json.load` before `os.replace` |
+| NEX-090 | PLANNED — not started |
+
+No second slice was attempted: ~1090s of the 1500s budget had elapsed when delivery finished,
+leaving under 7 minutes, well below the 10-minute threshold for starting a slice. The correct
+outcome was a clean push, not an uncommitted beginning.
+
+**Next exact action:** take NEX-090 from `docs/NEXUS/BACKLOG.md`. Do not redo NEX-077..NEX-089.
+The search pattern that produced five slices in this family is a total, a count, or an "oldest"
+value inferred from a page instead of asked for; the `PageMeta(total=len(items))` surface is now
+swept, and the remaining unpaginated reads are not on a listing route.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
