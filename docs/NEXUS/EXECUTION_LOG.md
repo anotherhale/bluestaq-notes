@@ -12854,4 +12854,44 @@ scan, and a body model constructed at runtime is invisible to it. The behavioura
 suites remain the runtime evidence; this slice raises the floor on the shapes of defect that
 survive review, it does not replace them.
 
+### Run 104, part 3 — delivery, and a merge NEXUS did not make
+
+**Delivered and read back.** PR #5 comment `7242499376` (4290 bytes / 81 lines; `NEX-102`,
+`46166360119` and the residual-limit paragraph all present in the landed body) and issue #2 comment
+`7242499683` (2220 bytes / 51 lines; `VERIFIED` and `unmerged` present). Read back through the API
+rather than trusted from the posting command's exit code.
+
+**PR #5 was already merged when the comments were posted.** `gh pr view 5` returned
+`state=MERGED`, `mergedAt=2026-11-28T16:45:30Z`, `mergedBy=anotherhale`, squash commit `7ec710ea`
+(*Enforce published governance policy at the tool gateway*), 128 files. This is the repository
+owner's action. NEXUS did not merge, did not approve, and did not request the merge; automated
+merging remains prohibited and the merge is reported as repository evidence rather than claimed as
+coordinator work.
+
+**The timing matters and was measured, not estimated.** The merge landed **36 seconds before** the
+promotion push (`4a076bf`, 16:46:06Z). Consequences, both verified rather than assumed:
+
+- main *does* carry the NEX-102 guard — `tests/architecture/test_request_body_identity.py` is
+  present on `main` at 24758 bytes.
+- main's `STATE.md` still reads **NEX-101** — the promotion records were pushed after the squash,
+  so the test is on main while the record that says it is verified is not.
+
+**`feature/agentic-enterprise-platform` is now `docs/NEXUS/` ahead of main.** `git diff --stat
+origin/main HEAD` → 6 files, 300 insertions / 53 deletions, and
+`git diff --name-only origin/main HEAD | grep -v '^docs/NEXUS/'` returns **nothing**. The branch
+holds only the promotion record; no product change is outstanding. One consequence worth stating
+rather than discovering later: if the owner merges the branch again, that diff is sitting in the
+*ancestor* direction from main's squash, so a future branch→main PR may present as empty or as a
+revert. NEXUS does not open that PR unasked — there is no open PR, and the owner has just merged.
+
+**Open PRs: zero.** Recorded because "PR UPDATED" would otherwise be claimed against a PR that no
+longer accepts updates in the sense the status means.
+
+**Next exact action.** Run 105: read `docs/NEXUS/BACKLOG.md`, select the highest-value
+dependency-ready P1 whose dependencies are satisfied, and check the selection against the phase-3
+completion criteria in `docs/NEXUS/ROADMAP.md` before writing code. The four structural guards
+(NEX-099b identity providers, NEX-100 route authentication, NEX-101 operator scope, NEX-102 body
+identity) are all **VERIFIED** and all present on main; none should be re-opened.
+
+
 

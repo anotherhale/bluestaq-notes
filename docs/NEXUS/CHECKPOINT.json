@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEXUS-2026-11-28-104",
-  "timestamp": "2026-11-28T16:35Z",
+  "timestamp": "2026-11-28T16:48Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. A file cannot hold the hash of the commit containing it. The PRODUCT commit for NEX-102 is 14b2a67 (tests/architecture/test_request_body_identity.py). Never use `git rev-parse origin/<branch>` here -- this clone's fetch refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot that lies plausibly.",
   "product_commit": "14b2a67",
@@ -12,7 +12,7 @@
   "task_statuses": {
     "NEX-100": "VERIFIED at product 9afd120.",
     "NEX-101": "VERIFIED at product ff8b6e63; CI green on the product commit itself (runs 46163954848 and 46163960436; Backend 12/12, Frontend 11/11).",
-    "NEX-102": "VERIFIED at product 14b2a671e75df1f50274d63a28ab95aef8e7804e. CI PASSED at the product commit itself: runs 46166355995 (push) and 46166360119 (pull_request), both completed/success. Read per job and per step via `gh run view <id> --json jobs`: Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped, zero in any other state. This is the verdict for the slice; no later push superseded it."
+    "NEX-102": "VERIFIED - product 14b2a67, CI green on both runs per job and per step; delivered to PR #5 (comment 7242499376) and issue #2 (comment 7242499683)"
   },
   "task_status_legend": "PLANNED != STARTED != IMPLEMENTED != TESTED != VERIFIED != COMMITTED != PUSHED != PR UPDATED != CI PASSED. NEX-102 is VERIFIED: committed at 14b2a67, pushed, and CI green at that product commit per run, per job and per step. The statuses were kept distinct during the run -- the slice read PUSHED while its CI was genuinely unfinished, and was promoted only after both runs concluded.",
   "completed_tasks": [
@@ -38,13 +38,18 @@
   "ci_status": "CI PASSED at product 14b2a67. Runs 46166355995 (push) and 46166360119 (pull_request) both completed/success, read per run, per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped, zero in any other state. This is the NEX-102 verdict and the only citable one for this slice. Standing rules unchanged: never rely on a watch exit code, never read run-level conclusion only, and a cancelled run is a superseded run rather than a failure.",
   "pr_state": {
     "number": 5,
-    "state": "open",
-    "draft": false,
-    "merged": false,
-    "head": "Resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. The citable product anchor for this run is 14b2a67.",
-    "body_covers": "NEX-052..NEX-101 at the time of writing. The NEX-102 section was NOT appended this run -- that step is deliberately deferred until CI concludes at 14b2a67, per the rule that a PR section is not added while required validation is unfinished.",
-    "note": "Never merged by automation. Remains open for human review.",
-    "ci_verdict": "Run 104's product verdict is pending (see ci_status). The NEX-101 verdict remains the last concluded one: CI PASSED at ff8b6e63."
+    "state": "MERGED",
+    "merged": true,
+    "mergedAt": "2026-11-28T16:45:30Z",
+    "mergedBy": "anotherhale",
+    "merge_commit": "7ec710ea",
+    "merge_method": "squash",
+    "files_in_squash": 128,
+    "merged_by_nexus": false,
+    "provenance": "Human owner action. NEXUS never merges; this is reported as repository evidence, not claimed as coordinator work. The squash landed 36 seconds BEFORE the promotion push 4a076bf (16:46:06Z), so main carries the NEX-102 test but not the promotion records.",
+    "branch_vs_main": "docs/NEXUS/ only - 6 files, 300 insertions, 53 deletions, no product file",
+    "open_prs": 0,
+    "next_for_main": "A future branch->main PR would deliver only the promotion record. NEXUS must not open it without a human asking, because the owner has just merged and no open PR exists."
   },
   "tracking_issue": "Issue #2 open. NEX-101 posted as comment 7242131778 and read back from the API (49/49 lines, exact match). NEX-102 was NOT posted this run -- deferred until CI concludes at 14b2a67, so the issue never carries a claim that CI has not established. The issue stays open; its acceptance criteria are program-level.",
   "blockers": [],
@@ -57,8 +62,8 @@
     "`git rev-parse origin/<branch>` reads a frozen snapshot in this clone (remote.origin.fetch maps only refs/heads/main). Use `git ls-remote`.",
     "The paging family (NEX-082..NEX-098), the auth-guard family (NEX-099b/NEX-100), the operator-gate family (NEX-101) and now the body-identity control (NEX-102) are all pinned. Do not re-open any of them."
   ],
-  "next_task": "1) Poll CI at product 14b2a67 per run, per job, per step (`gh run view <id> --json jobs`). 2) On completed/success, promote NEX-102 to VERIFIED in BACKLOG.md, STATE.md and this file, append the NEX-102 section to PR #5's body and post it to issue #2, and read both back from the API. 3) Then choose the next dependency-ready slice from docs/NEXUS/BACKLOG.md -- again a control that still relies on convention, or a P2 agent-platform gap. Do NOT re-open NEX-082..NEX-098, NEX-099b/NEX-100, NEX-101 or NEX-102.",
-  "next_action": "Poll CI at 14b2a67: `gh pr checks 5` until every entry is terminal, then `gh run view 46166355995 --json jobs` and `gh run view 46166360119 --json jobs`. If green, promote NEX-102 to VERIFIED and deliver to PR #5 and issue #2, reading both back. If red, fix the failure on the same branch before any new slice.",
+  "next_task": "Run 105: pick the next dependency-ready P1 slice from BACKLOG.md. The four structural guards (NEX-099b identity providers, NEX-100 route authentication, NEX-101 operator scope, NEX-102 body identity) are all VERIFIED and all present on main. Read BACKLOG.md for the first open P1 whose dependencies are satisfied; do not re-open a guard that is already closed.",
+  "next_action": "Read `docs/NEXUS/BACKLOG.md` and select the highest-value dependency-ready task; verify the selection against `docs/NEXUS/ROADMAP.md` phase 3 completion criteria before implementing.",
   "recovery_instructions": "Read CHECKPOINT.json, then STATE.md; Git wins any disagreement. NEX-102's product commit is 14b2a671e75df1f50274d63a28ab95aef8e7804e; resolve the live head with `git ls-remote` (never `git rev-parse origin/<branch>`). There is no uncommitted product work. If the docs-only state commit has not landed, the tree will show BACKLOG.md / STATE.md / EXECUTION_LOG.md / DECISIONS.md / CHECKPOINT.json modified -- those are documentation only; commit and push them. First action is always the CI poll in `next_action`.",
   "decisions_this_run": [
     "Wrote state files and computed the checkpoint while CI was still running, but refused to write VERIFIED anywhere: BACKLOG.md initially read VERIFIED by mistake and was corrected to PUSHED before it could ship. The status row now states its own promotion condition.",
@@ -66,7 +71,17 @@
     "Closed two ambiguities by narrowing the rule rather than widening it: route-annotation discovery replaced a name heuristic (which would have passed for the wrong reason), and the single body-credential exemption was made one named, audited entry rather than a general 'a body may carry a credential' rule.",
     "Excluded `user_id` from the actor-field pattern deliberately. On this platform it is always the target of a share or admin action, and the behavioural suites already pin that a caller may grant to another user without acting as them. Including it would have produced a false positive and invited someone to weaken the assertion."
   ],
-  "run_summary": "Run 104 delivered NEX-102, the body-identity guard: a structural test proving that caller identity is never taken from a request body. Three guarantees are derived from the source tree -- every wire-bound model forbids unknown fields (resolved through its base by name), no wire-bound model declares an actor-shaped field, and every use-case invocation takes identity from a PrincipalDep-annotated parameter (73/73 positional; the agent gateway by a trusted keyword dependency). This is a fourth, distinct control from NEX-099b (identity providers), NEX-100 (route authentication) and NEX-101 (operator gate); the distinction is recorded in STATE.md, BACKLOG.md and DECISIONS.md. The guard was proven load-bearing by three mutations, each red, each restored with an empty diff before commit. It also earned its keep during development: the new unknown-model test caught four real route helper bindings the scan had been about to treat as body models, which is why the scan is now scoped to decorated route handlers. Gates bare and green: ruff format 331, ruff check clean, mypy 144 clean, pytest 1941 passed / 0 failed / 0 errors / 4 skipped. Product commit 14b2a67 pushed and confirmed by `git ls-remote`. CI at 14b2a67 was in progress at checkpoint time -- Frontend passed on both runs, Backend still running -- and is recorded as in progress, never as passed. Delivery to PR #5 and issue #2 was deliberately deferred until that verdict exists. One incident: a heredoc-corrupted execution log was restored with `git checkout --` and rewritten through the file editor, with the file length verified identical before the clean append.",
-  "push_status": "PUSHED. Two classes of commit exist on this branch and must not be confused. PRODUCT commits carry the slice and its verdict; the one for NEX-102 is 14b2a671e75df1f50274d63a28ab95aef8e7804e, CI green. STATE-RECORD commits carry only coordinator files and are deliberately pushed after the product commit's CI has concluded, so they never cancel the run whose verdict they are about.",
-  "validation_status": "VERIFIED. CI PASSED at the product commit itself 14b2a67 -- runs 46166355995 (push) and 46166360119 (pull_request), both completed/success, read per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped. Local gates on the same tree were green too (ruff format 331 clean, ruff check clean, mypy 144 clean, pytest 1941 passed / 0 failed / 0 errors / 4 skipped), but the verification rests on CI at the product commit, not on the local run."
+  "run_summary": "Run 104 closed NEX-102 (body-identity structural guard) from PUSHED to VERIFIED on its CI evidence, pushed the promotion records, delivered to PR #5 and issue #2, and read both bodies back. Reconciled a material surprise: the owner had squash-merged PR #5 thirty-six seconds before the promotion push, so main carries the test but not the promotion records - recorded precisely rather than smoothed over. Two incidents disclosed: a self-interleaving heredoc that wrote nothing, and a stray log line removed with the file confirmed byte-identical.",
+  "push_status": {
+    "branch": "feature/agentic-enterprise-platform",
+    "head": "4a076bf324f1b51f2fe7eee22b8876dd3c2e6fcc",
+    "remote_head": "4a076bf324f1b51f2fe7eee22b8876dd3c2e6fcc",
+    "verified_with": "git ls-remote",
+    "pushed": true
+  },
+  "validation_status": {
+    "ci": "PASSED at product 14b2a67 - runs 46166355995 (push) and 46166360119 (pull_request), both completed/success, Backend 12/12 and Frontend 11/11 steps, zero failed, zero skipped.",
+    "local": "ruff format --check 331 clean, ruff check clean, mypy 144 files clean, pytest 1941 passed / 0 failed / 0 errors / 4 skipped.",
+    "status_record_commit": "4a076bf is docs-only; its CI verdict is the product commit's verdict plus an empty product diff. Structural lag documented in STATE.md."
+  }
 }
