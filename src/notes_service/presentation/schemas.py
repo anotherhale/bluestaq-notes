@@ -1195,6 +1195,12 @@ class ChainAuditReportResponse(ResponseModel):
     ``truncated`` is true the sweep stopped at the cap, so ``verified`` is false
     even with no findings — the unexamined agents could each be broken, and the
     honest answer is "unknown" rather than a false all-clear.
+
+    ``offset`` and ``next_offset`` make the cap finishable. A capped sweep used
+    to mean the agents past the cap were never verified at all, and because the
+    walk is oldest-first that was the newest chains. Continue at
+    ``next_offset`` while it is not null. A page after the first is never
+    ``verified``, however clean: it examined some agents, not the deployment.
     """
 
     verified: bool
@@ -1202,6 +1208,8 @@ class ChainAuditReportResponse(ResponseModel):
     agents_checked: int
     truncated: bool
     broken: list[ChainAuditFindingResponse]
+    offset: int
+    next_offset: int | None
 
     @classmethod
     def from_report(cls, report: ChainAuditReport) -> ChainAuditReportResponse:
@@ -1220,6 +1228,8 @@ class ChainAuditReportResponse(ResponseModel):
                 )
                 for finding in report.broken
             ],
+            offset=report.offset,
+            next_offset=report.next_offset,
         )
 
 

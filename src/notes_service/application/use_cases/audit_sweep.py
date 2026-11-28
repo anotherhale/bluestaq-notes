@@ -27,6 +27,7 @@ opening a transaction to say so would be noise.
 
 from __future__ import annotations
 
+from notes_service.application.errors import InvalidInput
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.base import UnitOfWorkFactory
 from notes_service.application.use_cases.operator_gate import OperatorGate
@@ -62,25 +63,33 @@ class SweepAuditIntegrity:
         self._operator_gate = operator_gate
         self._max_agents = max_agents
 
-    def run(self, principal: Principal) -> ChainAuditReport:
+    def run(self, principal: Principal, *, offset: int = 0) -> ChainAuditReport:
         # Platform-wide integrity data must never be reachable by content access
         # alone, so the gate is explicit rather than an AuthorizationProvider
         # decision. A granted sweep is recorded; a refused one is not.
         self._operator_gate.authorize(principal, operation=OPERATION)
+        if offset < 0:
+            raise InvalidInput("offset must not be negative")
 
         with self._uow_factory() as uow:
             total = uow.agents.count_all_for_integrity_sweep()
-            agents = uow.agents.list_all_for_integrity_sweep(limit=self._max_agents)
+            agents = uow.agents.list_all_for_integrity_sweep(limit=self._max_agents, offset=offset)
             findings = tuple(
                 finding
                 for finding in (self._sweep_agent(uow, agent) for agent in agents)
                 if finding is not None
             )
+            # Coverage is measured from the start of the deployment, not within
+            # the page, or a second page that reaches the last agent would claim
+            # to have verified agents it never loaded.
+            truncated = offset + len(agents) < total
             return ChainAuditReport(
                 agents_total=total,
                 agents_checked=len(agents),
-                truncated=len(agents) < total,
+                truncated=truncated,
                 broken=findings,
+                offset=offset,
+                next_offset=offset + len(agents) if truncated else None,
             )
 
     def _sweep_agent(self, uow: UnitOfWork, agent: AgentIdentity) -> ChainAuditFinding | None:

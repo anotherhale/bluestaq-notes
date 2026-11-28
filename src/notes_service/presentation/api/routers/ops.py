@@ -70,7 +70,9 @@ def get_withholding_report(
     dependencies=[RateLimitDep],
 )
 def sweep_audit_integrity(
-    principal: PrincipalDep, container: ContainerDep
+    principal: PrincipalDep,
+    container: ContainerDep,
+    offset: Annotated[int, Query(ge=0, description="Agents to skip, oldest first.")] = 0,
 ) -> ChainAuditReportResponse:
     """Recompute every agent's audit chain and report each contradiction.
 
@@ -80,8 +82,15 @@ def sweep_audit_integrity(
     than waiting for the affected owner to look. ``verified`` is true only for a
     *complete* sweep with no findings; a capped sweep reports ``truncated`` and
     is never ``verified``, so a partial pass cannot be read as an all-clear.
+
+    ``offset`` continues a capped sweep. The cap bounds one response, not the
+    check: without a cursor the agents past it were never verified, and since
+    the sweep walks oldest-first those were the newest chains. Follow
+    ``next_offset`` until it is null to reach every agent; that is the only way
+    the last page can report ``verified``, because any page after the first is
+    never ``verified`` on its own.
     """
-    report = container.sweep_audit_integrity().run(principal)
+    report = container.sweep_audit_integrity().run(principal, offset=offset)
     return ChainAuditReportResponse.from_report(report)
 
 

@@ -290,7 +290,7 @@ class ChainAuditFinding:
 
 @dataclass(frozen=True, slots=True)
 class ChainAuditReport:
-    """The result of verifying every agent's trail in one deployment.
+    """The result of verifying one *page* of a deployment's agent trails.
 
     ``agents_checked`` against ``agents_total`` is the honesty of the sweep. A
     sweep that silently examined the first fifty agents and reported "all
@@ -298,22 +298,43 @@ class ChainAuditReport:
     and the caller cannot mistake a partial sweep for a complete one. The same
     principle as ``ChainVerdict.checked``: a pass must carry the size of the
     thing it passed over.
+
+    ``offset`` and ``next_offset`` are what make a capped sweep finishable.
+    Before NEX-081 the sweep was always the *oldest* ``max_agents`` agents and
+    there was no way to ask for the rest, so on a deployment with more agents
+    than the cap the newest trails — the ones written most recently, and so the
+    likeliest to be tampered with by whoever just gained write access — were
+    outside the sweep permanently. A cap with no cursor is not a bound on one
+    request, it is a silent exclusion of everything past it.
     """
 
     agents_total: int
     agents_checked: int
     truncated: bool
     broken: tuple[ChainAuditFinding, ...]
+    offset: int = 0
+    next_offset: int | None = None
+
+    @property
+    def covered(self) -> int:
+        """How many agents, from the start of the deployment, this page reaches."""
+        return self.offset + self.agents_checked
 
     @property
     def verified(self) -> bool:
-        """True only when a complete sweep found no contradiction.
+        """True only when a *complete* sweep found no contradiction.
 
-        A truncated sweep is never ``verified``: the unexamined agents could
-        each be broken, so the honest answer to "is every chain intact" is
-        "unknown", and ``truncated`` is how the caller tells that apart.
+        Three ways to fail to earn it, and each is a different fact:
+
+        * ``truncated`` — agents after this page were not examined, so the answer
+          to "is every chain intact" is "unknown".
+        * ``broken`` — a contradiction was found.
+        * ``offset > 0`` — this page starts after the beginning, so even reaching
+          the end of the deployment it says nothing about the agents before it.
+          A clean second page is *not* an all-clear, and collapsing the two would
+          let an operator page through a broken deployment and see only passes.
         """
-        return not self.truncated and not self.broken
+        return self.offset == 0 and self.covered >= self.agents_total and not self.broken
 
 
 class VerifiableEntry(Protocol):

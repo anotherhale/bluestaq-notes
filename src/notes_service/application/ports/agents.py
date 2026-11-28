@@ -42,8 +42,8 @@ class AgentRepository(Protocol):
         """
         ...
 
-    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
-        """Every agent in the deployment, oldest first, capped at ``limit``.
+    def list_all_for_integrity_sweep(self, *, limit: int, offset: int = 0) -> list[AgentIdentity]:
+        """A page of the deployment's agents, oldest first, capped at ``limit``.
 
         The one unscoped enumeration, and it exists for exactly one caller: the
         operator-gated platform-wide audit sweep. ``list_for_owner`` refuses to
@@ -57,6 +57,14 @@ class AgentRepository(Protocol):
         caller compares the rows returned against :meth:`count_all_for_integrity_sweep`
         to report ``truncated``, so a partial sweep cannot be mistaken for a
         complete one.
+
+        ``offset`` is what lets a capped sweep *finish*. A limit with no way to
+        advance past it does not bound one request — it permanently excludes
+        every agent after the first page, and because the order is oldest-first
+        that is exactly the newest trails, which are the most likely to have
+        been tampered with. The order must stay deterministic across pages
+        (``created_at``, then ``id``) or paging could skip a row and still look
+        complete; see the adapter, where both are in the ``ORDER BY``.
         """
         ...
 

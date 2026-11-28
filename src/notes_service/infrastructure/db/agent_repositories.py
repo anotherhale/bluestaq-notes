@@ -268,12 +268,19 @@ class SqlAlchemyAgentRepository:
         )
         return [_agent_to_domain(row) for row in rows]
 
-    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
+    def list_all_for_integrity_sweep(self, *, limit: int, offset: int = 0) -> list[AgentIdentity]:
         # Deterministic order so a capped sweep always covers the same agents;
-        # ``id`` breaks ties when two agents share a ``created_at``.
+        # ``id`` breaks ties when two agents share a ``created_at``. Both columns
+        # stay in the ORDER BY because paging depends on the order being total:
+        # with a tie broken differently between two queries, an ``OFFSET`` page
+        # could skip the agent it should have started at and still return a full
+        # page, so the sweep would report complete coverage of a set it never saw.
         rows = (
             self._session.execute(
-                select(AgentRow).order_by(AgentRow.created_at, AgentRow.id).limit(limit)
+                select(AgentRow)
+                .order_by(AgentRow.created_at, AgentRow.id)
+                .limit(limit)
+                .offset(offset)
             )
             .scalars()
             .all()
