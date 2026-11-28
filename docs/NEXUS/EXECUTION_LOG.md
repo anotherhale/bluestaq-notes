@@ -12379,3 +12379,65 @@ restored the file to its committed 12,320 lines — but this is the fourth docum
 same kind on this host. Prose destined for a file is written with `file_editor`, then the file is
 read back. An exit code from a shell write is not evidence the write landed.
 
+
+## Run `NEX-2026-11-28-100` — every API route must authenticate, derived from the dependency graph
+
+- **Run ID:** `NEX-2026-11-28-100`
+- **Timestamp:** 2026-11-28T15:37Z
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `36da4b7` (live remote head via `git ls-remote`)
+- **Product commit:** `9afd120` — `test(architecture): derive route authentication from the dependency graph`
+- **Ending commit:** the docs-only state-record commit that follows this entry (a file cannot hold its own hash)
+
+### Task selection
+
+Phase 3 was closed through NEX-099b and `BACKLOG.md` listed nothing open with all dependencies
+satisfied, so the next dependency-ready gap came from auditing the transport boundary rather than
+from continuing a family. The finding: every API route authenticated, but **only by convention**.
+No structural test held it. Delete one `principal: PrincipalDep` parameter, or add a route with no
+`dependencies=[...]`, and the suite stayed green while an anonymous data path opened. This is the
+same "uncounted path" shape NEX-099b fixed for identity providers, one layer up.
+
+### What shipped
+
+`tests/architecture/test_route_authentication.py` (374 lines, 7 tests). It AST-parses every router in
+`presentation/api/routers/`, builds the authentication graph from `presentation/dependencies.py`
+itself — a primitive is a **call** to `authenticate` or a **raise** of `AuthenticationError`; a
+function authenticates if it takes an authenticating parameter; a `*Dep` alias naming an
+authenticating target joins it; iterate to a fixed point — then requires all 81 routes across 9
+routers to reference an authenticating dependency in `dependencies=[...]` or a parameter.
+`ANONYMOUS_ROUTES` names the four by-design public routes (`begin_login`, `complete_login`,
+`logout`, demo discovery) with a reason each; two tests fail when an exemption goes stale or when a
+declared-anonymous route starts authenticating.
+
+### The docstring was wrong, and measurement caught it
+
+The first draft asserted that ~70 routes authenticate transitively through `RateLimitDep` and that
+removing its `PrincipalDep` would make them anonymous. Measurement disproved it: all **77** protected
+routes name their own authenticating alias (74 × `{PrincipalDep, RateLimitDep}`, 3 ×
+`{AgentRateLimitDep, AgentTokenSecretDep}`). **Zero** protected routes rely on `RateLimitDep` alone.
+The docstring was rewritten to the measured topology, and the stronger property was pinned by a new
+test, `test_protected_routes_name_authentication_explicitly`, instead of being narrated. A green test
+carrying a false claim is the most expensive stale documentation there is.
+
+### Load-bearing, proven by four probes
+
+1. Removed `principal: PrincipalDep` from `enforce_rate_limit` → the shared-dependency test RED.
+2. Stripped auth from `organizations::list_my_organizations` → exactly that route RED.
+3. Left a bare `PrincipalDep = None` mention with no dependency → that route RED (mention ≠ call).
+4. Left a route authenticating only via `RateLimitDep` → the explicit-declaration test RED.
+
+Every probe artifact was restored (`git checkout`); `git diff` was empty before the real commit.
+
+### Gates (bare, as CI runs them)
+
+`ruff format --check` 329 files · `ruff check` clean · `mypy` 144 source files clean ·
+`pytest -o addopts= -q` **1878 passed, 4 skipped**.
+
+### Delivery state
+
+Committed `9afd120`, pushed, remote head confirmed with `git ls-remote` (not `rev-parse`). **CI at
+`9afd120` was still `in_progress`** (runs `46160737353` push, `46160742596` pull_request) when this
+entry was written, so NEX-100 is recorded **COMMITTED + PUSHED**, explicitly **not** VERIFIED. Prior
+head `36da4b7` was green in both runs (`46159460676`, `46159465129`).
+

@@ -7,18 +7,81 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | **NEX-099b** (run 99b, close-out): the tenant-access seam is now pinned by a **structural** guard, because the prose enumeration had counted the paths wrong twice (three, then four, while a fifth ran unchecked). `tests/architecture/test_identity_paths.py` **discovers** providers from `src/notes_service/infrastructure/identity` — any class defining `authenticate(self, context)` — instead of naming them, and requires each to call `ensure_tenant_access`, delegate to another provider, or delegate to a collaborator whose real class body reaches the seam. **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `bdc0308` (1791 passed / 4 skipped, gates green, 4 load-bearing probes); **CI PASSED** at `bdc0308` — both runs `completed/success`, verified per run **and** per job (`46158409114` push, `46158414451` pull_request; Backend 12/12 and Frontend 11/11 steps, zero failed, zero skipped in each), so NEX-099b is **VERIFIED**. Prior: **NEX-099** (run 99): the shared tenant-access rule was enforced on **four** identity paths but the **demo identity provider** was an uncounted **fifth** — it checked only `is_active`, so a suspended or deprovisioned membership still authenticated in development. Fixed by routing the demo provider through `ensure_tenant_access`. **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `20bd267` (1784 passed, 4 skipped; gates green; load-bearing probed); **CI PASSED** at `20bd267` and again at `a4e1880` after the docs commit. Prior: **NEX-098** (run 98, product `f4a2845`, CI 4/4 on the product commit itself) bounded and paged the organization roster with an exact counted total. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-099b VERIFIED**. Prior: **NEX-097** (run 97, product `febb810`, 4/4 on itself): the roster no longer lists offboarded people. |
+| Project phase | **NEX-100** (run 100): every API route now *provably* authenticates. All routes did authenticate already, but only by convention — nothing structural held it. `tests/architecture/test_route_authentication.py` parses every router and the authentication graph in `presentation/dependencies.py`, then requires all 81 routes (9 routers) to reference an authenticating dependency or be a documented exemption. **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `9afd120` (1878 passed / 4 skipped, gates green, 4 load-bearing probes); **CI PENDING at checkpoint time** — recorded COMMITTED + PUSHED, explicitly NOT VERIFIED. Prior: **NEX-099b** (run 99b): the tenant-access seam was pinned by a **structural** guard, `tests/architecture/test_identity_paths.py`, which **discovers** providers from `src/notes_service/infrastructure/identity` — any class defining `authenticate(self, context)` — instead of naming them (the prose enumeration had been wrong twice: three, then four, while a fifth ran unchecked). **VERIFIED** at `bdc0308` — CI both runs `completed/success` per run **and** per job (`46158409114` push, `46158414451` pull_request; Backend 12/12, Frontend 11/11, zero failed, zero skipped). **NEX-099** (run 99): the demo identity provider was an uncounted fifth path checking only `is_active`; fixed by routing it through `ensure_tenant_access` at `20bd267`, CI green there and at `a4e1880`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-099b VERIFIED**, NEX-100 committed. Prior: **NEX-098** (product `f4a2845`, CI 4/4 on itself) bounded and paged the organization roster. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 99b) | `09658db` — live remote head resolved with `git ls-remote`. This clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot; a fresh workspace arrives on `main` and the branch was checked out at the live head before any edit. |
-| Head commit (measured) | The live head moves with every state-record commit, so a SHA written here is stale by construction — resolve it with `git ls-remote`. What is fixed and citable: the **product** commit for NEX-099b is `bdc0308` (the identity-path guard), and the CI verdict is anchored to it. This run's close-out commits are docs-only (`a1843f8` recorded the CI verdict); no source changed in them. Prior chain: `09658db` → `0d1674c` → `a4e1880` → `20bd267` (NEX-099 implementation). Never trust a SHA recorded in this file; resolve the live head with `git ls-remote`, never `git rev-parse origin/<branch>`. |
-| Last CI result | **PASSED at `bdc0308`** (run 99b) — **both** runs `completed/success`, verified per run **and per job**: `46158409114` (push) and `46158414451` (pull_request); Backend 12/12 steps and Frontend 11/11 steps green in each, zero failed, zero skipped. Read from `gh run view --json jobs`, not from a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). The docs commit that follows invalidates this verdict for the *head*; per the lag invariant, its own CI is not quoted. Prior **PASSED at `a4e1880`** and `20bd267`, same shape. |
-| Tracking issue | #2 (open) — NEX-099b **VERIFIED** and posted as comment `7241302373` this run, carrying the per-job CI table and the four probe results; the landed body was fetched back and compared byte-for-byte against what was sent (identical, 72 lines). NEX-099 was `7240863239`, `7240892866`, `7240996168`. Issue stays **open**: its acceptance criteria are program-level. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=MERGEABLE`)** — `feature/agentic-enterprise-platform` → `main`. The PR follows the branch head, so its head is whatever `git ls-remote` reports, not a SHA recorded here; the CI verdict is anchored to the immovable product commit `bdc0308`. Body carries NEX-052…**NEX-099b**. The NEX-099b section was edited with `gh pr edit --body-file` and the **landed** body fetched back and compared (identical, 2661 lines). It now states its own `Status: VERIFIED at bdc0308` line and a note explaining why the verdict is not re-anchored to the later docs commit. **Never merged by automation.** |
-| **Open P1** | **Every identity-establishing path obeys the tenant-access seam — now enforced mechanically.** NEX-099 closed the fifth path (demo); NEX-099b added `tests/architecture/test_identity_paths.py`, which discovers providers from the source tree, so a sixth cannot ship unchecked and an exclusion cannot go stale. The docstring enumeration was wrong twice (three → four → five), which is why the guard derives the set instead of trusting prose. |
-| **Open P1b** | **No unbounded *organization* list remains.** The paging family (NEX-082…NEX-098) is closed. Remaining known whole-set read: `FoldersRepository.list_for_owner`, user-authored, small, on no paged route — deliberately not fixed (DECISIONS). |
-| **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
+| Starting commit (run 100) | `36da4b7` — live remote head resolved with `git ls-remote`. This clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot. |
+| Head commit (measured) | The live head moves with every state-record commit, so a SHA written here is stale by construction — resolve it with `git ls-remote`. Fixed and citable: the **product** commit for NEX-100 is `9afd120` (`tests/architecture/test_route_authentication.py`), and any CI verdict anchors to it. Prior chain: `36da4b7` → `9afd120` → docs close-out. Never trust a SHA recorded in this file; use `git ls-remote`, never `git rev-parse origin/<branch>`. |
+| Last CI result | **PENDING at `9afd120`** when this snapshot was written — runs `46160737353` (push) and `46160742596` (pull_request) both `in_progress`. Prior head `36da4b7` was **PASSED in both runs** (`46159460676`, `46159465129`, `completed/success`). Read from `gh run view --json jobs`, not from a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). |
+| Tracking issue | #2 (open) — NEX-099b **VERIFIED** and posted as comment `7241302373`. NEX-100 **not yet posted** at checkpoint time. Issue stays **open**: its acceptance criteria are program-level. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=MERGEABLE`)** — `feature/agentic-enterprise-platform` → `main`. The PR follows the branch head; the CI verdict will anchor to the immovable product commit `9afd120`. Body carries NEX-052…**NEX-099b**; the NEX-100 section is to be appended this run. **Never merged by automation.** |
+| **Open P1 (transport)** | **Every API route proves its authentication from the dependency graph.** NEX-100 added `tests/architecture/test_route_authentication.py`: 81 routes, 9 routers, four documented exemptions (`begin_login`, `complete_login`, `logout`, demo discovery), two tests guarding the exemption list against staleness and contradiction. The measured topology — all 77 protected routes name their own auth alias, none relies on `RateLimitDep` alone — is pinned by `test_protected_routes_name_authentication_explicitly`, not narrated. |
+| **Open P1 (identity)** | **Every identity-establishing path obeys the tenant-access seam — enforced mechanically** by NEX-099b. A sixth provider cannot ship unchecked; an exclusion cannot go stale. |
+| **Open P1b** | **No unbounded *organization* list remains.** The paging family (NEX-082…NEX-098) is closed. `FoldersRepository.list_for_owner` is deliberately unpaged (DECISIONS). |
+| **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4). Three `waitFor`-wrapped negative assertions were passing vacuously; each now anchors on a positive assertion, and the isolation test fails on a real leak. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-100 (run `NEX-2026-11-28-100`) — every API route must authenticate, derived from the dependency graph
+
+**Status: COMMITTED + PUSHED at `9afd120`; CI PENDING at checkpoint time — deliberately not VERIFIED.**
+Local gates green (1878 passed / 4 skipped; ruff format 329, ruff check clean, mypy 144 clean).
+
+Phase 3 was closed through NEX-099b with no open dependency-ready backlog items, so the next gap came
+from auditing the transport boundary. Every API route authenticated — but only by **convention**. There
+was no structural test: delete one `principal: PrincipalDep`, or add a route with no `dependencies=[...]`,
+and the suite stayed green while an anonymous data path opened. That is NEX-099b's "uncounted path"
+shape, one layer up.
+
+`tests/architecture/test_route_authentication.py` derives the answer instead of restating it. It AST-parses
+every router in `presentation/api/routers/`, builds the authentication graph from
+`presentation/dependencies.py` itself — a primitive is a **call** to `authenticate` or a **raise** of
+`AuthenticationError`; a function authenticates if it takes an authenticating parameter; a `*Dep` alias
+naming an authenticating target joins it; iterate to a fixed point — then requires all 81 routes across
+9 routers to reference an authenticating dependency in `dependencies=[...]` or a parameter. The four
+by-design public routes are listed with a reason each, and two tests keep that list honest: one fails if
+an exemption names a route that no longer exists, one if a declared-anonymous route starts authenticating.
+
+### The docstring was wrong, and measurement caught it
+
+The first draft claimed ~70 routes authenticate transitively via `RateLimitDep`, so removing its
+`PrincipalDep` would expose them. Measurement disproved it: all **77** protected routes name their own
+authenticating alias (74 × `{PrincipalDep, RateLimitDep}`, 3 × `{AgentRateLimitDep, AgentTokenSecretDep}`).
+**Zero** protected routes rely on `RateLimitDep` alone. The docstring was rewritten to the measured shape,
+and the stronger property — every protected route declares its own authentication — was pinned by a new
+test rather than narrated. Both the explicit-declaration test and the shared-dependency test are kept: the
+first makes each route's safety visible at the route, the second fails at the cause if the limiter changes.
+
+### Load-bearing, proven by four probes
+
+1. Removed `principal: PrincipalDep` from `enforce_rate_limit` → shared-dependency test RED. (The ~74
+   routes stayed green because they *also* name `PrincipalDep` — which is what revealed the wrong premise.)
+2. Stripped auth from `organizations::list_my_organizations` → exactly that route RED.
+3. Left a bare `PrincipalDep = None` mention with no dependency → that route RED (mention ≠ call).
+4. Left a route authenticating only via `RateLimitDep` → `test_protected_routes_name_authentication_explicitly` RED.
+
+Every probe artifact was restored; `git diff` was empty before the real commit.
+
+### Known limitation
+
+The guard measures syntax, not runtime: a route could name `PrincipalDep` and ignore it. Acceptable because
+`get_principal` raises on a missing credential, but this is not a runtime proof — the API tests remain the
+behavioural evidence, and review catches a discarded dependency.
+
+## Next best actions (run `NEX-2026-11-28-100`)
+
+NEX-100 closes the transport-boundary authentication guard. Do not extend the authentication-test family
+further without a concrete uncovered path.
+
+1. **Confirm CI at `9afd120`** by reading BOTH runs per run *and* per job (`gh run view <id> --json jobs`);
+   if green, promote NEX-100 to VERIFIED in `CHECKPOINT.json`/`STATE.md`.
+2. **Deliver**: append the NEX-100 section to PR #5 body with `--body-file` and read the landed body back;
+   post the result to issue #2 and read the landed comment back.
+3. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md` — the first open Phase 5 item
+   whose dependencies are all VERIFIED, or a Phase 3 governance slice.
+4. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+
+**Do not redo** NEX-100 or anything before it. **Do not** re-append NEX-079…NEX-099b to PR #5's body —
+all of them are already in it; append only NEX-100.
 
 ## NEX-098 (run `NEX-2026-11-28-98`) — the organization roster was a whole-set read whose total was its own length
 
