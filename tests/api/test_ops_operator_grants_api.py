@@ -15,11 +15,13 @@ holders and refuses everyone else the same way every other ``/ops`` view does.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import ALICE, BOB, auth_headers, operator_grant
+from tests.conftest import ALICE, BOB, CAROL, auth_headers, operator_grant
 
 PATH = "/api/v1/ops/operator-grants"
 
@@ -254,3 +256,59 @@ def test_an_operator_cannot_issue_a_grant_to_themselves(app: FastAPI) -> None:
     client = _issuer_client(app)
     response = client.post(ISSUE_PATH, json=_issue_body(user_id=ALICE), headers=auth_headers(ALICE))
     assert response.status_code == 409, response.text
+
+
+def test_a_deadline_beyond_the_issuers_own_is_a_409(app: FastAPI) -> None:
+    """Temporal attenuation holds through the route, the store and the gate (NEX-084).
+
+    The use case is covered directly in ``tests/application/test_issue_operator_grant.py``.
+    This covers what that cannot: that the ceiling survives the round trip through
+    the store and the gate, rather than only existing on the object the use case
+    returned.
+
+    BOB is *not* given ``withholding-report`` by configuration, because a seeded
+    grant is unbounded and would give him no ceiling to exceed. His only authority
+    for that scope is the grant ALICE issues below, which is short. His
+    ``operator-grant-issue`` config grant lets him reach the endpoint, and being a
+    different scope it must not widen that ceiling.
+
+    409 rather than 422: the request is well formed and the scope is legal; policy
+    refuses it. 403 would be wrong too — BOB reaches this resource, so this is the
+    known-but-insufficient answer, not an existence-hiding 404.
+    """
+    now = datetime.now(UTC)
+    client = _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-issue"),
+            operator_grant(ALICE, "withholding-report"),
+            operator_grant(BOB, "operator-grant-issue"),
+        ],
+    )
+    short = now + timedelta(minutes=90)
+    issued = client.post(
+        ISSUE_PATH,
+        json=_issue_body(user_id=BOB, expires_at=short.isoformat()),
+        headers=auth_headers(ALICE),
+    )
+    assert issued.status_code == 201, issued.text
+
+    refused = client.post(
+        ISSUE_PATH,
+        json=_issue_body(user_id=CAROL, expires_at=(now + timedelta(days=30)).isoformat()),
+        headers=auth_headers(BOB),
+    )
+    assert refused.status_code == 409, refused.text
+    body = refused.json()
+    assert body["error"]["code"] == "conflict"
+    # The refusal says *why* in terms an operator can act on: they may still issue,
+    # just not past their own deadline. It names the scope, not the other user.
+    assert "may not issue a grant that outlives" in body["error"]["message"]
+
+    # And the rule is a ceiling, not a ban: BOB may still issue inside it.
+    allowed = client.post(
+        ISSUE_PATH,
+        json=_issue_body(user_id=CAROL, expires_at=(now + timedelta(minutes=45)).isoformat()),
+        headers=auth_headers(BOB),
+    )
+    assert allowed.status_code == 201, allowed.text

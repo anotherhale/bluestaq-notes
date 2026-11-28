@@ -417,7 +417,7 @@ class IssueOperatorGrant:
                 f"unknown operator scope {request.scope!r}; "
                 f"expected one of {sorted(KNOWN_OPERATOR_OPERATIONS)}"
             )
-        self._require_attenuation(principal, request.scope)
+        ceiling = self._require_attenuation(principal, request.scope)
 
         now = self._clock.now()
         # Awareness is checked before the comparison for the same reason the domain
@@ -431,6 +431,17 @@ class IssueOperatorGrant:
             )
         if request.expires_at <= now:
             raise ValidationError("an operator grant must expire in the future")
+        if ceiling is not None and request.expires_at > ceiling:
+            # Temporal attenuation (NEX-084). Without this an issuer whose own grant
+            # lapses in an hour could hand the same scope on for a month, turning a
+            # bounded incident grant into an unbounded one on the holder's say-so.
+            # Scope attenuation covered *what* may be delegated but never *for how
+            # long*, which is the dimension this authority is bounded in.
+            raise Conflict(
+                "an operator may not issue a grant that outlives their own; "
+                f"{principal.user_id} may delegate {request.scope!r} only until "
+                f"{ceiling.isoformat()}"
+            )
         grant = OperatorGrant(
             user_id=request.user_id,
             scope=request.scope,
@@ -442,21 +453,48 @@ class IssueOperatorGrant:
         self._grants.add(grant)
         return grant
 
-    def _require_attenuation(self, principal: Principal, scope: str) -> None:
-        """Refuse a scope the issuer does not hold.
+    def _require_attenuation(self, principal: Principal, scope: str) -> datetime | None:
+        """Refuse a scope the issuer does not hold; return how long they hold it until.
 
         Checked against the gate's live scopes rather than against configuration,
         so an issuer whose own grant has lapsed cannot use a stale memory of it to
         hand the same scope onward. A wildcard holder may issue anything, because
         the wildcard already covers it.
+
+        The return value is the **temporal** ceiling of that authority — the latest
+        instant the issuer is authorized for ``scope`` among their own live grants —
+        and is ``None`` when it is unbounded. Scope attenuation alone let an issuer
+        whose grant lapses in an hour hand the same scope on for a month: a grant
+        that can be converted into a longer one by its holder is not bounded in the
+        dimension that matters. Returning the ceiling rather than comparing it here
+        keeps the refusal message with the caller and keeps this method one store
+        read, so attenuation and lifetime describe the same instant.
         """
-        held = self._operator_gate.scopes_for(principal.user_id)
-        if WILDCARD in held or scope in held:
-            return
-        raise Conflict(
-            f"an operator may only issue a scope they hold; "
-            f"{principal.user_id} does not hold {scope!r}"
-        )
+        now = self._clock.now()
+        active = self._grants.active_grants(now=now)
+        held = {grant.scope for grant in active if grant.user_id == principal.user_id}
+        if WILDCARD not in held and scope not in held:
+            raise Conflict(
+                f"an operator may only issue a scope they hold; "
+                f"{principal.user_id} does not hold {scope!r}"
+            )
+
+        horizon: datetime | None = None
+        for grant in active:
+            # A grant covers the requested scope either by naming it or by being
+            # the wildcard. The ceiling is the furthest of those, not the nearest:
+            # an issuer who holds a scope for a week has not narrowed to an
+            # unrelated five-minute grant of the same scope, and refusing on the
+            # nearer one would reject a hand-out their authority plainly covers.
+            if grant.user_id != principal.user_id:
+                continue
+            if grant.scope != scope and grant.scope != WILDCARD:
+                continue
+            if grant.expires_at is None:
+                return None
+            if horizon is None or grant.expires_at > horizon:
+                horizon = grant.expires_at
+        return horizon
 
 
 @dataclass(frozen=True, slots=True)

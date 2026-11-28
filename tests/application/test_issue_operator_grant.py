@@ -27,7 +27,7 @@ import pytest
 
 from notes_service.application.errors import Conflict, ResourceNotFound
 from notes_service.application.ports.clock import Clock
-from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.operator_gate import WILDCARD, OperatorGate
 from notes_service.application.use_cases.operator_grants import (
     ISSUE_OPERATION,
     IssueOperatorGrant,
@@ -253,3 +253,170 @@ def test_the_issued_grant_is_readable_back_from_the_store() -> None:
     (holder,) = [g for g in grants.active_grants(now=BASE) if g.user_id == BOB]
     assert holder.rationale == RATIONALE
     assert holder.granted_by == ALICE
+
+
+def test_a_grant_may_not_outlive_the_issuers_own_grant_of_that_scope() -> None:
+    """Temporal attenuation: a grant narrows authority, it never extends it (NEX-084).
+
+    Scope attenuation already stops an issuer handing on a permission they lack.
+    It says nothing about *lifetime*, so an operator whose own grant lapses in an
+    hour could issue the same scope to someone else for a month — widening
+    authority in the only dimension scope attenuation does not cover. An incident
+    grant is meant to cover the incident; if it can be converted into a longer one
+    by the person it was handed to, "bounded" means nothing.
+    """
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=1),
+        ),
+    )
+    # ALICE's own withholding-report lapses at BASE+1h; she asks for BASE+4h.
+    with pytest.raises(Conflict):
+        _use_case(grants).execute(_principal(ALICE), _request(user_id=BOB, expires_at=DEADLINE))
+    assert grants.active_for(BOB, now=BASE) == frozenset()
+
+
+def test_a_grant_inside_the_issuers_window_is_allowed() -> None:
+    """The rule is a ceiling, not a prohibition: a shorter window is attenuation.
+
+    Pinned so the fix cannot be "refuse everything with a deadline". The point is
+    that the issued grant must end no later than the authority it derives from.
+    """
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=3),
+        ),
+    )
+    grant = _use_case(grants).execute(
+        _principal(ALICE), _request(user_id=BOB, expires_at=BASE + timedelta(hours=2))
+    )
+    assert grant.expires_at == BASE + timedelta(hours=2)
+
+
+def test_a_grant_at_exactly_the_issuers_deadline_is_allowed() -> None:
+    """Equal to the ceiling is inside it — the child ends when the parent does."""
+    ceiling = BASE + timedelta(hours=1)
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=ceiling,
+        ),
+    )
+    grant = _use_case(grants).execute(_principal(ALICE), _request(user_id=BOB, expires_at=ceiling))
+    assert grant.expires_at == ceiling
+
+
+def test_the_ceiling_is_the_latest_live_grant_not_the_earliest() -> None:
+    """An issuer holding several grants of one scope may use the strongest one.
+
+    ``withholding-report`` can be held by more than one grant (a short incident
+    grant alongside a longer one). The ceiling is the furthest they are
+    authorized *as of now*, not the nearest deadline — narrowing to the nearest
+    would refuse a legitimate hand-out to an operator whose longer grant plainly
+    covers it.
+    """
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(minutes=5),
+        ),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=6),
+        ),
+    )
+    grant = _use_case(grants).execute(
+        _principal(ALICE), _request(user_id=BOB, expires_at=BASE + timedelta(hours=5))
+    )
+    assert grant.expires_at == BASE + timedelta(hours=5)
+
+
+def test_an_unbounded_grant_may_issue_up_to_the_live_ceiling() -> None:
+    """A configuration grant never lapses, so it is the ceiling and imposes no new one.
+
+    The seed path issues unbounded grants (``granted_by=None``). A holder of one
+    must remain able to hand the scope on with any deadline — the fix must not
+    silently make the platform's own operators unable to issue at all.
+    """
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(scope="withholding-report", expires_at=None),
+    )
+    grant = _use_case(grants).execute(
+        _principal(ALICE), _request(user_id=BOB, expires_at=BASE + timedelta(days=30))
+    )
+    assert grant.expires_at == BASE + timedelta(days=30)
+
+
+def test_a_wildcard_issuer_is_still_bounded_by_their_own_wildcard_deadline() -> None:
+    """The wildcard covers every scope; it does not cover every *time*.
+
+    A wildcard means "all operations", so the scope check passes. Its expiry is
+    still a bound on the authority it represents, so the temporal ceiling applies
+    to a wildcard holder exactly as it does to a single-scope one.
+    """
+    grants = _store(
+        _issuer_grant(
+            scope=WILDCARD,
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=1),
+        )
+    )
+    with pytest.raises(Conflict):
+        _use_case(grants).execute(
+            _principal(ALICE), _request(user_id=BOB, scope="policy-publish", expires_at=DEADLINE)
+        )
+
+
+def test_a_wildcard_issuer_with_the_latest_grant_may_issue_any_scope_within_it() -> None:
+    """The wildcard ceiling is the latest of the wildcard grants, not the nearest."""
+    grants = _store(
+        _issuer_grant(
+            scope=WILDCARD,
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=1),
+        ),
+        _issuer_grant(
+            scope=WILDCARD,
+            granted_at=BASE - timedelta(hours=3),
+            expires_at=BASE + timedelta(hours=8),
+        ),
+    )
+    grant = _use_case(grants).execute(
+        _principal(ALICE), _request(user_id=BOB, scope="policy-publish", expires_at=DEADLINE)
+    )
+    assert grant.expires_at == DEADLINE
+
+
+def test_the_ceiling_applies_only_to_live_grants_of_the_named_scope() -> None:
+    """A lapsed longer grant is not a ceiling: it confers nothing to hand on.
+
+    The ceiling is computed from *active* grants only. Counting a lapsed one would
+    let an operator whose authority has already ended still mint a window, which
+    inverts the rule.
+    """
+    grants = _store(
+        _issuer_grant(scope=ISSUE_OPERATION),
+        _issuer_grant(
+            scope="withholding-report",
+            granted_at=BASE - timedelta(hours=9),
+            expires_at=BASE - timedelta(hours=3),
+        ),
+    )
+    # Only a lapsed grant of the scope exists, so it is no ceiling at all: the
+    # issuer does not hold the scope and scope attenuation refuses first.
+    with pytest.raises(Conflict):
+        _use_case(grants).execute(
+            _principal(ALICE), _request(user_id=BOB, expires_at=BASE + timedelta(hours=2))
+        )
