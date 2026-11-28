@@ -21,9 +21,10 @@ truth; this file records intent and reconciliation.
 
 ## NEX-076 (run `NEX-2026-11-27-76`) — a human-issued grant must say why
 
-**Status: IMPLEMENTED + TESTED, COMMITTED + PUSHED (CI not yet read).** Not VERIFIED until CI on
-the product commit is read. Local gates: 1569 passed / 4 skipped, ruff format+check clean, mypy
-clean.
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED + CI PASSED + VERIFIED.** CI `4fa0463`
+4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T03:22Z. Local gates: 1569
+passed / 4 skipped, ruff format+check clean, mypy clean; migration verified
+`upgrade → downgrade → upgrade` on SQLite.
 
 **The gap.** NEX-074 made an operator grant issuable and stamped the issuer, but recorded no
 reason — its own explicit follow-up. An auditor could reconstruct *that* a grant was handed out and
@@ -46,7 +47,12 @@ human write path did not exist before NEX-074), so inventing reasons would fabri
 restart-durability and empty-string-constraint tests, and API tests (201 round-trip; missing /
 blank / over-long reason each `422`; non-operator `404`; self-grant `409`).
 
-**Next.** Read CI on the product commit, then promote to VERIFIED and append NEX-076 to PR #5's body.
+**Delivered to GitHub.** NEX-076 is appended to PR #5's body (now NEX-052..NEX-076, 63858 chars).
+
+**Next.** NEX-076 is closed. The next run picks the next dependency-ready slice. Two small
+follow-ups this slice recorded stay open: expose the rationale on the grant read path (a
+disclosure decision), and ask the owner whether PR #5's twenty-two stacked slices should be split
+before review.
 
 ## NEX-075 (run `NEX-2026-11-27-75`) — the access log gets a bounded retention window
 

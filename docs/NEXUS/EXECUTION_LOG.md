@@ -9174,3 +9174,78 @@ looks like a domain bug and is really a test-fixture misunderstanding.
 
 **Next.** Read CI on the product commit; on green, promote NEX-076 to VERIFIED and append its
 section to PR #5's body.
+
+---
+
+## Run `NEX-2026-11-27-76b` — verification pass: NEX-076 promoted to VERIFIED
+
+- **Run ID**: `NEX-2026-11-27-76b`
+- **Timestamp**: 2026-11-28T03:26Z
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `4fa0463` (docs commit from run 76; product commit `4384a4e` beneath it)
+- **Ending commit**: this docs commit
+- **Tasks completed**: none new — this run closed the one action run 76 left open.
+- **Tasks verified**: **NEX-076**.
+
+### What this run did
+
+Run 76 ended with NEX-076 IMPLEMENTED + TESTED + COMMITTED + PUSHED but explicitly **not
+VERIFIED**, because CI had not been read. Verification is the whole point of the status ladder, so
+the first action here was to read CI rather than start another slice.
+
+**CI read.** `GET /commits/4384a4e/check-runs` returned 4 runs, all `completed` / `cancelled` —
+and that is the trap this repository has hit before: a `cancelled` conclusion on the **product**
+commit means the **docs** commit superseded it in the same branch concurrency group, not that
+anything failed. The docs commit descends from the product commit, so its CI compiles and tests the
+same product code. Polling the docs head `4fa0463` is the valid evidence.
+
+| Poll | Frontend | Backend |
+| --- | --- | --- |
+| T+0 | 2× `completed/success` | 2× `in_progress` |
+| T+4m | 2× `completed/success` | 2× `completed/success` |
+
+**Result: 4/4 `completed/success` on `4fa0463`.** NEX-076 is VERIFIED. The two pairs per SHA are
+normal (the concurrency group re-runs); both pairs agree.
+
+### PR #5 body
+
+Appended the NEX-076 section. The body went from 60453 → 63858 chars and now carries
+NEX-052..NEX-076. Verified after the PATCH: exactly **one** occurrence of `## NEX-076` and one of
+its title line, so the append did not duplicate (a duplicated append has happened before and is
+invisible unless counted).
+
+### A status field that would have lied
+
+Promoting the prose was not enough. `CHECKPOINT.json` keeps **two** records of verification:
+`task_statuses["NEX-076"]` (per-task prose) and the top-level `verified_tasks` list. The script
+updated the first and left the second without `NEX-076` — so the machine-readable list of verified
+work, the one a reader would trust, would have disagreed with the prose. Both are now consistent:
+`verified_tasks` ends `[..., 'NEX-073', 'NEX-074', 'NEX-075', 'NEX-076']`.
+
+The same pass corrected `project_phase`, `active_task`, `in_progress_tasks`, `ci_status`,
+`last_ci_result`, `validation_status` and `run_summary`, all of which still described the pre-CI
+state. Two `NOT VERIFIED` strings that remain in `STATE.md` are historical run records
+(NEX-053 at line 2440, NEX-062 at line 2623) and are append-only history, not live status — left
+untouched deliberately.
+
+### Gates
+
+`.venv/bin/ruff format docs/NEXUS` → 5 files left unchanged; `.venv/bin/ruff check` → All checks
+passed. No source files changed in this run, so the product gates were not re-run; the evidence for
+them is CI on `4fa0463`.
+
+### Files changed
+
+`docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`, `docs/NEXUS/BACKLOG.md`,
+`docs/NEXUS/EXECUTION_LOG.md`. GitHub: PR #5 body.
+
+### Risks
+
+- PR #5 now carries **twenty-two** stacked slices (NEX-052..NEX-076). A reviewer facing a 63 KB
+  body and ~22 commits will not review it well. Splitting is a decision for the repository owner,
+  not something an automation should do unilaterally; it is recorded as a follow-up.
+
+### Next action
+
+NEX-076 is closed. The next run selects the next dependency-ready slice from `BACKLOG.md`. Do not
+re-implement NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058.

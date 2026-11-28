@@ -3291,7 +3291,7 @@ NEX-074 and NEX-075.
 | Field | Value |
 | --- | --- |
 | Phase | 3 (governance) |
-| Status | **IMPLEMENTED + TESTED** locally — CI not yet read, so **not VERIFIED** |
+| Status | **VERIFIED** — CI `4fa0463` 4/4 `completed/success`, polled 2026-11-28T03:22Z; 1569 passed / 4 skipped locally |
 | Priority | P1 — an audit of a privileged hand-out that cannot say *why* answers half the question |
 | Dependencies | NEX-074 (operator-grant issuance), NEX-072 (durable `operator_access_log`) |
 | Architecture | `domain/identity/operator_grant.py`, `application/use_cases/operator_grants.py`, migration `b4e6f1a2c9d7` |
@@ -3339,5 +3339,8 @@ so the two cannot drift.
 stored, returned, and readable after a restart; a human-issued grant cannot be constructed without
 one; a configuration grant cannot carry a fabricated one; the schema and domain agree on the bound.
 
-**Remaining.** Read CI on the product commit and promote to VERIFIED. Append NEX-076 to PR #5's
-body.
+**Remaining.** Nothing. Delivered to GitHub: PR #5's body now carries NEX-052..NEX-076.
+
+**Follow-ups recorded by this slice (not part of it).** Expose the rationale on the grant read path
+(a disclosure decision — the issue response already echoes it, listings do not), and ask the owner
+whether PR #5's twenty-two stacked slices should be split before review.
