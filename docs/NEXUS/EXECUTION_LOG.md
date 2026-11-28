@@ -12042,3 +12042,69 @@ D-099.
 
 No `VERIFIED` and no `MERGED` status is claimed here. Product CI has not run at the time of writing.
 
+
+## Close-out — run `NEX-2026-11-28-99`
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-28-99` |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `6e95ae2` (live remote head via `git ls-remote`) |
+| Ending commit | `20bd26730a80565f82298058c8edaf5aed9dd1f4` |
+| Files changed | 9 (2 adapters, 2 test files, 5 coordinator docs) |
+| Migrations | none |
+| Security findings | 1 fixed (demo path bypassed the tenant-access rule); no new risk introduced |
+
+### Delivery evidence
+
+- **COMMITTED / PUSHED.** `git push 6e95ae2..20bd267`; remote head confirmed with
+  `git ls-remote` — `20bd26730a80565f82298058c8edaf5aed9dd1f4`, matching the local head.
+  `rev-parse` was deliberately not trusted: this clone's fetch refspec maps only
+  `refs/heads/main`, so `origin/feature/...` is a stale snapshot that agrees with itself.
+- **CI PASSED on the `push` run.** Run `46155922886`, head `20bd267`, `completed/success`,
+  verified **per job**: Backend 12/12 steps green, Frontend 11/11 steps green, zero failed,
+  zero skipped.
+- **CI still running on the `pull_request` run** (`46155928352`, head `20bd267`), observed
+  `in_progress` when this run closed. The `push` verdict is on the same `head_sha` and the same
+  commit, so it is a genuine verdict on this code; the `pull_request` duplicate is recorded as
+  pending rather than assumed. **No claim is made about it.**
+- **PR #5 updated and read back.** Body extended through NEX-099 with `gh pr edit --body-file`,
+  then fetched back: 2540 lines landed vs 2539 sent, identical after normalising the trailing
+  newline. The publisher's exit 0 was *not* treated as evidence. PR left **open and unmerged**.
+- **Issue #2 commented** (`7240863239`), link recorded. Issue left **open** — its acceptance
+  criteria are program-level.
+
+### Process defect worth recording (second occurrence this run)
+
+A shell heredoc carrying prose self-interleaved into an unparseable Python script twice — once
+for the commit message, once for the `STATE.md` updater. Both times the file on disk was left
+untouched (the commit aborted; the script raised `SyntaxError` before writing), so no work was
+lost, but two attempts were burned. **Prose destined for a file or a publisher goes through
+`file_editor` and `--body-file`, never a heredoc.** `python3 - <<'PY'` with long multi-line
+string literals containing non-ASCII characters is specifically unsafe here.
+
+### Why the `pull_request` run matters less than it appears
+
+Both runs check out the same `head_sha`. A `push` run that is green per job at commit `20bd267`
+has already exercised the backend gates against this exact tree. The `pull_request` run
+duplicates that work; recording it as pending is the honest status, not a gap in verification.
+
+### Status at close
+
+| Status | Applies to |
+| --- | --- |
+| IMPLEMENTED | demo provider enforcement, docstring correction |
+| TESTED | 1784 passed / 4 skipped, gates green, load-bearing probed |
+| COMMITTED | `20bd267` |
+| PUSHED | remote head `20bd267`, confirmed by `ls-remote` |
+| CI PASSED | `46155922886` at `20bd267`, 2/2 jobs, 23/23 steps |
+| PR UPDATED | #5 body read back and compared |
+| VERIFIED | **yes for NEX-099** — implementation, test, push and CI all evidenced at one commit |
+| MERGED | **never** — prohibited, and the PR remains open for human review |
+
+### Next exact action
+
+Select the next dependency-ready task from `docs/NEXUS/BACKLOG.md`. The standing P1 is the
+identity-path audit: the tenant-access seam's enumeration has now been wrong twice, so grep for
+identity providers rather than trusting the docstring list. Confirm the `pull_request` run
+`46155928352` concluded green before quoting CI for the PR.
