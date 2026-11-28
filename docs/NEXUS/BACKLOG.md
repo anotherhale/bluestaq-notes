@@ -3510,3 +3510,46 @@ from an invalid offset.
 
 **Remaining.** Nothing for this slice. CI 4/4 at `85a013c`; PR #5's body carries NEX-081 and
 issue #2 comment `7234571708` reports it.
+
+---
+
+## NEX-082 — Page the operator access trail so the whole thing is readable (run `NEX-2026-11-28-82`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Audit Center |
+| Priority | P1 — an audit surface that could only show its newest window, permanently |
+| Status | **IMPLEMENTED + TESTED locally; CI NOT YET POLLED** — product `4f8e15d`, docs `25f5a6c`, both pushed |
+| Dependencies | ADR-017 (access-log retention), NEX-075 (bounded retention) — met |
+| Architecture | `application/ports/operator_access.py`, `application/use_cases/operator_access_report.py`, `infrastructure/db/operator_access_log.py`, `infrastructure/security/operator_access_log.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** `GET /ops/access-report` returned at most `limit` newest entries and offered no
+way to reach further back, while retention keeps the operator access log for years. Every
+granted operator read older than the newest window was permanently unreadable: the log
+recorded it, and no endpoint could show it. On an audit surface "read the trail" silently
+meant "read its most recent few hundred rows".
+
+**Delivered.**
+
+- `OperatorAccessEntry.position` — an opaque, monotonic insertion ordinal, exposed for
+  comparison only and documented as *not* a count (retention deletes and the ring evicts).
+- `recent(*, limit, before_position=None)` — returns entries strictly older than the cursor.
+- SQL adapter: the surrogate `id` is the position and is unique, so a page boundary can never
+  land between two entries; predicate `id < cursor`.
+- In-memory ring: a monotonic counter, **not** `len(entries)`, because the ring evicts.
+- `before_position` query param on the route; per-entry `position` and per-page `next_position`
+  in the response.
+- A non-positive cursor is rejected; `next_position` is offered only when the window filled;
+  `truncated` is true for a middle page too.
+
+**Why keyset and not offset.** Reading this endpoint appends to the log it reads, so an OFFSET
+page shifts by one row per page — repeating one entry and skipping another. See D-082 in
+`DECISIONS.md`.
+
+**Validation.** Full suite `1652 passed, 4 skipped` on `4f8e15d`; ruff format 321 files
+unchanged; ruff check clean; mypy clean on 143 source files. 14 new API paging tests, 15 adapter
+keyset tests, 16 use-case tests. Mutation control observed failing (forcing the cursor to `None`
+fails 3 of 6 new paging tests).
+
+**Remaining.** Poll CI for `4f8e15d`/`25f5a6c`, then append this section to PR #5's body and
+update issue #2 (both still end at NEX-081).
