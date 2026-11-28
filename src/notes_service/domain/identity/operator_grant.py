@@ -146,8 +146,23 @@ class OperatorGrant:
     taken away, by whom and when, is the point of keeping it.
 
     Revocation only ever *removes* authority, so it is honoured unconditionally —
-    see :meth:`is_active`. The two fields are set together or not at all: a
-    revocation nobody signed is not a record.
+    see :meth:`is_active`. ``revoked_at`` and ``revoked_by`` are written together
+    by the revoke path, but a revocation deliberately remains valid without its
+    actor (NEX-080). The actor columns are foreign keys to ``users`` with
+    ``ON DELETE SET NULL``, so deleting the account of whoever revoked or issued a
+    grant rewrites these columns. Two consequences, both fixed here rather than
+    papered over:
+
+    * a **revocation outlives its revoker**, which is the whole point — the record
+      that authority was taken away must survive the removal of the person who
+      took it;
+    * the *issuer* columns (``granted_by``/``revoked_by``) may now be NULL on a
+      grant that still carries a ``rationale``. Before NEX-080 the pairing checks
+      below treated that as a contradiction, so a deleted issuer made every read
+      of the store — the gate lookup included — raise ``ValidationError``, which
+      locked the whole ``/ops`` surface out with a 500. Provenance is therefore
+      validated at **write** time, where a human supplies it, and tolerated as
+      merely absent when a user deletion has erased the reference.
     """
 
     user_id: UserId
@@ -180,10 +195,15 @@ class OperatorGrant:
             # A grant a person issued must say why. Configuration grants are the
             # one exception: their reason is the deployment itself.
             raise ValidationError("a human-issued operator grant must carry a rationale")
-        if self.granted_by is None and self.rationale is not None:
-            # The reverse would attribute a reason to a deployment that never gave
-            # one, which is a fabricated audit fact rather than a missing one.
-            raise ValidationError("a configuration operator grant must not carry a rationale")
+        # NOTE (NEX-080): ``granted_by is None`` with a non-None ``rationale`` is
+        # *not* rejected here. It is the shape a row takes after its issuer's
+        # account is deleted, because ``granted_by`` is an ``ON DELETE SET NULL``
+        # foreign key while ``rationale`` is plain text that survives. The pairing
+        # is still enforced where a human supplies it — ``IssueOperatorGrant``
+        # requires a rationale and a configuration seed forbids one — so this type
+        # accepts the post-deletion state rather than making every read of the
+        # store raise. Previously this branch existed and a deleted issuer turned
+        # the gate lookup itself into a 500.
         # Awareness is checked before any comparison, because comparing a naive to
         # an aware datetime raises TypeError rather than returning False - an
         # unhandled 500 rather than the fail-closed refusal this type promises.
@@ -197,13 +217,13 @@ class OperatorGrant:
                     f"operator grant {field_name} must be timezone-aware; "
                     "a naive datetime names a wall-clock reading, not an instant"
                 )
-        if self.revoked_at is not None and self.revoked_by is None:
-            # A revocation with no actor is an anonymous erasure of someone else's
-            # authority — exactly the fact an audit must be able to attribute.
-            raise ValidationError("a revoked operator grant must record who revoked it")
         if self.revoked_by is not None and self.revoked_at is None:
-            # The reverse would name a revoker for a grant that is still live,
-            # which reads as a revocation that never happened.
+            # Naming a revoker for a grant that is still live reads as a revocation
+            # that never happened, so this half is still refused. The *other* half
+            # — ``revoked_at`` with no ``revoked_by`` — is deliberately allowed:
+            # see ``revoked_by`` in the class docstring. NEX-080 removed the
+            # matching CHECK because ``ON DELETE SET NULL`` on a real foreign key
+            # silently rewrote these rows to exactly that state.
             raise ValidationError("a revoker on an operator grant requires revoked_at")
         if self.revoked_at is not None and self.revoked_at < self.granted_at:
             # A grant cannot be revoked before it existed. This is the same class

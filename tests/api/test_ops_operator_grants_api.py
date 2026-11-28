@@ -76,7 +76,8 @@ def test_operator_reads_the_grant_list(operator_client: TestClient) -> None:
 
     # The detail view carries the same grants un-folded, and a seeded grant is a
     # configuration grant: no human issuer, no per-row reason. That null pairing
-    # is honest provenance, not a missing field (NEX-077).
+    # is honest provenance, not a missing field (NEX-077). A live grant also
+    # carries no revocation provenance — both fields null (NEX-080).
     for grant in body["grants"]:
         assert set(grant) == {
             "user_id",
@@ -85,9 +86,13 @@ def test_operator_reads_the_grant_list(operator_client: TestClient) -> None:
             "granted_by",
             "expires_at",
             "rationale",
+            "revoked_at",
+            "revoked_by",
         }
         assert grant["granted_by"] is None
         assert grant["rationale"] is None
+        assert grant["revoked_at"] is None
+        assert grant["revoked_by"] is None
 
 
 def test_reading_the_grant_list_is_recorded(operator_client: TestClient) -> None:

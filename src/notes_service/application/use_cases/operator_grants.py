@@ -90,11 +90,17 @@ class OperatorGrantDetail:
 
     * ``granted_by`` is ``None`` for a configuration grant (the seed path), which
       is an honest "no human issued this", never a missing field.
-    * ``rationale`` is the issuer's stated reason. The domain guarantees the
-      pairing (a human-issued grant always carries one; a configuration grant
-      never does), so a row with ``granted_by`` set always has a ``rationale``
-      here. It is typed ``str | None`` only because a configuration grant
-      legitimately has neither.
+    * ``rationale`` is the issuer's stated reason. A human-issued grant normally
+      carries one; a configuration grant has none, because its reason is the
+      deployment itself. It is typed ``str | None`` because a configuration grant
+      legitimately has neither — and because a grant whose issuer's account was
+      deleted keeps its rationale while losing ``granted_by`` (NEX-080).
+
+    ``revoked_at``/``revoked_by`` are the revocation provenance NEX-079 wrote and
+    nothing could read. Both are ``None`` on a live grant; a revoked grant carries
+    the instant it ended and, unless the revoker's account has since been deleted,
+    who ended it. They are reported on this same row rather than in a separate
+    shape so a reader sees the grant's whole life in one place.
     """
 
     user_id: UserId
@@ -103,6 +109,8 @@ class OperatorGrantDetail:
     granted_by: UserId | None
     expires_at: datetime | None
     rationale: str | None
+    revoked_at: datetime | None = None
+    revoked_by: UserId | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,8 +173,65 @@ class ListOperatorGrants:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RevokedOperatorGrantSnapshot:
+    """Every grant that ended by revocation, in the store's stable order (NEX-080).
+
+    Read-only history, unlike :class:`OperatorGrantSnapshot`: it describes facts
+    that have already happened, so it carries no ``as_of``. ``source_name`` still
+    names the adapter, for the same reason — a reader must not mistake a
+    process-local demo store for a durable deployment-wide one.
+
+    There is no fold here. A revocation is one fact about one grant, and folding
+    it per holder would have to discard the very provenance the endpoint exists to
+    expose: which of a holder's several revoked grants was ended by whom, and when.
+    """
+
+    grants: tuple[OperatorGrantDetail, ...]
+    source_name: str
+
+    @property
+    def grant_count(self) -> int:
+        return len(self.grants)
+
+
+class ListRevokedOperatorGrants:
+    """Return every revoked operator grant to an authorized operator (NEX-080).
+
+    NEX-079 recorded a revocation as a fact — ``revoked_at`` and ``revoked_by`` on
+    the grant — precisely so an auditor could ask "who removed whose authority, and
+    when". Nothing read it back. The write was durable and the read did not exist,
+    which is the same half-built loop NEX-076 closed for ``rationale``.
+
+    Gated by the same ``operator-access-report`` scope as the holder report: reading
+    the revocation history of the platform is exactly the authority that report
+    already needs, and minting a fifth token for it would force every auditor to be
+    granted twice to answer one question.
+    """
+
+    def __init__(
+        self,
+        *,
+        grants: OperatorGrantRepository,
+        operator_gate: OperatorGate,
+    ) -> None:
+        self._grants = grants
+        self._operator_gate = operator_gate
+
+    def run(self, principal: Principal) -> RevokedOperatorGrantSnapshot:
+        # Gate first, never after: a refused caller must not learn how much
+        # authority has been removed, and the gate records the attempt.
+        self._operator_gate.authorize(principal, operation=OPERATION)
+
+        revoked = self._grants.revoked_grants()
+        return RevokedOperatorGrantSnapshot(
+            grants=_detail(revoked),
+            source_name=self._grants.name,
+        )
+
+
 def _detail(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorGrantDetail, ...]:
-    """One detail row per active grant, in the store's stable order.
+    """One detail row per grant, in the store's stable order.
 
     The fold in :func:`_summarise` answers "who holds what"; this answers "why,
     and who said so". Both read the same ``active`` tuple, so the summary and its
@@ -182,6 +247,8 @@ def _detail(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorGrantDetail, ...
             granted_by=grant.granted_by,
             expires_at=grant.expires_at,
             rationale=grant.rationale.value if grant.rationale is not None else None,
+            revoked_at=grant.revoked_at,
+            revoked_by=grant.revoked_by,
         )
         for grant in grants
     )
@@ -481,9 +548,11 @@ __all__ = [
     "IssueOperatorGrant",
     "IssueOperatorGrantRequest",
     "ListOperatorGrants",
+    "ListRevokedOperatorGrants",
     "OperatorGrantDetail",
     "OperatorGrantSnapshot",
     "OperatorHolder",
     "RevokeOperatorGrant",
     "RevokeOperatorGrantRequest",
+    "RevokedOperatorGrantSnapshot",
 ]

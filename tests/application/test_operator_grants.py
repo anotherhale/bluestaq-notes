@@ -29,6 +29,7 @@ from notes_service.application.use_cases.operator_gate import WILDCARD, Operator
 from notes_service.application.use_cases.operator_grants import (
     OPERATION,
     ListOperatorGrants,
+    ListRevokedOperatorGrants,
 )
 from notes_service.domain.identity.operator_grant import (
     OperatorGrant,
@@ -369,3 +370,118 @@ def test_the_detail_excludes_an_expired_grant() -> None:
     snapshot = use_case.run(_principal(ALICE))
     assert not any(row.user_id == BOB for row in snapshot.grants)
     assert BOB not in {holder.user_id for holder in snapshot.holders}
+
+
+# -- the revocation history: the read half of NEX-079 (NEX-080) -------------
+
+
+def _revoked_use_case(
+    grants: InMemoryOperatorGrantRepository,
+) -> ListRevokedOperatorGrants:
+    gate = _gate(grants, clock=FixedClock(BASE))
+    return ListRevokedOperatorGrants(grants=grants, operator_gate=gate)
+
+
+def _revoked_grant(
+    user_id: UserId = BOB,
+    scope: str = "withholding-report",
+    *,
+    revoked_by: UserId | None = ALICE,
+    revoked_at: datetime | None = BASE + timedelta(hours=1),
+) -> OperatorGrant:
+    # A real revocation produces a store entry via ``revoke``; constructing the
+    # revoked shape directly keeps this test about the *read* path, and lets it
+    # build the post-deletion shape (``revoked_by`` None) the store cannot accept
+    # through ``revoke``.
+    grant = _grant(user_id, scope=scope)
+    return OperatorGrant(
+        user_id=grant.user_id,
+        scope=grant.scope,
+        granted_at=grant.granted_at,
+        revoked_at=revoked_at,
+        revoked_by=revoked_by,
+    )
+
+
+def test_a_revoked_grant_is_reported_with_who_revoked_it_and_when() -> None:
+    """The provenance NEX-079 wrote is the reason this read exists."""
+    revoker_reads = _grant(ALICE, scope=OPERATION)
+    use_case = _revoked_use_case(_store(revoker_reads, _revoked_grant()))
+
+    snapshot = use_case.run(_principal(ALICE))
+
+    (row,) = snapshot.grants
+    assert row.user_id == BOB
+    assert row.scope == "withholding-report"
+    assert row.revoked_at == BASE + timedelta(hours=1)
+    assert row.revoked_by == ALICE
+    assert snapshot.grant_count == 1
+
+
+def test_a_live_grant_is_absent_from_the_revocation_history() -> None:
+    """History is revocation, not holdings: a live grant belongs to the other report."""
+    use_case = _revoked_use_case(_store(_grant(ALICE, scope=OPERATION), _grant(BOB)))
+
+    assert use_case.run(_principal(ALICE)).grants == ()
+
+
+def test_an_expired_but_unrevoked_grant_is_not_history() -> None:
+    """Lapsing and being revoked are different facts; only revocation is history."""
+    expired = _grant(BOB, scope="withholding-report", expires_at=BASE + timedelta(hours=1))
+    use_case = _revoked_use_case(_store(_grant(ALICE, scope=OPERATION), expired))
+
+    assert use_case.run(_principal(ALICE)).grants == ()
+
+
+def test_a_revocation_outlives_a_deleted_revoker() -> None:
+    """The reason ``revoked_by`` is nullable here: the record must survive its actor.
+
+    ``revoked_by`` is a ``SET NULL`` foreign key, so deleting the revoker's account
+    leaves the revocation with no actor. It must still be reported — reading it as
+    "not revoked" would silently restore authority nobody granted back.
+    """
+    use_case = _revoked_use_case(
+        _store(_grant(ALICE, scope=OPERATION), _revoked_grant(revoked_by=None))
+    )
+
+    (row,) = use_case.run(_principal(ALICE)).grants
+    assert row.user_id == BOB
+    assert row.revoked_at is not None
+    assert row.revoked_by is None
+
+
+def test_a_non_operator_cannot_read_the_revocation_history() -> None:
+    use_case = _revoked_use_case(_store(_revoked_grant()))
+    with pytest.raises(ResourceNotFound):
+        use_case.run(_principal(CAROL))
+
+
+def test_reading_the_revocation_history_is_recorded() -> None:
+    """Reading who lost authority is an operator read, audited like the holder list."""
+    access_log = InMemoryOperatorAccessLog()
+    store = _store(_grant(ALICE, scope=OPERATION), _revoked_grant())
+    gate = _gate(store, access_log=access_log)
+    use_case = ListRevokedOperatorGrants(grants=store, operator_gate=gate)
+
+    use_case.run(_principal(ALICE))
+
+    entries = access_log.recent(limit=10)
+    assert [(entry.user_id, entry.operation) for entry in entries] == [(ALICE, OPERATION)]
+
+
+def test_a_refused_history_read_leaves_no_access_entry() -> None:
+    """The gate authorizes before it records, so a refusal writes nothing."""
+    access_log = InMemoryOperatorAccessLog()
+    store = _store(_revoked_grant())
+    gate = _gate(store, access_log=access_log)
+    use_case = ListRevokedOperatorGrants(grants=store, operator_gate=gate)
+
+    with pytest.raises(ResourceNotFound):
+        use_case.run(_principal(CAROL))
+
+    assert access_log.recent(limit=10) == ()
+
+
+def test_the_history_names_its_source() -> None:
+    use_case = _revoked_use_case(_store(_grant(ALICE, scope=OPERATION)))
+    assert use_case.run(_principal(ALICE)).source_name == "in-memory"

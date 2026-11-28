@@ -344,6 +344,118 @@ def test_deleting_a_user_removes_their_grants(
         assert session.execute(select(OperatorGrantRow)).scalars().all() == []
 
 
+# -- revocation history: the read half of NEX-079 (NEX-080) -----------------
+
+
+def _revoke(
+    grants: SqlAlchemyOperatorGrantRepository,
+    user: str,
+    scope: str = "withholding-report",
+    *,
+    by: str = ALICE,
+    at: datetime = NOW,
+) -> int:
+    return grants.revoke(UserId.parse(user), scope, at=at, by=UserId.parse(by))
+
+
+def test_revoked_grants_reports_a_revocation_with_its_actor(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    """What NEX-079 wrote, NEX-080 now reads back: who, and when."""
+    grants.add(_grant(BOB, "withholding-report"))
+    assert _revoke(grants, BOB) == 1
+
+    (row,) = grants.revoked_grants()
+    assert str(row.user_id) == BOB
+    assert row.scope == "withholding-report"
+    assert row.revoked_at == NOW
+    assert str(row.revoked_by) == ALICE
+    assert row.is_revoked
+
+
+def test_revoked_grants_omits_live_and_merely_expired_grants(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    """Lapsing is not revocation: only a stamped revocation is history."""
+    grants.add(_grant(ALICE, "withholding-report"))
+    grants.add(_grant(BOB, "audit-integrity", expires_at=NOW + timedelta(seconds=1)))
+
+    # The bound has passed, so BOB's grant confers nothing — but nobody revoked it.
+    live = [row.scope for row in grants.active_grants(now=NOW + timedelta(seconds=5))]
+    assert live == ["withholding-report"]
+    assert grants.revoked_grants() == ()
+
+
+def test_a_revocation_outlives_a_deleted_revoker(
+    grants: SqlAlchemyOperatorGrantRepository, engine: Engine, seeded: None
+) -> None:
+    """The migration's whole point: deleting the revoker must not break or erase it.
+
+    Before NEX-080 the CHECK required both revocation columns together, so the
+    ``SET NULL`` on ``revoked_by`` made the delete itself fail with a raw
+    ``IntegrityError`` — no account holding revocation history could be deleted at
+    all. Now the delete succeeds, the revocation survives, and the actor is NULL.
+    """
+    grants.add(_grant(BOB, "withholding-report"))
+    assert _revoke(grants, BOB) == 1
+
+    with Session(engine) as session:
+        session.execute(delete(UserRow).where(UserRow.id == uuid.UUID(ALICE)))
+        session.commit()
+
+    (row,) = grants.revoked_grants()
+    assert str(row.user_id) == BOB
+    assert row.revoked_at == NOW
+    assert row.revoked_by is None
+    # Still revoked: the authority must not come back because its revoker left.
+    assert row.is_revoked
+
+
+def test_deleting_an_issuer_leaves_every_read_working(
+    grants: SqlAlchemyOperatorGrantRepository, engine: Engine, seeded: None
+) -> None:
+    """A deleted issuer must not turn the gate lookup into a 500.
+
+    ``granted_by`` is ``SET NULL`` while ``rationale`` survives, so the row's issuer
+    is gone but its reason is not. The domain previously rejected that shape, which
+    made ``active_grants`` — and therefore the operator gate — raise on any read
+    once an issuer was deleted. That was a self-inflicted outage of ``/ops``.
+    """
+    grants.add(_grant(BOB, "withholding-report", granted_by=UserId.parse(ALICE), rationale=REASON))
+
+    with Session(engine) as session:
+        session.execute(delete(UserRow).where(UserRow.id == uuid.UUID(ALICE)))
+        session.commit()
+
+    (row,) = grants.active_grants(now=NOW)
+    assert row.rationale is not None
+    assert row.granted_by is None
+
+
+def test_revoked_grants_survives_a_restart(
+    grants: SqlAlchemyOperatorGrantRepository, session_factory: sessionmaker[Session]
+) -> None:
+    """A second adapter over the same database sees the same history."""
+    grants.add(_grant(BOB, "withholding-report"))
+    assert _revoke(grants, BOB) == 1
+
+    (row,) = _restart(session_factory).revoked_grants()
+    assert str(row.user_id) == BOB
+    assert str(row.revoked_by) == ALICE
+
+
+def test_revoked_grants_is_in_insertion_order(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    grants.add(_grant(ALICE, "withholding-report"))
+    grants.add(_grant(BOB, "audit-integrity"))
+    _revoke(grants, ALICE)
+    _revoke(grants, BOB, scope="audit-integrity")
+
+    scopes = [row.scope for row in grants.revoked_grants()]
+    assert scopes == ["withholding-report", "audit-integrity"]
+
+
 def test_the_table_exists_in_the_migrated_schema(engine: Engine) -> None:
     """The ORM model and the migration must not disagree about the table."""
     columns = {column["name"] for column in inspect(engine).get_columns("operator_grants")}

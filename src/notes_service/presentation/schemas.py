@@ -24,6 +24,7 @@ from notes_service.application.use_cases.operator_access_retention import (
 from notes_service.application.use_cases.operator_grants import (
     OperatorGrantDetail,
     OperatorGrantSnapshot,
+    RevokedOperatorGrantSnapshot,
 )
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.policy_lifecycle import PolicyHistory
@@ -938,8 +939,16 @@ class OperatorGrantDetailResponse(ResponseModel):
     ``granted_by`` and ``rationale`` are ``null`` for a configuration grant (the
     seed path): a deployment-issued grant has no human issuer and no per-row
     reason, and the domain forbids it from carrying a fabricated one. For a
-    human-issued grant both are present — that pairing is a domain invariant, so
-    a client may rely on it.
+    human-issued grant both are present on issue. They are not guaranteed together
+    forever, though: ``granted_by`` is a ``SET NULL`` foreign key, so deleting the
+    issuer's account leaves the rationale and clears the actor. A client must read
+    ``granted_by: null`` with a rationale as "the issuer's account is gone", not
+    as a malformed row (NEX-080).
+
+    ``revoked_at``/``revoked_by`` are the revocation provenance (NEX-080). Both are
+    ``null`` on a live grant. A revoked grant carries ``revoked_at``; ``revoked_by``
+    is ``null`` only if the revoker's account has since been deleted, for the same
+    reason as ``granted_by``.
     """
 
     user_id: str
@@ -948,6 +957,8 @@ class OperatorGrantDetailResponse(ResponseModel):
     granted_by: str | None
     expires_at: datetime | None
     rationale: str | None
+    revoked_at: datetime | None
+    revoked_by: str | None
 
     @classmethod
     def from_detail(cls, detail: OperatorGrantDetail) -> OperatorGrantDetailResponse:
@@ -958,6 +969,8 @@ class OperatorGrantDetailResponse(ResponseModel):
             granted_by=str(detail.granted_by) if detail.granted_by is not None else None,
             expires_at=detail.expires_at,
             rationale=detail.rationale,
+            revoked_at=detail.revoked_at,
+            revoked_by=str(detail.revoked_by) if detail.revoked_by is not None else None,
         )
 
 
@@ -998,6 +1011,35 @@ class OperatorGrantReportResponse(ResponseModel):
             holder_count=snapshot.holder_count,
             grant_count=snapshot.grant_count,
             as_of=snapshot.as_of,
+            source_name=snapshot.source_name,
+        )
+
+
+class RevokedOperatorGrantReportResponse(ResponseModel):
+    """Every grant that ended by revocation, for operators (NEX-080).
+
+    The read side of NEX-079. A revocation records ``revoked_at``/``revoked_by``
+    on the grant so "who removed whose authority, and when" is answerable; this is
+    the response that answers it. Live grants and grants that merely expired are
+    absent — this is history, not a holdings list, and mixing the two would make
+    the two reports describe overlapping sets.
+
+    There is no holder fold, unlike the active report: folding revoked grants per
+    holder would merge several revocations and lose which of them was ended by
+    whom. ``grant_count`` counts revoked rows directly.
+    """
+
+    grants: list[OperatorGrantDetailResponse]
+    grant_count: int
+    source_name: str
+
+    @classmethod
+    def from_snapshot(
+        cls, snapshot: RevokedOperatorGrantSnapshot
+    ) -> RevokedOperatorGrantReportResponse:
+        return cls(
+            grants=[OperatorGrantDetailResponse.from_detail(detail) for detail in snapshot.grants],
+            grant_count=snapshot.grant_count,
             source_name=snapshot.source_name,
         )
 

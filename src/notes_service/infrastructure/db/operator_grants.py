@@ -218,5 +218,13 @@ class SqlAlchemyOperatorGrantRepository:
             rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
             return tuple(grant for row in rows if (grant := _to_domain(row)).is_active(now=now))
 
+    def revoked_grants(self) -> tuple[OperatorGrant, ...]:
+        # ``is_revoked`` is the domain's predicate, applied here rather than a SQL
+        # ``revoked_at IS NOT NULL`` so the definition of "this row records a
+        # revocation" stays in one place, exactly as ``is_active`` does above.
+        with self._session_factory() as session:
+            rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
+            return tuple(grant for row in rows if (grant := _to_domain(row)).is_revoked)
+
 
 __all__ = ["SqlAlchemyOperatorGrantRepository"]

@@ -99,6 +99,7 @@ from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.operator_grants import (
     IssueOperatorGrant,
     ListOperatorGrants,
+    ListRevokedOperatorGrants,
     RevokeOperatorGrant,
 )
 from notes_service.application.use_cases.organization import (
@@ -313,6 +314,9 @@ class Container:
     issue_operator_grant: Callable[[], IssueOperatorGrant]
     # Taking a grant away, attributable and immediate (NEX-079).
     revoke_operator_grant: Callable[[], RevokeOperatorGrant]
+    # Reading grants that were revoked, so the provenance NEX-079 records is
+    # actually readable (NEX-080).
+    list_revoked_operator_grants: Callable[[], ListRevokedOperatorGrants]
     # Pruning the access log by the configured retention window (NEX-075).
     # ``None`` when retention is disabled, so the endpoint can answer 404 rather
     # than expose a purge that would delete nothing.
@@ -589,6 +593,16 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             clock=clock,
         )
 
+    # The read side of a revocation (NEX-080). NEX-079 wrote an attributable
+    # revocation and nothing could read it back; this use case reads the same store
+    # through the same read gate as the holder report, so an auditor who may see
+    # who holds what may also see who lost it, and from whom.
+    def make_list_revoked_operator_grants() -> ListRevokedOperatorGrants:
+        return ListRevokedOperatorGrants(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+        )
+
     # Retention (NEX-075). Built only when the deployment configured a window:
     # ``None`` means "keep everything", and the endpoint then answers 404 rather
     # than offering a purge with no mandate. The policy validates the window when
@@ -804,6 +818,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         list_operator_grants=make_list_operator_grants,
         issue_operator_grant=make_issue_operator_grant,
         revoke_operator_grant=make_revoke_operator_grant,
+        list_revoked_operator_grants=make_list_revoked_operator_grants,
         purge_operator_access_log=make_purge_operator_access_log,
         draft_policy=make_draft_policy,
         approve_draft=make_approve_draft,

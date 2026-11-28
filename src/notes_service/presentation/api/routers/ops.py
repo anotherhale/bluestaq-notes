@@ -38,6 +38,7 @@ from notes_service.presentation.schemas import (
     OperatorGrantResponse,
     OperatorGrantRevokedResponse,
     OperatorGrantRevokeRequest,
+    RevokedOperatorGrantReportResponse,
     WithholdingReportResponse,
 )
 
@@ -254,3 +255,32 @@ def revoke_operator_grant(
         scope=body.scope,
         grants_revoked=revoked,
     )
+
+
+@router.get(
+    "/operator-grants/revoked",
+    response_model=RevokedOperatorGrantReportResponse,
+    summary="Every revoked operator grant, with who revoked it and when (operators only)",
+    dependencies=[RateLimitDep],
+)
+def list_revoked_operator_grants(
+    principal: PrincipalDep, container: ContainerDep
+) -> RevokedOperatorGrantReportResponse:
+    """Return every grant that ended by revocation, and its revocation provenance.
+
+    NEX-079 recorded a revocation as an attributable fact on the grant —
+    ``revoked_at`` and ``revoked_by`` — so that "who removed whose authority, and
+    when" would be answerable. Nothing read it back: the write was durable and the
+    question stayed unanswerable except by querying the database by hand. This
+    endpoint is the read half, the same loop NEX-076/NEX-077 closed for a grant's
+    ``rationale``.
+
+    Live grants and grants that merely expired are absent: this is revoked history,
+    not a holdings report. A revoked grant whose revoker's account was later deleted
+    still appears, with ``revoked_by: null`` — the revocation outlives its revoker.
+
+    Reading this is a gated operator read under the same scope as the holder report,
+    recorded like every other ops read. A non-operator gets ``404``.
+    """
+    snapshot = container.list_revoked_operator_grants().run(principal)
+    return RevokedOperatorGrantReportResponse.from_snapshot(snapshot)

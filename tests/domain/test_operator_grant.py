@@ -174,13 +174,21 @@ def test_a_human_issued_grant_must_say_why() -> None:
         _grant(granted_by=BOB, rationale=None)
 
 
-def test_a_configuration_grant_must_not_invent_a_reason() -> None:
-    """The reverse pairing is refused: a deployment never stated a rationale.
+def test_a_rationale_without_an_issuer_is_the_post_deletion_shape() -> None:
+    """``granted_by=None`` beside a rationale is accepted, and must be (NEX-080).
 
-    Attaching one would be a fabricated audit fact, not a missing one.
+    It used to be refused as "a configuration grant inventing a reason", but that
+    shape is exactly what an ``ON DELETE SET NULL`` foreign key produces: the
+    issuer's account is deleted while the rationale text survives. Refusing it made
+    every read of the store raise once an issuer left, turning a routine account
+    deletion into an outage of the whole operator surface.
+
+    The write-time rule is not lost — it moved to where a human supplies the pair:
+    ``IssueOperatorGrant`` requires a rationale and configuration seeds forbid one.
     """
-    with pytest.raises(ValidationError):
-        _grant(granted_by=None, rationale=REASON)
+    grant = _grant(granted_by=None, rationale=REASON)
+    assert grant.granted_by is None
+    assert grant.rationale == REASON
 
 
 def test_a_human_issued_grant_records_the_reason() -> None:
