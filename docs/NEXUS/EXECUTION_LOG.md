@@ -9033,3 +9033,70 @@ has no comment this run.
 
 Poll CI on `319a3dd`. If green, append the single NEX-075 section to PR #5's body and post one issue
 #2 comment covering it.
+
+## Run `NEX-2026-11-27-75` (continued) — NEX-075 VERIFIED, delivered to PR #5 and issue #2
+
+**Timestamp:** 2026-11-28T02:45Z–02:50Z
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `f307999` (docs tip) · **Product commit:** `319a3dd` (NEX-075) · **Docs commit:** `849ad8d`
+**Tasks completed:** NEX-075 (verify + deliver)
+**Tasks verified:** NEX-075
+**Tasks started:** none — the clock did not allow a second slice, and starting one would have risked
+the integration step.
+
+### What this continuation did
+
+The earlier part of run 75 implemented NEX-075 (the operator access log's bounded retention window),
+created the backlog entry it lacked, wrote ADR-017, and reconciled PR #5's delivery state against the
+GitHub API. It ended with three things outstanding: the docs commit was uncommitted, CI on `319a3dd`
+had not been read, and PR #5's body still stopped at NEX-074. This continuation closed all three.
+
+1. **Docs committed and pushed.** `849ad8d`, 6 files (ADR-017 new, ADR README, BACKLOG, STATE,
+   EXECUTION_LOG, CHECKPOINT). Commit message written to a file and verified for corruption
+   (`grep -cE 'ejecreads|ssib[A-Z]|correc[A-Z]'` = 0) before committing, then re-verified on the
+   stored message. Push confirmed: `319a3dd..849ad8d`.
+2. **CI read on `319a3dd`.** `GET /commits/319a3dd/check-runs` → `total_count 4`, all four
+   `status: completed`, `conclusion: success` (backend ×2, frontend ×2). NEX-075 promoted from
+   IMPLEMENTED+TESTED+PUSHED to **VERIFIED**. Note the two check-run pairs: normal here, the branch
+   concurrency group re-runs; both pairs concluded success, so the verdict is unambiguous.
+3. **PR #5 body extended.** Fetched via API first — the body was 56934 chars and **already carried
+   NEX-074**, confirming the earlier correction. Appended one NEX-075 section: 56934 → 60453 chars,
+   verified to contain exactly one `## NEX-075` heading with NEX-074 still present. No second PR was
+   opened; twenty slices already stack in #5.
+4. **Issue #2 commented.** Comment `7232583113` (3199 chars) covers NEX-075 with its CI evidence,
+   the five retention bounds, the mutation-tested boundary, and what was deliberately omitted. It
+   carries the AI-agent disclosure line. The issue stays open — the programme is not done.
+
+### Decisions
+
+- **Append to PR #5 rather than open a new PR.** Twenty slices already stack there and the reviewer's
+  "consider a split" note is a human decision. Adding a twenty-first PR would fragment review further.
+- **Do not start a second slice.** ~650s remained at the checkpoint and the integration work above
+  consumed most of it. Section 7 of the directive is explicit: one slice, then integrate. A second
+  slice would have left an uncommitted tree for the next run to discard.
+- **State files corrected rather than appended to.** The run-75 "next best actions" list still told
+  the next run to read CI and update the PR body — both now done. A stale instruction reads as a
+  fresh plan and costs a whole run, so that list is marked closed and a run-76 list replaces it.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| CI on `319a3dd` | 4/4 `completed/success`, polled 2026-11-28T02:45Z |
+| `CHECKPOINT.json` | valid JSON, 18939 bytes, `verified_tasks` contains NEX-075 |
+| Commit message corruption check | 0 matches, 27 lines, both before commit and on the stored message |
+| PR body | 60453 chars, one NEX-075 section, NEX-074 intact |
+| Issue comment | `7232583113`, 3199 chars, 2026-11-28T02:46Z |
+
+Local gates were run in the earlier part of this run: 1551 passed / 4 skipped, `ruff format --check`
+313 files, `ruff check` clean, `mypy` clean on 143 source files.
+
+### Risks
+
+Unchanged from the earlier part of the run, none new: an operator-grant `rationale` has no column
+(migration required); no scheduled purge exists for the access log (ADR-017 — an unattended purger
+changes accountability); PR #5's twenty-slice stack is a human review decision.
+
+### Next action
+
+Take the next dependency-ready slice from `BACKLOG.md`. Nothing is outstanding on NEX-075.
