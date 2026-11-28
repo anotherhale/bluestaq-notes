@@ -3,9 +3,9 @@
  "run_id": "NEX-2026-11-28-95",
  "timestamp": "2026-11-28T12:20Z",
  "branch": "feature/agentic-enterprise-platform",
- "commit": "fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d",
+ "commit": "eabaed8725d793d959aae634de2bc26390311513",
  "product_commit": "fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d",
- "commit_note": "`commit` is the branch head at write time, which is the NEX-095 product commit (fb027ee). This checkpoint is committed by a docs commit that follows it, so the branch head one commit later is that docs commit. A file cannot contain the hash of the commit that contains it: a one-commit lag is expected and correct, do not chase it.",
+ "commit_note": "`commit` is the run-95 docs head at write time (eabaed8). This checkpoint is amended by a follow-up docs commit that records the delivery evidence, so the branch head one commit later is that follow-up. A file cannot contain the hash of the commit that contains it: a one-commit lag is expected and correct, do not chase it.",
  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-095 VERIFIED. NEX-095 is VERIFIED on the product commit itself.",
  "active_task": null,
  "task_statuses": {
@@ -52,7 +52,7 @@
   "nex_094_in_body": true,
   "nex_095_in_body": true
  },
- "tracking_issue": "Issue #2 open, not closed. NEX-095 is VERIFIED on the product commit fb027ee and delivered to issue #2 and PR #5 this run.",
+ "tracking_issue": "Issue #2 open, not closed. NEX-095 delivered this run: comment 7239156441 (read back at 40 lines, contains NEX-095 and VERIFIED). PR #5 body updated via --body-file and read back identical except a trailing newline; it now covers NEX-052..NEX-095.",
  "blockers": [],
  "risks": [
   "list_active_for_delegator remains an unpaged whole-set read ordered by created_at alone. It has no paging consumer, so an unstable tie can only reorder presentation. Do not add a tiebreak there until a consumer depends on the order.",
