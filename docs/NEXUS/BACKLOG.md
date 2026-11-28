@@ -3969,9 +3969,16 @@ added rather than changed speculatively now.
 
 ### Verification
 
-Pending — this run committed and pushed the slice and did **not** read a CI verdict, so NEX-089 is
-COMMITTED/PUSHED, not VERIFIED. The next run reads the runs for `b3130ce` (and for its docs head if
-one is pushed) and promotes it only if they are `completed/success`.
+**VERIFIED.** CI concluded **4/4 `completed/success`** on docs head `c5a1250` — runs `46129490407`
+(push) and `46129494580` (pull_request), each with `Backend (ruff, mypy, pytest, migrations)`
+and `Frontend (typecheck, lint, test, build)` green, polled 02:14Z. The product tree of `c5a1250` is
+identical to the product commit `b3130ce` — `git diff --stat b3130ce c5a1250 -- src/ tests/ frontend/
+Dockerfile docker/ .github/` is empty, and the only files that differ are the four `docs/NEXUS/` files
+— so the green runs tested exactly the code this slice ships.
+
+`b3130ce`'s own two runs read `completed/cancelled`: they were superseded by the docs push in the
+concurrency group. Per the standing rule, a superseded run is never evidence — which is why the
+verdict is anchored to `c5a1250` and to the empty product diff that licenses that anchor.
 
 ---
 

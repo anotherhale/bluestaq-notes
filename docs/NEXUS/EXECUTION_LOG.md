@@ -10544,7 +10544,8 @@ _This entry was created by an AI agent (OpenHands) on behalf of the repository o
 ### Task completed
 
 **NEX-089 — window the approval history, and report the status total, not the page size.**
-COMMITTED `b3130ce` · PUSHED. **CI unread this run** — not VERIFIED.
+COMMITTED `b3130ce` · PUSHED · **VERIFIED** — CI 4/4 `completed/success` on docs head `c5a1250`
+(product tree identical to `b3130ce`); see *CI verdict and promotion* below.
 
 ### Files changed
 
@@ -10606,14 +10607,35 @@ paging cannot be used to probe for another user's agent (ADR-008 intact). `limit
 
 ### Next exact action
 
-1. Poll the two runs for `b3130ce` (`46129413548` push, `46129417285` pull_request) to a concluded
-   verdict. `cancelled` alone is never evidence; anchor to a docs head with an identical product tree
-   if this docs push supersedes them.
-2. Only after reading `completed/success`, promote NEX-089 to VERIFIED in `CHECKPOINT.json`,
-   `STATE.md`, `BACKLOG.md`.
-3. Append NEX-089 to PR #5 and comment on issue #2 — **not done this run**, so it is delivery debt
-   and must not be reported as done.
-4. Then take the next dependency-ready slice; do not redo NEX-077…NEX-089.
+1. Take the next dependency-ready Phase 3 governance slice (NEX-090) from `BACKLOG.md`; do not redo
+   NEX-077…NEX-089. Reuse the NEX-082/086/087/088/089 family as a search pattern: a total, a count,
+   or an "oldest" value *inferred from a page* rather than asked for.
+2. Keep the habit that caught the two errors this run made in its own bookkeeping: check before
+   asserting. NEX-088 was assumed un-commented and already had `7236832249`; the first draft of this
+   entry recorded NEX-089 as "not delivered" and the delivery happened minutes later in the same
+   run. Neither reached a promoted status, because the record was corrected against evidence.
+
+### CI verdict and promotion (same run, after the docs push)
+
+Both runs on `b3130ce` read `completed/cancelled` — superseded by the docs push in the concurrency
+group, so neither was evidence. The runs on the docs head `c5a1250` (`46129490407` push,
+`46129494580` pull_request) both concluded **`success`**, with `Backend (ruff, mypy, pytest,
+migrations)` and `Frontend (typecheck, lint, test, build)` green in each — **4/4**.
+
+Anchoring the verdict to a docs head is only legitimate if the code is the same code, so that was
+checked rather than assumed: `git diff --stat b3130ce c5a1250 -- src/ tests/ frontend/ Dockerfile
+docker/ .github/` is empty, and `git diff --name-only b3130ce c5a1250` lists four `docs/NEXUS/`
+files and nothing else. **NEX-089 is VERIFIED** on that basis.
+
+Delivered in the same window: NEX-089 appended to PR #5's body (`gh pr edit --body-file`, after
+asserting the body still ended with the AI-disclosure trailer), and issue #2 commented at
+`7237110664` after checking the prior 72 comments for an existing NEX-089 mention. **No delivery
+debt remains** — the draft of this entry that listed PR #5 and issue #2 as owed was written before
+those calls and is superseded by this paragraph.
+
+No second slice was started: ~940s of the 1500s budget had elapsed, and the remainder did not leave
+a comfortable 10 minutes for a new slice plus its gates, commit, and push.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
 
