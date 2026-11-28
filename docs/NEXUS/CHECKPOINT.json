@@ -134,18 +134,7 @@
     "ci": "NEX-071 VERIFIED: 4/4 completed/success at adcb75e (docs head over product a5d2710), polled 2026-11-28T00:33Z. Everything through NEX-071 is VERIFIED."
   },
   "uncommitted_work": null,
-  "pr_state": {
-    "number": 5,
-    "state": "open",
-    "draft": false,
-    "merged": false,
-    "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-    "base": "main",
-    "mergeable_state_note": "`unstable` means check-runs are still arriving, not that something failed. Poll until every check-run has status=completed and judge on that. Never merge without human review.",
-    "note": "Body carries NEX-052..NEX-070 (48375 chars) as of run 70. Fifteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Automated merging is prohibited.",
-    "body_covers_through": "NEX-070",
-    "body_updated_this_run": true
-  },
+  "pr_state": "PR #5 open, unmerged, awaiting human review. Body 50507 chars, carrying NEX-052..NEX-071 including the NEX-071 section and the four-way bound on second-signer authority.",
   "tracking_issue": {
     "issue": 2,
     "state": "open",
@@ -162,7 +151,7 @@
   ],
   "next_task": "No carried-over implementation debt. Everything through NEX-071 is VERIFIED. Next: the highest-value dependency-ready backlog slice - read docs/NEXUS/BACKLOG.md, pick one, implement it as a single vertical slice. Do not re-implement NEX-071.",
   "next_action": "Read docs/NEXUS/BACKLOG.md and implement the highest-value dependency-ready slice as one vertical slice. A known candidate, surfaced but not yet scoped: second-signer authority is tenant-scoped with no per-agent allowlist - decide whether that warrants an ADR before tenants grow.",
-  "recovery_instructions": "Tree is clean at 04d52e1 (NEX-070 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. NEX-070 is COMMITTED + PUSHED but NOT VERIFIED - poll CI before claiming otherwise. Everything through NEX-069 is VERIFIED. PR #5 body and issue #2 comment 7230076705 cover through NEX-069. The NEX-069 commit message says NEX-066; that mislabel is documented in EXECUTION_LOG.md and must not be silently rewritten.",
+  "recovery_instructions": "Tree is clean at a5d2710 (NEX-071 product commit), pushed to feature/agentic-enterprise-platform; every commit above it is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. NEX-071 is VERIFIED (4/4 completed/success at adcb75e, polled 2026-11-28T00:33Z) and everything through it is VERIFIED - nothing is waiting on a CI poll. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. Next: read docs/NEXUS/BACKLOG.md, pick the highest-value dependency-ready slice, implement it as ONE vertical slice, and do not re-implement NEX-071.",
   "ci_status": {
     "adcb75e": "4/4 completed/success (NEX-071 docs head, descends from product a5d2710) - polled 2026-11-28T00:33Z by run 71",
     "04d52e1": "4/4 completed/success (NEX-070) - polled 2026-11-27T23:48Z"
@@ -189,7 +178,7 @@
     "issue_comment": "7230990964",
     "note": "PR #5 body carries NEX-052..NEX-071. Issue #2 comment 7230990964 covers NEX-071."
   },
-  "branch_head": "Docs head fb1cf68 (NEX-070 VERIFIED promotion) over product head 04d52e1. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
+  "branch_head": "Docs head 40063f0 (NEX-071 VERIFIED promotion) over product head a5d2710 over 04d52e1 (NEX-070 VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
   "run_report": {
