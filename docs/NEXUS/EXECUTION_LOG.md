@@ -9764,3 +9764,104 @@ one-commit lag, documented in the checkpoint's `commit_note` rather than chased.
 Run 82 hands over a clean board. The next run selects a fresh slice from `BACKLOG.md` (Phase 4
 admin console, or the next remaining backend gap) and must carry it all the way through the CI
 poll, which is the step runs 80 and 81 both dropped.
+
+---
+
+## Run NEX-2026-11-28-82 — NEX-082: keyset paging for the operator access trail
+
+- **Run ID:** NEX-2026-11-28-82
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `bb5189a` (remote tip; the local clone was on `main` at 997a6ac and
+  the work tree itself was EMPTY of the slice — recovered the implementation from this
+  session's stashed work, then re-verified every gate on the correct base)
+- **Ending commit:** `4f8e15d` (product), plus this docs commit
+- **Project phase:** Phase 2/3/5 largely delivered; Phase 3 milestones M3.1–M3.4 VERIFIED
+
+### Tasks completed
+
+- **NEX-082 — page the operator access trail by keyset cursor.** IMPLEMENTED, TESTED
+  locally; CI not yet polled.
+
+### The defect this closes
+
+`GET /ops/access-report` returned at most `limit` newest entries and offered no way to
+reach further back, while retention keeps the operator access log for years. Every
+granted operator read older than the newest few hundred was permanently unreadable: the
+log recorded it, and no endpoint could show it. "Read the trail" silently meant "read its
+most recent window", which is the wrong answer for an audit surface.
+
+### Why a cursor and not an offset
+
+Reading this view is **itself a granted operator read**, so each request appends a row at
+the head of the log it is reading. An `OFFSET` page therefore shifts by one row per page:
+page *n+1* repeats an entry page *n* already showed and skips another outright. A trail
+with invisible holes is worse than a capped read, because it looks complete. A keyset
+cursor is anchored to an entry rather than to a count, so head insertions cannot move the
+window.
+
+### Changes
+
+- `application/ports/operator_access.py` — `OperatorAccessEntry.position` (opaque,
+  monotonic, comparable but not arithmetic); `recent(*, limit, before_position=None)`
+  returns entries strictly older than the cursor. Documented that an adapter which cannot
+  name a position must behave as a plain capped read rather than pretend to page.
+- `infrastructure/db/operator_access_log.py` — the surrogate `id` *is* the insertion
+  ordinal, handed out unchanged; keyset predicate `id < cursor`.
+- `infrastructure/security/operator_access_log.py` — a monotonic counter, **not**
+  `len(entries)`: the ring evicts on overflow, so a length-derived ordinal would reuse a
+  position a surviving entry still holds and a cursor would then skip rows.
+- `application/use_cases/operator_access_report.py` — cursor plumbed through; a
+  non-positive cursor is rejected rather than read as "everything from now on";
+  `next_position` is offered only when the window filled; `truncated` is true for a
+  middle page as well as a filled one.
+- `presentation/api/routers/ops.py` + `presentation/schemas.py` — `before_position` query
+  param, per-entry `position`, per-page `next_position`.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `pytest` (full, on `4f8e15d`) | **1652 passed, 4 skipped** |
+| `ruff format` | 321 files unchanged |
+| `ruff check` | All checks passed |
+| `mypy` | clean on 143 source files |
+| New API paging tests | 14 passed |
+| New adapter keyset tests | 15 passed |
+| Use-case cursor/truncation tests | passing |
+| Mutation control | replacing the cursor with `None` in the use case fails 3 of 6 new paging tests — the walk assertions are not vacuous |
+| CI | **NOT POLLED** for `4f8e15d` |
+
+### Security findings
+
+- No new authorization surface: the route is unchanged in who may call it, and the
+  capability gate still runs **before** cursor validation, so a non-operator receives
+  `404` and cannot infer from a `400` that the route parses `before_position`.
+- Exposing `position` reveals nothing about volume: retention deletes rows and the ring
+  evicts them, so position 42 does not imply "forty-two entries exist". Documented on the
+  port so no caller reads it as a count.
+
+### Decisions
+
+Documented in `DECISIONS.md` (coordinator level) and in `CHECKPOINT.json`
+`decisions_this_run`. No ADR was required: this adds no bounded context, dependency, or
+security contract — it makes an existing audit read complete.
+
+### Risks
+
+- Keyset paging assumes positions only ever increase (true for an identity column and a
+  counter; an adapter that renumbers entries would invalidate a held cursor).
+- GitHub delivery lags: PR #5 and issue #2 still end at NEX-081.
+
+### Coordinator note (process)
+
+A `cat > /tmp/msg << EOF` heredoc **corrupted the commit message** for this run: the body
+echoed fragments of itself back, interleaved. The commit was sound but its message was
+garbage; it was rewritten with `git commit --amend -F <file>` after writing the file via
+`file_editor`. Same failure class as earlier runs: **never** build a multi-line payload
+through a heredoc — write the file with `file_editor`, then pass the path.
+
+### Next action
+
+Poll CI for `4f8e15d`. If green, promote NEX-082 to VERIFIED, append its section to PR #5
+(asserting it is absent first), update issue #2, and take the next dependency-ready slice
+from `BACKLOG.md`.

@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-81",
-  "timestamp": "2026-11-28T05:15Z",
+  "run_id": "NEX-2026-11-28-82",
+  "timestamp": "2026-11-28T05:33Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "4c47b19",
-  "project_phase": "Phase 2/3/5 largely delivered. NEX-081 (this run) makes a capped audit-integrity sweep finishable: the cap bounded one response but silently excluded every agent past it, permanently, and those were the newest trails. Next: poll CI for 3a05db2, then take the next dependency-ready slice from BACKLOG.md.",
+  "commit": "4f8e15d",
+  "project_phase": "Phase 2/3/5 largely delivered. NEX-082 makes the operator access trail fully readable: the report returned at most `limit` newest entries with no way to reach further back while retention keeps entries for years, so every privileged read older than the newest few hundred was permanently unreadable. Paged by keyset cursor, not offset. Next: poll CI for 4f8e15d, then the next dependency-ready slice from BACKLOG.md.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -174,9 +174,9 @@
     "draft": false,
     "merged": false,
     "mergeable": true,
-    "body_covers": "NEX-052..NEX-081",
-    "body_updated_this_run": true,
-    "note": "PR #5 open, unmerged, draft=false, mergeable=true. Body now carries NEX-052..NEX-081 (79014 chars). Also corrected a stale line inside the NEX-080 section that still read Backend 2/2 in_progress / not VERIFIED; NEX-080 concluded 4/4 success on 139edf6. Automated merging is prohibited."
+    "body_covers": "NEX-052..NEX-081 (NEX-082 not yet appended)",
+    "body_updated_this_run": false,
+    "note": "PR #5 open, unmerged, draft=false, mergeable=true. Body carries NEX-052..NEX-081 and does NOT yet carry NEX-082 - append it next run after asserting it is absent. Automated merging is prohibited."
   },
   "tracking_issue": {
     "issue": 2,
@@ -194,34 +194,24 @@
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
     "ON DELETE SET NULL on granted_by/revoked_by is handled in the domain, but any future validation over those columns must assume they can become NULL behind the writer's back.",
     "A paging sweep relies on the listing order being TOTAL. It is (created_at, id); loosening that to created_at alone would let an OFFSET page skip an agent and still return a full page, reporting complete coverage of a set it never saw.",
-    "GitHub delivery lags the branch: PR #5's body and issue #2 do not yet carry NEX-081."
+    "GitHub delivery lags the branch: PR #5's body and issue #2 do not yet carry NEX-082.",
+    "The keyset cursor assumes positions only ever increase. True for the SQL identity column and the ring's counter; any adapter that renumbers entries would invalidate a cursor held by a reader mid-walk."
   ],
-  "next_task": "NEX-082 - pick the next dependency-ready slice from BACKLOG.md. Phase 3 milestones M3.1-M3.4 are all VERIFIED and ROADMAP.md now says so, so the next value is in Phase 4 (admin console frontend) or a remaining P4/backend gap. Read STATE.md 'Next best actions' and BACKLOG.md tail for candidates and choose by dependency readiness. Do NOT redo NEX-081 (done, verified, delivered) and do NOT re-append NEX-078..NEX-081 to PR #5 - all four are in the body.",
-  "next_action": "Run 82 starts clean: nothing is pending from run 81. No delivery debt, no unverified slice, tree clean, CI green. Select the next slice from BACKLOG.md and execute it end to end - including polling CI, which is the step runs 80 and 81 both dropped.",
-  "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform && git pull --ff-only`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this checkpoint lags it by the docs commit that writes it. 3. NEX-078 is VERIFIED at product commit 6637c50 with CI 4/4. Do not re-implement it. 4. Run `.venv/bin/python -m pytest`, `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/python -m mypy` bare, exactly as CI does. 5. Take the next dependency-ready slice from BACKLOG.md. Never merge PR #5.",
-  "ci_status": "4c47b19 (run-82 docs head, product tree = NEX-081's 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:24:56Z. Prior: 85a013c 4/4 05:18Z; 139edf6/9336ba3 (NEX-080) 4/4 04:55Z; a0c8ee0 (NEX-079) 4/4 21:20Z; 6637c50 (NEX-078) 4/4 20:43Z.",
+  "next_task": "NEX-083 - poll CI for 4f8e15d and, if green, promote NEX-082 to VERIFIED. Then append the NEX-082 section to PR #5's body and update issue #2 (both still end at NEX-081; assert `body.count('## NEX-082 ') == 0` before appending, then read back from the API). Then take the next dependency-ready slice from BACKLOG.md. Do NOT redo NEX-081 or NEX-082, and do NOT re-append NEX-078..NEX-081 to PR #5.",
+  "next_action": "1. `gh run list --branch feature/agentic-enterprise-platform --limit 6` and wait for the runs on 4f8e15d (Backend + Frontend pairs). 2. If 4/4 success, rewrite validation_status to VERIFIED and record the SHA. 3. Append the NEX-082 section to PR #5 and update issue #2. 4. Take the next slice.",
+  "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform && git pull --ff-only`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this checkpoint lags it by the docs commit that writes it. 3. NEX-_082's product commit is 4f8e15d - it is pushed; do not re-implement the paging slice, only poll its CI. 4. Run `.venv/bin/python -m pytest`, `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/mypy` bare, exactly as CI does. 5. Take the next dependency-ready slice from BACKLOG.md. Never merge PR #5.",
+  "ci_status": "NOT POLLED for 4f8e15d. Poll Backend and Frontend pairs; the branch is the verdict, not one SHA.",
   "commits_this_run": [
-    "3a05db2 feat(audit-sweep): let a capped integrity sweep be finished (NEX-081)",
-    "docs commit: NEX-081 checkpoint (this file) - see git log, it cannot name itself"
+    "4f8e15d fix(ops): page the operator access trail by keyset cursor"
   ],
   "decisions_this_run": [
-    "D-081a: a cursor on the existing report rather than an uncapped sweep. An uncapped scan holds the database open for every agent's whole trail; the cap was a legitimate bound, the missing cursor was the defect.",
-    "D-081b: `verified` also requires offset == 0. A clean second page examined some agents, not the deployment; folding the two would let an operator page through a broken deployment and see only passes.",
-    "D-081c: order the sweep listing by (created_at, id), not created_at alone. Paging depends on the order being total, or an OFFSET page can skip an agent and still look full.",
-    "D-081d: validate offset in the use case (InvalidInput) as well as the query layer, and AFTER the operator gate, so a non-operator gets 404 and cannot probe the validation."
+    "Keyset cursor, not OFFSET. Reading this endpoint is itself a granted operator read, so every request appends a row at the head; an OFFSET page would shift one row per page, repeating one entry and skipping another. A trail with invisible holes is worse than a capped read because it looks complete.",
+    "The in-memory ring's position is a monotonic counter, not len(entries). The ring evicts on overflow, so a length-derived ordinal would reuse a position a surviving entry still holds and a cursor would then skip rows.",
+    "A supplied position is honoured by the in-memory ring and ignored by the SQL adapter, whose identity column must be database-assigned to stay total across processes. Pinned by two tests so the asymmetry is a contract, not a surprise.",
+    "`truncated` is true for a middle page (requested_from set) as well as a filled page: 'under-full' is not 'the whole trail'. The gate still runs before cursor validation, so a non-operator gets 404 and cannot learn the route parses before_position."
   ],
   "run_summary": "Run 81 delivered NEX-081: a capped audit-integrity sweep can now be finished. The sweep was operator-gated and complete for small deployments, but it walked only the oldest `max_agents` agents and offered no way to ask for the rest. `truncated` was honest about the exclusion yet left the operator with nothing to do about it, and the excluded agents were the newest chains - exactly the ones written most recently, and so the likeliest to be tampered with. GET /api/v1/ops/audit-integrity now takes `offset` and reports `next_offset`; the listing is ordered by (created_at, id) so a page boundary is total; and `verified` additionally requires offset == 0, so a clean page after the first can never read as a deployment-wide all-clear. 16 targeted tests, full suite green, ruff+mypy clean. The `offset == 0` guard was proved load-bearing by removing it and watching the intended test fail. CI was not polled - NEX-081 is COMMITTED + PUSHED, not VERIFIED.",
-  "delivery_state": {
-    "pr": 5,
-    "pr_state": "open",
-    "pr_draft": false,
-    "pr_merged": false,
-    "pr_note": "PR #5 open, unmerged, draft=false. Body carries NEX-052..NEX-081. Automated merging is prohibited.",
-    "issue": 2,
-    "issue_state": "open",
-    "issue_note": "Issue #2 open, latest comment 7234571708 covers NEX-081. Stays open: the programme is not done.",
-    "delivery_debt": "NONE - cleared this run (NEX-081 in both PR body and issue)."
-  },
+  "delivery_state": "Branch pushed to 4f8e15d. GitHub delivery (PR #5 body, issue #2) lags by one slice: NEX-082 is committed and pushed but not yet described in either.",
   "branch_head": "resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a stored SHA",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "4c47b19 = NEX-081 promoted to VERIFIED on polled CI, plus ROADMAP/next_task corrections. The commit that records this CI result cannot name itself; resolve the head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
@@ -234,11 +224,11 @@
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-081 VERIFIED: CI 4/4 completed/success at 85a013c (product 3a05db2), polled 2026-11-28T05:18Z. Local: 16 targeted tests green, full suite green, ruff format+check clean, mypy clean on 143 files. Mutation control observed failing.",
+  "validation_status": "NEX-082 IMPLEMENTED + TESTED locally, CI NOT YET POLLED. Local on the pushed tree 4f8e15d: full suite 1652 passed / 4 skipped, `ruff format` 321 files unchanged, `ruff check` all checks passed, mypy clean on 143 source files. Mutation control observed failing: replacing the cursor with None in the use case failed 3 of the 6 new paging tests, so the walk assertions are not vacuous. Targeted: 14 API+paging, 15 adapter keyset, 16 use case tests green.",
   "next_actions": [
     "Poll CI for 3a05db2; promote NEX-081 to VERIFIED on 4/4 success.",
     "Append NEX-081 to PR #5's body and comment on issue #2 (one slice of delivery debt).",
     "Pick the next dependency-ready backlog slice; NEX-081 is closed."
   ],
-  "last_ci_result": "4c47b19 (run-82 docs head, product tree = NEX-081's 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:24:56Z. Prior: 85a013c 4/4 05:18Z; 139edf6/9336ba3 (NEX-080) 4/4 04:55Z; a0c8ee0 (NEX-079) 4/4 21:20Z; 6637c50 (NEX-078) 4/4 20:43Z."
+  "last_ci_result": "NEX-081: 4/4 completed/success at 85a013c (product 3a05db2)."
 }

@@ -7,17 +7,60 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. **NEX-079** (run 79): an operator grant can now be **revoked** — the last live authority in the system that had no way to end early. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. **NEX-079** (run 79): an operator grant can now be **revoked** — the last live authority in the system that had no way to end early. **NEX-082** (run 82): the operator access trail is paged by **keyset cursor**, so the whole retained trail is readable; before this only the newest window was, permanently. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 77) | `9f9a70f` was this run's product head; the docs tip moves constantly. |
-| Head commit (measured) | Docs head `85a013c` (**NEX-081**, VERIFIED 4/4), over product head `3a05db2` (NEX-081), `aaeeb8e` (checkpoint repair), `139edf6` / product `9336ba3` (NEX-080, VERIFIED 4/4), `a0c8ee0` (NEX-079, VERIFIED 4/4), `6637c50` (NEX-078, VERIFIED 4/4). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | `85a013c` (NEX-081 docs head; product `3a05db2`) **4/4 `completed/success`** (Backend ×2, Frontend ×2), polled 2026-11-28T05:18Z. Prior: `139edf6`/`9336ba3` (NEX-080) 4/4 04:55Z; `a0c8ee0` (NEX-079) 4/4 2026-11-27T21:20Z; `6637c50` (NEX-078) 4/4 20:43Z; `9f9a70f` (NEX-077) 4/4 2026-11-28T03:44Z; `4fa0463` (NEX-076) 4/4 03:22Z; `319a3dd` (NEX-075) 4/4 02:45Z; `e375a1f` (NEX-074) 4/4 02:20Z; `09888ac` (NEX-073) 4/4 01:56Z. |
+| Starting commit (run 82) | `bb5189a` was the remote tip this run started from; the local clone was on `main`, so the slice was stashed, re-based onto the remote tip and every gate re-run there. The docs tip moves constantly. |
+| Head commit (measured) | Product head **`4f8e15d` (NEX-082, pushed, CI not yet polled)**; prior docs head `85a013c` (**NEX-081**, VERIFIED 4/4), over product head `3a05db2` (NEX-081), `aaeeb8e` (checkpoint repair), `139edf6` / product `9336ba3` (NEX-080, VERIFIED 4/4), `a0c8ee0` (NEX-079, VERIFIED 4/4), `6637c50` (NEX-078, VERIFIED 4/4). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **Not yet polled for `4f8e15d` (NEX-082)** — that is the next run's first action, not a gap in this one. Prior: `85a013c` (NEX-081 docs head; product `3a05db2`) **4/4 `completed/success`** (Backend ×2, Frontend ×2), polled 2026-11-28T05:18Z. Prior: `139edf6`/`9336ba3` (NEX-080) 4/4 04:55Z; `a0c8ee0` (NEX-079) 4/4 2026-11-27T21:20Z; `6637c50` (NEX-078) 4/4 20:43Z; `9f9a70f` (NEX-077) 4/4 2026-11-28T03:44Z; `4fa0463` (NEX-076) 4/4 03:22Z; `319a3dd` (NEX-075) 4/4 02:45Z; `e375a1f` (NEX-074) 4/4 02:20Z; `09888ac` (NEX-073) 4/4 01:56Z. |
 | Tracking issue | #2 (open) — `7234571708` covers **NEX-081** (VERIFIED, CI 4/4). Earlier: `7234295952` NEX-080; `7234071012` NEX-079; `7233539283` NEX-078; `7232583113` NEX-075; `7231968445` NEX-073; `7230423658` NEX-070; `7229097083` NEX-067; `7228764536` NEX-068; `7228642936` NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-081** (79014 chars). Twenty-six slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | **None.** NEX-081 (run 81) closed a verification-coverage gap rather than a P1: `SweepAuditIntegrity` examined only the oldest `max_agents` agents and gave the operator no way to reach the rest, so on a large deployment the **newest** trails — the likeliest to have been tampered with — fell outside the check permanently. `GET /api/v1/ops/audit-integrity?offset=N` now returns `offset`/`next_offset`, the listing is ordered `(created_at, id)` so a page boundary is total, and `verified` requires `offset == 0` so a clean later page cannot read as a deployment-wide all-clear. **VERIFIED: CI 4/4 `completed/success` on `85a013c` (2026-11-28T05:18Z).** Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-081** (79014 chars); **NEX-082 is pushed but not yet described there** — append next run after asserting it is absent. Twenty-seven slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **None.** NEX-082 (run 82) closed a read-completeness gap on an audit surface: the operator access trail was capped with no cursor, so every grant read older than the newest window was permanently unreadable. NEX-081 (run 81) closed a verification-coverage gap rather than a P1: `SweepAuditIntegrity` examined only the oldest `max_agents` agents and gave the operator no way to reach the rest, so on a large deployment the **newest** trails — the likeliest to have been tampered with — fell outside the check permanently. `GET /api/v1/ops/audit-integrity?offset=N` now returns `offset`/`next_offset`, the listing is ordered `(created_at, id)` so a page boundary is total, and `verified` requires `offset == 0` so a clean later page cannot read as a deployment-wide all-clear. **VERIFIED: CI 4/4 `completed/success` on `85a013c` (2026-11-28T05:18Z).** Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-082 (run `NEX-2026-11-28-82`) — the access trail was capped, so most of it was unreadable
+
+**Status: IMPLEMENTED, TESTED locally; CI NOT YET POLLED.** Product `4f8e15d`, pushed.
+
+**The gap.** `GET /ops/access-report` returned at most `limit` newest entries and offered no
+way to reach further back. Retention keeps the operator access log for years (ADR-017), so
+every granted operator read older than the newest window was **permanently unreadable**: the
+log recorded it and no endpoint could show it. On an audit surface, "read the trail" silently
+meant "read its most recent few hundred rows" — and unlike NEX-081's sweep, it did not even
+say `truncated` was a dead end, because the paging did not exist at all.
+
+**Why a keyset cursor and not an offset — this endpoint forces it.** Reading this view is
+itself a granted operator read, so *every request appends a row at the head of the log it is
+reading*. An `OFFSET` page would therefore shift by one row per page: page *n+1* would repeat
+an entry page *n* had already shown and skip another outright. A trail with invisible holes
+is worse than a capped read, because it looks complete.
+
+**The change.**
+
+- Port: `OperatorAccessEntry.position` — an opaque, monotonic insertion ordinal, exposed for
+  comparison only. Documented as *not* a count: retention deletes rows and the ring evicts
+  them, so position 42 does not mean "forty-two entries exist".
+- `recent(*, limit, before_position=None)` returns entries strictly older than the cursor.
+  An adapter that cannot name a position must behave as a plain capped read, not pretend.
+- SQL adapter: the surrogate `id` *is* the insertion ordinal and is unique, which is what
+  makes the keyset total — no two entries share a position, so no page boundary can land
+  between them. Predicate `id < cursor`.
+- In-memory ring: a **monotonic counter**, not `len(entries)`. The ring drops its oldest entry
+  on overflow, so a length-derived ordinal would reuse a position a surviving entry still
+  holds — and a cursor would then skip rows.
+- Use case: a non-positive cursor is *rejected*, not read as "everything from now on";
+  `next_position` is offered only when the window filled; `truncated` is true for a middle
+  page too, because "under-full" is not "the whole trail".
+- The capability gate still runs **before** cursor validation, so a non-operator still gets
+  `404` and cannot learn from a `400` that the route parses `before_position`.
+
+**Validation.** Full suite `1652 passed, 4 skipped` on `4f8e15d`; `ruff format` 321 files
+unchanged; `ruff check` all checks passed; `mypy` clean on 143 source files. New: 14 API paging
+tests (a full-trail walk asserting no duplicates and no skips *while each read appends*), 15
+adapter keyset tests (including the ring eviction collision), 16 use-case tests. Mutation
+control observed failing: forcing the cursor to `None` in the use case fails 3 of the 6 new
+paging tests, so the walk assertions are not vacuous.
 
 ## NEX-081 (run `NEX-2026-11-28-81`) — a capped sweep excluded the newest trails, permanently
 

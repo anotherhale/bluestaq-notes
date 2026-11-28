@@ -250,3 +250,45 @@ free-text column.
 operator grant is re-read per request from the repository, so revocation takes effect on the next
 call without a token to invalidate. If a token cache is ever introduced, that reasoning stops
 holding and this needs revisiting.
+
+---
+
+## D-082 — The operator access trail pages by keyset cursor, not by offset
+
+**Context.** `GET /ops/access-report` returned at most `limit` newest entries and offered no
+way to read further back, while retention keeps the log for years. NEX-081 had just made a
+*paging* mistake visible on a neighbouring endpoint and it would have been easy to repeat it
+here: reach for `offset`.
+
+**Decision.** A keyset cursor. `OperatorAccessEntry.position` is an opaque, monotonic
+insertion ordinal; the client passes the previous page's `next_position` back as
+`before_position`, and the read returns entries strictly older than it.
+
+**Why offset is wrong *here* specifically.** This endpoint is not a plain read: an operator
+reading the trail is itself a granted operator read, and the gate records that read before
+the report reads its page. Every request therefore inserts a row at the head of the very log
+it is paging. An `OFFSET`-based page shifts by one row per page — page *n+1* repeats an entry
+page *n* already showed and skips one it has not. A trail with invisible holes is worse than
+a capped read, because it looks complete. NEX-081's sweep had the same lesson with a different
+mechanism (a stable `(created_at, id)` order made an offset *total* there); the difference is
+that the sweep does not append to what it reads.
+
+**Consequences.**
+
+- The SQL adapter's surrogate `id` is the position: unique, so a page boundary can never land
+  between two entries. A cursor is anchored to an entry, not to a count.
+- The in-memory ring must use a monotonic counter, not `len(entries)` — the ring evicts its
+  oldest entry on overflow, so a length-derived ordinal would reuse a position a surviving
+  entry still holds, and a cursor would skip rows.
+- `position` is *not* a count: retention deletes rows and the ring evicts them, so position 42
+  does not mean "forty-two entries exist". Documented on the port so no caller reads it as one.
+- A non-positive cursor is rejected rather than read as "everything from now on". The
+  capability gate still runs first, so a non-operator gets `404` and cannot infer from a `400`
+  that the route parses `before_position`.
+- `truncated` is true for a middle page as well as a filled one: "under-full" is not "the whole
+  trail", and a client that treats an under-full page as completion will stop early.
+
+**Not adopted.** No `total` count. Counting the retained trail costs a scan proportional to its
+(retained for years) size on every page, and the number would be wrong the moment a read
+appends. A client that needs to know it reached the end follows `next_position` until it is
+null.
