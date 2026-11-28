@@ -51,7 +51,7 @@
     "open_prs": 0,
     "next_for_main": "A future branch->main PR would deliver only the promotion record. NEXUS must not open it without a human asking, because the owner has just merged and no open PR exists."
   },
-  "tracking_issue": "Issue #2 open. NEX-101 posted as comment 7242131778 and read back from the API (49/49 lines, exact match). NEX-102 was NOT posted this run -- deferred until CI concludes at 14b2a67, so the issue never carries a claim that CI has not established. The issue stays open; its acceptance criteria are program-level.",
+  "tracking_issue": "Issue #2 OPEN (never closed by NEXUS; its acceptance criteria are program-level). NEX-101 posted as comment 7242131778. NEX-102 posted as comment 7242499683 (2220 bytes / 51 lines, read back with VERIFIED and unmerged present). Run 104's merge reconciliation posted as comment 7242534647 (3871 bytes / 79 lines) and compared to the local file with all whitespace stripped: identical, so the landed body is the authored body.",
   "blockers": [],
   "risks": [
     "The guard is static (AST), not behavioural. It cannot see a body model constructed at runtime, and it believes the annotation: a route that type-hints a dependency it does not actually receive would satisfy the scan. The behavioural authorization suites remain the runtime evidence.",
