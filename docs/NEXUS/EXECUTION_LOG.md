@@ -11495,3 +11495,175 @@ from the API). **Never merged.**
 Nothing is in flight. Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md` and start
 it test-first.
 
+
+---
+
+## Run `NEX-2026-11-28-96` — 2026-11-28T12:31Z → 2026-11-28T12:35Z
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-28-96` |
+| Timestamp | 2026-11-28T12:31Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `c0e8628` (NEX-095 docs close-out; live head confirmed with `git ls-remote`, local HEAD identical) |
+| Ending commit | product `87936d4`; this docs commit follows it |
+| Phase | 3 — governance / agent platform surface |
+
+### Observation
+
+Entry state matched the checkpoint: `CHECKPOINT.json` named NEX-095 VERIFIED at product `fb027ee` and
+`next_task` said to start a fresh slice. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+answered `c0e8628`, and `fb027ee` was confirmed an ancestor of `HEAD`. Nothing was in flight.
+
+The working tree was **not** clean: five modified files (`agents.py` port, use case, repository, router,
+`tests/api/test_agents_api.py`) were an in-progress paged-`GET /agents` slice from a prior segment with
+no commit. Recovered rather than discarded — the task was identifiable from the diff and the tests were
+already written.
+
+### Task completed — NEX-096
+
+`GET /agents` was the last listing route in the exact-total paging family still reading a whole set.
+`list_for_owner` selected every agent the owner had registered with no window and the router answered
+`PageMeta(total=len(items))`. The route now takes `limit` (1..200, default 50) / `offset`, orders by
+`(created_at, id)`, and fills `meta.total` from a scoped `count_for_owner` `COUNT`.
+
+Design reasoning worth keeping: paging and an exact total had to land together. NEX-088 had exempted
+this route from its `total=len(items)` sweep because on an unpaginated route the page size *is* the
+total — correct for the code as written, and wrong as a resting place, since the route was only honest
+because it refused to truncate. Adding `limit` alone would have reproduced NEX-088's defect on the one
+route that had escaped it.
+
+### Files changed
+
+`src/notes_service/application/ports/agents.py`,
+`src/notes_service/application/use_cases/agents.py`,
+`src/notes_service/infrastructure/db/agent_repositories.py`,
+`src/notes_service/presentation/api/routers/agents.py`,
+`tests/api/test_agents_api.py`, plus the state files in this commit.
+
+### Migrations
+
+None. No schema change; `count_for_owner` reads existing columns.
+
+### Tests
+
+- Targeted: `pytest tests/api/test_agents_api.py` → **77 passed**.
+- Full suite, bare as CI runs it: **1766 passed, 4 skipped** (skips are `postgresql`-marked).
+- Gates: `ruff format --check` 325 files already formatted; `ruff check` all passed; `mypy` no issues in
+  144 source files.
+- **Load-bearing, observed and restored.** `git checkout -- src/` while keeping the new tests produced
+  **4 failed, 73 passed**, and the four failures were exactly the four new pagination tests
+  (`test_total_is_the_set_size_not_the_page_size`, `test_offset_walks_the_set_without_repeating_a_row`,
+  `test_a_page_beyond_the_set_is_empty_not_an_error`, `test_a_page_size_beyond_the_cap_is_rejected`),
+  with the pre-existing listing test still green. Fix restored from a backup copy; re-ran, 77 passed.
+
+### Security
+
+Read-only and owner-scoped; default-deny unchanged. The count is filtered by the same `owner_user_id` as
+the listing, so an aggregate cannot disclose another user's agent volume. The bound is also a control:
+response cost no longer scales with how many agents the caller registered. No contract break — the
+route gains two optional query parameters and the envelope shape is unchanged.
+
+### Decision and incident this run
+
+- **Incident (process, not product).** I attempted to append the backlog entry with a shell heredoc and
+  it self-interleaved and truncated, corrupting `BACKLOG.md`. I recovered with
+  `git checkout -- docs/NEXUS/BACKLOG.md` (no work was lost — the file had no uncommitted changes) and
+  rewrote the entry with `file_editor`. This is a repeat of a known lesson: prose destined for a file
+  must not go through a heredoc. Recorded here because it cost time inside a 25-minute window.
+- **Corrected a false status before it landed.** The first draft of the `STATE.md` phase row said
+  "CI passing at read time" when both runs were `in_progress`. Rewritten to CI PENDING. Local green
+  tests are not CI PASSED.
+
+### CI
+
+**PENDING — no verdict claimed.** Pushed product commit `87936d4` and read its check-runs immediately:
+`46145902373` (pull_request) and `46145897805` (push) both `in_progress`. The prior head `c0e8628` was
+4/4 `completed/success` (`46144188707`, `46144183186`), but that is NEX-095's docs close-out and is not
+evidence about this change. NEX-096 is therefore **IMPLEMENTED · TESTED · COMMITTED · PUSHED**, not
+VERIFIED.
+
+### Delivery
+
+Not delivered this run, deliberately. Promoting NEX-096 or writing its PR/issue sections before a
+concluded CI read would be the "claims its own verdict" failure. The next run reads the verdict first
+and delivers it.
+
+### Next action
+
+Read `gh api repos/anotherhale/bluestaq-notes/commits/87936d4/check-runs`. If Backend and Frontend both
+concluded success with zero failed and zero skipped steps, promote NEX-096 to VERIFIED in `STATE.md`,
+`BACKLOG.md` and `CHECKPOINT.json`, append the NEX-096 section to PR #5's body with `--body-file`, and
+comment the verdict on issue #2. If red, fix on this branch. Then start the next slice test-first.
+
+---
+
+## Run NEX-2026-11-28-96-closeout — 2026-11-28T12:45Z → 12:52Z
+
+**Branch.** `feature/agentic-enterprise-platform`
+**Starting commit.** `87936d4` (product for NEX-096; the run-96 checkpoint recorded it as head)
+**Ending commit.** The docs commit that contains this entry. A file cannot hold its own hash, so the
+true head is one commit later than any SHA written here.
+**Phase.** 3 (governance / agent platform surface)
+
+### Task completed and verified
+
+**NEX-096 — VERIFIED.** This run did no product work; it discharged the verification debt the previous
+run deliberately left open.
+
+- Read the check-runs for the product commit itself, at run *and* job granularity: runs `46145902373`
+  (pull_request) and `46145897805` (push), both `head_sha = 87936d4`, both `conclusion = success`.
+  Backend 12/12 steps success, Frontend 11/11 steps success, zero failed, zero skipped. No
+  descendant-CI anchor was needed: the verdict is about the commit that carries the change.
+- Waited out an in-flight Backend run before touching docs. A docs push supersedes the product run in
+  the concurrency group, and a `cancelled` run is never evidence — the failure mode this project has
+  hit before.
+- Promoted NEX-096 to VERIFIED in `STATE.md` (phase row, head commit, last CI result, status heading),
+  `BACKLOG.md` and `CHECKPOINT.json` (`task_statuses`, `completed_tasks`, `ci_status`, `next_task`,
+  `next_action`, `recovery_instructions`, `run_summary`, and the decision note that previously
+  explained *why* the promotion was withheld).
+- Delivered: PR #5 body extended from NEX-095 to **NEX-096** with `--body-file`, then read back — one
+  NEX-096 heading, and the prior 2362 lines byte-identical (the strong assertion is that the old
+  content is unchanged, not merely that the new content is present). Issue #2 commented `7239449984`.
+
+### Files changed
+
+Docs only — `docs/NEXUS/{STATE.md,BACKLOG.md,EXECUTION_LOG.md,CHECKPOINT.json}`. No source, no
+migration, no dependency change.
+
+### Tests and gates
+
+- CI (authoritative): 4/4 on `87936d4` itself, 0 failed, 0 skipped.
+- Local docs gates: `ruff format --check` (325 files already formatted), `ruff check` (all checks
+  passed). `CHECKPOINT.json` revalidated with `python3 -m json.tool`.
+
+### Decisions
+
+- **Rejected starting a new slice.** ~590s remained at the integration boundary — under the 10-minute
+  floor. A slice begun there ends as an uncommitted tree the next run must discard, which is worse
+  than a clean handoff.
+- **Promotion rests on an observed read, not on local greens.** Local `pytest`/`mypy` passing was
+  already true last run and is not the same status as CI PASSED; the difference is the whole reason
+  the previous run stopped where it did.
+- **Two `python3 - <<PY` heredoc promotions failed** (terminal heredoc-input error) before switching to
+  `file_editor`. Verified no partial damage: checkpoint remained valid JSON at every step, the `/tmp`
+  draft was never consumed. This is the fourth distinct way heredocs have failed on this host; prose
+  destined for a file or an API body goes through `file_editor` only.
+
+### Risks
+
+- The one-commit lag between a checkpoint's recorded `commit` and the true head is structural, not a
+  defect. Documented in `CHECKPOINT.json:head_semantics`; do not chase it with a corrective commit.
+
+### Delivery state
+
+PR #5 open, `draft=false`, body through NEX-096, never merged by automation. Issue #2 open, NEX-096
+delivered. Checkpoint valid JSON.
+
+### Next action
+
+Nothing is in flight and no verification debt remains: the NEX-082…NEX-096 exact-total paging family is
+closed. Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md` and implement it
+test-first. Before any docs push, confirm the product commit's own CI has concluded.
+
+

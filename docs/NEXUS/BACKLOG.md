@@ -4358,3 +4358,85 @@ remote head confirmed with `git ls-remote`, not `git rev-parse origin/<branch>`.
 paging consumer, so an unstable tie can only reorder presentation. Do not add a tiebreak there until a
 consumer depends on the order.
 
+
+---
+
+## NEX-096 — Bound the owner agent listing, and count the set it returns (run `NEX-2026-11-28-96`)
+
+**Phase.** 3 (governance / agent platform surface). **Priority.** P1 — an unbounded read any
+authenticated client can grow, and a total that cannot distinguish a complete listing from a
+truncated one.
+**Status.** **VERIFIED** — CI 4/4 `completed/success` on the product commit `87936d4` itself (runs
+`46145902373` pull_request, `46145897805` push; Backend 12/12 and Frontend 11/11 steps green, zero
+failed, zero skipped, both `head_sha = 87936d4`), so no docs-head anchor was needed. Verdict commented
+on issue #2 as `7239449984`; PR #5 body extended to NEX-096.
+**Depends on.** NEX-082, NEX-087, NEX-088, NEX-090, NEX-095 — the exact-total paging pattern this
+mirrors.
+
+### The defect
+
+`GET /agents` was the one listing route in this family still reading a whole set.
+`SqlAlchemyAgentRepository.list_for_owner` ran `select(AgentRow).where(owner=...).order_by(created_at)`
+with no window, and the router filled `PageMeta(total=len(items), limit=len(items), offset=0)`.
+There is no per-user cap on agent registration, so an owner can register agents in a loop and make
+every listing request price the entire set — a self-inflicted denial of service on the database that
+the route gave the client no way to bound.
+
+The `total` half was the more damaging half. On an unpaginated route `len(items)` *is* the total,
+which is exactly why NEX-088 exempted this route from its `PageMeta(total=len(items))` sweep. That
+exemption was correct for the code as written, and wrong as a resting place: the number was honest
+only because the route refused to truncate, and refusing to truncate was the defect. Adding `limit`
+without adding an exact count would have converted an honest unpaginated listing into a lying
+paginated one — the same failure each of NEX-088's four siblings had.
+
+### The fix
+
+- `AgentRepository.list_for_owner(owner_user_id, *, limit=None, offset=0)` applies `.limit()` /
+  `.offset()` and orders by `(created_at, id)`. The `id` tiebreak is load-bearing: agents registered
+  in one request burst share `created_at` to the microsecond, and an order that is not total lets an
+  `OFFSET` window repeat one row while skipping another — with the page still looking full.
+- `AgentRepository.count_for_owner(owner_user_id)` answers the set's real size with
+  `SELECT count(*) ... WHERE owner_user_id = :owner`: an aggregate that reads no rows and cannot be
+  truncated by volume. It is scoped by owner for the same reason the listing is — an unscoped count
+  would disclose how many agents other users hold.
+- `ListAgents.run(principal, *, limit=50, offset=0)` returns `AgentPage(items, total)`.
+- `GET /agents` accepts `limit` (1..200, default 50) and `offset` (>= 0). `PageMeta.total` is
+  `AgentPage.total`, never `len(items)`. The dead `_page()` helper and its `Sequence` import are
+  removed.
+
+### Tests — `tests/api/test_agents_api.py`, class `TestAgentListingHttp`
+
+- [x] `test_list_returns_only_the_callers_agents` (pre-existing; still asserts `meta.total == 1`)
+- [x] `test_total_is_the_set_size_not_the_page_size` — three agents, `limit=1`: the total must read 3
+- [x] `test_offset_walks_the_set_without_repeating_a_row` — pages are disjoint, together they cover the
+      set, and replaying a page returns the same rows
+- [x] `test_total_counts_only_the_callers_agents` — Bob's three agents must not enter Alice's total
+- [x] `test_a_page_beyond_the_set_is_empty_not_an_error` — empty page, total still the set size
+- [x] `test_a_page_size_beyond_the_cap_is_rejected` — `limit=201` is 422, not a silently clamped page
+- [x] **Load-bearing, proved and restored.** Reverting the four source files to the parent commit fails
+      exactly the four new tests (`total_is_the_set_size`, `offset_walks`, `page_beyond_the_set`,
+      `page_size_beyond_the_cap`) and leaves the pre-existing listing test green: 4 failed, 73 passed.
+      Restored the fix, re-ran: 77 passed.
+
+### Security considerations
+
+Read-only, owner-scoped, default-deny unchanged. The listing names only the caller's own agents and
+the count is filtered by the same `owner_user_id`, so the total cannot leak another user's agent
+volume. No migration, no envelope-shape change, no new dependency: the route gains two optional query
+parameters. The bound is itself a control — response cost no longer scales with how many agents the
+caller registered.
+
+### Validation
+
+`ruff format --check` 325 files already formatted · `ruff check` all passed · `mypy` no issues in 144
+source files · full suite **1766 passed, 4 skipped** (the skips are `postgresql`-marked), run bare as
+`.github/workflows/ci.yml` does. Product commit **`87936d4`**, pushed; remote head confirmed with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.
+
+### Remaining / next
+
+`FoldersRepository.list_for_owner` is still a whole-set read, but folders are user-authored and small
+and no route exposes them paged, so the page size *is* the total there and the number is honest; leave
+it until a consumer needs a window. The frontend has no `/agents` consumer, so no UI change applies.
+Next: select the next dependency-ready slice.
+
