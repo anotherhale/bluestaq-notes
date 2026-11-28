@@ -528,7 +528,10 @@ class SqlAlchemyApprovalRequestRepository:
                     ApprovalRequestRow.agent_id == _as_uuid(agent_id),
                     ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
                 )
-                .order_by(ApprovalRequestRow.requested_at)
+                .order_by(
+                    ApprovalRequestRow.requested_at,
+                    ApprovalRequestRow.id,
+                )
             )
             .scalars()
             .all()
@@ -555,11 +558,19 @@ class SqlAlchemyApprovalRequestRepository:
         that (NEX-089): it must see every live approval to decide whether a
         sensitive action is authorised, and a bounded read there would silently
         refuse actions whose approval fell outside the page.
+
+        ``id`` breaks ``requested_at`` ties. A page is an ``OFFSET`` window, so a
+        non-deterministic order lets the same row appear twice while another is
+        skipped as the windows shift; approvals opened in the same instant are
+        exactly the case where that happens. The tool gateway's unbounded read
+        has the same problem for a different reason: a sensitive action's
+        authorisation must not depend on which order the database chose for its
+        approvals (NEX-093).
         """
         statement = (
             select(ApprovalRequestRow)
             .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
-            .order_by(ApprovalRequestRow.requested_at)
+            .order_by(ApprovalRequestRow.requested_at, ApprovalRequestRow.id)
         )
         if status is not None:
             statement = statement.where(ApprovalRequestRow.status == status.value)
@@ -789,11 +800,23 @@ class SqlAlchemyToolInvocationRepository:
     def list_for_agent(
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[ToolInvocation]:
+        """An agent's invocations, newest first, one page at a time.
+
+        ``chain_sequence`` breaks ``invoked_at`` ties. It is unique per agent
+        (``uq_tool_invocations_agent_chain_sequence``) and, unlike ``id``, it
+        orders the tied rows the way the audit chain read them, so a page of
+        invocations lines up with the chain a verifier walks. Without a
+        tiebreaker an ``OFFSET`` window over a non-unique timestamp can show one
+        invocation twice and skip another (NEX-093).
+        """
         rows = (
             self._session.execute(
                 select(ToolInvocationRow)
                 .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
-                .order_by(ToolInvocationRow.invoked_at.desc())
+                .order_by(
+                    ToolInvocationRow.invoked_at.desc(),
+                    ToolInvocationRow.chain_sequence.desc(),
+                )
                 .limit(limit)
                 .offset(offset)
             )
