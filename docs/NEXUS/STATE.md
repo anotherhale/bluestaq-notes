@@ -10,12 +10,12 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `38292d2` (**NEX-058 scope item 7, VERIFIED** — backend 2/2 `completed/success`, frontend 1/2 success with the one failure being a pre-existing `App.test.tsx` race in untouched code, see NEX-073), over `3c26957` (NEX-072, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`38292d2` (NEX-058): backend 2/2 `completed/success`; frontend 1/2 `success`, the failure being the pre-existing `App.test.tsx` race (NEX-073) — polled 2026-11-28T01:19Z.** Prior: `3c26957` (NEX-072): 4/4 `completed/success`, polled 2026-11-28T00:52Z. |
+| Head commit (measured) | Product head `09888ac` (**NEX-073**, test-only; IMPLEMENTED · TESTED · COMMITTED · PUSHED, CI not yet read), over `dcd01e0` and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`38292d2` (NEX-058): backend 2/2 `completed/success`; frontend 1/2 `success`, the failure being the pre-existing `App.test.tsx` race — polled 2026-11-28T01:19Z.** Prior: `3c26957` (NEX-072): 4/4 `completed/success`, polled 2026-11-28T00:52Z. **`09888ac` (NEX-073): UNKNOWN — not polled; run 73 hit its deadline after the push. Run 74 must read it.** |
 | Tracking issue | #2 (open) — **comment `7230423658`** covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-070** (48375 chars) as of run 70; NEX-071 not yet added. Fifteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | **Open P1** | None outstanding. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. Run 71 closed an unsatisfiable-control defect: every two-person approval was undecidable through the API (see NEX-071 below). |
-| **Open P4 (gate trust)** | **NEX-073** — a pre-existing race in `frontend/src/App.test.tsx` makes one frontend CI run fail intermittently on code it does not touch. Cheap to fix, and a flaky gate is what lets a real failure be waved through later. |
+| **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI unread). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
@@ -48,15 +48,37 @@ remaining scope item, the diagnostic that makes the enforcement legible.
   reverting the log call, which failed 4 of them. Full suite **1508 passed / 4 skipped**,
   mypy clean on 141 files.
 
-## NEX-073 (filed run `NEX-2026-11-27-73`) — the frontend gate has a race
+## NEX-073 (run `NEX-2026-11-27-73`) — the frontend gate's flaky test was passing vacuously
 
-`frontend/src/App.test.tsx > shows the current user and lists owned notes` asserts a note
-title with the **synchronous** `getByText` immediately after awaiting `findByText` on the
-identity header. The notes list renders in a second effect, so the assertion can read the DOM
-before it is there. It failed one of two frontend CI runs on `38292d2` and passed the other on
-the identical SHA, on a commit that touches no frontend file: a pre-existing flake, not a
-regression. Fix is small — `findByText`/`waitFor` for note titles. Worth doing before the next
-run leans on a red gate as evidence either way.
+**Status: IMPLEMENTED · TESTED · COMMITTED · PUSHED** at `09888ac` (test-only). CI not yet
+read — run 74 promotes this to VERIFIED once check-runs on `09888ac` conclude success.
+
+- **What the failure looked like.** `App.test.tsx > shows the current user and lists owned
+  notes` failed one of two frontend runs on `38292d2` and passed the other on the identical
+  SHA, on a commit touching no frontend file.
+- **The real mechanism, which the first account missed.** `NoteWorkspace` renders the note
+  list only while `!loadingNotes`; every identity-keyed refetch empties it. So a `waitFor`
+  around `expect(queryByText(x)).toBeNull()` resolves *during the loading swap*, not on a
+  filtered list. The test is green whether or not the filtering works.
+- **Three assertions had absence as their only evidence**, not one: both search tests and —
+  most seriously — `does not reveal another user's private note when switching identity`.
+  That one anchored on `Bob Baker`, the identity header, which a different effect renders;
+  it is not a barrier for list content. A leak, or an empty render, both passed.
+- **Fix.** Each now asserts a positive fact and the absence together: the two search tests
+  check the matching note *and* the filtered-out note inside one `waitFor`; the isolation
+  test seeds `Bob private` and awaits it before asserting `Alice private` is gone.
+- **Proof it can fail.** A temporary `FakeApiClient` with `canRead() => true` and
+  `listNotes` forcing `view: "all"` makes the new isolation assertion fail with
+  `expected document not to contain element, found <span>Alice private</span>`. The test
+  detects a real leak; the old form could not.
+- **Left alone deliberately.** Two other absence-only waits are each followed by a backend
+  assertion (`folder_id === null`; `getNote` rejects `404`) that carries the real proof.
+- **Record corrected in place.** An earlier note in `BACKLOG.md` said only one assertion had
+  the race and the search tests were fine. They were cleared without being audited. The
+  correction is kept visible rather than rewritten — a log a run edits into looking right is
+  worthless.
+- **Tests:** 127 passed / 9 files; `tsc -b --force` clean; `eslint .` clean; `vite build` ok;
+  20/20 repeat runs of `App.test.tsx` with 0 failures.
 
 ## NEX-072 (run `NEX-2026-11-27-72`) — the record of a privileged read now outlives the process
 
@@ -2639,3 +2661,24 @@ log and checkpoint for the next free ID *before* writing the commit message.
   The issue stays open: the programme is not done.
 - **CI**: 4/4 `completed/success` at `3c26957`, polled 2026-11-28T00:52Z. Delivery debt for
   NEX-072: **none**.
+
+## Next best actions (run `NEX-2026-11-27-73`, superseding the lists above)
+
+1. **Read CI for `09888ac`** (NEX-073, test-only) and promote it to VERIFIED if every
+   check-run concludes success. This is the only outstanding evidence debt for the task;
+   the code and the gates are already green locally. Use
+   `gh run list --branch feature/agentic-enterprise-platform`, and judge on check-runs whose
+   `status` is `completed` — a docs commit descending from it reads `cancelled` once
+   superseded in the concurrency group, which is not a failure.
+2. **PR #5 body catch-up** for NEX-058 and NEX-065…NEX-073. The body currently stops at
+   NEX-070, so a reviewer reading it sees a stale picture of a branch that has advanced six
+   slices. This is delivery debt, not code debt, and it is the cheapest way to make the
+   review honest.
+3. **`operator_access_log` retention policy** — run 72's named follow-up. The table is
+   append-only and unbounded; nothing prunes it. Needs a decision on how long a
+   privileged-read record must be kept before code, so it is worth an ADR line rather than
+   an arbitrary `DELETE`.
+
+Do not re-implement NEX-058 or NEX-073. NEX-073 is test-only: if its CI turns red, read the
+failing assertion before assuming the product broke — the change cannot alter behaviour.
+

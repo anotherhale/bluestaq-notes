@@ -8752,3 +8752,73 @@ assuming either verdict.
 second slice (NEX-073) was deliberately not started: at 1272s elapsed only ~228s
 remained, far below the 10-minute floor, and starting it would have produced an
 uncommitted tree for the next run to discard.
+
+## Run NEX-2026-11-27-73 (continued) — 2026-11-28T01:47Z
+
+**Branch** `feature/agentic-enterprise-platform` · **Start** `dcd01e0` · **End** `09888ac` (pushed)
+
+### NEX-073 — de-race `App.test.tsx` (test-only) — IMPLEMENTED · TESTED · COMMITTED · PUSHED
+
+The previous entry on this run filed NEX-073 as "one synchronous `getByText` after a
+`findByText`". That was the symptom, not the mechanism. Auditing every `waitFor` in the
+file that wrapped a *negative* assertion found the real cause: the note list is replaced by
+a loading state while `loadingNotes` is true, so a `waitFor` on `queryByText(...)` being
+`null` resolves **while the list is empty**, not while it is filtered. The assertion is
+green on every run whether or not the behaviour under test works.
+
+Three assertions had absence as their entire evidence:
+
+1. `filters notes by search text` — now asserts the matching note *and* the absence in one
+   `waitFor`.
+2. `clears the search and restores the view` — same change, so the mid-flight absence check
+   and the final positive check are both meaningful.
+3. `does not reveal another user's private note when switching identity` — the most
+   important one, because absence is the whole point. It anchored on `Bob Baker`, the
+   identity header, which is rendered by a different effect than the note list and is
+   therefore not a barrier for list content. A leak or an empty render both passed.
+
+Fix for (3): seed `Bob private`, then `await waitFor(() => expect(screen.getByText("Bob
+private")).toBeInTheDocument())` before asserting `Alice private` is gone.
+
+**Proved the test can fail for the right reason.** A temporary `FakeApiClient` subclass with
+`canRead()` returning `true` and `listNotes` forcing `view: "all"` makes the new assertion
+fail with `expected document not to contain element, found <span>Alice private</span>`. A
+test that cannot fail is not evidence; this one can. Temp file removed.
+
+The other two absence-only waits were left alone deliberately: each is followed by a
+backend assertion (`folder_id === null`; `getNote` rejects `404`) that carries the real
+proof, so the DOM check there is a UI hint, not the verdict.
+
+### Correction to the NEX-073 record
+
+An earlier claim in `BACKLOG.md` — that only one assertion had the race, and that the search
+tests were fine — was wrong; the search tests were cleared without being audited. The
+correction is kept visible in `BACKLOG.md` rather than silently rewritten, because a
+run that edits its own evidence into looking right destroys the log's value.
+
+### Validation
+
+| Check | Result |
+| --- | --- |
+| `npx vitest run` | 127 passed / 9 files |
+| `npm run typecheck` (`tsc -b --force`) | clean |
+| `npx eslint .` | clean |
+| `npm run build` | built in 668ms |
+| 20x repeat of `App.test.tsx` | 0 failures |
+| leak negative control | new assertion fails on `Alice private` |
+
+### Status honesty
+
+- **COMMITTED + PUSHED** at `09888ac`, verified with `git ls-remote`.
+- **CI is UNKNOWN.** The push landed with about 10 minutes left, but reading CI takes
+  several minutes per run and the run deadline was close; polling was not started rather
+  than started and abandoned. Run 74 must read check-runs on `09888ac` before calling
+  NEX-073 VERIFIED-by-CI.
+- Test-only change: zero production files touched, so no behavioural risk to the product.
+
+### Handoff
+
+Run 74: (1) read CI for `09888ac`, promote NEX-073 to VERIFIED-by-CI if green; (2) then take
+the highest-value dependency-ready slice from `BACKLOG.md` — named candidates are the
+`operator_access_log` retention policy (run 72's follow-up) and the PR #5 body catch-up for
+NEX-058..NEX-073. Do not re-implement NEX-058 or NEX-073.

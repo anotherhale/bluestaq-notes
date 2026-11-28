@@ -3039,7 +3039,7 @@ policy change is not itself recorded as approved.
 | --- | --- |
 | Phase | 4 (developer experience / gate trust) |
 | Priority | P4 (but cheap, and it protects every future verdict) |
-| Status | **IMPLEMENTED + TESTED + PUSHED at `dcd01e0` (run 74)** — awaiting a CI read to promote to VERIFIED |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED at `09888ac`** (test-only; 127 passed / 9 files, `tsc -b --force` + `eslint` + `vite build` clean, 20/20 repeat runs 0 failures) — **CI not yet read; run 74 promotes to VERIFIED on a green check-run read.** |
 | Dependencies | None |
 | Blocks | Nothing functionally; it degrades the reliability of the frontend CI signal |
 | Owner | FRONTEND |
