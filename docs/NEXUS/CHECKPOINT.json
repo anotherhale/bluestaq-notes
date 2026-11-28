@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-28-81",
   "timestamp": "2026-11-28T05:15Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "85a013c",
+  "commit": "4c47b19",
   "project_phase": "Phase 2/3/5 largely delivered. NEX-081 (this run) makes a capped audit-integrity sweep finishable: the cap bounded one response but silently excluded every agent past it, permanently, and those were the newest trails. Next: poll CI for 3a05db2, then take the next dependency-ready slice from BACKLOG.md.",
   "active_task": null,
   "task_statuses": {
@@ -199,7 +199,7 @@
   "next_task": "NEX-082 - pick the next dependency-ready slice from BACKLOG.md. Phase 3 milestones M3.1-M3.4 are all VERIFIED and ROADMAP.md now says so, so the next value is in Phase 4 (admin console frontend) or a remaining P4/backend gap. Read STATE.md 'Next best actions' and BACKLOG.md tail for candidates and choose by dependency readiness. Do NOT redo NEX-081 (done, verified, delivered) and do NOT re-append NEX-078..NEX-081 to PR #5 - all four are in the body.",
   "next_action": "Run 82 starts clean: nothing is pending from run 81. No delivery debt, no unverified slice, tree clean, CI green. Select the next slice from BACKLOG.md and execute it end to end - including polling CI, which is the step runs 80 and 81 both dropped.",
   "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform && git pull --ff-only`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this checkpoint lags it by the docs commit that writes it. 3. NEX-078 is VERIFIED at product commit 6637c50 with CI 4/4. Do not re-implement it. 4. Run `.venv/bin/python -m pytest`, `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/python -m mypy` bare, exactly as CI does. 5. Take the next dependency-ready slice from BACKLOG.md. Never merge PR #5.",
-  "ci_status": "85a013c (NEX-081 docs head over product 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:18Z. Prior: 139edf6/9336ba3 (NEX-080) 4/4 success 04:55Z; a0c8ee0 (NEX-079) 4/4 2026-11-27T21:20Z; 6637c50 (NEX-078) 4/4 20:43Z.",
+  "ci_status": "4c47b19 (run-82 docs head, product tree = NEX-081's 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:24:56Z. Prior: 85a013c 4/4 05:18Z; 139edf6/9336ba3 (NEX-080) 4/4 04:55Z; a0c8ee0 (NEX-079) 4/4 21:20Z; 6637c50 (NEX-078) 4/4 20:43Z.",
   "commits_this_run": [
     "3a05db2 feat(audit-sweep): let a capped integrity sweep be finished (NEX-081)",
     "docs commit: NEX-081 checkpoint (this file) - see git log, it cannot name itself"
@@ -224,8 +224,8 @@
   },
   "branch_head": "resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a stored SHA",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "85a013c is the docs checkpoint this run pushed. The final commit of this run (which promotes NEX-081 to VERIFIED) cannot name itself; resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "run_report": "NEX-079: give an operator grant a way to end early. Before this a grant ended only by expiry, so a mistaken hand-out was stuck for its term and a configuration grant (granted_by IS NULL) could not be ended at all without editing the seed and redeploying. Revocation is recorded on the row, not applied by DELETE, because the point of keeping a grant is that an audit can read what authority existed; a delete erases the grant and the evidence it was removed. 12 files, +720/-10. 11 new API tests. Full suite green locally. Two pre-existing-test/migration defects found and fixed before commit (duplicate index; stale column-set assertion).",
+  "commit_note": "4c47b19 = NEX-081 promoted to VERIFIED on polled CI, plus ROADMAP/next_task corrections. The commit that records this CI result cannot name itself; resolve the head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
+  "run_report": "NEX-079: give an operator grant a way to end early. Before this a grant ended only by expiry, so a mistaken hand-out was stuck for its term and a configuration grant (granted_by IS NULL) could not be ended at all without editing the seed and redeploying. Revocation is recorded on the row, not applied by DELETE, because the point of keeping a grant is that an audit can read what authority existed; a delete erases the grant and the evidence it was removed. 12 files, +720/-10. 11 new API tests. Full suite green locally. Two pre-existing-test/migration defects found and fixed before commit (duplicate index; stale column-set assertion). ENDING: run 82 ends with 4c47b19 plus one docs commit recording its CI; both are docs-only, so the product tree under test remains NEX-081's 3a05db2.",
   "pr": {
     "body_covers_through": "NEX-077",
     "body_updated_this_run": false,
@@ -240,5 +240,5 @@
     "Append NEX-081 to PR #5's body and comment on issue #2 (one slice of delivery debt).",
     "Pick the next dependency-ready backlog slice; NEX-081 is closed."
   ],
-  "last_ci_result": "85a013c (NEX-081 docs head over product 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:18Z. Prior: 139edf6/9336ba3 (NEX-080) 4/4 success 04:55Z; a0c8ee0 (NEX-079) 4/4 2026-11-27T21:20Z; 6637c50 (NEX-078) 4/4 20:43Z."
+  "last_ci_result": "4c47b19 (run-82 docs head, product tree = NEX-081's 3a05db2): 4/4 completed/success (Backend x2, Frontend x2), polled 2026-11-28T05:24:56Z. Prior: 85a013c 4/4 05:18Z; 139edf6/9336ba3 (NEX-080) 4/4 04:55Z; a0c8ee0 (NEX-079) 4/4 21:20Z; 6637c50 (NEX-078) 4/4 20:43Z."
 }
