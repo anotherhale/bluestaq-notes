@@ -3424,7 +3424,7 @@ for operators (the listing is operator-gated); non-operator callers still see no
 
 - **Phase:** 3 (governance / audit)
 - **Priority:** P1
-- **Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (`9336ba3`); **CI UNVERIFIED — not VERIFIED**
+- **Status:** **VERIFIED** — product `9336ba3`, docs checkpoint `139edf6`; CI 4/4 `completed/success` on both (Backend x2, Frontend x2, polled 2026-11-28T04:55Z). Corrected in run 85: this line still read "CI UNVERIFIED" long after the evidence existed — stale in the pessimistic direction, which invites wasted re-verification.
 - **Dependencies:** NEX-079 (the write side), NEX-077 (the detail view) — both met
 - **Objective:** surface the revocation facts NEX-079 stores. `revoked_at`/`revoked_by` existed,
   were paired by a CHECK, and survived their revoker, but nothing read them: an operator could see
@@ -3612,7 +3612,7 @@ section to PR #5's body and comment on issue #2.
 | --- | --- |
 | Phase | 3 (governance) / platform operations — Access Center |
 | Priority | P1 — a configuration-seeded wildcard operator was unrevokable through the platform |
-| Status | **PUSHED** — `c698979` on the feature branch; local gates green (pytest 1679 passed / 4 skipped, exit 0); CI not yet polled |
+| Status | **VERIFIED — CI 4/4 success on `d9d0a3a` (runs `46120082100` push and `46120085453` pull_request; Backend and Frontend each `success`), polled 2026-11-28 run 85. The product commit `c698979`'s own runs read `completed/cancelled` — superseded in the concurrency group by this docs commit, never a failure; `d9d0a3a` carries the identical product tree (proved with `git diff c698979 d9d0a3a -- src/ tests/`, empty). |
 | Dependencies | NEX-079 (revocation path), NEX-084 (attenuation) — both met |
 | Architecture | `application/use_cases/operator_grants.py` (`RevokeOperatorGrant`, `REVOCABLE_OPERATOR_SCOPES`); `presentation/schemas.py` docstring; tests at `tests/api/test_ops_operator_grant_revoke_api.py`; no migration |
 
@@ -3648,5 +3648,5 @@ unrelated operator view after revocation; `test_revoking_the_wildcard_leaves_an_
 — an explicit grant survives the wildcard revocation; `test_an_unknown_scope_is_still_refused_now_that_the_wildcard_is_accepted`
 — a bogus scope is still a validation error.
 
-**Remaining.** Append this section to PR #5's body and comment on issue #2; poll CI on
-`c698979` and record the outcome.
+**Remaining.** None for implementation or verification. Delivery (append this section to
+PR #5's body, comment on issue #2) is done in run 85 after this promotion.

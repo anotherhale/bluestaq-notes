@@ -7,14 +7,14 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…**NEX-084 VERIFIED**, **NEX-085 PUSHED** pending CI. **NEX-085** (run 85, `c698979`): the **wildcard operator grant could not be revoked**. `RevokeOperatorGrant` guarded on `KNOWN_OPERATOR_OPERATIONS`, the *issue* allowlist, which deliberately omits `"*"` — so revoking the wildcard failed as an unknown scope (422). The strongest grant in the system, seeded from configuration, could only be stood down by editing the deployment seed and restarting: the exact "edit configuration to revoke" hole NEX-079 closed, one level up. Revocation now has its own allowlist (`REVOCABLE_OPERATOR_SCOPES`, issue path still refuses `"*"`). |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…**NEX-085 VERIFIED**. **NEX-085** (run 85, `c698979`): the **wildcard operator grant could not be revoked**. `RevokeOperatorGrant` guarded on `KNOWN_OPERATOR_OPERATIONS`, the *issue* allowlist, which deliberately omits `"*"` — so revoking the wildcard failed as an unknown scope (422). The strongest grant in the system, seeded from configuration, could only be stood down by editing the deployment seed and restarting: the exact "edit configuration to revoke" hole NEX-079 closed, one level up. Revocation now has its own allowlist (`REVOCABLE_OPERATOR_SCOPES`, issue path still refuses `"*"`). |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 84) | `453e134` — the run-83 docs head, whose product tree is NEX-083's `c16dd9b` (proved with `git diff -- src/ tests/`, empty). |
-| Head commit (measured) | Product head **`c698979` (NEX-085, pushed, CI in flight)**; prior `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); prior `453e134` (**NEX-083** docs head, VERIFIED 2/2) over product `c16dd9b`, prior `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, prior `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | `c698979` (NEX-085) — runs `46119980168` (push) and `46119984770` (pull_request) were **in_progress** when run 85 ended; **not polled to a conclusion**, so NEX-085 is **PUSHED, not VERIFIED**. Next run polls these two ids first. Prior: `09cc4ad` (NEX-084) **4/4 success** (Backend + Frontend × pull_request + push), so NEX-084 is **VERIFIED**. Prior: `453e134` (NEX-083) **2/2 `completed/success`** polled 2026-11-28T06:39Z — its own product commit's runs read `cancelled` (superseded in the concurrency group, never a failure), but `453e134` carried the identical product tree and concluded success. Earlier: `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
+| Head commit (measured) | Docs head **`d9d0a3a` (NEX-085, **CI 4/4 success**) over product `c698979`**; prior `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); prior `453e134` (**NEX-083** docs head, VERIFIED 2/2) over product `c16dd9b`, prior `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, prior `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | `d9d0a3a` (NEX-085 docs head) **4/4 success** — runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z, so NEX-085 is **VERIFIED**. `c698979`'s own runs read `cancelled` (superseded) and are never evidence. Prior: `09cc4ad` (NEX-084) **4/4 success** (Backend + Frontend × pull_request + push), so NEX-084 is **VERIFIED**. Prior: `453e134` (NEX-083) **2/2 `completed/success`** polled 2026-11-28T06:39Z — its own product commit's runs read `cancelled` (superseded in the concurrency group, never a failure), but `453e134` carried the identical product tree and concluded success. Earlier: `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
 | Tracking issue | #2 (open) — `7235362658` covers **NEX-083** (VERIFIED, CI 2/2). That comment was posted by a **concurrent** NEXUS run at 06:32:43Z, 103s into run 84; its claims were verified independently here and are accurate, so run 84 posted no duplicate. Earlier: `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
 | PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-084** (90541 bytes; NEX-082, NEX-083 and NEX-084 each asserted present exactly once by API read-back this run). Twenty-eight slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. NEX-084 appended this run (section count asserted 1 from the API) — that was the last remaining delivery debt, now cleared. |
-| **Open P1** | **None outstanding as of NEX-085.** NEX-085 closed the last fail-closed asymmetry in operator revocation (issueable but unrevokable authority). Earlier: NEX-084 NEX-084 closed the last unbounded arrow in grant delegation — a grant could be handed on for longer than the issuer held it. NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
+| **Open P1** | **None outstanding as of NEX-085.** NEX-085 closed the last fail-closed asymmetry in operator revocation (issueable but unrevokable authority). Earlier: NEX-084 closed the last unbounded arrow in grant delegation — a grant could be handed on for longer than the issuer held it. NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
@@ -37,8 +37,10 @@ wildcard survives, and the audit entry names the single authority removed.
 
 Validated with mutation control: with the source fix stashed, both wildcard tests fail `422`.
 Full suite `1679 passed, 4 skipped`, exit 0; ruff format/check clean; mypy clean on 143 files.
-Committed `c698979` and pushed; remote head verified through the branches API. **CI not polled
-to a conclusion** — status is PUSHED.
+Committed `c698979` and pushed; remote head verified through the branches API. The docs head
+`d9d0a3a` then concluded **CI 4/4 success** (`46120082100` push, `46120085453` pull_request),
+so NEX-085 is **VERIFIED**. The product commit's own runs read `cancelled` — superseded in the
+concurrency group, never a failure; `git diff c698979 d9d0a3a -- src/ tests/` is empty.
 
 ## NEX-084 (run `NEX-2026-11-28-84`) — a bounded grant could be converted into a longer one
 
@@ -94,19 +96,14 @@ Gates: full suite **1678 passed, 4 skipped**, exit 0; `ruff format --check` 321 
 
 ## Next best actions (run `NEX-2026-11-28-85`, superseding the lists above)
 
-1. **Poll CI on `c698979` and promote NEX-085 to VERIFIED** when runs `46119980168` (push) and
-   `46119984770` (pull_request) both conclude success.
-   `gh run list --branch feature/agentic-enterprise-platform --limit 4`. `cancelled` means
-   superseded by a later docs commit, never failed.
-2. **Append the NEX-085 section to PR #5's body and comment on issue #2.** Assert
-   `body.count("## NEX-085 ") == 0` before writing, then read back from the API. Do **not**
-   re-append NEX-082, NEX-083 or NEX-084.
-3. **Then take the next dependency-ready slice from `BACKLOG.md`.** Do not start a new slice with
-   under 10 minutes left on the clock.
+1. **Take the next dependency-ready slice from `BACKLOG.md`.** NEX-085 is closed, verified and
+   delivered; no delivery debt remains on PR #5 or issue #2. Write the failing test first.
+2. **Do not start a new slice with under 10 minutes left on the clock.** Leave a committed,
+   pushed increment behind instead.
+3. **Re-check the live head with `git ls-remote`** before trusting any SHA in these files.
 
 **Do not redo** NEX-085, NEX-084, NEX-083, NEX-082, NEX-081, NEX-080, NEX-079, NEX-078 or
-NEX-077 — NEX-085 is implemented and pushed with green local gates and only needs its CI poll,
-the rest are CI-verified.
+NEX-077 — all are implemented, pushed and CI-verified.
 
 ## Next best actions (run `NEX-2026-11-28-84`, superseded — kept for history)
 

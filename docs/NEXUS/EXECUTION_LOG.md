@@ -10144,20 +10144,34 @@ _This entry was created by an AI agent (OpenHands) on behalf of the repository o
 - Full suite `1679 passed, 4 skipped`, exit 0. `ruff format --check` clean, `ruff check`
   clean, `mypy` clean on 143 files.
 
-### Not done, deliberately
+### Verification (same run)
 
-- **CI not polled this run.** ~400 s remained at commit time; polling plus a checkpoint write
-  plus a final poll does not fit. The status is **PUSHED**, not VERIFIED. The next run polls
-  `c698979` first.
-- **PR #5 body / issue #2 not updated.** Same reason. This is recorded delivery debt for the
-  next run and is the first thing after the CI poll, not a second slice.
-- **No second slice.** Under 10 minutes remained after integration.
+The docs commit that recorded this run (`d9d0a3a`) is the CI verdict node: `c698979`'s own runs
+read `completed/cancelled` because the docs push superseded them in the concurrency group.
+`gh run list` / `gh run view --json jobs` on the docs head: runs **`46120082100`** (push) and
+**`46120085453`** (pull_request), **Backend** and **Frontend** each `success` — **4/4**, polled
+2026-11-28T07:14Z. `git diff c698979 d9d0a3a -- src/ tests/` is empty, so the docs head tests
+the identical product tree. **NEX-085 is VERIFIED.**
+
+### Delivery
+
+- **PR #5 body** extended with the NEX-085 section. Asserted `body.count("## NEX-085 ") == 0`
+  first (the body already carried NEX-084), then read back: NEX-085 **1**, NEX-084 **1** — no
+  duplicate, no lost section.
+- **Issue #2** commented with the NEX-085 verification summary (`issuecomment-7235822904`),
+  after asserting 0 prior NEX-085 mentions across its 68 comments.
+
+### Reconciliation done this run
+
+`BACKLOG.md`'s NEX-080 entry still read "CI UNVERIFIED — not VERIFIED" although `9336ba3` and
+`139edf6` were 4/4 green since 04:55Z. Stale in the *pessimistic* direction, which invites
+wasted re-verification, so it was corrected to VERIFIED with its run ids. This run also fixed a
+self-inflicted duplicate "NEX-084 NEX-084" in `STATE.md`. Both were caught by sweeping every
+record file after the promotion — the sweep is not optional.
 
 ### Next action
 
-Poll CI on `c698979` (Backend + Frontend, pull_request and push). If 4/4 success, promote
-NEX-085 to VERIFIED in `BACKLOG.md`, `CHECKPOINT.json`, `STATE.md`, append the section to
-PR #5's body (assert it is not already there), and comment on issue #2. Do not re-verify
-NEX-077…NEX-084.
+Take the next dependency-ready slice from `BACKLOG.md`. No delivery debt remains on PR #5 or
+issue #2. Do not re-verify NEX-077…NEX-085.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._

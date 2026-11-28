@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-85",
-  "timestamp": "2026-11-28T07:11:00Z",
+  "timestamp": "2026-11-28T07:15:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c698979d1dce7e4092ad07124792a56270eb6f9f",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 delivered. NEX-085 closed the fail-closed asymmetry in operator revocation: the wildcard grant (the strongest one, seeded from configuration) could be issued but not revoked through the running platform. Revocation now uses its own allowlist. No open P1.",
+  "commit": "d9d0a3a2ecec7ed24a400c391a9e67bd8e33673a",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 VERIFIED. NEX-085 closed the fail-closed asymmetry in operator revocation: the wildcard grant (the strongest one, seeded from configuration) could be issued but not revoked through the running platform. Revocation now uses its own allowlist. No open P1.",
   "active_task": null,
   "task_statuses": {
     "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134 (product tree identical, proved with git diff -- src/ tests/). PR #5 body and issue #2 both carry it (section counts asserted from the live API).",
     "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success (Backend + Frontend on both the pull_request and push events; check-runs read directly this run). Local gates green (ruff format/check, mypy 143 files, pytest 1678 passed / 4 skipped, exit 0) and the mutation control was observed failing 3/3. PR #5 body carries NEX-084 exactly once and issue #2 needed no new comment (a concurrent run's 7235362658 covered NEX-083 accurately).",
-    "NEX-085": "PUSHED - product c698979 on feature/agentic-enterprise-platform (remote head verified through the branches API). Local gates green: ruff format/check clean, mypy 143 files clean, pytest 1679 passed / 4 skipped, exit 0. Mutation control observed failing (source fix stashed -> both wildcard tests 422). CI runs 46119980168 (push) and 46119984770 (pull_request) on c698979 were in_progress when this checkpoint was written: NOT yet VERIFIED. PR #5 body and issue #2 not yet updated."
+    "NEX-085": "VERIFIED \u2014 CI 4/4 success on `d9d0a3a` (runs `46120082100` push and `46120085453` pull_request; Backend and Frontend each `success`), polled 2026-11-28 run 85. The product commit `c698979`'s own runs read `completed/cancelled` \u2014 superseded in the concurrency group by this docs commit, never a failure; `d9d0a3a` carries the identical product tree (proved with `git diff c698979 d9d0a3a -- src/ tests/`, empty). Local gates: pytest 1679 passed / 4 skipped exit 0, ruff format/check clean, mypy 143 files clean, mutation control observed failing (source fix stashed -> both wildcard tests 422). PR #5 body and issue #2 updated in this run."
   },
   "completed_tasks": [
     "NEX-083",
@@ -114,7 +114,8 @@
       "polled_at": "2026-11-28T06:44Z",
       "docs_head": "73cc288",
       "docs_head_result": "4/4 completed/success, polled 2026-11-28T06:47Z"
-    }
+    },
+    "nex085_ci": "4/4 success on `d9d0a3a`: runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -124,8 +125,10 @@
     "mergeable": true,
     "body_sections_through": "NEX-084",
     "body_length_bytes": 90541,
-    "note": "Section counts asserted from the live API before and after the write: NEX-082=1, NEX-083=1, NEX-084=0 -> 1. The append script refuses to run when NEX-084 is already present, so a re-run cannot duplicate. No delivery debt remains on PR #5.",
-    "updated_at": "2026-11-28T06:45:00Z"
+    "note": "PR #5 body carries NEX-052..NEX-085 (asserted `body.count(\"## NEX-085 \") == 0` before the append, then read back: NEX-085 1, NEX-084 1, no duplicate). Issue #2 received the NEX-085 verification comment (issuecomment-7235822904) after asserting 0 prior NEX-085 mentions across 68 comments.",
+    "updated_at": "2026-11-28T06:45:00Z",
+    "delivery_through": "NEX-085",
+    "issue_2": "commented with the NEX-085 verification summary (issuecomment-7235822904)"
   },
   "tracking_issue": {
     "number": 2,
@@ -142,11 +145,12 @@
     "ON DELETE SET NULL on granted_by/revoked_by is handled in the domain, but future validation over those columns must assume they can become NULL behind the writer's back.",
     "A paging sweep relies on the listing order being TOTAL. It is (created_at, id).",
     "The keyset cursor assumes positions only ever increase.",
-    "Concurrent NEXUS runs share this branch and /tmp: one posted issue #2 comment 7235362658 during this run and created /tmp/checkpoint_new.json. Re-read GitHub and use unique temp paths."
+    "Concurrent NEXUS runs share this branch and /tmp: one posted issue #2 comment 7235362658 during this run and created /tmp/checkpoint_new.json. Re-read GitHub and use unique temp paths.",
+    "Run 85 reconciliation: BACKLOG's NEX-080 line still read 'CI UNVERIFIED' although `9336ba3`/`139edf6` were 4/4 green since 04:55Z - stale in the pessimistic direction, which invites wasted re-verification. Corrected. This run also fixed a self-inflicted duplicate 'NEX-084 NEX-084' in STATE.md. Both caught by the post-promotion sweep, which is why that sweep is mandatory."
   ],
-  "next_task": "NEX-085 delivery - poll CI on c698979, then promote to VERIFIED and deliver the section to PR #5 and issue #2",
+  "next_task": "NEX-085 closed and delivered. Take the next dependency-ready slice from BACKLOG.md; first re-read STATE.md 'Next best actions' and confirm no delivery debt remains on PR #5 / issue #2.",
   "next_action": "1. Read docs/NEXUS/BACKLOG.md and pick the highest-priority dependency-ready task that is not already VERIFIED. 2. Implement and test it as one vertical slice. 3. Commit, push, poll CI on the product commit, then record its result here.",
-  "recovery_instructions": "1) Read this file and STATE.md. 2) gh run list --branch feature/agentic-enterprise-platform --limit 4: confirm runs 46119980168 and 46119984770 on c698979 concluded success on both events. 3) If all success, change the NEX-085 Status line in docs/NEXUS/BACKLOG.md, this file and STATE.md from PUSHED to VERIFIED with the run ids, then append the NEX-085 section to PR #5's body only after asserting body already lacks it (body.count is zero), comment on issue #2, commit and push. 4) If a run failed, read its log and fix; do not mark VERIFIED. 5) Do not re-verify NEX-077..NEX-084 - all are VERIFIED on polled CI.",
+  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED on CI 4/4 success at d9d0a3a and delivered to PR #5 and issue #2 - do not redo it. 3) Verify the live head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform; never trust the SHA recorded here. 4) Pick the next dependency-ready slice from BACKLOG.md, write the failing test first, and leave a committed, pushed increment behind. 5) A docs commit's CI supersedes the product commit's runs (they read cancelled); poll the docs head for the verdict.",
   "ci_status": {
     "product_commit": "09cc4ad3ed13b8ddf3c421f5479cb094297a1d39",
     "result": "4/4 completed/success",
