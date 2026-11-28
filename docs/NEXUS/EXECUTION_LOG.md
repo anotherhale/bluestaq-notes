@@ -11193,3 +11193,55 @@ with zero check-runs. Verified by reading the workflow config before pushing, no
 
 Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md`; continue the adapter sweep for
 reads documented as bounded whose bodies still materialise the table.
+
+## Run 93 (`NEX-2026-11-28-93`) — closing out NEX-092, then auditing the state files it closed into
+
+**Start commit** `61ec31a` (run-92 docs head, matched by `git ls-remote`); **end commit**
+`4413769` + the follow-up docs commit this entry ships in. **Branch**
+`feature/agentic-enterprise-platform`, no divergence.
+
+**Work completed.** NEX-092 (product `3159555`) was already implemented, tested and green
+before this run: CI runs `46136495333` (push) and `46136499460` (pull_request) both concluded
+**4/4 `completed/success`**, Backend and Frontend green, on the product commit itself — so the
+verdict needed no docs-head anchor and no empty-product-diff licence. This run delivered it:
+the NEX-092 section was appended to PR #5's body (118678 → 121690 bytes, read back from the
+API: `## NEX-092` present exactly once, NEX-091/090/088 sections intact, `CI UNREAD` count 0),
+the CI verdict and delivery were recorded on tracking issue #2 (`7238119575`), and the
+`61ec31a` docs-head verdict was recorded on PR #5 (`7238131300`).
+
+**Two state-file defects found by an audit, not by a failure.** With the run's remaining time
+too short for a new slice, the checkpoint and STATE were swept for superseded negations — the
+run-90 lesson that a promotion which edits only machine-readable fields leaves contradicting
+prose behind. The sweep found genuine problems, both in the *reassuring* direction:
+
+1. **STATE.md line 224 still read "NEX-083 is COMMITTED + PUSHED, not VERIFIED. Polling it is
+   the next run's first action."** It was true when written (run 83 stopped with CI
+   `in_progress`), but run 84 polled it: `453e134` concluded 2/2 success over NEX-083's exact
+   product tree. Line 153 of the *same file* already recorded that reconciliation, so the file
+   contradicted itself for nine runs. Annotated in place — the commit subject and the 083-era
+   status are facts about that moment, so the original sentence is kept and the outcome
+   appended rather than rewritten.
+2. **STATE.md's "Current position" header table was run-91 vintage while the phase row said
+   run 93.** This is exactly the half-updated-file pattern that produced the run-90 defect, one
+   file over. Five stale rows were rewritten: starting commit, measured head, last CI result,
+   tracking issue, PR #5.
+3. **CHECKPOINT.json's `commit` field was a run-92 value inside a run-93 file**, reconciled by
+   naming the docs head explicitly (`docs_head: 4413769`) and restating that no SHA in the file
+   is authoritative.
+
+**Process incident.** The first attempt to patch the header table used a `cat > /tmp/x.py <<
+'PYEOF'` heredoc of ~90 lines. It self-interleaved and never terminated, feeding garbage into
+the parser until the soft timeout — the third instance of this failure mode in this program.
+Nothing was written, because the corruption was at parse time, and STATE.md was verified intact
+(3523 lines, 0 × `NEX3c`) before proceeding. The script was then written with `file_editor` and
+ran cleanly. Recorded so the next run writes multi-line scripts to a file first and never uses
+a long heredoc.
+
+**Validation.** The tree diff is docs-only (`STATE.md`, `CHECKPOINT.json`, this log), so the
+product tree is byte-identical to `3159555` and this run's verdict anchors to it; no new CI read
+is owed. `CHECKPOINT.json` was rewritten through the temp-file → `json.load` → `os.replace`
+protocol and re-validated after replacement. `ruff format` left STATE.md unchanged.
+
+**Next action.** Poll the push run `46136930439` for `4413769` if a conclusive result is wanted
+for the docs head, then select the next dependency-ready slice from BACKLOG.md / ROADMAP.md.
+No delivery debt is outstanding through NEX-092.
