@@ -170,7 +170,7 @@
     "issue_comment_this_run": null,
     "note": "NEX-084 was the last delivery debt and is now cleared. Issue #2 already carries comment 7235362658 for NEX-083, posted by a CONCURRENT run at 06:32:43Z; its claims were verified independently here, so run 84 posted no duplicate. A further issue comment is optional, not owed."
   },
-  "branch_head": "c04a554",
+  "branch_head": "1b466f4",
   "head_drift_policy": "The commit field names the product commit whose tree CI is reading. NEXUS checkpoint updates are docs-only commits, so the tip advances one commit past commit every time this file is written. On reconciliation compare the product tree, not the SHA: git diff <commit>..HEAD -- src/ tests/ being empty means commit still describes what CI verified.",
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with git ls-remote.",
   "concurrency_note": "A second NEXUS run is active on this branch: issue #2 comment 7235362658 appeared at 06:32:43Z, 103 seconds into this run, and was not written by it. Its claims were checked and accurate. Any run starting here must re-read PR #5's body and issue #2 before posting, and must anchor to git ls-remote because the other run's docs commits advance the tip independently.",
@@ -197,5 +197,6 @@
       "verdict": "NEX-084 VERIFIED"
     },
     "docs_head_ci": "c04a554 docs-only; not a verdict on the product tree"
-  }
+  },
+  "docs_head_delivered": "1b466f4 (docs promotion + PR #5 delivery)"
 }
