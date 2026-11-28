@@ -41,6 +41,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from notes_service.application.errors import InvalidInput
 from notes_service.application.ports.operator_access import (
     OperatorAccessEntry,
     OperatorAccessLog,
@@ -65,24 +66,39 @@ class OperatorAccessSnapshot:
     must be able to tell a bounded, process-local view from a durable one; an
     unlabelled list of ten entries reads like "ten reads ever happened" when it
     may mean "ten happened on this worker since the last restart".
+
+    ``next_position`` is the keyset cursor for the next page — the ``position`` of
+    the oldest entry in this window — and is ``None`` when this window is the last
+    one. Follow it while it is not ``None`` to read the whole retained trail.
     """
 
     entries: tuple[OperatorAccessEntry, ...]
     limit: int
     log_name: str
     capacity: int
+    next_position: int | None = None
+    requested_from: int | None = None
 
     @property
     def truncated(self) -> bool:
-        """True when the window filled, so older entries may exist beyond it.
+        """True when this window is a *partial* read of the retained trail.
 
-        This reports "the window is full", not "entries were definitely
-        withheld": with exactly ``limit`` entries in the log nothing is hidden,
-        yet the reader cannot tell that from this side of the port. An audit
-        view should over-report a possible gap rather than imply completeness it
-        cannot prove.
+        A window is partial in either direction, and both are reported:
+
+        * it **filled** (``next_position`` is set), so older entries exist past it;
+        * it **started from a cursor** (``requested_from`` is set), so entries
+          newer than the first one shown are not in it either.
+
+        Reporting only the first would let a middle page — under-full, but nowhere
+        near the start — read as "the whole trail". An audit view must over-report
+        a possible gap rather than imply a completeness it cannot prove.
+
+        An empty window is never truncated: with no entries it cannot name an
+        anchor, and there is nothing in any direction to reach.
         """
-        return len(self.entries) >= self.limit
+        if not self.entries:
+            return False
+        return self.next_position is not None or self.requested_from is not None
 
 
 class GetOperatorAccessReport:
@@ -97,19 +113,72 @@ class GetOperatorAccessReport:
         self._access_log = access_log
         self._operator_gate = operator_gate
 
-    def run(self, principal: Principal, *, limit: int = DEFAULT_LIMIT) -> OperatorAccessSnapshot:
+    def run(
+        self,
+        principal: Principal,
+        *,
+        limit: int = DEFAULT_LIMIT,
+        before_position: int | None = None,
+    ) -> OperatorAccessSnapshot:
         # Gate first, read second: a refused caller must not learn how many
         # entries exist, and the gate records the grant before we touch the log.
+        #
+        # That record-before-read ordering is also why paging here is keyset, not
+        # offset: this call appends an entry at the head, so an OFFSET page would
+        # shift by one row per page and repeat an entry while skipping another.
+        # The cursor is taken from the last entry of the *previous* page, so rows
+        # arriving at the head while a reader walks the log cannot move its window.
         self._operator_gate.authorize(principal, operation=OPERATION)
 
         effective_limit = _clamp_limit(limit)
-        entries = self._access_log.recent(limit=effective_limit)
+        start = _validate_cursor(before_position)
+        entries = self._access_log.recent(limit=effective_limit, before_position=start)
         return OperatorAccessSnapshot(
             entries=entries,
             limit=effective_limit,
             log_name=self._access_log.name,
             capacity=_capacity_of(self._access_log),
+            next_position=_next_position(entries, effective_limit),
+            requested_from=start,
         )
+
+
+def _next_position(entries: tuple[OperatorAccessEntry, ...], limit: int) -> int | None:
+    """The cursor for the page after ``entries``, or ``None`` when there is none.
+
+    Two conditions must both hold, and each rules out a different way of lying:
+
+    * the window **filled** — an under-full page is the last page, so there is
+      nothing more to fetch and offering a cursor would send the reader on a walk
+      that never ends;
+    * the oldest entry **names a position** — an adapter that cannot order its
+      entries cannot continue from one, and inventing a cursor there would page
+      over a set it cannot actually address.
+
+    The cursor is the oldest entry's own position, not ``position - 1``: the port
+    promises entries *strictly older* than the cursor, which excludes the entry
+    already shown without assuming anything about how dense the positions are
+    (retention and ring eviction both leave gaps in them).
+    """
+    if len(entries) < limit:
+        return None
+    oldest = entries[-1].position
+    return oldest if oldest is not None else None
+
+
+def _validate_cursor(before_position: int | None) -> int | None:
+    """Reject a cursor that cannot address an entry.
+
+    A non-positive cursor is a caller mistake, not a request for "the end": it
+    would silently return the whole log, which is the opposite of what a cursor is
+    for. Refusing it keeps ``next_position`` trustworthy — the next page is
+    always a real continuation, never a wrap-around.
+    """
+    if before_position is None:
+        return None
+    if before_position < 1:
+        raise InvalidInput("before_position must be a positive entry position")
+    return before_position
 
 
 def _clamp_limit(limit: int) -> int:

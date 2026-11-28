@@ -871,11 +871,17 @@ class OperatorAccessEntryResponse(ResponseModel):
     point of the record: an audit entry that omitted the actor would answer
     "something was read" rather than "who read it". ``operation`` is a fixed
     identifier each use case chooses, never caller-supplied text.
+
+    ``position`` is the entry's monotonic insertion ordinal, exposed so a reader
+    can resume *after* this entry with ``before_position``. Without it a client
+    would have to re-request the head and re-derive where it stopped, which is
+    exactly the duplicate-and-skip failure a cursor exists to prevent.
     """
 
     user_id: str
     operation: str
     at: datetime
+    position: int | None
 
 
 class OperatorAccessReportResponse(ResponseModel):
@@ -885,7 +891,12 @@ class OperatorAccessReportResponse(ResponseModel):
     reader cannot mistake a bounded, process-local window for a durable
     deployment-wide history. ``capacity`` of ``0`` means the adapter does not
     advertise a fixed ring (e.g. an append-only store), not that it is empty.
-    ``truncated`` is true when more entries exist than this window returned.
+    ``truncated`` is true when this window is a *partial* read of the retained
+    trail, in either direction. ``next_position`` is the cursor for the page after
+    this one, or ``null`` on the last page; pass it back as ``before_position`` to
+    read on. Reading the whole trail means following ``next_position`` until it is
+    null — a single capped window is not the trail, and the log is retained for
+    years.
     """
 
     entries: list[OperatorAccessEntryResponse]
@@ -893,6 +904,7 @@ class OperatorAccessReportResponse(ResponseModel):
     log_name: str
     capacity: int
     truncated: bool
+    next_position: int | None
 
     @classmethod
     def from_snapshot(cls, snapshot: OperatorAccessSnapshot) -> OperatorAccessReportResponse:
@@ -902,6 +914,7 @@ class OperatorAccessReportResponse(ResponseModel):
                     user_id=str(entry.user_id),
                     operation=entry.operation,
                     at=entry.at,
+                    position=entry.position,
                 )
                 for entry in snapshot.entries
             ],
@@ -909,6 +922,7 @@ class OperatorAccessReportResponse(ResponseModel):
             log_name=snapshot.log_name,
             capacity=snapshot.capacity,
             truncated=snapshot.truncated,
+            next_position=snapshot.next_position,
         )
 
 

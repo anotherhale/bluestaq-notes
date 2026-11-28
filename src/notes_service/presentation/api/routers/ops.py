@@ -115,6 +115,17 @@ def get_operator_access_report(
             ),
         ),
     ] = DEFAULT_LIMIT,
+    before_position: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description=(
+                "Keyset cursor: return entries strictly older than this position. "
+                "Pass the `next_position` of the previous page. A cursor, not an "
+                "offset, because reading this log appends to it."
+            ),
+        ),
+    ] = None,
 ) -> OperatorAccessReportResponse:
     """Return who has used an operator grant, newest first.
 
@@ -123,10 +134,18 @@ def get_operator_access_report(
     "who read the totals" was unanswerable from inside the system.
 
     Reading this view is itself a granted operator read, so it appends an entry
-    of its own — the trail cannot be inspected without being extended. A
-    non-operator gets ``404`` like every other ops endpoint.
+    of its own — the trail cannot be inspected without being extended. That is
+    why the window is continued with a **keyset cursor** (`before_position`) and
+    not an offset: this very call inserts an entry at the head, so an offset page
+    would shift by one row per page and repeat one entry while skipping another.
+    Follow `next_position` until it is null to read the whole retained trail;
+    before this, only the newest `limit` entries were reachable at all.
+
+    A non-operator gets ``404`` like every other ops endpoint.
     """
-    snapshot = container.get_operator_access_report().run(principal, limit=limit)
+    snapshot = container.get_operator_access_report().run(
+        principal, limit=limit, before_position=before_position
+    )
     return OperatorAccessReportResponse.from_snapshot(snapshot)
 
 

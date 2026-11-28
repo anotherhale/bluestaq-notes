@@ -55,6 +55,11 @@ def _to_domain(row: OperatorAccessRow) -> OperatorAccessEntry:
         user_id=UserId(str(row.user_id)),
         operation=row.operation,
         at=row.at,
+        # The surrogate key *is* the insertion ordinal, which is exactly what the
+        # port's ``position`` means, so it is handed out unchanged. It is also what
+        # makes the keyset cursor total: ``id`` is unique, so no two entries can
+        # share a position and no page boundary can land between them.
+        position=row.id,
     )
 
 
@@ -81,13 +86,16 @@ class SqlAlchemyOperatorAccessLog:
             )
             session.commit()
 
-    def recent(self, *, limit: int) -> tuple[OperatorAccessEntry, ...]:
+    def recent(
+        self, *, limit: int, before_position: int | None = None
+    ) -> tuple[OperatorAccessEntry, ...]:
         if limit < 1:
             return ()
+        statement = select(OperatorAccessRow).order_by(OperatorAccessRow.id.desc()).limit(limit)
+        if before_position is not None:
+            statement = statement.where(OperatorAccessRow.id < before_position)
         with self._session_factory() as session:
-            rows = session.execute(
-                select(OperatorAccessRow).order_by(OperatorAccessRow.id.desc()).limit(limit)
-            ).scalars()
+            rows = session.execute(statement).scalars()
             return tuple(_to_domain(row) for row in rows)
 
     def purge_before(self, *, cutoff: datetime) -> int:

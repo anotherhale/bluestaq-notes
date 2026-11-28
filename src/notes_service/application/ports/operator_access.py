@@ -32,11 +32,23 @@ from notes_service.domain.identity.value_objects import UserId
 
 @dataclass(frozen=True, slots=True)
 class OperatorAccessEntry:
-    """One granted read of an operational view."""
+    """One granted read of an operational view.
+
+    ``position`` is the adapter's monotonic insertion ordinal: a positive integer
+    that strictly increases with every recorded entry, and ``None`` only when the
+    adapter cannot name one. It exists so a reader can page *past* an entry it has
+    already seen without re-counting, which a limit alone cannot do once the log
+    grows while the reader is walking it.
+
+    It is not a count of *entries in the log*: retention may delete old rows and a
+    ring may drop them, so position 42 does not mean "forty-two entries exist". It
+    only orders them. Treat it as opaque — compare, never arithmetic.
+    """
 
     user_id: UserId
     operation: str
     at: datetime
+    position: int | None = None
 
 
 @runtime_checkable
@@ -50,8 +62,34 @@ class OperatorAccessLog(Protocol):
         """Append one granted read. Called only after a gate allows."""
         ...
 
-    def recent(self, *, limit: int) -> tuple[OperatorAccessEntry, ...]:
-        """The most recent entries, newest first, capped at ``limit``."""
+    def recent(
+        self, *, limit: int, before_position: int | None = None
+    ) -> tuple[OperatorAccessEntry, ...]:
+        """Up to ``limit`` entries, newest first, strictly *older* than a cursor.
+
+        ``before_position`` is a keyset cursor: when given, only entries whose
+        :attr:`OperatorAccessEntry.position` is strictly less are returned, so the
+        caller resumes exactly after the last entry it saw. ``None`` starts at the
+        newest entry.
+
+        Why a cursor and not an ``offset``
+        ----------------------------------
+        Reading this log **appends to it** — the gate records the granted read
+        before the report reads the page. An ``OFFSET`` page would therefore shift
+        under the reader by one row per page, so page *n+1* would repeat an entry
+        page *n* already showed and skip another outright. A keyset cursor is
+        anchored to an entry rather than to a count, so rows inserted at the head
+        while the reader walks the log cannot move the window.
+
+        A cursor is required for correctness, not only for convenience: with
+        ``limit`` alone, any entry older than the newest ``limit`` is unreachable,
+        and the access log is retained for up to a decade, so "read the trail" would
+        silently mean "read its most recent 500 rows".
+
+        Adapters that cannot name a position (``position is None`` on every entry)
+        ignore the cursor and behave as a plain capped read; they cannot offer
+        paging and must not pretend to.
+        """
         ...
 
     def purge_before(self, *, cutoff: datetime) -> int:

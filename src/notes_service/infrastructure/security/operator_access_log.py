@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 from collections import deque
+from dataclasses import replace
 from datetime import datetime
 
 from notes_service.application.ports.operator_access import OperatorAccessEntry
@@ -33,6 +34,11 @@ class InMemoryOperatorAccessLog:
         self._lock = threading.Lock()
         self._entries: deque[OperatorAccessEntry] = deque(maxlen=capacity)
         self._capacity = capacity
+        # A monotonic counter, *not* ``len(self._entries)``: the ring drops its
+        # oldest entry on overflow, so the length falls while entries keep
+        # arriving and a length-derived position would reuse an ordinate an older
+        # surviving entry already holds.
+        self._next_position = 1
 
     @property
     def name(self) -> str:
@@ -44,13 +50,24 @@ class InMemoryOperatorAccessLog:
 
     def record(self, entry: OperatorAccessEntry) -> None:
         with self._lock:
+            if entry.position is None:
+                entry = replace(entry, position=self._next_position)
+            self._next_position = max(self._next_position, (entry.position or 0) + 1)
             self._entries.append(entry)
 
-    def recent(self, *, limit: int) -> tuple[OperatorAccessEntry, ...]:
+    def recent(
+        self, *, limit: int, before_position: int | None = None
+    ) -> tuple[OperatorAccessEntry, ...]:
         if limit < 1:
             return ()
         with self._lock:
             newest_first = reversed(self._entries)
+            if before_position is not None:
+                newest_first = (
+                    entry
+                    for entry in newest_first
+                    if entry.position is None or entry.position < before_position
+                )
             return tuple(list(newest_first)[:limit])
 
     def purge_before(self, *, cutoff: datetime) -> int:
