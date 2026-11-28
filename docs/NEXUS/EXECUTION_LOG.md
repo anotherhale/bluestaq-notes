@@ -9341,3 +9341,47 @@ No migration. No dependency change.
 Append the NEX-077 section to PR #5's body, then select the next dependency-ready slice from
 `docs/NEXUS/BACKLOG.md`. Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or
 NEX-058.
+
+## Run NEX-2026-11-27-77 (continued) — 2026-11-28T03:52Z — delivery debt cleared
+
+- **Starting commit:** `c7c97d6` (docs checkpoint of NEX-077)
+- **Ending commit:** `3047b53`
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Tasks completed:** PR #5 body catch-up (NEX-077 section appended, heading corrected
+  `###` → `##`); delivery state recorded in `CHECKPOINT.json`/`STATE.md`; CI evidence for the
+  docs head recorded.
+- **Tasks verified:** NEX-077 remains VERIFIED — CI 4/4 `completed/success` on `9f9a70f`
+  (product) and on `acd9d30` (docs head, polled 2026-11-28T03:51Z). The docs commit touches no
+  product file (`git diff 9f9a70f..HEAD -- src tests migrations frontend/src` is empty).
+- **Files changed:** `docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/STATE.md`,
+  `docs/NEXUS/EXECUTION_LOG.md`. No source, test, migration or frontend changes.
+- **Tests executed:** none required (docs only). `ruff format` repo-wide: 314 files unchanged
+  on the first pass, 1 reformatted (the checkpoint JSON edit) on the second.
+- **Decisions made:** recording "PR body now carries NEX-077" is itself delivery work. A
+  checkpoint that still asked for the append would have sent the next run to redo it.
+- **Risks identified:** the PR #5 body reached 66208 characters carrying twenty-three stacked
+  slices. A reviewer may reasonably ask for a split; that is an owner decision, not something
+  to act on unilaterally.
+- **Commits created:** `acd9d30` (delivery state), `3047b53` (CI evidence).
+- **Push status:** pushed. Remote head `3047b53`.
+- **PR updates:** PR #5 body updated (NEX-077 section added). PR left open, `draft=false`,
+  unmerged. Automated merging is prohibited.
+- **CI results:** `acd9d30` 4/4 `completed/success`; `3047b53` pending at run end (docs-only).
+- **Checkpoint status:** updated and validated.
+- **Next action:** select the next dependency-ready slice from `BACKLOG.md`. Do not
+  re-implement NEX-077/076/075/074/073/058 and do not re-append NEX-077 to PR #5.
+
+### Correction — `3047b53` shipped an invalid `CHECKPOINT.json`, repaired in the next commit
+
+`3047b53` ran `.venv/bin/ruff format docs/NEXUS/CHECKPOINT.json` before committing. `ruff format`
+parses JSON as Python and re-emits it, which strips the trailing comma after the last object
+member. The file became unparseable and was committed and pushed in that state, so for a few
+minutes the recovery checkpoint could not be read by the tooling that depends on it.
+
+Fixed by rebuilding the file from the last version that parsed (`git show
+acd9d30:docs/NEXUS/CHECKPOINT.json`), re-applying the same edits in Python, and validating with
+`json.load` both the temp file and the final path before committing.
+
+Rule: `ruff format` is for Python only. A JSON, YAML or Markdown state file is formatted by
+rewriting it in Python (`json.dump(..., indent=2)`) and validating the parse. Never point
+`ruff format` at a data file — it accepts the argument and silently corrupts it.
