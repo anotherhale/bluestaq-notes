@@ -4067,3 +4067,66 @@ listing route; they are unchanged here rather than speculatively reworked.
 
 ---
 
+
+## NEX-091 — Link, list and unlink external IdP identities (run `NEX-2026-11-28-92`)
+
+**Status: COMMITTED `977b21f` · PUSHED · NOT VERIFIED** — CI run `46134525416` was `queued` at write
+time and no verdict has been read. PR #5 body section and issue #2 comment outstanding.
+
+OIDC login (NEX-002) resolves an incoming `(provider, subject)` pair to a local account through
+`external_identities`, but nothing exposed the write path: there was no way for an operator to create
+a binding, enumerate an account's bindings, or revoke one. Offboarding from an IdP therefore had no
+expression in the platform, and a mis-typed subject could not be corrected.
+
+### The slice
+
+| Layer | Change |
+| --- | --- |
+| Ports | external-identity lookup/insert/delete; `revoke_for_identity` on the session port |
+| Adapter | SQLAlchemy implementations of both |
+| Application | `LinkExternalIdentity`, `ListExternalIdentities`, `UnlinkExternalIdentity` |
+| API | `POST`/`GET`/`DELETE` under `/api/v1/organizations/{org}/members/{user}/identities` |
+| Tests | 10 application, 13 HTTP |
+
+No migration: the table and its uniqueness constraint already existed.
+
+### The routing decision, and why it is not cosmetic
+
+The unlink route addresses the link by **its own id**, not by `(provider, subject)`. An IdP subject is
+opaque and routinely contains `/`, `@` or `+` — `auth0|64f/0a+b@tenant/realms/acme#user` is a perfectly
+ordinary subject. A path segment cannot carry those unescaped, and the observed failure was not a clean
+`400`: the route failed to **match**, answering `404` without ever reaching the use case. The link
+therefore looked *absent* rather than *unaddressable*, which is a misleading error on an administrative
+surface. Addressing the id removes the escaping problem instead of documenting a workaround around it.
+`test_opaque_subject_with_path_characters_survives_round_trip` pins it.
+
+### Security properties, each pinned by a test
+
+- **Linking cannot escalate.** An admin may not attach a login to an account more privileged than their
+  own (`403`). Linking is a takeover route, so a less privileged target is the only permitted one.
+- **`(provider, subject)` is unique system-wide.** Re-linking the same pair to the same user is
+  idempotent; binding a pair already owned by a **different** account is refused `422` rather than
+  silently rebinding that user's login to someone else.
+- **Unlink revokes only the sessions minted from that exact `(provider, subject)`**, in the same
+  transaction. Unrelated sessions survive, and a live cookie from the removed link cannot outlive it.
+- **`404` unreadable / `403` unauthorized**, matching the rest of the admin surface (ADR-008). A link is
+  removable only through the member that owns it, so a guessed id cannot cross accounts.
+- **The audit entry names actor, target, provider and subject — never a credential** — and only after
+  the change succeeds.
+
+### Test-writing lesson
+
+Three list assertions were written as absolute counts and failed — correctly. The seeded demo users
+**already carry a `demo` identity link**, so an absolute count was asserting the *seed*, not the change
+under test. They are now delta-based: membership of the new id, and "exactly one `entra` link". A test
+that asserts a pristine world fails the moment the fixture becomes realistic.
+
+### Validation (committed tree)
+
+`ruff format` clean (1 reformatted, 323 unchanged) · `ruff check` all passed · `mypy` clean on **144**
+files · full suite **1740 passed / 4 skipped**, exit 0.
+
+### Outstanding
+
+1. Read run `46134525416` to conclusion; mark VERIFIED only on `completed/success`.
+2. Append this slice to PR #5's body and comment on issue #2.

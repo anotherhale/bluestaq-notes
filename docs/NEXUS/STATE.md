@@ -3378,3 +3378,56 @@ leak NEX-088's mutation check found in the same shape of code.
 
 **Do not redo** NEX-090 or anything before it. **Do not** re-append NEX-079…NEX-090 to PR #5's body —
 all of them are already in it.
+
+## NEX-091 (run `NEX-2026-11-28-92`) — external IdP identities can be linked, listed and unlinked
+
+**Status: COMMITTED `977b21f` · PUSHED · NOT VERIFIED.** CI run `46134525416` was `queued` when this
+was written; no verdict has been read. PR #5 body section and issue #2 comment are outstanding.
+
+OIDC login needs a durable binding from an IdP `(provider, subject)` pair to a local account, and an
+operator needs to create and revoke it. This slice adds the three operations end to end: repository
+port methods, the SQLAlchemy adapter, three use cases in `application/use_cases/identity_linking.py`,
+three routes on the organization admin router, and 23 tests (10 application, 13 HTTP).
+
+**The unlink route addresses the link by its own id, not by `(provider, subject)`.** An IdP subject is
+opaque and routinely contains `/`, `@` or `+` — `auth0|64f/0a+b@tenant/realms/acme#user` is a normal
+subject. A path segment cannot carry those unescaped, and the failure was not a clean `400`: the route
+failed to *match* and answered `404` without ever reaching the use case, so the link looked absent
+rather than unaddressable. Addressing the id removes the escaping problem instead of documenting a
+workaround. `test_opaque_subject_with_path_characters_survives_round_trip` pins it.
+
+Security decisions, each pinned by a test:
+
+- **Linking is a takeover route, so it cannot escalate.** An admin may not attach a login to an
+  account more privileged than their own (`403`). A less privileged target is the only permitted one.
+- **`(provider, subject)` is unique system-wide.** Re-linking the same pair to the same user is
+  idempotent rather than a conflict; binding a pair already owned by a different account is refused
+  `422` instead of silently rebinding another user's login.
+- **Unlink revokes only the sessions minted from that exact `(provider, subject)`, in the same
+  transaction.** Unrelated sessions survive, and a live cookie from the removed link cannot outlive
+  the removal.
+- **404 for unreadable, 403 for unauthorized**, matching the rest of the admin surface. A link is
+  removable only through the member that owns it, so a guessed id cannot cross accounts.
+- **The audit entry names actor, target, provider and subject — never a credential** — and only after
+  the change succeeds.
+
+One test-writing lesson worth keeping: the seeded demo users **already carry a `demo` identity link**,
+so three assertions that counted the list absolutely were asserting the *seed*, not the change under
+test — they failed for the right reason. They are now delta-based (`body["id"] in listed_ids`, and
+"exactly one `entra` link" rather than "exactly one link").
+
+**Validation (on the committed tree):** `ruff format` 1 reformatted then 323 unchanged, `ruff check`
+all passed, `mypy` clean on **144** files, full suite **1740 passed / 4 skipped**, exit 0.
+
+## Next best actions (run `NEX-2026-11-28-92`, superseding every list above)
+
+1. **Read the CI verdict for `977b21f`** (run `46134525416`). Mark NEX-091 VERIFIED only when every
+   check-run is `completed`/`success`. This is the same debt runs 80 and 81 left behind: a slice that
+   is built, locally tested and pushed but unproven is not delivered.
+2. **Deliver NEX-091 to PR #5 and issue #2.** The body currently ends at NEX-090 and the tracking
+   issue's last comment covers NEX-090 only.
+3. **Then select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`, and do not start
+   one with under 10 minutes of window left.
+
+**Do not redo** NEX-091 or anything before it. **Do not** re-append NEX-079…NEX-091 to PR #5's body
+until step 2 is actually done — only NEX-091 is missing.

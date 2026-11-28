@@ -10885,3 +10885,121 @@ do not rework them speculatively. Hold the next slice to the same standard: a te
 the fix, a mutation that proves the test bites, and a verdict read rather than assumed.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-92` — NEX-091: external IdP identity linking
+
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `6a81ab3` (matched `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` before any work)
+**Ending commit (product):** `977b21f` — pushed; remote head verified by `ls-remote`, not assumed
+**Ending commit (docs):** the commit carrying this entry
+**Run phase:** Phase 3 (governance) → identity foundation
+
+### Task
+
+NEX-091. OIDC login needs a durable binding from an IdP `(provider, subject)` pair to a local
+account, plus an operator surface to create and revoke it. The prior segment was interrupted after
+the implementation and local gates were green but before the HTTP-level tests existed; this run
+recovered that state rather than restarting it.
+
+### Files changed
+
+| File | Change |
+| --- | --- |
+| `src/notes_service/application/use_cases/identity_linking.py` | **new** — base use case plus link/list/unlink |
+| `src/notes_service/application/ports/repositories.py` | external-identity port methods |
+| `src/notes_service/application/ports/sessions.py` | `revoke_for_identity` |
+| `src/notes_service/infrastructure/db/repositories.py` | SQLAlchemy adapter for both |
+| `src/notes_service/bootstrap/container.py` | wiring |
+| `src/notes_service/presentation/api/routers/organizations.py` | three routes |
+| `src/notes_service/presentation/schemas.py` | request/response models |
+| `tests/application/test_identity_linking.py` | **new** — 10 application tests |
+| `tests/api/test_identity_linking_api.py` | **new** — 13 HTTP tests |
+
+No migration: the identity table and its uniqueness constraint already existed.
+
+### The routing decision
+
+The unlink route addresses the link by its own id, not by `(provider, subject)`. An IdP subject is
+opaque and routinely contains `/`, `@` or `+`. A subject-in-path route did not fail with a clean
+`400` — it failed to **match**, answering `404` without reaching the use case, so the link appeared
+absent rather than unaddressable. Id-addressing removes the escaping problem rather than documenting
+a workaround around it. `test_opaque_subject_with_path_characters_survives_round_trip` pins the
+behaviour with `auth0|64f/0a+b@tenant/realms/acme#user`.
+
+### Security properties, each pinned by a test
+
+- Linking cannot escalate: an admin may not attach a login to a more privileged account (`403`).
+- `(provider, subject)` is unique system-wide. Re-linking to the same user is idempotent; binding a
+  pair owned by another account is refused `422` rather than silently rebinding their login.
+- Unlink revokes only the sessions minted from that exact `(provider, subject)`, in the same
+  transaction — a live cookie from the removed link cannot outlive the removal.
+- `404` unreadable / `403` unauthorized, matching the admin surface; a link is removable only through
+  the member that owns it, so a guessed id cannot cross accounts.
+- The audit entry records actor, target, provider and subject — never a credential — after success.
+
+### Something the tests taught us
+
+Three list assertions were written as absolute counts and failed. The cause was not the product: the
+seeded demo users **already carry a `demo` identity link**, so an absolute count was asserting the
+seed rather than the change under test. They are now delta-based — membership of the new id, and
+"exactly one `entra` link". A test that asserts a pristine world is a test that will fail the moment
+the fixture becomes realistic.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format` | 1 file reformatted, then 323 unchanged |
+| `ruff check` | All checks passed |
+| `mypy` | Success, no issues in **144** source files |
+| `pytest` (full) | **1740 passed, 4 skipped**, exit 0 |
+| `pytest` (identity only) | 23 passed — 10 application, 13 HTTP |
+
+Not run locally: the 4 tests skipped by the PostgreSQL marker; CI's Backend job runs that path.
+
+### Two process failures in this run, recorded rather than hidden
+
+1. **A shell heredoc corrupted a Python script mid-write** while adding membership setup to the new
+   test file. The interleaved text ran and produced a syntax error, so nothing was written — but the
+   same mechanism both times is the one that corrupts. The file was deleted and rebuilt with
+   `file_editor` instead.
+2. **A `git commit -F - <<'MSG'` heredoc self-interleaved and hung** rather than failing. It wrote
+   nothing (`git log` still showed `6a81ab3`, tree intact). The message was written to a file with
+   `file_editor` and committed with `git commit -F <file>`. Verified afterwards: commit landed, tree
+   clean.
+
+Both are the failure mode recorded in memory: prose in a heredoc is not safe in this environment.
+Code without long prose literals is fine; commit messages and scripts are not.
+
+### Commits
+
+- `977b21f` — `feat(identity): link, list and unlink external IdP identities (NEX-091)`
+- docs commit — NEX-091 state, log, backlog, checkpoint
+
+### CI
+
+**UNREAD.** Run `46134525416` (push) was `queued` three seconds old when this entry was written.
+No verdict has been observed in either direction, so NEX-091 is **NOT VERIFIED**. A push is not a
+verdict.
+
+### Delivery
+
+- **PR #5** — NEX-091 section **not yet appended** (body ends at NEX-090).
+- **Issue #2** — NEX-091 **not yet reported** (last comment `7237454626` covers NEX-090).
+
+### Status
+
+| Item | Status |
+| --- | --- |
+| NEX-091 implementation | IMPLEMENTED · TESTED |
+| NEX-091 commit | COMMITTED · PUSHED (`977b21f`, remote verified) |
+| NEX-091 CI | **UNREAD** — run `46134525416` queued at write time |
+| PR #5 | NEX-091 outstanding |
+| Issue #2 | NEX-091 outstanding |
+| Merges | none — PR #5 remains open for human review |
+
+**Next exact action:** poll run `46134525416` to conclusion and mark NEX-091 VERIFIED only if every
+check-run is `completed`/`success`; then append NEX-091 to PR #5's body and comment on issue #2.
+Both are delivery debts, not optional follow-ups.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
