@@ -12525,3 +12525,41 @@ Phase 5 item whose dependencies are all VERIFIED, or a Phase 3 governance slice.
 family (NEX-082…NEX-098) or the authentication-guard family (NEX-099b, NEX-100). Next run should begin with
 a full fresh window and can take a product slice.
 
+
+### Addendum — CI re-read at the promotion commit's own head
+
+The promotion commit `00d6b54` (docs-only, `docs/NEXUS/` only) triggered its own CI. Rather than
+leave the records pointing at the ancestor `beb45e4`, both runs were polled to completion and read
+**per run, per job, and per step**:
+
+- `46161431195` (push) — `completed/success`; Backend 12/12 steps success, Frontend 11/11 steps success.
+- `46161435411` (pull_request) — `completed/success`; Backend 12/12, Frontend 11/11.
+- Zero failed steps, zero skipped steps, in both runs (2026-11-28T15:46Z).
+
+This is strictly stronger evidence than the ancestor verdict: `00d6b54` is simultaneously the green
+CI head **and** the live PR head (`gh pr view 5 --json headRefOid` returns it), so a reviewer reads
+exactly the run that was verified. `git diff 9afd120 00d6b54` is `docs/NEXUS/` only, so the verdict
+still covers the NEX-100 product tree unchanged.
+
+Two defects were caught during this promotion and are recorded rather than quietly fixed:
+
+1. **A self-inflicted format failure.** Running `ruff format --check` with `docs/NEXUS/CHECKPOINT.json`
+   named explicitly reported it "would be reformatted" — because naming a `.json` overrides ruff's
+   default include of Python files only. The gate that CI runs is **bare**; run bare, it reports 329
+   files already formatted. Naming extra paths does not strengthen the gate, it changes what it means.
+2. **A negation grep that was too narrow.** The earlier stale-claim sweep searched `NOT VERIFIED`
+   and `not yet posted`, but the file said `NOT yet VERIFIED` and `still needs appending` — both
+   survived. Those three present-tense claims were found by *reading the `ruff format` diff*, not by
+   the grep. The grep was then broadened (`NOT yet`, `still needs`, `to be appended`, `PENDING`,
+   `in_progress`) and re-run; the only remaining `in_progress` is a truthful historical clause about
+   when CI was first observed.
+
+Unverified figures removed from the records: the earlier delivery text asserted "2719 lines / 1934
+content lines / footer count 1" for the PR body. Measurement against the live body gives 2720 lines
+and exactly one PR-level footer at line 205, alongside per-section attribution links. The records now
+state only the measured values.
+
+**Ending state:** branch `feature/agentic-enterprise-platform`; product `9afd120`; docs promotion
+`00d6b54`; remote head verified by `git ls-remote`; PR #5 open, unmerged, `mergeable=MERGEABLE`;
+tracking issue #2 open. No uncommitted work. Next action is the `next_action` field in the
+checkpoint: select the next dependency-ready slice from `BACKLOG.md` / the current `ROADMAP.md` phase.
