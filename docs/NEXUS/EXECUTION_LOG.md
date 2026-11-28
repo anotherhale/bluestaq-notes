@@ -13206,3 +13206,5 @@ clone's fetch refspec maps only `main`, so that ref is a stale snapshot that agr
 and with any cached state file. Then read the docs-head CI run per job and per step — the two
 documentation commits after `afd07e1` have unread verdicts, so this is a real check. Then select
 one slice from `docs/NEXUS/BACKLOG.md` by dependency readiness and implement it.
+
+**Final CI verdict for this run.** Head `d30fec1` run `46175274832`: `completed/success`, Frontend 11 steps and Backend 12 steps, 0 failed, 0 skipped, read per job and per step. The intermediate head `e80efbc` (run `46175201909`) shows `cancelled` with zero check-runs: the branch's concurrency group cancelled it when `d30fec1` was pushed. That is neither a failure nor a pass, and treating a cancelled run as green is the specific error this log keeps flagging, so the live head was polled instead of settling for the earlier run.
