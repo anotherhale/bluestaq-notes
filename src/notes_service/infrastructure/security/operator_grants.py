@@ -108,10 +108,18 @@ class InMemoryOperatorGrantRepository:
             grants = tuple(self._grants.values())
         return tuple(grant for grant in grants if grant.is_active(now=now))
 
-    def revoked_grants(self) -> tuple[OperatorGrant, ...]:
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
         with self._lock:
-            grants = tuple(self._grants.values())
-        return tuple(grant for grant in grants if grant.is_revoked)
+            grants = tuple(grant for grant in self._grants.values() if grant.is_revoked)
+        if limit is None:
+            return grants[offset:]
+        return grants[offset : offset + limit]
+
+    def count_revoked(self) -> int:
+        with self._lock:
+            return sum(1 for grant in self._grants.values() if grant.is_revoked)
 
 
 __all__ = ["InMemoryOperatorGrantRepository"]

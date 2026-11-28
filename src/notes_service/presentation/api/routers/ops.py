@@ -288,13 +288,37 @@ def revoke_operator_grant(
 @router.get(
     "/operator-grants/revoked",
     response_model=RevokedOperatorGrantReportResponse,
-    summary="Every revoked operator grant, with who revoked it and when (operators only)",
+    summary="A page of revoked operator grants, with who revoked them and when (operators only)",
     dependencies=[RateLimitDep],
 )
 def list_revoked_operator_grants(
-    principal: PrincipalDep, container: ContainerDep
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_LIMIT,
+            description=(
+                "Maximum revoked grants to return, oldest revocation first. Values "
+                "above the ceiling are rejected rather than silently clamped, so a "
+                "caller cannot believe it read more than the cap allows."
+            ),
+        ),
+    ] = DEFAULT_LIMIT,
+    offset: Annotated[
+        int,
+        Query(
+            ge=0,
+            description=(
+                "Revoked grants to skip, oldest first. Pass the `next_offset` of the "
+                "previous page. An offset, not a cursor, because reading this history "
+                "does not append to it."
+            ),
+        ),
+    ] = 0,
 ) -> RevokedOperatorGrantReportResponse:
-    """Return every grant that ended by revocation, and its revocation provenance.
+    """Return a bounded page of grants that ended by revocation, with provenance.
 
     NEX-079 recorded a revocation as an attributable fact on the grant —
     ``revoked_at`` and ``revoked_by`` — so that "who removed whose authority, and
@@ -307,8 +331,13 @@ def list_revoked_operator_grants(
     not a holdings report. A revoked grant whose revoker's account was later deleted
     still appears, with ``revoked_by: null`` — the revocation outlives its revoker.
 
+    **Bounded since NEX-086.** Revoked rows are never pruned, so this history grows
+    for the life of the deployment; serving it whole made one request load every
+    revocation ever recorded. ``limit``/``offset`` page against the total
+    ``revoked_total``; follow ``next_offset`` while it is not null to walk all of it.
+
     Reading this is a gated operator read under the same scope as the holder report,
     recorded like every other ops read. A non-operator gets ``404``.
     """
-    snapshot = container.list_revoked_operator_grants().run(principal)
+    snapshot = container.list_revoked_operator_grants().run(principal, limit=limit, offset=offset)
     return RevokedOperatorGrantReportResponse.from_snapshot(snapshot)

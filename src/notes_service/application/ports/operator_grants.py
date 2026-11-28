@@ -117,7 +117,9 @@ class OperatorGrantRepository(Protocol):
         """
         ...
 
-    def revoked_grants(self) -> tuple[OperatorGrant, ...]:
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
         """Every grant that ended by revocation, in insertion order (NEX-080).
 
         The counterpart of ``revoke``. A revocation is deliberately *not* an
@@ -135,6 +137,35 @@ class OperatorGrantRepository(Protocol):
         "Ended by revocation" is ``revoked_at IS NOT NULL``, not "revoked and not
         expired": a grant revoked while still live and a grant that lapsed on its
         own are different facts, and the second is not in this list at all.
+
+        Bounded reads (NEX-086)
+        -----------------------
+
+        Insertion order is oldest-first, and revoked rows are **never pruned** — a
+        revocation is a standing audit fact, not a value the retention window may
+        erase. So this list grows without bound for the lifetime of the
+        deployment, and the original signature returned the *whole* history in one
+        tuple. That is the same unbounded-response defect NEX-082 fixed for the
+        access log: an operator on a long-lived deployment could not read the
+        report without loading every revocation ever recorded.
+
+        ``limit`` and ``offset`` bound one page against that total order.
+        ``offset`` (not a keyset cursor) is correct here precisely because this
+        list is *not* appended to by reading it — unlike the access log, a read of
+        the revocation history writes nothing, so pages cannot shift under a
+        walker. ``limit=None`` keeps the old whole-history behaviour for callers
+        that genuinely need it (tests, export); a serving path always passes one.
+        """
+        ...
+
+    def count_revoked(self) -> int:
+        """The total number of revoked grants, without materialising them (NEX-086).
+
+        A paged report must state ``revoked_total`` so the reader can tell a full
+        page from the last one and know how far the history reaches. Counting
+        through the same ``is_revoked`` predicate as ``revoked_grants`` keeps the
+        total and the page consistent — a faster count that disagreed with the
+        list would make ``next_offset`` point past the end of the set.
         """
         ...
 

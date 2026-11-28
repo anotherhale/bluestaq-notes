@@ -218,13 +218,38 @@ class SqlAlchemyOperatorGrantRepository:
             rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
             return tuple(grant for row in rows if (grant := _to_domain(row)).is_active(now=now))
 
-    def revoked_grants(self) -> tuple[OperatorGrant, ...]:
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
         # ``is_revoked`` is the domain's predicate, applied here rather than a SQL
         # ``revoked_at IS NOT NULL`` so the definition of "this row records a
         # revocation" stays in one place, exactly as ``is_active`` does above.
+        #
+        # Paging (NEX-086) is applied after the domain filter, not pushed into SQL
+        # as ``OFFSET``/``LIMIT``. ``revoked_at IS NOT NULL`` is a faithful SQL
+        # translation, but keeping the selection in Python preserves the single
+        # definition of "revoked" the comment above states — a schema-level
+        # predicate could drift from ``is_revoked`` and page a different set than
+        # the report counts.
         with self._session_factory() as session:
             rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
-            return tuple(grant for row in rows if (grant := _to_domain(row)).is_revoked)
+            revoked = [grant for row in rows if (grant := _to_domain(row)).is_revoked]
+        if limit is None:
+            return tuple(revoked[offset:])
+        return tuple(revoked[offset : offset + limit])
+
+    def count_revoked(self) -> int:
+        """How many grants have been revoked, ever (NEX-086).
+
+        A paged report needs the total to say whether a page is the last one and
+        to page without the caller knowing the size in advance. Counting through
+        the domain predicate keeps this consistent with ``revoked_grants``: a
+        cheaper ``revoked_at IS NOT NULL`` COUNT could disagree with the list it
+        is supposed to bound.
+        """
+        with self._session_factory() as session:
+            rows = session.execute(select(OperatorGrantRow)).scalars()
+            return sum(1 for row in rows if _to_domain(row).is_revoked)
 
 
 __all__ = ["SqlAlchemyOperatorGrantRepository"]

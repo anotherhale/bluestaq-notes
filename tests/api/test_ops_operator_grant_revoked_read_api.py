@@ -144,3 +144,118 @@ def test_a_holder_of_another_scope_cannot_read_the_history(app: FastAPI) -> None
     )
     response = client.get(REVOKED_PATH, headers=auth_headers(ALICE))
     assert response.status_code == 404, response.text
+
+
+# -- the history is served a page at a time over HTTP (NEX-086) --------------
+
+
+def _revoke_scope(client: TestClient, scope: str) -> None:
+    revoked = client.post(REVOKE_PATH, json=_revoke_body(scope=scope), headers=auth_headers(ALICE))
+    assert revoked.status_code == 200, revoked.text
+
+
+def test_the_response_carries_the_paging_fields(revoker_client: TestClient) -> None:
+    """The default page states its total, its offset, and its cursor.
+
+    The fields exist whether or not the caller asked for paging, so a client that
+    never passes ``limit``/``offset`` still learns ``revoked_total`` and whether it
+    saw all of it. Servicing that with an implicit "everything" would reintroduce
+    the unbounded read for every caller.
+    """
+    _revoke_scope(revoker_client, "withholding-report")
+
+    response = revoker_client.get(REVOKED_PATH, headers=auth_headers(ALICE))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["revoked_total"] == 1
+    assert body["offset"] == 0
+    assert body["next_offset"] is None
+    assert body["truncated"] is False
+
+
+def test_paging_reaches_every_revocation_and_the_total_holds(app: FastAPI) -> None:
+    """Two revocations, one per page: the pages join to the whole set.
+
+    The wire shape is what an auditor has to walk, so the walk is what the test
+    does — first page names the second by ``next_offset``, the second ends the
+    history, and ``revoked_total`` stays two throughout.
+    """
+    # Pinned here rather than borrowed from ``revoker_client``: that fixture gives
+    # BOB one scope, and two revocations need two live grants to take away.
+    client = _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-revoke"),
+            operator_grant(ALICE, "operator-access-report"),
+            operator_grant(BOB, "withholding-report"),
+            operator_grant(BOB, "audit-integrity"),
+        ],
+    )
+    _revoke_scope(client, "withholding-report")
+    _revoke_scope(client, "audit-integrity")
+
+    first = client.get(REVOKED_PATH, params={"limit": 1}, headers=auth_headers(ALICE))
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert first_body["grant_count"] == 1
+    assert first_body["revoked_total"] == 2
+    assert first_body["next_offset"] == 1
+    assert first_body["truncated"] is True
+
+    second = client.get(
+        REVOKED_PATH,
+        params={"limit": 1, "offset": first_body["next_offset"]},
+        headers=auth_headers(ALICE),
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["grant_count"] == 1
+    assert second_body["next_offset"] is None
+    assert second_body["truncated"] is False
+
+    scopes = {first_body["grants"][0]["scope"], second_body["grants"][0]["scope"]}
+    assert scopes == {"withholding-report", "audit-integrity"}, "no row is skipped or repeated"
+
+
+@pytest.mark.parametrize("limit", [0, -1])
+def test_a_degenerate_limit_is_rejected_over_http(revoker_client: TestClient, limit: int) -> None:
+    """``limit`` below one is refused, not silently turned into "everything".
+
+    The route guards with ``ge=1`` so a mistyped limit cannot widen the read. A
+    ``200`` here would let a caller with one bad number pull the whole history.
+    """
+    response = revoker_client.get(
+        REVOKED_PATH, params={"limit": limit}, headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_a_limit_above_the_ceiling_is_rejected_not_clamped_over_http(
+    revoker_client: TestClient,
+) -> None:
+    """An over-cap limit is refused so a caller cannot believe it read more than allowed."""
+    response = revoker_client.get(
+        REVOKED_PATH, params={"limit": 10_000}, headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_a_negative_offset_is_rejected_over_http(revoker_client: TestClient) -> None:
+    response = revoker_client.get(REVOKED_PATH, params={"offset": -1}, headers=auth_headers(ALICE))
+    assert response.status_code == 422, response.text
+
+
+def test_a_non_operator_cannot_page_the_history(app: FastAPI) -> None:
+    """Paging parameters do not open the surface to an outsider.
+
+    A gated read answered ``404`` must stay ``404`` whatever the query string says;
+    otherwise a non-operator could use the paging shape to probe for existence.
+    """
+    client = _client(
+        app,
+        ops_operator_user_ids=[operator_grant(BOB, "withholding-report")],
+    )
+    response = client.get(
+        REVOKED_PATH, params={"limit": 1, "offset": 0}, headers=auth_headers(CAROL)
+    )
+    assert response.status_code == 404, response.text

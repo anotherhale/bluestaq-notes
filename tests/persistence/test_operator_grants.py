@@ -456,6 +456,49 @@ def test_revoked_grants_is_in_insertion_order(
     assert scopes == ["withholding-report", "audit-integrity"]
 
 
+def test_revoked_grants_pages_with_limit_and_offset(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    """Paging (NEX-086): the adapter slices the same stable order it returns whole.
+
+    ``revoked_grants`` is the unbounded read the report used to make; with paging
+    it must agree with itself — a page at each offset, joined, is the whole list,
+    in order, no gaps and no repeats. ``count_revoked`` must equal that list's
+    length, or the report's ``next_offset`` would point past or short of the end.
+    """
+    grants.add(_grant(ALICE, "withholding-report"))
+    grants.add(_grant(BOB, "audit-integrity"))
+    _revoke(grants, ALICE)
+    _revoke(grants, BOB, scope="audit-integrity")
+
+    whole = grants.revoked_grants()
+    assert [row.scope for row in whole] == ["withholding-report", "audit-integrity"]
+    assert grants.count_revoked() == 2
+
+    first = grants.revoked_grants(limit=1, offset=0)
+    second = grants.revoked_grants(limit=1, offset=1)
+    assert [row.scope for row in first + second] == [row.scope for row in whole]
+    assert grants.revoked_grants(limit=2, offset=2) == ()
+    assert grants.revoked_grants(limit=None, offset=1) == whole[1:]
+
+
+def test_count_revoked_omits_live_and_merely_expired_grants(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    """The total is revoked facts only, matching what the list would return.
+
+    A cheaper ``revoked_at IS NOT NULL`` count is tempting, but a grant that merely
+    lapsed must not inflate the total: the count and the page have to describe the
+    same set, or ``next_offset`` lies about where the history ends.
+    """
+    grants.add(_grant(ALICE, "withholding-report"))
+    grants.add(_grant(BOB, "audit-integrity", expires_at=NOW + timedelta(seconds=1)))
+    _revoke(grants, ALICE)
+
+    assert grants.count_revoked() == 1
+    assert len(grants.revoked_grants()) == 1
+
+
 def test_the_table_exists_in_the_migrated_schema(engine: Engine) -> None:
     """The ORM model and the migration must not disagree about the table."""
     columns = {column["name"] for column in inspect(engine).get_columns("operator_grants")}

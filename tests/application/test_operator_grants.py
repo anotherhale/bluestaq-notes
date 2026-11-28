@@ -485,3 +485,118 @@ def test_a_refused_history_read_leaves_no_access_entry() -> None:
 def test_the_history_names_its_source() -> None:
     use_case = _revoked_use_case(_store(_grant(ALICE, scope=OPERATION)))
     assert use_case.run(_principal(ALICE)).source_name == "in-memory"
+
+
+# -- bounding the history: a page, its total, and the next cursor (NEX-086) --
+#
+# Revoked rows are never pruned, so the history grows for the life of the
+# deployment. Serving it whole made one operator read load every revocation ever
+# recorded. These tests pin the shape that replaces "everything": a page, the
+# total it was drawn from, and a cursor, so a client can walk the history without
+# the use case ever materialising all of it at once.
+
+
+def _three_revocations() -> InMemoryOperatorGrantRepository:
+    # Distinct holder/scope pairs so each revoked row is individually addressable
+    # in the stable store order the paging is defined against.
+    return _store(
+        _grant(ALICE, scope=OPERATION),
+        _revoked_grant(BOB, "withholding-report"),
+        _revoked_grant(CAROL, "audit-integrity"),
+        _revoked_grant(UserId.new(), "policy-approve"),
+    )
+
+
+def test_a_page_reports_the_total_beyond_the_page() -> None:
+    """``grant_count`` is the page; ``revoked_total`` is the history.
+
+    The distinction is the whole point of bounding the read: a client that reported
+    ``grant_count`` as the total would understate how much authority has been
+    removed. Here two of three rows come back, and the total still says three.
+    """
+    use_case = _revoked_use_case(_three_revocations())
+
+    snapshot = use_case.run(_principal(ALICE), limit=2, offset=0)
+
+    assert snapshot.grant_count == 2
+    assert snapshot.revoked_total == 3
+    assert snapshot.offset == 0
+    assert snapshot.next_offset == 2, "a page with more behind it names the next offset"
+    assert snapshot.truncated is True
+
+
+def test_the_last_page_has_no_next_offset() -> None:
+    """Following ``next_offset`` until it is null reaches exactly the total.
+
+    A page that reaches the end reports ``next_offset`` of None and is not
+    ``truncated``; any other answer would give a client either a duplicate final
+    page or a history it can never finish walking.
+    """
+    use_case = _revoked_use_case(_three_revocations())
+
+    first = use_case.run(_principal(ALICE), limit=2, offset=0)
+    second = use_case.run(_principal(ALICE), limit=2, offset=first.next_offset or 0)
+
+    assert second.grant_count == 1
+    assert second.offset == 2
+    assert second.next_offset is None
+    assert second.truncated is False
+
+
+def test_walking_the_pages_covers_every_revocation_once() -> None:
+    """Concatenated pages are the whole history, in order, with no repeats.
+
+    The join is what a client does, so it is what the test asserts: paging must not
+    skip a row between pages, and must not serve one twice. Offset paging is safe
+    here only because a read of this history writes nothing to it.
+    """
+    use_case = _revoked_use_case(_three_revocations())
+
+    seen: list[tuple[UserId, str]] = []
+    offset = 0
+    for _ in range(10):
+        page = use_case.run(_principal(ALICE), limit=1, offset=offset)
+        seen.extend((row.user_id, row.scope) for row in page.grants)
+        if page.next_offset is None:
+            break
+        offset = page.next_offset
+
+    whole = use_case.run(_principal(ALICE), limit=None)
+    assert seen == [(row.user_id, row.scope) for row in whole.grants]
+    assert len(seen) == 3
+
+
+def test_an_offset_past_the_end_is_an_empty_final_page() -> None:
+    """An offset at or beyond the total is empty, not an error and not a wrap."""
+    use_case = _revoked_use_case(_three_revocations())
+
+    snapshot = use_case.run(_principal(ALICE), limit=10, offset=3)
+
+    assert snapshot.grant_count == 0
+    assert snapshot.revoked_total == 3
+    assert snapshot.next_offset is None
+
+
+def test_a_non_positive_limit_does_not_serve_the_whole_history() -> None:
+    """``limit=0`` is a caller mistake, not a request for everything (NEX-086).
+
+    Failing closed here means clamping to one row. Treating a zero limit as
+    "unbounded" would reinstate exactly the unbounded read this task removed, for a
+    caller who only mistyped a number.
+    """
+    use_case = _revoked_use_case(_three_revocations())
+
+    snapshot = use_case.run(_principal(ALICE), limit=0, offset=0)
+
+    assert snapshot.grant_count == 1
+    assert snapshot.revoked_total == 3
+
+
+def test_a_limit_above_the_ceiling_is_clamped() -> None:
+    """Over-large limits are capped, so one read cannot pull the whole history."""
+    use_case = _revoked_use_case(_three_revocations())
+
+    snapshot = use_case.run(_principal(ALICE), limit=10_000, offset=0)
+
+    assert snapshot.truncated is False
+    assert snapshot.grant_count == 3

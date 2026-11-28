@@ -39,9 +39,13 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
-from notes_service.application.errors import Conflict
+from notes_service.application.errors import Conflict, InvalidInput
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.operator_grants import OperatorGrantRepository
+from notes_service.application.use_cases.operator_access_report import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+)
 from notes_service.application.use_cases.operator_gate import WILDCARD, OperatorGate
 from notes_service.domain.errors import ValidationError
 from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
@@ -175,7 +179,7 @@ class ListOperatorGrants:
 
 @dataclass(frozen=True, slots=True)
 class RevokedOperatorGrantSnapshot:
-    """Every grant that ended by revocation, in the store's stable order (NEX-080).
+    """One page of grants that ended by revocation (NEX-080, paged NEX-086).
 
     Read-only history, unlike :class:`OperatorGrantSnapshot`: it describes facts
     that have already happened, so it carries no ``as_of``. ``source_name`` still
@@ -185,14 +189,29 @@ class RevokedOperatorGrantSnapshot:
     There is no fold here. A revocation is one fact about one grant, and folding
     it per holder would have to discard the very provenance the endpoint exists to
     expose: which of a holder's several revoked grants was ended by whom, and when.
+
+    **Bounded (NEX-086).** Revoked rows are never pruned, so this history grows for
+    the life of the deployment. The snapshot holds at most one page, plus the total
+    and the cursor for the next, exactly as ``ChainAuditReport`` does for the
+    integrity sweep. ``grant_count`` is the number of rows *on this page*;
+    ``revoked_total`` is the size of the whole history. They differ whenever the
+    caller asked for less than everything, and a client that reported
+    ``grant_count`` as the total would understate the revocations that exist.
     """
 
     grants: tuple[OperatorGrantDetail, ...]
     source_name: str
+    revoked_total: int
+    offset: int
+    next_offset: int | None
 
     @property
     def grant_count(self) -> int:
         return len(self.grants)
+
+    @property
+    def truncated(self) -> bool:
+        return self.next_offset is not None
 
 
 class ListRevokedOperatorGrants:
@@ -207,6 +226,13 @@ class ListRevokedOperatorGrants:
     the revocation history of the platform is exactly the authority that report
     already needs, and minting a fifth token for it would force every auditor to be
     granted twice to answer one question.
+
+    Paged since NEX-086. The history is never pruned, so serving it whole made one
+    request load every revocation ever recorded. ``limit`` is clamped into
+    ``[1, MAX_LIMIT]`` (``limit=None`` keeps the whole-history behaviour for
+    export) and ``offset`` must be non-negative — a non-positive limit is a caller
+    mistake turned into ``1`` rather than silently into "everything", the same
+    clamp ``GetOperatorAccessReport`` applies.
     """
 
     def __init__(
@@ -218,16 +244,48 @@ class ListRevokedOperatorGrants:
         self._grants = grants
         self._operator_gate = operator_gate
 
-    def run(self, principal: Principal) -> RevokedOperatorGrantSnapshot:
+    def run(
+        self,
+        principal: Principal,
+        *,
+        limit: int | None = DEFAULT_LIMIT,
+        offset: int = 0,
+    ) -> RevokedOperatorGrantSnapshot:
         # Gate first, never after: a refused caller must not learn how much
         # authority has been removed, and the gate records the attempt.
         self._operator_gate.authorize(principal, operation=OPERATION)
 
-        revoked = self._grants.revoked_grants()
+        if offset < 0:
+            raise InvalidInput("offset must not be negative")
+        # A whole history page also needs the total to place it; count first so
+        # ``next_offset`` is decided from one consistent view of the set.
+        revoked_total = self._grants.count_revoked()
+        bounded = _clamp_limit(limit) if limit is not None else None
+        revoked = self._grants.revoked_grants(limit=bounded, offset=offset)
+        next_offset = (
+            offset + len(revoked)
+            if bounded is not None and offset + len(revoked) < revoked_total
+            else None
+        )
         return RevokedOperatorGrantSnapshot(
             grants=_detail(revoked),
             source_name=self._grants.name,
+            revoked_total=revoked_total,
+            offset=offset,
+            next_offset=next_offset,
         )
+
+
+def _clamp_limit(limit: int) -> int:
+    """Constrain a caller-supplied limit into ``[1, MAX_LIMIT]`` (NEX-086).
+
+    A non-positive limit is a caller mistake, not a request for "everything", so it
+    becomes ``1`` rather than the whole history. Mirrors the clamp
+    ``GetOperatorAccessReport`` applies so both operator reports bound identically.
+    """
+    if limit < 1:
+        return 1
+    return min(limit, MAX_LIMIT)
 
 
 def _detail(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorGrantDetail, ...]:

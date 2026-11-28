@@ -1034,7 +1034,7 @@ class OperatorGrantReportResponse(ResponseModel):
 
 
 class RevokedOperatorGrantReportResponse(ResponseModel):
-    """Every grant that ended by revocation, for operators (NEX-080).
+    """A page of grants that ended by revocation, for operators (NEX-080, NEX-086).
 
     The read side of NEX-079. A revocation records ``revoked_at``/``revoked_by``
     on the grant so "who removed whose authority, and when" is answerable; this is
@@ -1044,11 +1044,22 @@ class RevokedOperatorGrantReportResponse(ResponseModel):
 
     There is no holder fold, unlike the active report: folding revoked grants per
     holder would merge several revocations and lose which of them was ended by
-    whom. ``grant_count`` counts revoked rows directly.
+    whom. ``grant_count`` counts the revoked rows *on this page*.
+
+    The history is never pruned, so it is served a page at a time (NEX-086).
+    ``revoked_total`` is the whole set's size; ``grant_count`` is this page's. They
+    are equal only on a page that reached the end with one request. ``offset`` and
+    ``next_offset`` walk the total order: continue at ``next_offset`` while it is
+    not null. ``truncated`` is true exactly when a further page exists, so a client
+    never has to infer "there is more" from ``len(grants) == limit``.
     """
 
     grants: list[OperatorGrantDetailResponse]
     grant_count: int
+    revoked_total: int
+    offset: int
+    next_offset: int | None
+    truncated: bool
     source_name: str
 
     @classmethod
@@ -1058,6 +1069,10 @@ class RevokedOperatorGrantReportResponse(ResponseModel):
         return cls(
             grants=[OperatorGrantDetailResponse.from_detail(detail) for detail in snapshot.grants],
             grant_count=snapshot.grant_count,
+            revoked_total=snapshot.revoked_total,
+            offset=snapshot.offset,
+            next_offset=snapshot.next_offset,
+            truncated=snapshot.truncated,
             source_name=snapshot.source_name,
         )
 
