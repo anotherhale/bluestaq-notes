@@ -10280,3 +10280,71 @@ Two design points worth keeping:
 **Do not redo** NEX-086's implementation, and do not re-verify NEX-077…NEX-085.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+---
+
+## NEX-086 — promotion to VERIFIED and delivery (run `NEX-2026-11-28-86`, continuation)
+
+**Task.** NEX-086 (paged revocation history). **Transition.** `COMMITTED + PUSHED` → **VERIFIED**.
+
+### What evidence established it
+
+`GET /repos/anotherhale/bluestaq-notes/commits/70d7667/check-runs` on the product commit never
+concluded: its Backend push-run read `completed/cancelled` once the docs push `f780afb` superseded
+it in the concurrency group. That is not a failure and not evidence. The verdict therefore comes
+from the docs head, after proving the two trees are the same tree:
+
+```
+git diff --stat 70d7667 f780afb -- src/ tests/    # empty, no output
+```
+
+With the product tree identical, CI on `f780afb` is CI on `70d7667`:
+
+| Run | Event | Backend | Frontend |
+| --- | --- | --- | --- |
+| `46122302349` | push | `completed/success` | `completed/success` |
+| `46122306894` | pull_request | `completed/success` | `completed/success` |
+
+4/4 `completed/success`, polled 2026-11-28T07:42:52Z. NEX-086 is **VERIFIED**.
+
+### Delivery
+
+- **PR #5 body.** Read the live body first (93,604 bytes, `body.count("## NEX-086 ") == 0`) —
+  the previous run's record was accurate, but the count was asserted rather than assumed, because
+  a blind append would have duplicated the section. Appended one section, then read back from the
+  API: **96,780 bytes**, `## NEX-085 ` ×1, `## NEX-086 ` ×1. No delivery debt remains.
+- **Issue #2.** Comment `7236123126` (70th comment) posts the verification summary. Posted only
+  after confirming zero prior mentions of NEX-086 in the issue's comments.
+
+### Decisions
+
+- The `cancelled` verdict on `70d7667`'s own run was resolved by *proving tree identity*, not by
+  assuming "cancelled means fine". Cancelled is ambiguous until the tree comparison is empty; it is
+  the comparison that licenses the substitution, and it is cheap.
+- Promotion was treated as a **sweep**, not a status edit. After the first pass the real defects
+  were not in the NEX-086 status line but in three *neighbouring* fields that still narrated
+  NEX-083/NEX-084: `STATE.md`'s tracking-issue row, its PR row, and its `Open P1` row, plus
+  `CHECKPOINT.json`'s `status_semantics` and `run_summary`, which still asserted "NEX-086 is
+  committed and pushed, not VERIFIED". A grep for `pending|in_progress|not yet|no verdict|had not
+  concluded` across the record files found them; that grep is the promotion's real last step.
+
+### Tooling defect hit during this run
+
+A `python3 - <<'PY' ... PY` heredoc echoed fragments of its own body back interleaved with command
+output and terminated without writing — the same corruption recorded in `MEMORY.md` for run 80.
+Nothing was damaged: the checkpoint on disk was re-read and was still valid and unmodified, because
+the write went to `/tmp/ck.json` and the `cp` never ran. The fix, applied immediately, is to write
+patch scripts to a file with `file_editor create` and run `python3 file.py`. Multi-line Python that
+edits a record file must never go through an inline heredoc.
+
+### State
+
+Checkpoint run `NEX-2026-11-28-86`, `verified_tasks_up_to: NEX-086`, `in_progress_tasks: []`, 27
+keys, valid JSON. Product `70d7667`; docs head promoted by this commit. Nothing left uncommitted.
+
+### Next exact action
+
+Take the next dependency-ready slice from `BACKLOG.md` — Phase 4 (admin console frontend) or the
+remaining backend gaps. Write the failing test first. Do not redo NEX-077…NEX-086.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._

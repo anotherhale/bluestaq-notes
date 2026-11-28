@@ -1,22 +1,26 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-86",
-  "timestamp": "2026-11-28T07:45:00Z",
+  "timestamp": "2026-11-28T07:55:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "70d766755ee358659558601bbf6cb204ea536a85",
   "branch_head": "70d7667 (product); a docs commit carrying this checkpoint advances the tip one past it",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 VERIFIED; NEX-086 COMMITTED + PUSHED, CI PENDING. NEX-086 bounded the revocation history read: revoked rows are never pruned, so the NEX-080 report that served the whole history in one tuple could not be read at all on a long-lived deployment. limit/offset + count_revoked() now bound it, with revoked_total/next_offset/truncated on the response.",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-086 VERIFIED. NEX-086 bounded the revocation history read: revoked rows are never pruned, so the NEX-080 report that served the whole history in one tuple could not be read at all on a long-lived deployment. limit/offset + count_revoked() now bound it, with revoked_total/next_offset/truncated on the response.",
   "active_task": null,
   "task_statuses": {
     "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
     "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
     "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
-    "NEX-086": "COMMITTED + PUSHED - product 70d7667. Local gates green (1696 passed, 4 skipped, ruff format/check clean, mypy 143 files clean). CI check-runs created on 70d7667 and read queued/in_progress, NOT yet concluded. NOT VERIFIED. Not yet delivered to PR #5 body or issue #2."
+    "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126."
   },
-  "completed_tasks": ["NEX-083", "NEX-084", "NEX-085"],
-  "verified_tasks_up_to": "NEX-085",
-  "in_progress_tasks": ["NEX-086"],
-  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. COMMITTED + PUSHED is not VERIFIED. NEX-086 is committed and pushed but its CI had not concluded when this checkpoint was written; the next run must read /commits/70d7667/check-runs to a verdict before promoting it. A docs commit that supersedes 70d7667 in the concurrency group reads completed/cancelled, which is never a failure; anchor evidence to a concluded run, or to a docs head whose product tree is identical (proved with git diff -- src/ tests/).",
+  "completed_tasks": [
+    "NEX-084",
+    "NEX-085",
+    "NEX-086"
+  ],
+  "verified_tasks_up_to": "NEX-086",
+  "in_progress_tasks": [],
+  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. COMMITTED + PUSHED is not VERIFIED. NEX-086 became VERIFIED this run by reading 4/4 completed/success on docs head f780afb, whose product tree is identical to 70d7667's (proved with git diff -- src/ tests/, empty). A docs commit that supersedes the product commit in the concurrency group reads completed/cancelled, which is never a failure; anchor evidence to a concluded run, or to a docs head whose product tree is identical.",
   "validation": {
     "commands_run_on_committed_tree": [
       "ruff format . : 5 files reformatted, 316 unchanged; then all formatted",
@@ -28,8 +32,8 @@
     "new_tests": 17,
     "ci": {
       "commit": "70d7667",
-      "result": "PENDING",
-      "detail": "4 check-runs (Backend x2, Frontend x2) read queued/in_progress at 2026-11-28T07:39Z. No verdict."
+      "result": "4/4 completed/success",
+      "detail": "Backend and Frontend both success on pull_request and push, on docs head f780afb whose product tree is identical to 70d7667 (git diff -- src/ tests/ empty). Run ids 46122302349 (push), 46122306894 (pull_request)."
     },
     "verified_prior": {
       "commit": "09cc4ad",
@@ -43,18 +47,18 @@
     "draft": false,
     "mergeable": true,
     "state": "open",
-    "body_sections_through": "NEX-085",
-    "body_length_bytes": 93604,
-    "head_sha": "70d7667",
-    "note": "NEX-085 present exactly once (asserted from the live API this run). NEX-086 is ABSENT - delivery debt for the next run. Body length and head are measured from the PR object at 07:39Z, not copied from an earlier run."
+    "body_sections_through": "NEX-086",
+    "body_length_bytes": 96780,
+    "head_sha": "f780afb",
+    "note": "PR #5 body carries NEX-052..NEX-086. NEX-086 appended this run after asserting body.count(\"## NEX-086 \")==0, then read back from the API: 96780 bytes, NEX-085 x1, NEX-086 x1."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "comment_count": 69,
-    "latest_comment": "7235822904",
-    "covers": "NEX-085",
-    "note": "69 comments; the newest covers NEX-085. Zero comments mention NEX-086 - delivery debt for the next run. Use lists, not markdown tables, in issue comments on this repository."
+    "comment_count": 70,
+    "latest_comment": "7236123126",
+    "covers": "NEX-086",
+    "note": "Comment 7236123126 posts the NEX-086 verification summary (posted this run after asserting 0 prior mentions of NEX-086). Use lists, not markdown tables, in issue comments on this repository."
   },
   "blockers": [],
   "risks": [
@@ -64,13 +68,13 @@
     "ON DELETE SET NULL on granted_by/revoked_by shapes domain validation; the NEX-080 defect that made an account with revocation history undeletable is fixed, but the pattern deserves a durable test if a third such column is added.",
     "count_revoked() and revoked_grants() each scan the operator_grants table in Python. Correct and consistent now; if the table grows large a single SQL COUNT pushed behind the same predicate is the follow-up, not a second definition of 'revoked'."
   ],
-  "next_task": "NEX-086 is implemented, committed and pushed at 70d7667 but NOT verified. Its CI had not concluded when this run ended.",
-  "next_action": "1. Read CI on 70d7667 to a verdict (GET /commits/70d7667/check-runs). Promote NEX-086 to VERIFIED only on completed/success on every run. 2. Deliver NEX-086: append its section to PR #5's body (assert body.count('## NEX-086 ') == 0 first, then read back from the API) and post one issue #2 comment. 3. Then take the next dependency-ready slice from BACKLOG.md - Phase 4 (admin console frontend) or the remaining backend gaps. Do not start a new slice with under 10 minutes left on the clock.",
-  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED and delivered - do not redo it. 3) NEX-086 is at 70d7667: implementation and tests are done and locally green, CI was not read. Poll it before writing VERIFIED anywhere. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files, because writing them is itself a commit that advances the tip. 5) Delivery debt owed by this run: NEX-086 to PR #5 body and issue #2. 6) A docs commit reads completed/cancelled once superseded in the concurrency group - never a failure, and never evidence.",
+  "next_task": "NEX-086 VERIFIED and delivered. Take the next dependency-ready slice from BACKLOG.md: Phase 4 (admin console frontend) or the remaining backend gaps. No delivery debt remains on PR #5 or issue #2.",
+  "next_action": "1. Read docs/NEXUS/BACKLOG.md and pick the highest-priority dependency-ready task not already VERIFIED. 2. Implement and test it as one vertical slice, failing test first. 3. Commit, push, then poll CI on the product commit (and on a docs head with an identical product tree if the docs push supersedes it) to a verdict before writing VERIFIED. 4. Deliver to PR #5 body and issue #2. 5. Do not start a new slice with under 10 minutes left on the clock.",
+  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-086 is VERIFIED and delivered - do not redo or re-verify it. NEX-077..NEX-086 are all implemented, pushed and CI-verified. 3) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files, because writing them is itself a commit that advances the tip. 4) A docs commit reads completed/cancelled once superseded in the concurrency group - never a failure, and never evidence. 5) CHECKPOINT.json was found stale this run (a run-85 header over a run-84 body); keep the body in sync with the header.",
   "ci_status": {
     "product_commit": "70d766755ee358659558601bbf6cb204ea536a85",
-    "result": "PENDING",
-    "detail": "4 check-runs created; queued/in_progress at 07:39Z. Prior run's conclusion: 09cc4ad 4/4 completed/success (NEX-084)."
+    "result": "4/4 completed/success",
+    "detail": "Docs head f780afb carried the identical product tree; runs 46122302349 (push), 46122306894 (pull_request). Polled 2026-11-28T07:42:52Z."
   },
   "commits_this_run": [
     "70d7667 feat(ops): page the revoked operator-grant history (NEX-086)"
@@ -81,6 +85,6 @@
     "limit=None preserves the whole-history behaviour for tests and a future export; the serving path always passes a limit, and the route refuses limit>MAX_LIMIT rather than clamping so a caller cannot believe it read more than the cap. _clamp_limit() maps a non-positive limit to 1, never to 'everything'.",
     "count_revoked() is called AFTER the operator gate, so a refused caller still learns nothing about how much authority has been removed - the total is exactly that number."
   ],
-  "run_summary": "Run 86 took the in-flight NEX-086 slice (unbounded revocation-history read, the same defect NEX-082 fixed for the access trail) from uncommitted working tree to committed and pushed. Verified the diff across all six source files and three test modules, ran the full suite (1696 passed, 4 skipped, exit 0) and all gates bare as CI does, and proved the new tests fail under a two-part mutation (next_offset disabled + limit ignored: 4/4 failing) before restoring and re-running green. Product commit 70d7667, 9 files, +455/-16, no migration, no new authority, no new scope. CI check-runs were created on 70d7667 and had not concluded when the run closed, so NEX-086 is COMMITTED + PUSHED, not VERIFIED. Reconciliation found CHECKPOINT.json stale in the run-85 header over a run-84 body; it is rewritten here.",
-  "docs_head_delivered": "pending - the run-86 docs commit carrying BACKLOG/STATE/EXECUTION_LOG/CHECKPOINT for NEX-086"
+  "run_summary": "Run 86 took the in-flight NEX-086 slice (unbounded revocation-history read, the same defect NEX-082 fixed for the access trail) from an uncommitted working tree to committed, pushed, CI-verified and delivered. Verified the diff across all six source files and three test modules, ran the full suite (1696 passed, 4 skipped, exit 0) and all gates bare as CI does, and proved the new tests fail under a two-part mutation (next_offset disabled + limit ignored: 4/4 failing) before restoring and re-running green. Product commit 70d7667, 9 files, +455/-16, no migration, no new authority, no new scope. CI concluded 4/4 completed/success on docs head f780afb (runs 46122302349, 46122306894), so NEX-086 is VERIFIED and delivered to PR #5 body (96780 bytes) and issue #2 comment 7236123126. Reconciliation found CHECKPOINT.json stale in the run-85 header over a run-84 body; it is rewritten here.",
+  "docs_head_delivered": "f780afb carried the run-86 docs; this promotion commit follows it"
 }

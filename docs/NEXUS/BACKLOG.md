@@ -3659,7 +3659,7 @@ PR #5's body, comment on issue #2) is done in run 85 after this promotion.
 | --- | --- |
 | Phase | 3 (governance) / platform operations — Audit Center |
 | Priority | P1 — the report could not be read at all on a long-lived deployment |
-| Status | **COMMITTED + PUSHED** — product commit `70d7667`; CI polled, not yet promoted to VERIFIED |
+| Status | **VERIFIED** — product commit `70d7667`, CI **4/4 `completed/success`** on docs head `f780afb` (identical product tree, proved with `git --diff -- src/ tests/` empty). Runs `46122302349` (push) and `46122306894` (pull_request), Backend and Frontend both `success`, polled 2026-11-28T07:42:52Z. `70d7667`'s own Backend push-run reads `completed/cancelled` — superseded in the concurrency group, never a failure. |
 | Dependencies | NEX-080 (the read side, whose endpoint this bounds), NEX-082 (the same defect fixed for the access trail) — met |
 | Architecture | `application/ports/operator_grants.py`, `application/use_cases/operator_grants.py`, `infrastructure/db/operator_grants.py`, `infrastructure/security/operator_grants.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
 
@@ -3720,9 +3720,8 @@ re-run green before the commit.
 been removed, and the total is that number. Bounding the read also bounds the resource a single
 authorized operator can force the service to hold.
 
-**Remaining.** None for implementation. Promote to VERIFIED once CI check-runs on `70d7667`
-conclude `completed`/`success`, then append this section to PR #5's body and comment on
-issue #2.
+**Remaining.** None. Implementation, local gates and CI are all green; the delivery to PR #5's
+body and issue #2 is owed by the next run.
 
 ---
 
