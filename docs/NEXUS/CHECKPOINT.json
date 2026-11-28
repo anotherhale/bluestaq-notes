@@ -1,98 +1,94 @@
 {
-  "schema_version": 1,
-  "run_id": "NEX-2026-11-28-88",
-  "timestamp": "2026-11-28T09:10:00Z",
-  "branch": "feature/agentic-enterprise-platform",
-  "commit": "06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8",
-  "branch_head": "06b5b32 (product, NEX-088); the docs commit carrying this checkpoint advances the tip one past it",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-088 VERIFIED. NEX-088 (run 88): the tool-invocation audit page filled meta.total with len(items), so every page reported its own window as the whole trail; the count is now an agent-scoped SELECT count(*), and the scope itself is pinned by a test.",
-  "active_task": null,
-  "task_statuses": {
-    "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
-    "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
-    "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
-    "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126.",
-    "NEX-087": "VERIFIED - product 82d8a64, CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request). Delivered to PR #5 body and issue #2 comment 7236499955.",
-    "NEX-088": "VERIFIED - CI 4/4 completed/success (runs 46127299155 push and 46127304188 pull_request on docs head 592ba07, product tree identical to 06b5b32; also 46127157086 on 06b5b32 itself). Delivered to PR #5 and issue #2."
-  },
-  "completed_tasks": [
-    "NEX-084",
-    "NEX-085",
-    "NEX-086",
-    "NEX-087",
-    "NEX-088"
-  ],
-  "verified_tasks_up_to": "NEX-088",
-  "in_progress_tasks": [],
-  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. NEX-088 was recorded COMMITTED/PUSHED-but-NOT-VERIFIED for exactly one run, then promoted here after reading runs 46127299155 and 46127304188 as completed/success. A verdict may be anchored to a docs head only when `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty, so the green run tested the identical tree. A run superseded in the concurrency group reads completed/cancelled - never a failure, never evidence.",
-  "validation": {
-    "commands_run_on_committed_tree": [
-      "ruff format . : 321 files left unchanged",
-      "ruff check . : All checks passed",
-      "mypy : Success, no issues in 143 source files",
-      "pytest (full suite) : exit 0, 4 skipped (run twice, both exit 0)",
-      "mutation 1: router back to total=len(items) -> test_meta_total_is_the_whole_trail_not_the_window fails; restored green",
-      "mutation 2: count with the agent_id filter removed -> SURVIVED, then test_meta_total_counts_only_this_agents_trail added -> now fails; restored green"
-    ],
-    "new_tests": 2,
-    "ci": {
-      "commit": "06b5b32",
-      "result": "4/4 completed/success",
-      "detail": "Runs 46127299155 (push, head 592ba07) and 46127304188 (pull_request, head 592ba07): both jobs - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) - completed/success. Product tree on 592ba07 is identical to 06b5b32. Run 46127157086 on 06b5b32 itself was 2/2 success. Run 46127161135 was superseded (cancelled).",
-      "verified_at": "2026-11-28T09:08Z"
+    "schema_version": 1,
+    "run_id": "NEX-2026-11-28-88",
+    "timestamp": "2026-11-28T09:20:00Z",
+    "branch": "feature/agentic-enterprise-platform",
+    "commit": "592ba07089857dc9595805f7218d7da79c0aee8b",
+    "branch_head": "327173c (docs, NEX-088 promotion) - the tip after this record; product is 06b5b32",
+    "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-088 VERIFIED. NEX-088 (run 88): the tool-invocation audit page filled meta.total with len(items), so every page reported its own window as the whole trail; the count is now an agent-scoped SELECT count(*), and the scope itself is pinned by a test.",
+    "active_task": null,
+    "task_statuses": {
+        "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
+        "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
+        "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
+        "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126.",
+        "NEX-087": "VERIFIED - product 82d8a64, CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request). Delivered to PR #5 body and issue #2 comment 7236499955.",
+        "NEX-088": "VERIFIED - CI 4/4 completed/success (runs 46127299155 push and 46127304188 pull_request on docs head 592ba07, product tree identical to 06b5b32; also 46127157086 on 06b5b32 itself). Delivered to PR #5 and issue #2.",
     },
-    "verified_prior": {
-      "commit": "82d8a64",
-      "result": "4/4 completed/success (NEX-087) on docs head cf44c89"
-    }
-  },
-  "uncommitted_work": false,
-  "pr_state": {
-    "number": 5,
-    "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
-    "draft": false,
-    "mergeable": true,
-    "state": "open",
-    "body_sections_through": "NEX-088",
-    "body_length_bytes": 100876,
-    "head_sha": "06b5b32",
-    "note": "PR #5 body now carries NEX-052..NEX-088. No NEX delivery debt remains."
-  },
-  "tracking_issue": {
-    "number": 2,
-    "state": "open",
-    "comment_count": 71,
-    "latest_comment": "7236499955",
-    "covers": "NEX-088",
-    "note": "Comment 7236499955 posts the NEX-087 verification summary, after asserting zero prior mentions of NEX-087. Use lists, not markdown tables, in issue comments on this repository."
-  },
-  "blockers": [],
-  "risks": [
-    "NEX-088's shape - a derived value standing in for an exact count - belongs to a family with NEX-082, NEX-086 and NEX-087. The sweep of PageMeta(total=len(items)) sites is now complete and every survivor was justified individually (unpaginated), so this surface should be exhausted; keep looking wherever a total, a count or an 'oldest' is reported.",
-    "count_revoked()/revoked_grants() scan the grant table in Python - correct today, unproven at volume.",
-    "No scheduled purge exists for the operator access log (ADR-017).",
-    "PR #5 stacks thirty-two slices; the reviewer's 'consider a split' note stands and is a human decision.",
-    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
-    "Heredocs corrupt in this environment, including a `python3 - <<` body that interleaved into itself. Write the payload to a file with file_editor and run the file; never inline it."
-  ],
-  "next_task": "No NEXUS delivery debt remains through NEX-088. Take the next dependency-ready slice from BACKLOG.md; do not redo NEX-077..NEX-088.",
-  "next_action": "1. Select the next dependency-ready slice from BACKLOG.md (Phase 3 governance has NEX-089+ candidates; check what the backlog still lists as open). 2. Implement it with the same shape: exact reads for exact questions, mutation-tested guards, tests that fail against the old answer. 3. Do not start a new slice with under 10 minutes left.",
-  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-077..NEX-087 are implemented, pushed and CI-verified - do not redo them. 3) NEX-088 IS implemented, tested, committed (06b5b32) and pushed, but its CI has NOT been read and it is NOT delivered - finish that before starting anything new. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files. 5) A docs commit reads completed/cancelled once superseded - never a failure, never evidence. 6) Never inline a multi-line commit message or Python body as a heredoc here; write it to /tmp and pass the file.",
-  "ci_status": {
-    "product_commit": "06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8",
-    "result": "4/4 completed/success",
-    "detail": "Docs head 592ba07: runs 46127299155 (push) + 46127304188 (pull_request), both 2/2 jobs success. Product tree identical to 06b5b32."
-  },
-  "commits_this_run": [
-    "06b5b32 fix(agents): report the exact trail size on the tool-invocation audit page (NEX-088)",
-    "this docs commit (NEX-088 record)"
-  ],
-  "decisions_this_run": [
-    "A second port method, not a len() over a bigger page: 'how many rows match' has an exact aggregate answer, and deriving it from a page makes correctness a function of volume (same reasoning as NEX-082/NEX-087).",
-    "Return a page object (ToolInvocationAuditPage) from the use case rather than a tuple, matching NotePage, so the total cannot be dropped at the call site by accident.",
-    "Justify each surviving PageMeta(total=len(items)) site individually rather than converting all of them: all five are unpaginated, so page size IS the total and the number is honest. Converting them would add endpoints nobody asked for.",
-    "The count is in the same transaction as the page, but that is atomicity, not a single snapshot - under READ COMMITTED an insert can land between the two statements. The docstring says so."
-  ],
-  "run_summary": "Run 88 swept the derived-value audit surfaces and fixed 'GET /agents/{agent_id}/tool-invocations reported meta.total with len(items), so each page claimed its own window was the whole trail. A three-entry trail answered 2 then 1. The port gained count_for_agent (SELECT count(*) scoped to the agent), ListToolInvocations returns a page carrying the true total, and the router fills PageMeta.total from it. Mutation found that an unscoped count survived the first regression test - a worse bug that would disclose another agent's trail size - so a second test pins the scope; both mutations now fail. The four sibling total=len(items) listings were each verified unpaginated and left alone. ruff/mypy clean, full pytest exit 0 twice. Product 06b5b32 pushed and remote-verified. CI NOT read and PR #5 / issue #2 NOT updated - NEX-088 is COMMITTED+PUSHED, not VERIFIED.",
-  "docs_head_delivered": "592ba07 - the docs commit carrying the NEX-088 record; CI 4/4 success."
+    "completed_tasks": ["NEX-084", "NEX-085", "NEX-086", "NEX-087", "NEX-088"],
+    "verified_tasks_up_to": "NEX-088",
+    "in_progress_tasks": [],
+    "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. NEX-088 was recorded COMMITTED/PUSHED-but-NOT-VERIFIED for exactly one run, then promoted here after reading runs 46127299155 and 46127304188 as completed/success. A verdict may be anchored to a docs head only when `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty, so the green run tested the identical tree. A run superseded in the concurrency group reads completed/cancelled - never a failure, never evidence.",
+    "validation": {
+        "commands_run_on_committed_tree": [
+            "ruff format . : 321 files left unchanged",
+            "ruff check . : All checks passed",
+            "mypy : Success, no issues in 143 source files",
+            "pytest (full suite) : exit 0, 4 skipped (run twice, both exit 0)",
+            "mutation 1: router back to total=len(items) -> test_meta_total_is_the_whole_trail_not_the_window fails; restored green",
+            "mutation 2: count with the agent_id filter removed -> SURVIVED, then test_meta_total_counts_only_this_agents_trail added -> now fails; restored green",
+        ],
+        "new_tests": 2,
+        "ci": {
+            "commit": "06b5b32",
+            "result": "4/4 completed/success",
+            "detail": "Runs 46127299155 (push, head 592ba07) and 46127304188 (pull_request, head 592ba07): both jobs - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) - completed/success. Product tree on 592ba07 is identical to 06b5b32. Run 46127157086 on 06b5b32 itself was 2/2 success. Run 46127161135 was superseded (cancelled).",
+            "verified_at": "2026-11-28T09:08Z",
+        },
+        "verified_prior": {
+            "commit": "82d8a64",
+            "result": "4/4 completed/success (NEX-087) on docs head cf44c89",
+        },
+    },
+    "uncommitted_work": false,
+    "pr_state": {
+        "number": 5,
+        "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
+        "draft": false,
+        "mergeable": true,
+        "state": "open",
+        "body_sections_through": "NEX-088",
+        "body_length_bytes": 100876,
+        "head_sha": "06b5b32",
+        "note": "PR #5 body carries NEX-052..NEX-088 (104472 bytes, read back from the API after editing; asserted body.count('## NEX-088 ')==0 before writing). No NEX delivery debt remains.",
+    },
+    "tracking_issue": {
+        "number": 2,
+        "state": "open",
+        "comment_count": 71,
+        "latest_comment": "7236832249",
+        "covers": "NEX-088 (posted 2026-11-28T09:16Z)",
+        "note": "Comment 7236499955 posts the NEX-087 verification summary, after asserting zero prior mentions of NEX-087. Use lists, not markdown tables, in issue comments on this repository.",
+    },
+    "blockers": [],
+    "risks": [
+        "NEX-088's shape - a derived value standing in for an exact count - belongs to a family with NEX-082, NEX-086 and NEX-087. The sweep of PageMeta(total=len(items)) sites is now complete and every survivor was justified individually (unpaginated), so this surface should be exhausted; keep looking wherever a total, a count or an 'oldest' is reported.",
+        "count_revoked()/revoked_grants() scan the grant table in Python - correct today, unproven at volume.",
+        "No scheduled purge exists for the operator access log (ADR-017).",
+        "PR #5 stacks thirty-two slices; the reviewer's 'consider a split' note stands and is a human decision.",
+        "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
+        "Heredocs corrupt in this environment, including a `python3 - <<` body that interleaved into itself. Write the payload to a file with file_editor and run the file; never inline it.",
+    ],
+    "next_task": "No NEXUS delivery debt remains through NEX-088. Take the next dependency-ready slice from BACKLOG.md (Phase 3 governance); check what the backlog still lists open rather than assuming a successor. Do not redo NEX-077..NEX-088.",
+    "next_action": "1. Read BACKLOG.md for the next open slice (Phase 3 governance). 2. Implement with the established shape: exact reads for exact questions, mutation-tested guards, a regression test that fails against the old answer. 3. Integrate and deliver in the same run; do not start a slice with under 10 minutes left.",
+    "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-077..NEX-087 are implemented, pushed and CI-verified - do not redo them. 3) NEX-088 IS implemented, tested, committed (06b5b32) and pushed, but its CI has NOT been read and it is NOT delivered - finish that before starting anything new. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files. 5) A docs commit reads completed/cancelled once superseded - never a failure, never evidence. 6) Never inline a multi-line commit message or Python body as a heredoc here; write it to /tmp and pass the file.",
+    "ci_status": {
+        "product_commit": "06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8",
+        "result": "4/4 completed/success",
+        "detail": "Docs head 592ba07: runs 46127299155 (push) + 46127304188 (pull_request), both 2/2 jobs success. Product tree identical to 06b5b32.",
+    },
+    "commits_this_run": [
+        "06b5b32 fix(agents): report the exact trail size on the tool-invocation audit page (NEX-088)",
+        "592ba07 docs(nexus): record NEX-088 (run 88) - COMMITTED+PUSHED, explicitly NOT VERIFIED",
+        "327173c docs(nexus): promote NEX-088 to VERIFIED (CI 4/4 on 592ba07)",
+        "this docs commit (delivery record: PR #5 body + issue #2 comment)",
+    ],
+    "decisions_this_run": [
+        "A second port method, not a len() over a bigger page: 'how many rows match' has an exact aggregate answer, and deriving it from a page makes correctness a function of volume (same reasoning as NEX-082/NEX-087).",
+        "Return a page object (ToolInvocationAuditPage) from the use case rather than a tuple, matching NotePage, so the total cannot be dropped at the call site by accident.",
+        "Justify each surviving PageMeta(total=len(items)) site individually rather than converting all of them: all five are unpaginated, so page size IS the total and the number is honest. Converting them would add endpoints nobody asked for.",
+        "The count is in the same transaction as the page, but that is atomicity, not a single snapshot - under READ COMMITTED an insert can land between the two statements. The docstring says so.",
+    ],
+    "run_summary": "Run 88 closed NEX-088 end to end in one window. The tool-invocation audit page answered meta.total with len(items) - its own window size - so a three-entry trail reported 2 then 1 and every page looked complete. count_for_agent (SELECT count(*) WHERE agent_id = ?) now supplies the exact total; ListToolInvocations returns a page object carrying it. Mutation found that an unscoped count survived the first regression test - a worse bug that would disclose another agent's trail size - so a second test pins the scope; both mutations fail. The four sibling total=len(items) listings were each verified unpaginated and left alone. ruff/mypy clean, full pytest exit 0 twice. CI: 4/4 completed/success on docs head 592ba07 (product tree identical to 06b5b32) plus 2/2 on 06b5b32 itself; the pull_request run on 06b5b32 was superseded (cancelled), which is never evidence on its own. Delivered: PR #5 body now carries NEX-052..NEX-088, issue #2 commented at 7236832249. NEX-088 VERIFIED. No NEX delivery debt remains. STOPPED AT THE CLOCK: under 10 minutes remained, so no new slice was started.",
+    "docs_head_delivered": "592ba07 - the docs commit carrying the NEX-088 record; CI 4/4 success.",
 }
