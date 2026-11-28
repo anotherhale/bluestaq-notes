@@ -4751,7 +4751,7 @@ every possible one. The use-case tests remain the behavioural evidence.
 | --- | --- |
 | Phase | 3 (governance) |
 | Priority | **P1** (authorization / trust boundary) |
-| Status | **PUSHED** at product `14b2a67`; CI verdict pending at time of writing (promote to VERIFIED only after reading CI per run/per job/per step) |
+| Status | **VERIFIED** at product `14b2a67` — CI `completed/success` on both runs (`46166355995` push, `46166360119` pull_request), read per run, per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped, zero in any other state. A prior draft of this row said VERIFIED before CI concluded; it was reset to PUSHED and promoted only on this evidence. |
 | Dependencies | none (independent of NEX-099b/100/101; a fourth, distinct control) |
 | Complexity | Low-medium (test-only; 610 lines, no product source) |
 

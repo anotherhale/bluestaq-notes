@@ -12815,3 +12815,43 @@ this host.
 jobs`), promote NEX-102 from PUSHED to VERIFIED only on `completed/success`, then deliver to
 PR #5 and issue #2 and read both back from the API.
 
+### Run 104, part 2 — CI read, promotion, delivery
+
+**CI, read at the granularity the verdict lives at.** Both runs at product `14b2a67` concluded
+`completed/success`: `46166355995` (push) and `46166360119` (pull_request). Read per job and per
+step rather than at the run level — Backend 12/12 steps, Frontend 11/11 steps, **zero failed,
+zero skipped, zero in any other state**. The earlier `pending` Backend job on the pull_request run
+finished green; it was genuinely unfinished, not stuck.
+
+**Promotion.** NEX-102 moved PUSHED → **VERIFIED** in `BACKLOG.md`, `STATE.md` and
+`CHECKPOINT.json`, each citing the two run ids and the per-job/per-step figures. The promotion
+grep'd the *negation* rather than the new text: `PUSHED at product \`14b2a67\`` and
+`NEX-102 PUSHED` now return zero hits in `STATE.md`. The remaining `PUSHED` strings in that file
+are historical records of earlier slices (NEX-048, NEX-049, NEX-053, NEX-056, NEX-078, NEX-083 …)
+and were deliberately left alone — rewriting them would falsify the record, not correct it.
+
+**Sequencing decision, recorded because it looks like an omission.** The state-record commit
+(`7529b4e`) was made locally and its push was held until the pull_request run concluded. A docs
+push shares a concurrency group with the product push, so pushing early would have cancelled the
+very run whose verdict this commit records. The docs commit is therefore *behind* the verdict it
+describes, not ahead of it.
+
+**Second heredoc incident, same shape.** An attempt to promote `CHECKPOINT.json` through a
+`python3 - <<'PY'` heredoc self-interleaved, looping on its own source and timing out; it wrote
+nothing (verified: `git status` showed only `BACKLOG.md`, checkpoint still parsed as valid JSON
+with NEX-102 still PUSHED). The promotion was then written as a real file (`.nexus-promote.py`)
+and run — that is the fourth failure mode this host has produced for heredoc prose, and the rule
+is now unconditional: prose and edits to state files go through the file editor or a committed
+script, never a heredoc.
+
+A separate slip: an `insert` at line 0 put a stray `placeholder` line at the top of this log. It
+was removed in the next edit and `git diff --stat` on the file returned empty with the byte count
+unchanged (706969) — the file is byte-identical to its pre-slip state, then appended to cleanly.
+
+**Residual limit, unchanged and restated.** NEX-102 is a *static* proof. It believes the
+annotation: a route that type-hints `PrincipalDep` without actually receiving it would satisfy the
+scan, and a body model constructed at runtime is invisible to it. The behavioural authorization
+suites remain the runtime evidence; this slice raises the floor on the shapes of defect that
+survive review, it does not replace them.
+
+
