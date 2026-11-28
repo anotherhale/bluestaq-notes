@@ -9881,3 +9881,65 @@ One trap re-confirmed: a `python3 - <<'PYEOF'` heredoc used to edit `STATE.md` e
 of its own body back interleaved and was killed before it wrote anything — `STATE.md` was
 verified clean afterwards and the edits were redone through `file_editor`. The rule in
 `MEMORY.md` holds: no heredocs for content writes, however short.
+## Run 83 — 2026-11-28 — NEX-083: policies-in-force aggregate
+
+- **Run ID:** NEX-2026-11-28-83
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `9c1ae48` (NEX-082 promoted to VERIFIED)
+- **Ending commit:** `c16dd9b` (product) + this docs commit
+- **Phase:** 2/3/5 — operator policy lifecycle, read side
+
+### Task completed
+
+**NEX-083 — expose the policies actually in force.** `GET /api/v1/ops/policies/in-force`
+could tell an operator *whether* a policy was active but not *which* ones, so the API
+could not answer "what governs this deployment right now?". It now returns:
+
+- `policies` — every active policy version with its scope and metadata
+- `policy_count` — how many are in force
+- `source_name` — which store answered (in-memory ring or SQL adapter)
+
+Built in the application use case (not the router), wired through the container.
+
+### Decisions
+
+- **Empty set is 200 with `[]`, never 404.** Absence of policy is a valid answer; a 404
+  here would be indistinguishable from the operator gate refusing, so a caller could not
+  tell "no policies" from "not allowed".
+- **The aggregate is built in the use case.** A transport layer must not be where a
+  contract shape is decided, or a second interface would have to re-derive it.
+- **`source_name` rather than a `durable` boolean.** A boolean would lose the third
+  adapter; the caller needs to know which one answered.
+
+### Defect found in the test suite (not the product)
+
+`test_in_force_route_is_404_for_a_non_operator` was built on DAVE. DAVE is suspended, so
+the request failed at authentication with **401** and never reached the operator gate —
+the `assert 404` passed for the wrong reason and would not have caught a gate regression.
+Rebuilt on BOB (active, unprivileged) so the 404 is the gate refusing, splitting the
+client so the operator publishes and the ordinary user is the one denied.
+
+### Validation (local, on the committed tree)
+
+| Gate | Result |
+| --- | --- |
+| `ruff format src tests docs` | clean |
+| `ruff check` | All checks passed |
+| `mypy` | Success, 143 source files |
+| `pytest -q` (full suite) | exit 0 |
+| `pytest ...policy_lifecycle` (2 files) | 66 passed |
+
+**CI: not concluded.** Both runs on `c16dd9b` were `in_progress` at the budget
+boundary. NEX-083 is **COMMITTED + PUSHED**, deliberately *not* VERIFIED.
+
+### Files changed
+
+6 files, +655/-1: `application/use_cases/policy_lifecycle.py`,
+`bootstrap/container.py`, `presentation/api/routers/policies.py`,
+`presentation/schemas.py`, `tests/api/test_ops_policy_lifecycle_api.py`,
+`tests/application/test_policy_lifecycle.py`.
+
+### Next action
+
+Poll CI for `c16dd9b`; on 2/2 success promote NEX-083 to VERIFIED, then clear the
+delivery debt (NEX-082 and NEX-083 are both absent from PR #5's body and issue #2).
