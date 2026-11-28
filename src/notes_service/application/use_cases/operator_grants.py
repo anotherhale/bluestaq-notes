@@ -44,7 +44,7 @@ from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.operator_grants import OperatorGrantRepository
 from notes_service.application.use_cases.operator_gate import WILDCARD, OperatorGate
 from notes_service.domain.errors import ValidationError
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import UserId
 
@@ -204,16 +204,18 @@ class IssueOperatorGrantRequest:
     that could name its own issuer would let a caller attribute a widening to
     someone else.
 
-    There is no ``rationale`` field, deliberately: the grant row has no column for
-    one, so a required free-text field would be validated and then discarded — worse
-    than absent, because it reads as a record that is never written. Intent is
-    carried today by ``granted_by`` plus the gate's access log, which records the
-    issuer, the ``operator-grant-issue`` operation, and the instant.
+    ``rationale`` is required: the operator's own words for *why* this user's
+    authority is being widened. The grant row now has a column for it, so a
+    required field is a record that is written, not one validated and discarded.
+    Before this, intent rested on ``granted_by`` plus the gate's access log, which
+    records the issuer and the instant but never the reason — enough to know *who*
+    widened *what*, never *why*. See ``OperatorGrantRationale`` for the bounds.
     """
 
     user_id: UserId
     scope: str
     expires_at: datetime
+    rationale: OperatorGrantRationale
 
 
 class IssueOperatorGrant:
@@ -281,6 +283,7 @@ class IssueOperatorGrant:
             granted_at=now,
             granted_by=principal.user_id,
             expires_at=request.expires_at,
+            rationale=request.rationale,
         )
         self._grants.add(grant)
         return grant

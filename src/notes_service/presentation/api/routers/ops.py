@@ -23,6 +23,7 @@ from notes_service.application.use_cases.operator_access_report import (
     MAX_LIMIT,
 )
 from notes_service.application.use_cases.operator_grants import IssueOperatorGrantRequest
+from notes_service.domain.identity.operator_grant import OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
@@ -191,6 +192,11 @@ def issue_operator_grant(
     ``granted_by`` — and the use case refuses a self-grant, an unbounded deadline,
     a scope the issuer does not itself hold, and an unknown scope. A non-operator
     gets ``404`` like every other ops endpoint.
+
+    The body must also state *why*: ``rationale`` is the operator's recorded
+    reason, stored on the grant so an auditor can read the justification, not
+    just the fact. A blank or over-long reason is a ``422`` at the boundary; the
+    domain value object enforces the same bound for every other caller.
     """
     grant = container.issue_operator_grant().execute(
         principal,
@@ -198,6 +204,7 @@ def issue_operator_grant(
             user_id=UserId.parse(body.user_id),
             scope=body.scope,
             expires_at=body.expires_at,
+            rationale=OperatorGrantRationale(body.rationale),
         ),
     )
     return OperatorGrantResponse.from_domain(grant)

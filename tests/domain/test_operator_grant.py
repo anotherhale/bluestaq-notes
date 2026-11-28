@@ -24,13 +24,20 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from notes_service.domain.errors import ValidationError
-from notes_service.domain.identity.operator_grant import MAX_SCOPE_LENGTH, OperatorGrant
+from notes_service.domain.identity.operator_grant import (
+    MAX_RATIONALE_LENGTH,
+    MAX_SCOPE_LENGTH,
+    OperatorGrant,
+    OperatorGrantRationale,
+)
 from notes_service.domain.identity.value_objects import UserId
 
 ALICE = UserId.parse("11111111-1111-1111-1111-111111111111")
 BOB = UserId.parse("22222222-2222-2222-2222-222222222222")
 
 GRANTED = datetime(2026, 11, 27, 10, 0, tzinfo=UTC)
+
+REASON = OperatorGrantRationale("covering the incident review window")
 
 
 def _grant(**overrides: object) -> OperatorGrant:
@@ -39,6 +46,11 @@ def _grant(**overrides: object) -> OperatorGrant:
         "scope": "withholding-report",
         "granted_at": GRANTED,
     }
+    # A human-issued grant must carry a rationale, so a helper that sets
+    # ``granted_by`` supplies the matching reason. Tests that exercise the
+    # pairing itself override ``rationale`` explicitly.
+    if overrides.get("granted_by") is not None and "rationale" not in overrides:
+        fields["rationale"] = REASON
     fields.update(overrides)
     return OperatorGrant(**fields)  # type: ignore[arg-type]
 
@@ -147,3 +159,63 @@ def test_a_grant_records_who_issued_it() -> None:
 def test_grants_compare_by_value() -> None:
     assert _grant() == _grant()
     assert _grant() != _grant(scope="audit-integrity")
+
+
+# -- rationale: why the authority was widened -------------------------------
+
+
+def test_a_human_issued_grant_must_say_why() -> None:
+    """A person who widens another person's authority must record a reason.
+
+    ``granted_by`` without ``rationale`` is an attributable act with no stated
+    purpose — exactly the audit gap this slice closes.
+    """
+    with pytest.raises(ValidationError):
+        _grant(granted_by=BOB, rationale=None)
+
+
+def test_a_configuration_grant_must_not_invent_a_reason() -> None:
+    """The reverse pairing is refused: a deployment never stated a rationale.
+
+    Attaching one would be a fabricated audit fact, not a missing one.
+    """
+    with pytest.raises(ValidationError):
+        _grant(granted_by=None, rationale=REASON)
+
+
+def test_a_human_issued_grant_records_the_reason() -> None:
+    grant = _grant(granted_by=BOB, rationale=REASON)
+    assert grant.rationale == REASON
+    assert grant.rationale is not None and grant.rationale.value == REASON.value
+
+
+def test_a_rationale_that_is_not_the_value_object_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        _grant(granted_by=BOB, rationale="just a string")
+
+
+def test_a_rationale_is_trimmed_but_keeps_interior_spacing() -> None:
+    assert OperatorGrantRationale("  why  now \n").value == "why  now"
+
+
+def test_a_blank_rationale_is_not_a_reason() -> None:
+    for blank in ("", "   ", "\n\t"):
+        with pytest.raises(ValidationError):
+            OperatorGrantRationale(blank)
+
+
+def test_a_rationale_is_bounded() -> None:
+    assert len(OperatorGrantRationale("x" * MAX_RATIONALE_LENGTH).value) == MAX_RATIONALE_LENGTH
+    with pytest.raises(ValidationError):
+        OperatorGrantRationale("x" * (MAX_RATIONALE_LENGTH + 1))
+
+
+def test_a_rationale_must_be_text() -> None:
+    with pytest.raises(ValidationError):
+        OperatorGrantRationale(42)  # type: ignore[arg-type]
+
+
+def test_the_rationale_is_part_of_grant_identity() -> None:
+    """Two grants that differ only by stated reason are not the same record."""
+    other = OperatorGrantRationale("a different reason")
+    assert _grant(granted_by=BOB, rationale=REASON) != _grant(granted_by=BOB, rationale=other)

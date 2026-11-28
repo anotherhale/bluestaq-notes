@@ -56,6 +56,58 @@ never caller-supplied text, so this bound only catches a typo or a pasted blob.
 It is deliberately generous relative to the longest real name.
 """
 
+MAX_RATIONALE_LENGTH = 500
+"""Upper bound on the free-text reason an operator records for a grant.
+
+A rationale is human-written prose explaining *why* authority was widened. The
+bound is generous enough for a sentence or two of context and small enough that
+the column is a note, not a document store. It is enforced here rather than only
+in the request schema so every path that constructs a grant — HTTP, a future CLI,
+a test — obeys the same limit.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorGrantRationale:
+    """Why an operator widened someone else's authority, as a validated value.
+
+    A grant record answers *who* may do *what* until *when*. It cannot answer
+    *why*, and "why" is the question an auditor actually asks about a privileged
+    hand-out. Before this value existed the rationale had no column and was
+    therefore discarded at the boundary; recording intent on a widening is the
+    difference between an audit that can reconstruct a decision and one that can
+    only list its effects.
+
+    Normalisation and bounds are enforced at construction, so a caller cannot
+    store an empty or over-long reason that would later read as a real one:
+
+    * **Not blank.** A rationale of only whitespace is absence pretending to be a
+      record; it is rejected rather than silently trimmed to nothing.
+    * **Trimmed, not interior-collapsed.** Surrounding whitespace is stripped
+      (it is never meaningful in a note); interior spacing and newlines are kept,
+      because the operator's own sentence structure is part of the record.
+    * **Bounded.** See :data:`MAX_RATIONALE_LENGTH`.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise ValidationError("operator grant rationale must be text")
+        trimmed = self.value.strip()
+        if not trimmed:
+            raise ValidationError("operator grant rationale must not be blank")
+        if len(trimmed) > MAX_RATIONALE_LENGTH:
+            raise ValidationError(
+                f"operator grant rationale must be at most {MAX_RATIONALE_LENGTH} characters"
+            )
+        # Freeze the normalised form so equality and persistence agree with what
+        # the operator actually meant, not with incidental padding.
+        object.__setattr__(self, "value", trimmed)
+
+    def __str__(self) -> str:
+        return self.value
+
 
 @dataclass(frozen=True, slots=True)
 class OperatorGrant:
@@ -69,6 +121,14 @@ class OperatorGrant:
     that came from deployment configuration (the seed path). Recording it means
     a stored grant can answer "who gave this", which a config string never can.
     ``None`` is an honest "no human issued this", not a missing field.
+
+    ``rationale`` is the *why*: the operator's stated reason for widening this
+    user's authority. It is required for every human-issued grant (``granted_by``
+    set) and must be absent for a configuration grant, because the two are
+    different facts — configuration is reviewed with the deployment, whereas a
+    hand-out between people needs a recorded justification. Requiring it here,
+    at the type level, means a caller cannot create an attributable grant whose
+    purpose is unknown.
     """
 
     user_id: UserId
@@ -77,6 +137,7 @@ class OperatorGrant:
     granted_by: UserId | None = None
     not_before: datetime | None = None
     expires_at: datetime | None = None
+    rationale: OperatorGrantRationale | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_id, UserId):
@@ -92,6 +153,16 @@ class OperatorGrant:
             )
         if scope != self.scope:
             raise ValidationError("operator grant scope must not have surrounding whitespace")
+        if self.rationale is not None and not isinstance(self.rationale, OperatorGrantRationale):
+            raise ValidationError("operator grant rationale must be an OperatorGrantRationale")
+        if self.granted_by is not None and self.rationale is None:
+            # A grant a person issued must say why. Configuration grants are the
+            # one exception: their reason is the deployment itself.
+            raise ValidationError("a human-issued operator grant must carry a rationale")
+        if self.granted_by is None and self.rationale is not None:
+            # The reverse would attribute a reason to a deployment that never gave
+            # one, which is a fabricated audit fact rather than a missing one.
+            raise ValidationError("a configuration operator grant must not carry a rationale")
         if self.expires_at is not None and self.expires_at <= self.granted_at:
             # A grant that expires at or before it was issued is a mistake that
             # would otherwise look like a working grant until the first check.
@@ -126,4 +197,4 @@ class OperatorGrant:
         return self.expires_at is not None
 
 
-__all__ = ["MAX_SCOPE_LENGTH", "OperatorGrant"]
+__all__ = ["MAX_RATIONALE_LENGTH", "MAX_SCOPE_LENGTH", "OperatorGrant", "OperatorGrantRationale"]

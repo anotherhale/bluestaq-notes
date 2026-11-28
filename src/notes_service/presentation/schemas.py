@@ -40,7 +40,7 @@ from notes_service.domain.agent.value_objects import (
 )
 from notes_service.domain.governance.policy import PolicyVersion
 from notes_service.domain.identity.entities import User
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import MAX_RATIONALE_LENGTH, OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
 from notes_service.domain.notes.note import Note
@@ -982,25 +982,31 @@ class OperatorAccessPurgeResponse(ResponseModel):
 
 
 class OperatorGrantIssueRequest(StrictModel):
-    """Ask to issue a bounded operator grant to another user (NEX-074).
+    """Ask to issue a bounded operator grant to another user (NEX-074, NEX-076).
 
     There is no ``granted_by`` field and no unbounded form: the issuer is the
     authenticated caller, stamped by the use case, and a grant issued this way
     always expires. A body that could name its own issuer, or omit the deadline,
     would let a caller attribute a widening to someone else or make it permanent.
+
+    ``rationale`` is required and bounded: it is the operator's stated reason for
+    widening this user's authority, and it is now stored (the grant row has a
+    column for it). Requiring it at the boundary means a privileged hand-out can
+    never be recorded without a reason an auditor can read back.
     """
 
     user_id: str
     scope: str = Field(min_length=1, max_length=64)
     expires_at: datetime
+    rationale: str = Field(min_length=1, max_length=MAX_RATIONALE_LENGTH)
 
 
 class OperatorGrantResponse(ResponseModel):
     """The single grant that was just written.
 
-    Echoed back so the issuer can confirm the exact scope, subject, and deadline
-    that landed — the store is append-only and a mistaken grant is fixed by
-    letting it lapse, not by editing it.
+    Echoed back so the issuer can confirm the exact scope, subject, deadline, and
+    stated reason that landed — the store is append-only and a mistaken grant is
+    fixed by letting it lapse, not by editing it.
     """
 
     user_id: str
@@ -1008,15 +1014,23 @@ class OperatorGrantResponse(ResponseModel):
     granted_by: str
     granted_at: datetime
     expires_at: datetime
+    rationale: str
 
     @classmethod
     def from_domain(cls, grant: OperatorGrant) -> OperatorGrantResponse:
+        # A grant built by ``IssueOperatorGrant`` always has an issuer and a
+        # rationale (the domain refuses otherwise), so these are not ``None`` on
+        # this path. The assertions document that and fail loudly if a future
+        # writer breaks the invariant rather than serialising ``null``.
+        assert grant.granted_by is not None
+        assert grant.rationale is not None
         return cls(
             user_id=str(grant.user_id),
             scope=grant.scope,
             granted_by=str(grant.granted_by),
             granted_at=grant.granted_at,
             expires_at=grant.expires_at,
+            rationale=grant.rationale.value,
         )
 
 

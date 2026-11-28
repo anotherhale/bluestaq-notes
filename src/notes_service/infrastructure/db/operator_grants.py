@@ -46,7 +46,7 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import OperatorGrantRow
 
@@ -63,6 +63,11 @@ def _to_domain(row: OperatorGrantRow) -> OperatorGrant:
         granted_by=UserId(str(row.granted_by)) if row.granted_by is not None else None,
         not_before=row.not_before,
         expires_at=row.expires_at,
+        # A stored rationale is re-validated on the way out, exactly like a scope:
+        # the value object is the single definition of "a valid reason", so a row
+        # written before a bound changed (or by hand) fails loudly here rather
+        # than surfacing as an unchecked string.
+        rationale=(OperatorGrantRationale(row.rationale) if row.rationale is not None else None),
     )
 
 
@@ -98,6 +103,7 @@ class SqlAlchemyOperatorGrantRepository:
                         ),
                         not_before=grant.not_before,
                         expires_at=grant.expires_at,
+                        rationale=(grant.rationale.value if grant.rationale is not None else None),
                     )
                 )
             else:
@@ -106,6 +112,7 @@ class SqlAlchemyOperatorGrantRepository:
                 )
                 existing.not_before = grant.not_before
                 existing.expires_at = grant.expires_at
+                existing.rationale = grant.rationale.value if grant.rationale is not None else None
             session.commit()
 
     def replace_configured(self, grants: Iterable[OperatorGrant]) -> None:

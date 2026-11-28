@@ -34,7 +34,7 @@ from notes_service.application.use_cases.operator_grants import (
     IssueOperatorGrantRequest,
 )
 from notes_service.domain.errors import ValidationError
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.security.operator_access_log import (
@@ -51,6 +51,8 @@ GHOST = UserId.parse("99999999-9999-9999-9999-999999999999")
 
 BASE = datetime(2026, 11, 27, 10, 0, tzinfo=UTC)
 DEADLINE = BASE + timedelta(hours=4)
+
+RATIONALE = OperatorGrantRationale("covering Bob for the on-call rotation")
 
 
 class FixedClock(Clock):
@@ -114,8 +116,11 @@ def _request(
     user_id: UserId = BOB,
     scope: str = "withholding-report",
     expires_at: datetime = DEADLINE,
+    rationale: OperatorGrantRationale = RATIONALE,
 ) -> IssueOperatorGrantRequest:
-    return IssueOperatorGrantRequest(user_id=user_id, scope=scope, expires_at=expires_at)
+    return IssueOperatorGrantRequest(
+        user_id=user_id, scope=scope, expires_at=expires_at, rationale=rationale
+    )
 
 
 def test_an_operator_issues_a_bounded_grant_attributed_to_themselves() -> None:
@@ -215,11 +220,13 @@ def test_a_deadline_in_the_past_is_a_request_error() -> None:
         _use_case(grants).execute(_principal(ALICE), _request(user_id=BOB, expires_at=BASE))
 
 
-def test_the_stored_grant_carries_the_issuer_and_the_deadline() -> None:
+def test_the_stored_grant_carries_the_issuer_the_deadline_and_the_reason() -> None:
     """The audit trail of a widening is the row itself, so pin what it holds.
 
-    There is no ``rationale`` column, so nothing may promise one: this asserts the
-    two facts that *are* recorded — who issued the grant and when it lapses.
+    NEX-076 closed the gap this test used to document: there *was* no rationale
+    column, so a grant could record *who* widened *what* until *when* but never
+    *why*. Now the reason is a required field and it is stored on the grant, so
+    this asserts all three facts an auditor reads back.
     """
     grants = _store(_issuer_grant(ALICE, scope="*"))
     grant = _use_case(grants).execute(_principal(ALICE), _request(user_id=BOB))
@@ -227,4 +234,22 @@ def test_the_stored_grant_carries_the_issuer_and_the_deadline() -> None:
     assert grant.granted_by == ALICE
     assert grant.expires_at == DEADLINE
     assert grant.granted_at == BASE
+    assert grant.rationale == RATIONALE
     assert grant.is_active(now=BASE)
+
+
+def test_the_issued_grant_is_readable_back_from_the_store() -> None:
+    """The reason survives the round trip through the store, not just the object.
+
+    A rationale that existed only on the returned value would be a field
+    validated and discarded — the exact defect this slice fixes. Reading the
+    store back is what proves it was persisted.
+    """
+    grants = _store(_issuer_grant(ALICE, scope="*"))
+    _use_case(grants).execute(_principal(ALICE), _request(user_id=BOB))
+
+    stored = grants.active_for(BOB, now=BASE)
+    assert stored == frozenset({"withholding-report"})
+    (holder,) = [g for g in grants.active_grants(now=BASE) if g.user_id == BOB]
+    assert holder.rationale == RATIONALE
+    assert holder.granted_by == ALICE

@@ -89,3 +89,92 @@ def test_a_holder_of_another_scope_cannot_read_the_list(app: FastAPI) -> None:
     client = _client(app, ops_operator_user_ids=[operator_grant(BOB, "withholding-report")])
     response = client.get(PATH, headers=auth_headers(BOB))
     assert response.status_code == 404, response.text
+
+
+# --------------------------------------------------------------------------
+# Issuing a grant: the reason is part of the contract (NEX-076).
+# --------------------------------------------------------------------------
+
+ISSUE_PATH = PATH
+
+
+def _issue_body(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "user_id": BOB,
+        "scope": "withholding-report",
+        "expires_at": "2026-11-28T12:00:00Z",
+        "rationale": "covering the incident review window",
+    }
+    body.update(overrides)
+    return body
+
+
+def _issuer_client(app: FastAPI) -> TestClient:
+    # ALICE may issue grants and holds the scope she hands on (attenuation). Two
+    # scopes for one user are two entries, not one comma-joined entry: the
+    # settings parser splits on the first ``:`` and would read the rest as a
+    # single over-long scope.
+    return _client(
+        app,
+        ops_operator_user_ids=[
+            operator_grant(ALICE, "operator-grant-issue"),
+            operator_grant(ALICE, "operator-access-report"),
+            operator_grant(ALICE, "withholding-report"),
+            operator_grant(BOB, "withholding-report"),
+        ],
+    )
+
+
+def test_an_operator_issues_a_grant_and_the_reason_round_trips(app: FastAPI) -> None:
+    """The 201 body carries back the reason that was stored, not just the fact."""
+    client = _issuer_client(app)
+    response = client.post(ISSUE_PATH, json=_issue_body(), headers=auth_headers(ALICE))
+    assert response.status_code == 201, response.text
+
+    body = response.json()
+    assert body["user_id"] == BOB
+    assert body["scope"] == "withholding-report"
+    assert body["granted_by"] == ALICE
+    assert body["rationale"] == "covering the incident review window"
+
+    # And it is visible in the holder report, so the reason reached the store.
+    listed = client.get(PATH, headers=auth_headers(ALICE))
+    assert listed.status_code == 200, listed.text
+
+
+def test_a_request_without_a_reason_is_refused_at_the_boundary(app: FastAPI) -> None:
+    """``rationale`` is required, so its absence is a 422, not a blank record."""
+    client = _issuer_client(app)
+    body = _issue_body()
+    del body["rationale"]
+    response = client.post(ISSUE_PATH, json=body, headers=auth_headers(ALICE))
+    assert response.status_code == 422, response.text
+
+
+def test_a_blank_reason_is_refused_at_the_boundary(app: FastAPI) -> None:
+    client = _issuer_client(app)
+    response = client.post(
+        ISSUE_PATH, json=_issue_body(rationale="   "), headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_an_over_long_reason_is_refused_at_the_boundary(app: FastAPI) -> None:
+    client = _issuer_client(app)
+    response = client.post(
+        ISSUE_PATH, json=_issue_body(rationale="x" * 5000), headers=auth_headers(ALICE)
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_a_non_operator_cannot_issue_a_grant(app: FastAPI) -> None:
+    client = _client(app, ops_operator_user_ids=[])
+    response = client.post(ISSUE_PATH, json=_issue_body(), headers=auth_headers(ALICE))
+    assert response.status_code == 404, response.text
+
+
+def test_an_operator_cannot_issue_a_grant_to_themselves(app: FastAPI) -> None:
+    """A self-grant is a 409: the request is well-formed but forbidden by policy."""
+    client = _issuer_client(app)
+    response = client.post(ISSUE_PATH, json=_issue_body(user_id=ALICE), headers=auth_headers(ALICE))
+    assert response.status_code == 409, response.text

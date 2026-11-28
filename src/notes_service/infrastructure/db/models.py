@@ -732,6 +732,14 @@ class OperatorGrantRow(Base):
     ``granted_by`` is nullable and that is meaningful: ``NULL`` marks a grant the
     deployment configuration issued, which is what lets the seed path reconcile
     its own grants without touching grants a human issued.
+
+    ``rationale`` is the *why*, and its nullability mirrors ``granted_by`` exactly
+    (NEX-076). A human-issued grant carries the operator's stated reason; a
+    configuration grant has none, because its reason is the deployment itself. The
+    domain enforces that pairing, so the column is never a free-floating note: it
+    is present precisely when a person issued the grant. Storing it closes the gap
+    where intent lived only in the access log, which recorded the issuer and the
+    instant but never the reason.
     """
 
     __tablename__ = "operator_grants"
@@ -747,10 +755,12 @@ class OperatorGrantRow(Base):
     )
     not_before: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("user_id", "scope", "granted_at", name="uq_operator_grants_identity"),
         CheckConstraint("length(scope) > 0", name="scope_not_empty"),
+        CheckConstraint("rationale IS NULL OR length(rationale) > 0", name="rationale_not_empty"),
         Index("ix_operator_grants_user_scope", "user_id", "scope"),
     )
 

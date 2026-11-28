@@ -19,7 +19,7 @@ from sqlalchemy import Engine, delete, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import OperatorGrantRow, UserRow
 from notes_service.infrastructure.db.operator_grants import (
@@ -30,6 +30,8 @@ from tests.conftest import ALICE, BOB
 pytestmark = pytest.mark.usefixtures("seeded")
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
+
+REASON = OperatorGrantRationale("covering the incident window")
 
 
 @pytest.fixture
@@ -199,13 +201,46 @@ def test_re_issuing_a_grant_extends_its_deadline_rather_than_duplicating(
     assert rows[0].expires_at == NOW + timedelta(hours=4)
 
 
-def test_a_human_issued_grant_records_who_issued_it(
+def test_a_human_issued_grant_records_who_issued_it_and_why(
     grants: SqlAlchemyOperatorGrantRepository,
 ) -> None:
-    grants.add(_grant(ALICE, "withholding-report", granted_by=UserId.parse(BOB)))
+    grants.add(_grant(ALICE, "withholding-report", granted_by=UserId.parse(BOB), rationale=REASON))
 
     (only,) = grants.active_grants(now=NOW)
     assert only.granted_by == UserId.parse(BOB)
+    assert only.rationale == REASON
+
+
+def test_the_rationale_survives_a_restart(
+    grants: SqlAlchemyOperatorGrantRepository,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The reason is in the row, not only in the writer's memory.
+
+    Read back through a second adapter over the same database, so this fails if
+    the column is dropped from either the write or the read mapping.
+    """
+    grants.add(_grant(ALICE, "withholding-report", granted_by=UserId.parse(BOB), rationale=REASON))
+
+    (reloaded,) = _restart(session_factory).active_grants(now=NOW)
+    assert reloaded.rationale == REASON
+    assert reloaded.rationale is not None and reloaded.rationale.value == REASON.value
+
+
+def test_the_rationale_column_cannot_hold_an_empty_string(
+    grants: SqlAlchemyOperatorGrantRepository, engine: Engine
+) -> None:
+    """A check constraint, so a row cannot exist without a stated reason."""
+    with pytest.raises(IntegrityError), Session(engine) as session:
+        session.add(
+            OperatorGrantRow(
+                user_id=UserId(ALICE),
+                scope="withholding-report",
+                granted_at=NOW,
+                rationale="",
+            )
+        )
+        session.commit()
 
 
 # --------------------------------------------------------------------------
@@ -248,6 +283,7 @@ def test_replace_configured_leaves_human_issued_grants_alone(
             ALICE,
             "audit-integrity",
             granted_by=UserId.parse(BOB),
+            rationale=REASON,
             expires_at=NOW + timedelta(hours=1),
         )
     )
@@ -263,7 +299,7 @@ def test_replace_configured_refuses_a_grant_it_does_not_own(
 ) -> None:
     with pytest.raises(ValueError):
         grants.replace_configured(
-            [_grant(ALICE, "withholding-report", granted_by=UserId.parse(BOB))]
+            [_grant(ALICE, "withholding-report", granted_by=UserId.parse(BOB), rationale=REASON)]
         )
 
 
@@ -319,4 +355,5 @@ def test_the_table_exists_in_the_migrated_schema(engine: Engine) -> None:
         "granted_by",
         "not_before",
         "expires_at",
+        "rationale",
     }
