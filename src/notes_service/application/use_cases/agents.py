@@ -143,12 +143,33 @@ class RegisterAgent(UseCase):
             return agent
 
 
-class ListAgents(UseCase):
-    """List the caller's own agents. Never another user's."""
+@dataclass(frozen=True, slots=True)
+class AgentPage:
+    """One page of a user's agents plus the set's exact size.
 
-    def run(self, principal: Principal) -> list[AgentIdentity]:
+    ``total`` is counted, never ``len(items)``. An owner of more agents than one
+    page could otherwise not tell a complete listing from the first 50 of 300 —
+    and the page that is truncated is the one where "did my agent get created"
+    is being asked.
+    """
+
+    items: list[AgentIdentity]
+    total: int
+
+
+class ListAgents(UseCase):
+    """List the caller's own agents. Never another user's.
+
+    Bounded and paged: an unbounded read of every agent a user owns is a
+    denial-of-service on the database that any client can trigger by looping
+    registrations. The window is ``(created_at, id)`` so pages are disjoint.
+    """
+
+    def run(self, principal: Principal, *, limit: int = 50, offset: int = 0) -> AgentPage:
         with self._uow_factory() as uow:
-            return uow.agents.list_for_owner(principal.user_id)
+            items = uow.agents.list_for_owner(principal.user_id, limit=limit, offset=offset)
+            total = uow.agents.count_for_owner(principal.user_id)
+            return AgentPage(items=items, total=total)
 
 
 class GetAgent(UseCase):
@@ -767,6 +788,7 @@ class VerifyToolInvocationChain(UseCase):
 
 
 __all__ = [
+    "AgentPage",
     "ApprovalRequestPage",
     "DecideApprovalRequest",
     "DelegationPage",

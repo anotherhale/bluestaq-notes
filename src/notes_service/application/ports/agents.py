@@ -36,11 +36,29 @@ class AgentRepository(Protocol):
 
     def get_by_runtime_identity(self, runtime_identity: str) -> AgentIdentity | None: ...
 
-    def list_for_owner(self, owner_user_id: UserId) -> list[AgentIdentity]:
-        """Agents owned by one user.
+    def list_for_owner(
+        self, owner_user_id: UserId, *, limit: int | None = None, offset: int = 0
+    ) -> list[AgentIdentity]:
+        """A page of the agents owned by one user, oldest first.
 
         There is deliberately no unscoped ``list_all``: a caller must always
         name the owner, so one user cannot enumerate another's agents.
+
+        ``limit=None`` means every agent, which is why the caller that faces a
+        client must pass one. The order is ``(created_at, id)``: an ``OFFSET``
+        window needs a **total** order, or a row can repeat while another is
+        skipped as the window shifts, and agents registered in one burst share
+        ``created_at``.
+        """
+        ...
+
+    def count_for_owner(self, owner_user_id: UserId) -> int:
+        """How many agents one user owns.
+
+        Separate from :meth:`list_for_owner` so a page can report the set's real
+        size. A total derived from ``len(page)`` cannot distinguish a complete
+        listing from the first page of a larger one, which is exactly the
+        judgement a paged consumer has to make.
         """
         ...
 

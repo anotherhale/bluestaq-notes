@@ -210,6 +210,71 @@ class TestAgentListingHttp:
         assert [item["runtime_identity"] for item in body["items"]] == ["svc-alice"]
         assert body["meta"]["total"] == 1
 
+    def test_total_is_the_set_size_not_the_page_size(self, client: TestClient) -> None:
+        for index in range(3):
+            register_agent(client, ALICE, runtime_identity=f"svc-alice-{index}")
+
+        page = client.get("/api/v1/agents?limit=1&offset=0", headers=auth_headers(ALICE)).json()
+
+        assert len(page["items"]) == 1
+        # A page-derived total would read "1" and hide that two more exist, so an
+        # owner could not tell a complete listing from a truncated one.
+        assert page["meta"]["total"] == 3
+        assert page["meta"]["limit"] == 1
+        assert page["meta"]["offset"] == 0
+
+    def test_offset_walks_the_set_without_repeating_a_row(self, client: TestClient) -> None:
+        # Agents registered in the same request burst share created_at to the
+        # microsecond; an order that is not total would let the window shift so a
+        # row repeats while another is skipped. The adapter adds an id tiebreak
+        # for that case. This pins the observable contract — pages are disjoint
+        # and together cover the set — rather than the tiebreak itself.
+        for index in range(3):
+            register_agent(client, ALICE, runtime_identity=f"svc-alice-{index}")
+
+        first = client.get("/api/v1/agents?limit=2&offset=0", headers=auth_headers(ALICE)).json()[
+            "items"
+        ]
+        second = client.get("/api/v1/agents?limit=2&offset=2", headers=auth_headers(ALICE)).json()[
+            "items"
+        ]
+
+        first_ids = {item["id"] for item in first}
+        second_ids = {item["id"] for item in second}
+        assert first_ids.isdisjoint(second_ids)
+        assert len(first_ids | second_ids) == 3
+
+        replay = client.get("/api/v1/agents?limit=2&offset=0", headers=auth_headers(ALICE)).json()[
+            "items"
+        ]
+        assert [item["id"] for item in replay] == [item["id"] for item in first]
+
+    def test_total_counts_only_the_callers_agents(self, client: TestClient) -> None:
+        register_agent(client, ALICE, runtime_identity="svc-alice")
+        for index in range(3):
+            register_agent(client, BOB, runtime_identity=f"svc-bob-{index}")
+
+        page = client.get("/api/v1/agents?limit=1&offset=0", headers=auth_headers(ALICE)).json()
+
+        # An unscoped count would report 4 and leak how many agents others hold.
+        assert page["meta"]["total"] == 1
+
+    def test_a_page_beyond_the_set_is_empty_not_an_error(self, client: TestClient) -> None:
+        register_agent(client, ALICE, runtime_identity="svc-alice")
+
+        page = client.get("/api/v1/agents?limit=10&offset=5", headers=auth_headers(ALICE))
+
+        assert page.status_code == 200
+        assert page.json()["items"] == []
+        # The total still describes the set, so an empty page past the end is
+        # distinguishable from an empty account.
+        assert page.json()["meta"]["total"] == 1
+
+    def test_a_page_size_beyond_the_cap_is_rejected(self, client: TestClient) -> None:
+        response = client.get("/api/v1/agents?limit=201", headers=auth_headers(ALICE))
+
+        assert response.status_code == 422, response.text
+
     def test_a_non_owner_gets_404_not_403_on_get(self, client: TestClient) -> None:
         agent = register_agent(client, ALICE)
 

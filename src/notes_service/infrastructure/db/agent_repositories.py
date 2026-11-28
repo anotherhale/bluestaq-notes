@@ -256,17 +256,33 @@ class SqlAlchemyAgentRepository:
         ).scalar_one_or_none()
         return _agent_to_domain(row) if row else None
 
-    def list_for_owner(self, owner_user_id: UserId) -> list[AgentIdentity]:
-        rows = (
-            self._session.execute(
-                select(AgentRow)
-                .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
-                .order_by(AgentRow.created_at)
-            )
-            .scalars()
-            .all()
+    def list_for_owner(
+        self, owner_user_id: UserId, *, limit: int | None = None, offset: int = 0
+    ) -> list[AgentIdentity]:
+        # ``id`` breaks ties so an ``OFFSET`` window is stable: agents registered
+        # in one request burst share ``created_at`` to the microsecond, and an
+        # order that is not total can repeat a row while skipping another as the
+        # window shifts — with the page still looking full.
+        statement = (
+            select(AgentRow)
+            .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
+            .order_by(AgentRow.created_at, AgentRow.id)
         )
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_agent_to_domain(row) for row in rows]
+
+    def count_for_owner(self, owner_user_id: UserId) -> int:
+        # Scoped by owner, like the listing: an unscoped aggregate would disclose
+        # how many agents other users hold.
+        return int(
+            self._session.execute(
+                select(func.count())
+                .select_from(AgentRow)
+                .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
+            ).scalar_one()
+        )
 
     def list_all_for_integrity_sweep(self, *, limit: int, offset: int = 0) -> list[AgentIdentity]:
         # Deterministic order so a capped sweep always covers the same agents;

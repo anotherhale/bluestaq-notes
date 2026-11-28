@@ -18,7 +18,6 @@ maps HTTP to use cases and nothing more, with three consequences worth stating:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
@@ -51,11 +50,6 @@ from notes_service.presentation.schemas import (
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-def _page(items: Sequence[object]) -> PageMeta:
-    """These listings are unpaginated, so the meta describes the full set."""
-    return PageMeta(total=len(items), limit=len(items), offset=0)
-
-
 # -- agents ---------------------------------------------------------------
 
 
@@ -65,10 +59,25 @@ def _page(items: Sequence[object]) -> PageMeta:
     summary="List the agents the caller owns",
     dependencies=[RateLimitDep],
 )
-def list_agents(principal: PrincipalDep, container: ContainerDep) -> AgentListResponse:
-    agents = container.list_agents().run(principal)
-    items = [AgentResponse.from_domain(agent) for agent in agents]
-    return AgentListResponse(items=items, meta=_page(items))
+def list_agents(
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> AgentListResponse:
+    """The caller's own agents, oldest first, with the set's exact size.
+
+    Paged rather than whole-set: an owner can register agents in a loop, so an
+    unpaged read is a database read any authenticated client can grow without
+    bound. ``meta.total`` is the count of the caller's agents, not of ``items``;
+    a page-derived total cannot distinguish a complete listing from a truncated
+    one.
+    """
+    page = container.list_agents().run(principal, limit=limit, offset=offset)
+    items = [AgentResponse.from_domain(agent) for agent in page.items]
+    return AgentListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(
