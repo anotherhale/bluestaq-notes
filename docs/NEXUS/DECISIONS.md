@@ -371,3 +371,37 @@ tenant ever gets there.
 paged route, so its page size *is* its total and the number is honest. Bounding it now would add a `Query`
 surface and migration risk for no consumer. The rule is that a read gets a window when a **client** can
 grow it, not when a docstring says it is large.
+
+## D-099
+
+*The demo identity provider is an authentication path and must obey the tenant-access seam.* NEX-006
+closed the offboarding gap on the three human identity paths; NEX-017 closed it for agent-token
+resolution (a fourth). The demo provider is a **fifth** and was not counted, so it selected a user after
+checking only `is_active` and never the membership rule. A suspended or deprovisioned membership kept
+authenticating in development.
+
+*Why "only in development" is not a mitigation.* The demo provider is a live authentication path in every
+dev and test deployment, and the component tests run against it (`tests/conftest.py`'s `client` is the
+demo-auth app). A rule enforced on four paths and skipped on the fifth teaches the test suite, and anyone
+reading it, that losing a membership does not end authenticated access — the exact model NEX-006 exists to
+reject. The `tenant_access.py` docstring already claimed the seam was "shared by every path that
+establishes an identity"; the honest fix was either to make it true or stop saying it. We made it true.
+
+*Reuse the seam, do not re-derive it.* `demo_provider` calls `ensure_tenant_access`, the same use case the
+OIDC, session, bearer and agent paths call, rather than reading memberships itself. A second copy of the
+rule is how the paths drifted apart in the first place.
+
+*Reconciling two tests, and why it is not weakening them.* `test_suspend_removes_all_authority` and
+`test_reactivate_does_not_revive_a_deprovisioned_member` asserted a 404 for a caller who had just lost
+their *only* membership. They were green before only because the demo path let that caller stay
+authenticated past the boundary. Under the corrected rule the caller gets 401 at authentication, which is
+what the bearer and session paths already do and what the tests in `test_tenant_access_bearer.py` assert.
+Changing the expected status to 401 would have quietly redefined those tests from "the org is invisible"
+to "the caller is signed out" — a different, weaker property. Instead each test now gives Bob a *second,
+active* membership, so he remains authenticated and the original 404/422 assertions test the property they
+name. The assertions are unchanged; only the caller's other tenant was added.
+
+*Load-bearing, measured.* Reverting only `demo_provider.py` on this tree turns exactly the four refusal
+tests in `test_tenant_access_demo.py` red and leaves both positive controls green. The positive controls
+(active member, unaffiliated user) are the reason the file cannot pass by refusing everyone: they pin
+`UNAFFILIATED` → bootstrap-allowed and `ACTIVE` → authenticated, which is the same shape NEX-017 decided.

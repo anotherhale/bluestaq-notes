@@ -1,80 +1,58 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-98",
+  "run_id": "NEX-2026-11-28-99",
   "timestamp": "2026-11-28T14:40Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "f4a28459a82fdd853bba5134c9cef89b66ab7d73",
-  "product_commit": "f4a28459a82fdd853bba5134c9cef89b66ab7d73",
-  "commit_note": "`commit` names the product commit f4a2845, whose CI verdict is the verdict of record. The docs commit recording this checkpoint follows it by one; a file cannot contain the hash of the commit that contains it, so that lag is structural and expected. Do not chase it.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-098 VERIFIED. NEX-098 is VERIFIED on the product commit f4a2845 itself.",
+  "commit": "PENDING_ON_PUSH",
+  "product_commit": "PENDING_ON_PUSH",
+  "commit_note": "This run's product change and its docs ship in one commit, so there is no separate product/docs split as in run 98. `commit` is filled at close-out after the push; a file cannot contain the hash of the commit that contains it, so a one-commit lag here would be structural anyway. Resolve the live head with `git ls-remote`, never `git rev-parse origin/<branch>`, because this clone maps only refs/heads/main.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-098 VERIFIED. NEX-099 (identity, tenant access on the demo path): IMPLEMENTED + TESTED locally; CI pending on push.",
   "active_task": null,
   "task_statuses": {
-    "NEX-098": "VERIFIED - CI 4/4 completed/success on the product commit f4a2845 itself (runs 46153368050 push and 46153373346 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = f4a28459a82fdd853bba5134c9cef89b66ab7d73), read per run AND per job. GET /organizations/{id}/members was a whole-set read: list_for_organization(organization_id) took no window and the router filled PageMeta(total=len(items)) from the returned list, so one read and one response grew with the tenant (no per-organization member cap exists). Now: limit (1..200) / offset windowed in SQL, meta.total from count_for_organization (a scoped COUNT sharing the SAME _roster_predicate), order (created_at, id) because a burst invite shares created_at and OFFSET over a non-total order can repeat one row while skipping another. The predicate is applied before the window, so limit=1 cannot become a one-row peek. Load-bearing proved by reverting each half on this tree: total=len(items) -> 2 failed; dropping the id tiebreaker -> 1 failed. Decided in DECISIONS.md D-098."
+    "NEX-099": "IMPLEMENTED + TESTED. The shared tenant-access rule was enforced on four identity paths (OIDC callback, per-request session, bearer provider, and NEX-017's agent-token resolution) but the demo identity provider was an uncounted FIFTH: it checked only is_active, so a suspended or deprovisioned membership still authenticated in development. Fixed by calling ensure_tenant_access (the shared seam, not a re-derived rule). New tests/authentication/test_tenant_access_demo.py has 6 tests: 2 positive controls (active member, unaffiliated user -> bootstrap allowed) and 4 refusals (suspended org, deprovisioned org, suspended membership, deprovisioned membership). Two pre-existing API tests (test_suspend_removes_all_authority, test_reactivate_does_not_revive_a_deprovisioned_member) were green ONLY because the demo path bypassed the seam; they are reconciled by giving Bob a second active membership so the original 404/422 assertions test org visibility and terminal offboarding rather than conflating either with 'is the caller signed in'. Assertions unchanged, not relaxed. Load-bearing proved: reverting only demo_provider.py -> exactly those 4 refusal tests red, both positive controls green. Decided in DECISIONS.md D-099."
   },
   "completed_tasks": [
-    "NEX-098",
-    "NEX-097",
-    "NEX-096",
-    "NEX-095",
-    "NEX-094",
-    "NEX-093",
-    "NEX-092",
-    "NEX-090",
-    "NEX-089",
-    "NEX-088",
-    "NEX-087"
+    "NEX-099"
   ],
   "validation": {
     "commands_run_on_working_tree": [
-      "import guard: notes_service.__file__ -> THIS workspace's src/notes_service/__init__.py; .venv/.../site-packages/*.pth points only here",
-      "ruff format --check: 326 files already formatted",
+      "import guard: notes_service.__file__ -> THIS workspace's src/notes_service/__init__.py",
+      "ruff format: 327 files unchanged (repo-wide, bare as CI does)",
       "ruff check: All checks passed",
       "mypy: Success, no issues found in 144 source files",
-      "pytest (full, bare, -o addopts=--strict-markers): 1778 passed, 4 skipped in 34.01s (baseline 1769 + 9 new)"
+      "pytest (full, bare): 1784 passed, 4 skipped in 34.65s (baseline 1778 + 6 new)"
     ],
-    "import_path_guard": "This workspace HAS its own .venv and its src is the editable target; asserted before any result was believed. The standing hazard from run 97 (a borrowed venv importing another workspace's src and turning correct code red) was checked first, not assumed absent.",
-    "load_bearing_probe_total": "Router restored to PageMeta(total=len(items), limit=limit, offset=offset) -> 2 failed: test_total_is_the_roster_size_not_the_page_size, test_a_page_beyond_the_roster_is_empty_not_an_error. Restored -> green.",
-    "load_bearing_probe_tiebreaker": "First attempt came back ALL GREEN with the id key removed: the persistence fixture's docstring claimed reversed insertion order but iterated DEMO_USERS[:ROSTER_SIZE] forward, and SQLite returned tied rows in insertion order, so the walk passed either way. The test was encoding the defect. Fixed by inserting reversed(DEMO_USERS[:ROSTER_SIZE]) and asserting the unpaged listing's sequence equals its id-sorted sequence. Re-probed: id key removed -> test_walking_the_window_neither_repeats_nor_skips_a_member FAILS (at index 0, ids differ); restored -> passes.",
-    "doc_correction": "BACKLOG.md and DECISIONS.md both asserted the tiebreaker test was load-bearing, which was not established when first written. Both were rewritten to the measured result, including the failed first probe, rather than patched to look right."
+    "import_path_guard": "Asserted notes_service resolves to this workspace's src BEFORE believing any result, per the standing run-97 hazard.",
+    "load_bearing_probe": "git stash push on src/notes_service/infrastructure/identity/demo_provider.py only, then pytest on test_tenant_access_demo.py + test_organizations_api.py -> exactly 4 FAILED (all refusals), the 2 positive controls green. git stash pop, restored, green. Measured, not assumed.",
+    "tests_reconciled_not_weakened": "The two org tests previously asserted 404 for a caller who had just lost their only membership, and passed only because the demo path let that caller stay authenticated. Expected statuses were NOT changed to 401; instead Bob was given a second active membership so the original 404/422 assertions now measure org invisibility and terminal offboarding. Changing the status would have silently redefined both tests to a weaker property."
   },
-  "uncommitted_work": false,
-  "ci_status": "f4a2845 (NEX-098 product): 4/4 completed/success ON THE PRODUCT COMMIT ITSELF (runs 46153368050 push, 46153373346 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = f4a28459a82fdd853bba5134c9cef89b66ab7d73), verified per run AND per job -- the exit code alone is not the verdict. Prior: febb810 (NEX-097 product) 4/4 on itself (46148603437, 46148607713); d18da82 4/4 on itself (46149271375, 46149276202); bedc235 (run-96 docs head) 4/4; cf51518 4/4; 5e0c926 4/4; 87936d4 (NEX-096 product) 4/4 on itself; fb027ee (NEX-095) 4/4 on itself; d4abd07 (run-94 docs head) 4/4; d8353ff (NEX-094 product) carried ZERO check-runs (superseded in the concurrency group) so that verdict was descendant-CI; 48ad062 (NEX-093) 4/4. CAVEAT: the strengthened persistence test postdates f4a2845 and is NOT in the commit CI validated. RESOLVED in this close-out: that test shipped in e9ccba4, and e9ccba4's own runs are 4/4 completed/success on its own head_sha (runs 46153750548 push, 46153754933 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, per job). Both commits are green at their own head_sha; neither verdict is descendant-CI.",
+  "uncommitted_work": true,
+  "ci_status": "UNRUN for NEX-099. No CI verdict exists for this change yet; do not report one. Prior: f4a2845 (NEX-098 product) and e9ccba4 (run-98 docs+test) were each 4/4 completed/success at their OWN head_sha (46153368050/46153373346 and 46153750548/46153754933), verified per run AND per job.",
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
-    "head_ref_oid": "e9ccba4f6bb421f424a828fd8fcb3b79182771ee",
-    "body_covers": "NEX-052..NEX-098. NEX-098 section appended with --body-file, then the landed body read back: 136237 chars, byte-exact against the composed body, heading and load-bearing section both present. A publisher exit 0 is not evidence the artifact landed; the read-back is.",
-    "nex_097_in_body": true,
-    "nex_098_in_body": "delivered and read back (byte-exact, 136237 chars)"
+    "head_ref_oid_before_this_run": "e9ccba4f6bb421f424a828fd8fcb3b79182771ee",
+    "body_covers": "NEX-052..NEX-098 before this run. NEX-099 must be appended and the landed body read back; a publisher exit 0 is not evidence the artifact landed."
   },
-  "tracking_issue": "Issue #2 open, not closed. NEX-098 verdict delivered as comment 7240543435 and read back (83 comments; last body 2373 chars; carries the VERIFIED heading and the nothing-turned-red finding). NEX-097 delivered in run 97; NEX-096 as 7239449984; NEX-092 through NEX-097 all delivered.",
+  "tracking_issue": "Issue #2 open, not closed. NEX-099 verdict NOT yet delivered; prior delivery was NEX-098 as comment 7240543435.",
   "blockers": [],
   "risks": [
-    "The exact-total paging family (NEX-082..NEX-098) is now CLOSED. The next run must not invent another paging slice to continue the pattern: every remaining whole-set list_* is either user-authored and small (FoldersRepository.list_for_owner, on no paged route) or already windowed. DECISIONS records why folders are deliberately left alone.",
-    "`git rev-parse origin/<branch>` in this clone reads a frozen snapshot: remote.origin.fetch maps only refs/heads/main. Use `git ls-remote`. Three local sources agreeing is worth nothing if they read one unrefreshed cache.",
-    "The clone arrives on main, not on the feature branch (a fresh workspace per run). Verify the branch before editing; the branch must be created at the live remote head, never assumed.",
-    "A docs push supersedes the product commit's run in the CI concurrency group, so the product run can read completed/cancelled and is then never evidence. This run read f4a2845's verdict BEFORE pushing docs.",
-    "Test counts drift if the tree moves: 1778 was measured on this tree with the docs edits uncommitted (docs edits cannot change a test count). Re-measure rather than quoting it after any product change.",
-    "A guard can pass without the fix. This run's tiebreaker test did exactly that until it was rewritten; the lesson is to probe the guard, not only the code."
+    "The demo provider is dev-only, so the temptation is to call NEX-099 low priority. It is P0-adjacent because tests/conftest.py's `client` IS the demo-auth app: a rule enforced on four paths and skipped on the fifth makes the whole test suite assert a model production rejects. Do not downgrade it.",
+    "Do not 'fix' a red test by changing an expected status to match new behaviour without checking what the test was measuring. The two org tests here were measuring authentication, not org visibility, without saying so. The reconciliation added a second membership rather than adjusting the assertion.",
+    "`git rev-parse origin/<branch>` in this clone reads a frozen snapshot (remote.origin.fetch maps only refs/heads/main). Use `git ls-remote`.",
+    "A fresh clone arrives on main, not the feature branch. Verify the branch before editing.",
+    "A docs push supersedes a product run in the CI concurrency group; read the product commit's runs before pushing docs, or the verdict may be cancelled and unusable.",
+    "The exact-total paging family (NEX-082..NEX-098) is CLOSED. Do not invent another paging slice. FoldersRepository.list_for_owner is deliberately unpaged; leave it alone."
   ],
-  "next_task": "Not a paging slice -- that family is closed. Select the next dependency-ready task from docs/NEXUS/BACKLOG.md and ROADMAP.md by dependency readiness, not by continuing the most recent pattern. Read the checkpoint and BACKLOG's next section rather than trusting this field.",
-  "next_action": "1) `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the live head (NOT `git rev-parse origin/<branch>`). 2) Check `git branch --show-current` -- a fresh clone starts on main; create the feature branch at the live head before editing. 3) Assert `notes_service.__file__` points at THIS workspace's src before believing any test result. 4) Read BACKLOG.md to select the next dependency-ready task; do not start another paging slice. 5) Read the docs+test commit's own CI run for the strengthened test, but do not let it retroactively redefine f4a2845's verdict.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. Product commit f4a2845 carries the NEX-098 slice and its own green CI (runs 46153368050, 46153373346). The docs commit recording this checkpoint follows it by one and touches docs/NEXUS/ plus tests/persistence/test_organization_roster_paging.py (test strengthening only, no product change). Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`: this clone's remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot. Nothing is in flight. If the tree is dirty on entry, inspect before discarding: a previous run may have been killed at the 30-minute boundary with a coherent half-slice. Never force-push, never merge, never touch main directly.",
-  "commits_this_run": [
-    "f4a2845 - feat(organizations): page the roster with a counted total (product, run 98; 6 files incl. the new persistence test)",
-    "(the docs+test commit recording this checkpoint follows f4a2845: a file cannot contain the hash of the commit that contains it)"
-  ],
+  "next_task": "Select the next dependency-ready task from docs/NEXUS/BACKLOG.md and ROADMAP.md. NEX-099 is the last identity-path gap found by auditing the tenant-access seam; a follow-up worth considering is whether any OTHER identity-establishing path (e.g. a future API-key or service-principal adapter) exists that the seam enumeration still omits -- audit by grepping for identity providers rather than trusting the docstring's list, which was wrong twice (3 -> 4 -> 5).",
+  "next_action": "1) `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the live head. 2) Observe CI on the commit this run pushes; promote NEX-099 to VERIFIED only on 4/4 completed/success at its OWN head_sha, read per run AND per job. 3) Append NEX-099 to PR #5 body with --body-file and read the landed body back. 4) Post the NEX-099 verdict to issue #2 and read it back. 5) Then select the next dependency-ready task; audit the identity-provider list by grep, not by docstring.",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. This run ships NEX-099 (demo provider tenant access) as a single commit touching src/infrastructure/identity/demo_provider.py, src/application/use_cases/tenant_access.py (docstring), tests/authentication/test_tenant_access_demo.py (new), tests/api/test_organizations_api.py (two tests reconciled), and docs/NEXUS/. Nothing is in flight beyond this push. If the tree is dirty on entry, inspect before discarding: a prior run may have been killed at the 30-minute boundary with a coherent half-slice. Verify `git branch --show-current`; a fresh clone starts on main. Never force-push, never merge, never touch main directly.",
   "decisions_this_run": [
-    "OFFSET paging, not keyset, because the response already shipped limit/offset inside PageMeta; changing the wire contract to a cursor is a separate, larger decision. The trade is recorded: OFFSET degrades on a very large roster and a cursor is the upgrade if a tenant ever gets there.",
-    "The count lives in the repository next to the listing and shares _roster_predicate, rather than being computed in the router from the page. A page-derived total cannot distinguish a complete roster from a truncated one, which is the whole defect.",
-    "Order is (created_at, id), not created_at. Memberships invited in one burst share created_at to the timestamp, so the tie is real; OFFSET over a non-total order can repeat one row while skipping another.",
-    "The predicate is applied before the window, so authorization is never widened by a small page size. Verified by a security test: a non-member asking for limit=1 still gets 404.",
-    "limit is capped at 200 and a larger value is rejected 422 rather than silently clamped, matching NEX-096. Silent clamping hides a client bug; a rejection surfaces it.",
-    "The strengthened persistence test inserts in reverse id order and asserts the listing's sequence equals its id-sorted sequence. Without that, a stable-but-arbitrary order passes and the test proves nothing -- which is exactly what the first draft did."
+    "The demo identity provider must obey the tenant-access seam. It is a live authentication path in dev and test, and tests/conftest.py's client runs against it; skipping the rule there teaches the suite a model production rejects.",
+    "Reuse ensure_tenant_access rather than reading memberships in the provider. A second copy of the rule is how the five paths drifted apart.",
+    "Reconcile the two org tests by giving Bob a second active membership; do not change their expected 404/422 to 401. The originals asserted org visibility and terminal offboarding, and a status change would have redefined them to 'the caller is signed out' -- weaker, and it would have hidden that they had been measuring authentication.",
+    "Keep the docstring enumeration honest: it now names the demo provider as the fifth path, because it twice under-counted (three, then four)."
   ],
-  "run_summary": "Run 98. Delivered NEX-098: GET /organizations/{id}/members was the last whole-set organization read -- no window, and meta.total was len(items), so a large tenant grew both the read and the response without bound. Shipped limit/offset on the port and adapter, a count_for_organization aggregate sharing the roster predicate, (created_at, id) ordering, and a 200 cap that rejects rather than clamps. Product f4a2845 pushed and VERIFIED: CI 4/4 completed/success on the product commit itself, both runs, per job. The significant finding is about the tests, not the code: reverting the total turned 2 tests red, but dropping the id tiebreaker turned NOTHING red -- the fixture's docstring claimed reversed insertion order while inserting forward, so SQLite's insertion order satisfied the walk either way. That is a guard encoding the defect it exists to catch. Fixed the fixture to insert reversed and added a sequence assertion, then re-probed: the tiebreaker is now load-bearing. Both docs that asserted the untested claim were rewritten to the measured result instead of being left to look right.",
-  "docs_delivery": "DELIVERED. e9ccba4 pushed and 4/4 completed/success on its OWN head_sha (46153750548 push, 46153754933 pull_request; per job, zero failed, zero skipped). It did NOT read cancelled as this field previously feared: f4a2845's runs had already concluded before the docs push, so the concurrency group was free and e9ccba4 got its own full pair. The docs half touches docs/NEXUS/ only; the test half strengthens tests/persistence/test_organization_roster_paging.py with no product-code change. Both PR #5 body and issue #2 were updated and read back.",
-  "observed_remote_head_on_entry": "997a6ac on main (grafted shallow clone). The branch was not checked out; it was created at the live remote head, resolved with `git ls-remote`, before any edit.",
-  "head_semantics": "`commit` names the product commit f4a2845 whose CI is the verdict of record for the product change; `product_commit` repeats it. The docs+test commit e9ccba4 lands after it and is itself 4/4 green on its own head_sha, so both are validated. A file still cannot contain the hash of the commit that contains it, so the hash recorded here lags the commit that writes it by one; that lag is structural and correct."
+  "run_summary": "Run 99. Selected NEX-099 by dependency readiness, not pattern continuation: the checkpoint closed the paging family at NEX-098 and said to pick the next dependency-ready task. Auditing the tenant-access seam found the demo identity provider as an uncounted fifth identity path -- NEX-006 covered three human paths, NEX-017 added agent tokens as a fourth, and the demo provider checked only is_active. A suspended or deprovisioned membership therefore still authenticated in development, which is the same offboarding gap the earlier slices closed everywhere else. Fixed by routing the demo provider through ensure_tenant_access, corrected the docstring to five paths, added 6 tests (2 positive controls, 4 refusals), and proved the guard load-bearing by reverting the one source file (exactly 4 red, controls green). The subtler finding: two existing organization tests were green ONLY because of this defect -- they asserted a 404 for a caller who had lost their only membership, which passed only because the demo path let that caller stay authenticated past the boundary. Rather than change their expected status (which would have quietly weakened what they assert), each now gives Bob a second active membership so the original assertions test org invisibility and terminal offboarding as named. Gates run bare: ruff format 327 unchanged, ruff check clean, mypy 144 clean, pytest 1784 passed / 4 skipped."
 }

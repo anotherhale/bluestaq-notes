@@ -11982,3 +11982,63 @@ NEX-098 is **VERIFIED** (product CI green at its own head) and **PUSHED** (remot
 review. Tracking issue #2 is **open** with the delivery recorded. No `MERGED` status is claimed for
 anything — that is reserved for human/repository evidence.
 
+
+## Run 99 — NEX-099: close the fifth identity path
+
+**Run ID:** `NEX-2026-11-28-99` · **Branch:** `feature/agentic-enterprise-platform` · **Starting head:** `6e95ae2`
+
+### Selection
+
+The checkpoint's `next_task` said, correctly, *not* to continue the paging family (closed at NEX-098)
+and to pick the next task by dependency readiness. Reading the tenant-access slices in BACKLOG surfaced
+the real gap: NEX-006 enforced the rule on three human identity paths, NEX-017 added agent-token
+resolution as a fourth and corrected the docstring from "three paths" to four — but the **demo identity
+provider** was an uncounted fifth. Reconciliation therefore chose NEX-099 by dependency readiness (it
+depends on NEX-006/NEX-017, both VERIFIED), not by pattern continuation.
+
+### Delivered
+
+| File | Change |
+| --- | --- |
+| `src/notes_service/infrastructure/identity/demo_provider.py` | calls `ensure_tenant_access` after the active-user check — the fifth path now uses the shared seam |
+| `src/notes_service/application/use_cases/tenant_access.py` | docstring corrected to name the demo provider as the fifth path |
+| `tests/authentication/test_tenant_access_demo.py` | new, 6 tests (2 positive controls, 4 refusals) |
+| `tests/api/test_organizations_api.py` | two tests reconciled so Bob keeps a second membership — assertions unchanged |
+
+### Validation (all run bare, as CI does)
+
+- `ruff format` → 327 files unchanged
+- `ruff check` → All checks passed
+- `mypy` → Success, no issues in 144 source files
+- `pytest` → **1784 passed, 4 skipped** (baseline 1778 + 6 new)
+- import guard → `notes_service.__file__` resolved to **this** workspace's `src`, checked before any result was believed
+
+### Load-bearing probe
+
+Reverting only `demo_provider.py` (`git stash push` on that one file) and re-running the auth + org
+suites turned **exactly four** tests red — `test_suspended_organization_blocks_authentication`,
+`test_deprovisioned_membership_cannot_authenticate`, and both parametrisations of
+`test_inactive_membership_cannot_authenticate` — while the two positive controls stayed green. Restored
+with `git stash pop`; green again. The guard does not merely encode the fix.
+
+### The subtle part: two tests were passing *because of* the defect
+
+`test_suspend_removes_all_authority` and `test_reactivate_does_not_revive_a_deprovisioned_member`
+asserted a 404 for a caller who had just lost their **only** membership. They were green before this
+change only because the demo path let that caller stay authenticated past the identity boundary. The
+tempting "fix" was to change the expected status to 401 — which would have quietly redefined both tests
+from "the org is invisible" to "the caller is signed out", a different and weaker property, and would
+have hidden that the original assertion had been measuring the wrong thing. Instead each test now gives
+Bob a second, active membership, so the original 404/422 assertions test what they name. Recorded as
+D-099.
+
+### Status at close
+
+| Status | Applies to |
+| --- | --- |
+| IMPLEMENTED | demo provider enforcement, docstring correction |
+| TESTED | 1784 passed / 4 skipped, gates green, load-bearing probed |
+| COMMITTED / PUSHED / CI | recorded in the close-out below once executed |
+
+No `VERIFIED` and no `MERGED` status is claimed here. Product CI has not run at the time of writing.
+

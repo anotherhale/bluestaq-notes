@@ -10,13 +10,18 @@ Security properties:
 
 * the header never grants a user that is not already persisted and active;
 * an invalid demo selection does not fall back to any other identity;
-* the provider never mints identities, so guessing an arbitrary id fails.
+* the provider never mints identities, so guessing an arbitrary id fails;
+* a selected user must still hold tenant access, so a suspended or deprovisioned
+  membership cannot authenticate even in development. This is the same rule the
+  OIDC login callback, session resolution and bearer provider apply — a demo
+  header is an identity selection, not an entitlement.
 """
 
 from __future__ import annotations
 
 from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.identity import AuthenticationContext
+from notes_service.application.use_cases.tenant_access import ensure_tenant_access
 from notes_service.domain.errors import ValidationError
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import UserId
@@ -65,6 +70,10 @@ class DemoIdentityProvider:
                 raise AuthenticationError("unknown demo user")
             if not user.is_active:
                 raise AuthenticationError("demo user is not active")
+            # Selecting a demo identity is not an entitlement to a tenant. The
+            # same rule guards the OIDC, session and bearer paths; without it a
+            # revoked membership would keep working in development.
+            ensure_tenant_access(uow, user_id=str(user.id))
 
             return Principal(
                 user_id=user.id,

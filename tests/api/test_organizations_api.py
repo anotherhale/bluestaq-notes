@@ -417,6 +417,13 @@ class TestMembershipLifecycle:
     def test_suspend_removes_all_authority(self, client: TestClient) -> None:
         org = create_org(client, ALICE, "acme")
         bob_membership = invite(client, ALICE, org["id"], BOB, "org_admin")
+        # A second, active membership keeps Bob authenticated, so the assertion
+        # below isolates org visibility (404) from authentication. Without it
+        # tenant access would already refuse Bob at the identity boundary (401,
+        # matching the bearer and session paths), and the test could not tell
+        # "the org is invisible" apart from "the caller is not signed in".
+        second = create_org(client, ALICE, "globex")
+        invite(client, ALICE, second["id"], BOB, "org_member")
 
         suspended = client.post(
             f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/suspend",
@@ -464,8 +471,14 @@ class TestMembershipLifecycle:
         )
 
     def test_reactivate_does_not_revive_a_deprovisioned_member(self, client: TestClient) -> None:
+        third = create_org(client, ALICE, "initech")
+        invite(client, ALICE, third["id"], BOB, "org_member")
         org = create_org(client, ALICE, "acme")
         bob_membership = invite(client, ALICE, org["id"], BOB, "org_member")
+        # Bob keeps tenant access through `initech`, so the assertions below test
+        # that reactivation is refused rather than that Bob can no longer sign
+        # in. Offboarding from his only tenant would instead deny him at the
+        # identity boundary (401), which is a different property.
         client.post(
             f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/deprovision",
             headers=auth_headers(ALICE),

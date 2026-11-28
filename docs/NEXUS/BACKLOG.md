@@ -4602,4 +4602,57 @@ had a **single** consumer (`application/use_cases/organization.py`), already upd
 exposed on no paged route, so its page size *is* its total and the number is honest. Do not "fix" it
 without a consumer that needs a window.
 
+## NEX-099 — Enforce tenant access on the demo identity provider (run `NEX-2026-11-28-99`)
 
+| Field | Value |
+| --- | --- |
+| Phase | 2 (identity & delegation) |
+| Priority | P0 (offboarding did not revoke access on the demo path) |
+| Status | **IMPLEMENTED + TESTED** locally; product CI pending on push |
+| Dependencies | NEX-006 (tenant access enforcement), NEX-017 (agent-token tenant access) |
+| Architecture | explicit authorization, fail-closed security, one shared decision seam |
+
+**Objective:** the shared tenant-access rule (`resolve_tenant_access` /
+`ensure_tenant_access`) was applied on four identity paths — OIDC login callback,
+per-request session resolution, the bearer provider, and agent-token resolution
+(NEX-017). The **demo identity provider** was an uncounted fifth that selected a
+user after checking only `is_active`, never the membership rule. A suspended or
+deprovisioned membership therefore still authenticated in development.
+
+**Why it mattered:** this is the same offboarding gap that NEX-006 closed for the
+three human paths and NEX-017 closed one layer up for agents. The demo provider is
+not production code, but it is a real authentication path in every dev/test
+deployment, and a defect that only exists "in development" trains the demo and the
+tests to accept a model the production paths reject. The `tenant_access.py`
+docstring said "shared by every path that establishes an identity" — it was not,
+so the prose was overclaiming, not merely imprecise.
+
+**Delivered:**
+
+- `infrastructure/identity/demo_provider.py` calls `ensure_tenant_access(uow, user_id=...)`
+  after the existing active-user check, reusing the shared seam rather than
+  re-deriving the rule.
+- `application/use_cases/tenant_access.py` docstring corrected to list the demo
+  provider as the fifth path, so the enumeration matches the code.
+- New `tests/authentication/test_tenant_access_demo.py` (6 tests): two positive
+  controls (active member, unaffiliated user → allowed to bootstrap) and four
+  refusals (suspended org, deprovisioned org, suspended membership, deprovisioned
+  membership).
+
+**Two API tests reconciled, not weakened.** `test_suspend_removes_all_authority` and
+`test_reactivate_does_not_revive_a_deprovisioned_member` in
+`tests/api/test_organizations_api.py` had been asserting a 404 for a member who had
+just lost their *only* membership. They passed before this change **only because
+the demo path bypassed the seam** — under the corrected behaviour the caller is
+refused at the identity boundary (401), which is the documented, bearer- and
+session-consistent outcome. Each test now gives Bob a second, active membership so
+he stays authenticated, which lets the original assertion test *the actual property*
+(org invisibility after suspension; reactivation refused 422) instead of conflating
+it with "is the caller signed in". The 404/422 assertions were not relaxed.
+
+**Load-bearing proved:** reverting only `demo_provider.py` on this tree turns exactly
+the four refusal tests red, while both positive controls stay green — the test is
+non-vacuous and does not merely encode the fix.
+
+**Tests:** full suite 1784 passed, 4 skipped (baseline 1778 + 6 new); `ruff format`
+327 files unchanged, `ruff check` clean, `mypy` 144 files clean, run bare as CI does.
