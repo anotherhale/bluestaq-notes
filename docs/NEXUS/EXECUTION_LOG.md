@@ -11245,3 +11245,26 @@ protocol and re-validated after replacement. `ruff format` left STATE.md unchang
 **Next action.** Poll the push run `46136930439` for `4413769` if a conclusive result is wanted
 for the docs head, then select the next dependency-ready slice from BACKLOG.md / ROADMAP.md.
 No delivery debt is outstanding through NEX-092.
+
+**Addendum (end of run 93).** Three corrections to the entry above, all made after it was
+written and after `c470ef8` was pushed.
+
+1. **The next action named above is stale.** It suggested polling push run `46136930439` for
+   `4413769`; that run and its `pull_request` twin both concluded `cancelled` — superseded by
+   the `c470ef8` pushes in the same concurrency group. The live heads are the two `c470ef8`
+   runs, `in_progress` at run close. Nothing about the product verdict changes: that anchors to
+   `3159555`, unchanged and green.
+2. **A fourth heredoc corruption occurred, and unlike the first three it was published.** The
+   PR #5 comment body was built with `cat > /tmp/pr93.txt << 'EOF'`; it self-interleaved and
+   truncated at line 18 mid-sentence, dropping the validation paragraph and the AI disclosure.
+   `gh pr comment 5 --body-file` then returned exit 0 and a comment URL — a publisher accepts
+   whatever bytes it is handed, so parse-time protection did not apply. Caught by fetching the
+   landed body (`gh api .../comments/<id> --jq .body`): 19 lines against the local 18, plus a
+   `furthrun` interleaving marker. Deleted (`404` confirmed), rewritten with `file_editor`,
+   reposted as `7238173479`, and re-fetched: 0 corruption markers, disclosure line present.
+3. **The PR #5 comment is therefore `7238173479`, not the deleted `7238169993`.** The earlier
+   comment `7238131300` (docs-head CI verdict for `61ec31a`) stands and was not touched.
+
+Rule carried forward: a heredoc feeding a *publisher* (`gh pr comment`, `gh issue comment`,
+`git commit -F`, any request body) is unsafe by default regardless of length, because the
+failure mode is silent success rather than a parse error.
