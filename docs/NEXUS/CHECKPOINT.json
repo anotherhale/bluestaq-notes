@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-73",
-  "timestamp": "2026-11-28T01:57Z",
+  "timestamp": "2026-11-28T02:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "09888ac",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049, NEX-058, NEX-065..NEX-072 verified. NEX-058's last open scope item (the claim-shape diagnostic that explains a fail-closed step-up) closed this run. Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
@@ -140,7 +140,17 @@
     "ci": "09888ac (NEX-073): 4/4 completed/success (backend x2, frontend x2), read 2026-11-28T01:56Z. Prior 38292d2 had frontend 1/2 (the race this commit fixes)."
   },
   "uncommitted_work": false,
-  "pr_state": "PR #5 open, unmerged, awaiting human review. Product head 09888ac. Body still lacks NEX-058..NEX-073 sections (delivery debt).",
+  "pr_state": {
+    "number": 5,
+    "state": "open",
+    "draft": false,
+    "mergeable": true,
+    "head": "0b98fa7",
+    "body_covers": "NEX-052..NEX-073",
+    "body_chars": 54625,
+    "note": "Body was stale at NEX-072; run 73 appended NEX-073. Prior STATE row called it a draft, which was wrong.",
+    "merging": "prohibited for automated runs; awaiting human review"
+  },
   "tracking_issue": {
     "issue": 2,
     "state": "open",
