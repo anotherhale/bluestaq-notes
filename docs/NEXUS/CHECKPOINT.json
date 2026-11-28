@@ -3,7 +3,9 @@
   "run_id": "NEX-2026-11-28-92",
   "timestamp": "2026-11-28T10:22Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "977b21f",
+  "commit": "d26a27f",
+  "product_commit": "977b21f",
+  "commit_note": "commit is the live head at the end of this run (the docs promotion). product_commit 977b21f is the tree CI validated; it is identical to the CI-verified head 6f8ca19 in every product file. Never trust this SHA - read the live head with git ls-remote.",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-091 VERIFIED. NEX-091 delivered external IdP identity linking (link, list, unlink). Next: select the next dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
@@ -33,6 +35,7 @@
     "number": 5,
     "state": "open",
     "draft": false,
+    "head_ref_oid": "d26a27f",
     "body_covers": "NEX-052..NEX-091; NEX-091 marked VERIFIED with CI cited",
     "nex_091_in_body": true
   },
