@@ -14,6 +14,16 @@ before the approval column existed - the same property the previous migration
 relied on for its own extension. No backfill: there is no approval to invent,
 and fabricating one would forge the audit trail the column exists to provide.
 
+That NULL-passes property is load-bearing for ``drafted_by`` as well, and the
+reason the three branches below contain **no** ``drafted_by IS NOT NULL`` guard.
+A row published before authors were recorded has ``drafted_by = NULL`` too, and
+``NULL IS NOT NULL`` is FALSE - so such a guard would make this revision's table
+rebuild abort with ``CHECK constraint failed`` on exactly the deployment this
+constraint is supposed to leave readable. Comparisons only: ``NULL <> 'x'`` is
+NULL and passes. Author presence for *new* rows is enforced by the domain
+(``separation_of_duties``) and ``PublishDraft``, which a grandfathered row never
+passes through.
+
 Revision ID: 5d2b7c41e9a8
 Revises: b4e6f1a2c9d7
 """
@@ -33,18 +43,23 @@ _CONSTRAINT = "policy_versions_separation_of_duties"
 # Kept as literals rather than imported from the model: a migration must describe
 # the schema as it is at *this* revision, so a later change to the model cannot
 # silently rewrite history here.
+#
+# No ``drafted_by IS NOT NULL`` / ``approved_by IS NOT NULL`` guard: a legacy
+# in-force row has both NULL, ``NULL IS NOT NULL`` is FALSE, and this revision
+# rebuilds the table, so any such guard would abort the upgrade on exactly the
+# rows the constraint must tolerate. ``NULL <> 'x'`` is NULL and passes a CHECK.
 _THREE_WAY = (
     "status = 'draft'"
-    " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
-    " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
+    " OR (status = 'approved' AND drafted_by <> approved_by)"
+    " OR (status IN ('published','retired')"
     " AND drafted_by <> published_by AND drafted_by <> approved_by"
     " AND approved_by <> published_by)"
 )
 
 _PREVIOUS = (
     "status = 'draft'"
-    " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
-    " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
+    " OR (status = 'approved' AND drafted_by <> approved_by)"
+    " OR (status IN ('published','retired')"
     " AND drafted_by <> published_by AND drafted_by <> approved_by)"
 )
 

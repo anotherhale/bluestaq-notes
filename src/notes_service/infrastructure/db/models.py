@@ -816,9 +816,13 @@ class PolicyVersionRow(Base):
     ``drafted_by`` records the author, and a third schema rule enforces separation of
     duties (NEX-050) against a row written by something other than the use cases: a
     published or retired row must name an author *different* from its publisher. The
-    column is nullable only so a pre-NEX-050 row remains readable; the constraint
-    makes that leniency irrelevant to anything in force, because a row that cannot
-    satisfy it cannot be published at all.
+    column is nullable only so a pre-NEX-050 row remains readable, and the constraint
+    therefore tests for inequality alone - a NULL author must survive the table
+    rebuild an upgrade performs, because that rebuild sees the legacy row before any
+    application code does (NEX-101). A table-wide CHECK cannot distinguish a
+    grandfathered row from a malformed new one, so *presence* of the author is not
+    this constraint's job: the domain refuses to publish a version with no recorded
+    author, and no application path can reach the store without one.
     """
 
     __tablename__ = "policy_versions"
@@ -865,18 +869,26 @@ class PolicyVersionRow(Base):
             " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
             name="policy_versions_publication_data_consistent",
         ),
-        # Separation of duties (NEX-050, extended by NEX-065 and NEX-078): anything
-        # past draft names an author, and the author, approver and publisher are
-        # pairwise distinct. An author approving their own rules is not a review, and
-        # an approver who also publishes has performed both halves of the two-person
-        # control alone, so the third pair is checked as well. A legacy in-force row
-        # carries a NULL approver, and a NULL comparison is NULL, which a CHECK
-        # constraint treats as passing rather than failing - so widening the rule
-        # does not invalidate data written before approvals were recorded.
+        # Separation of duties (NEX-050, extended by NEX-065 and NEX-078): the
+        # author, approver and publisher of a version in force are pairwise
+        # distinct. An author approving their own rules is not a review, an author
+        # publishing their own rules has forced them, and an approver who also
+        # publishes has performed both halves of the two-person control alone.
+        #
+        # The predicate is *comparisons only* - no ``drafted_by IS NOT NULL`` and no
+        # ``approved_by IS NOT NULL``. A legacy in-force row carries NULL in both,
+        # and ``NULL IS NOT NULL`` is FALSE, so such a guard would be violated by
+        # history; ``NULL <> 'x'`` is NULL, which a CHECK passes. Since a CHECK is
+        # table-wide it cannot tell a grandfathered row from a malformed new one,
+        # so author/approver *presence* is enforced where it can be: the domain
+        # (``separation_of_duties``, ``approval_of_duties``) and ``PublishDraft``.
+        # Do not "tighten" this by adding an IS NOT NULL guard - that is precisely
+        # what made ``upgrade head`` impossible on a database with a published
+        # legacy policy (NEX-101).
         CheckConstraint(
             "status = 'draft'"
-            " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
-            " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
+            " OR (status = 'approved' AND drafted_by <> approved_by)"
+            " OR (status IN ('published','retired')"
             " AND drafted_by <> published_by AND drafted_by <> approved_by"
             " AND approved_by <> published_by)",
             name="policy_versions_separation_of_duties",
