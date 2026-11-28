@@ -11629,11 +11629,16 @@ run deliberately left open.
 ### Files changed
 
 Docs only — `docs/NEXUS/{STATE.md,BACKLOG.md,EXECUTION_LOG.md,CHECKPOINT.json}`. No source, no
-migration, no dependency change.
+migration, no dependency change. Two docs commits: `cf51518` (promotion + PR/issue delivery record)
+and the commit carrying this entry (final CI rows for the docs head).
 
 ### Tests and gates
 
 - CI (authoritative): 4/4 on `87936d4` itself, 0 failed, 0 skipped.
+- CI on the docs head `cf51518`: 4/4 as well — runs `46146365871` (push) and `46146370519`
+  (pull_request), Backend 12/12 and Frontend 11/11 steps green, 0 failed, 0 skipped, both
+  `head_sha = cf51518`. Read per run *and* per job: `gh run watch --exit-status` also exits 0 for a
+  *cancelled* run, so the exit code alone is not the verdict.
 - Local docs gates: `ruff format --check` (325 files already formatted), `ruff check` (all checks
   passed). `CHECKPOINT.json` revalidated with `python3 -m json.tool`.
 
