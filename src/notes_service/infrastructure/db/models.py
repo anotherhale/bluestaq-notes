@@ -401,6 +401,9 @@ class UserSessionRow(Base):
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    #: Assurance the human proved at login (ADR-015). Nullable for rows created
+    #: before the column existed; read back as single-factor, never as stepped up.
+    assurance: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     idle_expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
@@ -469,6 +472,10 @@ class DelegationRow(Base):
     )
     capabilities: Mapped[str] = mapped_column(String(1024), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    #: Assurance the delegator proved when granting (ADR-015). Nullable because
+    #: rows written before the column existed have no recorded proof, and an
+    #: absent value must read as single-factor — never as stepped up.
+    assurance: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
@@ -544,6 +551,22 @@ class ApprovalRequestRow(Base):
     # Why the grant was withdrawn, kept apart from ``reason`` so the approval
     # justification is not lost when the authorisation is taken back.
     revoke_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Two-person control (NEX-059). ``required_approvals`` is stamped when the
+    # request is opened from a policy that imposes the ``second-approver``
+    # obligation; the two signatory columns record the distinct humans. The
+    # server default of 1 is what every pre-existing row means: one approver was
+    # enough, and no backfill can invent a second signature that never happened.
+    required_approvals: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    second_approver_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    second_decided_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    second_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    denied_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # Optimistic concurrency for the decision itself. A stale save would rewrite
     # ``status``/``consumed_at`` from a pre-decision copy and silently restore
     # authority the human already withdrew or spent.
@@ -551,6 +574,10 @@ class ApprovalRequestRow(Base):
 
     __table_args__ = (
         CheckConstraint("status IN ('pending','approved','denied','revoked')", name="status_valid"),
+        # A request may require one or two approvers, never more and never zero:
+        # zero would mean "nobody must approve", which is the absence of a control
+        # stored as though it were one.
+        CheckConstraint("required_approvals IN (1,2)", name="required_approvals_valid"),
         Index("ix_agent_approval_requests_agent_status", "agent_id", "status"),
     )
 
@@ -565,6 +592,18 @@ class ToolInvocationRow(Base):
 
     ``idempotency_key`` is unique per agent — not globally — so one agent
     reusing a key cannot block or observe another agent's invocation.
+
+    ``policy_versions`` holds the JSON array of policy versions in force when the
+    gateway decided the call (NEX-052), sealed into ``intent_hash``. It is stored
+    as JSON text for the same reason ``PolicyVersionRow.rules`` is: the column is
+    a durable record of a decision, not a queryable dimension.
+
+    ``decision_evidence`` holds the JSON object of extra proof a policy's
+    ``enhanced-audit`` obligation required (NEX-055), also sealed into
+    ``intent_hash``: the matched rules, the obligations imposed, and the
+    attribute snapshot the decision used. Empty string means "not an
+    enhanced-audit attempt", which is the state of every row written before
+    NEX-055 and reads back as ``None``.
     """
 
     __tablename__ = "tool_invocations"
@@ -592,6 +631,8 @@ class ToolInvocationRow(Base):
     previous_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     intent_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     outcome_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    policy_versions: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    decision_evidence: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     __table_args__ = (
         CheckConstraint("status IN ('started','succeeded','failed','denied')", name="status_valid"),
@@ -691,6 +732,16 @@ class OperatorGrantRow(Base):
     ``granted_by`` is nullable and that is meaningful: ``NULL`` marks a grant the
     deployment configuration issued, which is what lets the seed path reconcile
     its own grants without touching grants a human issued.
+
+    ``rationale`` is the *why* (NEX-076). A human-issued grant carries the
+    operator's stated reason; a configuration grant has none, because its reason is
+    the deployment itself. That pairing is enforced where a *person* supplies it,
+    not by this column's nullability: ``granted_by`` is a ``SET NULL`` foreign key,
+    so deleting the issuer's account leaves a NULL issuer beside a surviving
+    ``rationale`` (NEX-080). The alternative — refusing that shape — made every
+    read of the store, including the gate lookup, raise once an issuer was
+    deleted. Storing the reason still closes the gap where intent lived only in
+    the access log, which recorded the issuer and instant but never the reason.
     """
 
     __tablename__ = "operator_grants"
@@ -706,10 +757,33 @@ class OperatorGrantRow(Base):
     )
     not_before: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Revocation (NEX-079): recorded as a fact rather than applied by deleting the
+    # row, so an audit can see authority was taken away, by whom, and when. The
+    # revoke path writes both columns together; the CHECK below only forbids the
+    # incoherent half (an actor with no instant), because ``revoked_by`` is SET NULL
+    # on user deletion and a revocation deliberately outlives its revoker. That is
+    # the point: losing the record because the revoker's account was later removed
+    # would erase the revocation itself.
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "scope", "granted_at", name="uq_operator_grants_identity"),
         CheckConstraint("length(scope) > 0", name="scope_not_empty"),
+        CheckConstraint("rationale IS NULL OR length(rationale) > 0", name="rationale_not_empty"),
+        # A revocation instant may outlive its actor (NEX-080): ``revoked_by`` is a
+        # ``SET NULL`` foreign key, so deleting the revoker's account legally leaves
+        # ``revoked_at`` set with a NULL ``revoked_by`` — the record of the
+        # revocation survives, which is its whole purpose. The constraint therefore
+        # only forbids the genuinely incoherent half: a named revoker with no
+        # instant, which reads as a revocation that never happened.
+        CheckConstraint(
+            "revoked_by IS NULL OR revoked_at IS NOT NULL",
+            name="revocation_actor_requires_instant",
+        ),
         Index("ix_operator_grants_user_scope", "user_id", "scope"),
     )
 
@@ -738,6 +812,13 @@ class PolicyVersionRow(Base):
     ``id`` is a surrogate key so ``history`` can recover insertion order without
     relying on ``created_at`` precision, and it is what makes an ``UPDATE ... WHERE
     id = ?`` unambiguous when two rows share a version number across policy ids.
+
+    ``drafted_by`` records the author, and a third schema rule enforces separation of
+    duties (NEX-050) against a row written by something other than the use cases: a
+    published or retired row must name an author *different* from its publisher. The
+    column is nullable only so a pre-NEX-050 row remains readable; the constraint
+    makes that leniency irrelevant to anything in force, because a row that cannot
+    satisfy it cannot be published at all.
     """
 
     __tablename__ = "policy_versions"
@@ -751,22 +832,54 @@ class PolicyVersionRow(Base):
     created_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     published_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    drafted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("policy_id", "version_number", name="uq_policy_versions_policy_version"),
         CheckConstraint(
-            "status IN ('draft','published','retired')", name="policy_versions_status_valid"
+            "status IN ('draft','approved','published','retired')",
+            name="policy_versions_status_valid",
         ),
         CheckConstraint("version_number >= 1", name="policy_versions_version_positive"),
         CheckConstraint("length(policy_id) > 0", name="policy_versions_policy_id_not_empty"),
-        # A published row must carry its publication data, and a draft must not.
-        # The domain enforces this on construction; the schema enforces it against
-        # a row that was written by something other than the domain.
+        # Each lifecycle state carries exactly the record it is entitled to: a draft
+        # has none, an approved version has an approval and no publication, and a
+        # version in force has a publication and - unless it predates NEX-065 - an
+        # approval too. The domain enforces this on construction; the schema
+        # enforces it against a row written by something other than the domain, so
+        # an approval cannot be invented after the fact. The approval is optional
+        # for a version in force only because c4e7a1b93d05 must rebuild a table that
+        # may already hold such a row; a half-written approval is still refused.
         CheckConstraint(
-            "(status = 'draft' AND published_at IS NULL AND published_by IS NULL)"
+            "(status = 'draft'"
+            " AND published_at IS NULL AND published_by IS NULL"
+            " AND approved_at IS NULL AND approved_by IS NULL)"
+            " OR (status = 'approved'"
+            " AND approved_at IS NOT NULL AND approved_by IS NOT NULL"
+            " AND published_at IS NULL AND published_by IS NULL)"
             " OR (status IN ('published','retired')"
-            " AND published_at IS NOT NULL AND published_by IS NOT NULL)",
+            " AND published_at IS NOT NULL AND published_by IS NOT NULL"
+            " AND ((approved_at IS NULL AND approved_by IS NULL)"
+            " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
             name="policy_versions_publication_data_consistent",
+        ),
+        # Separation of duties (NEX-050, extended by NEX-065 and NEX-078): anything
+        # past draft names an author, and the author, approver and publisher are
+        # pairwise distinct. An author approving their own rules is not a review, and
+        # an approver who also publishes has performed both halves of the two-person
+        # control alone, so the third pair is checked as well. A legacy in-force row
+        # carries a NULL approver, and a NULL comparison is NULL, which a CHECK
+        # constraint treats as passing rather than failing - so widening the rule
+        # does not invalidate data written before approvals were recorded.
+        CheckConstraint(
+            "status = 'draft'"
+            " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
+            " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
+            " AND drafted_by <> published_by AND drafted_by <> approved_by"
+            " AND approved_by <> published_by)",
+            name="policy_versions_separation_of_duties",
         ),
         Index("ix_policy_versions_policy_status", "policy_id", "status"),
         Index(
@@ -776,6 +889,42 @@ class PolicyVersionRow(Base):
             sqlite_where=text("status = 'published'"),
             postgresql_where=text("status = 'published'"),
         ),
+    )
+
+
+class OperatorAccessRow(Base):
+    """One granted read of a platform-wide operational view, durably stored (NEX-072).
+
+    ``InMemoryOperatorAccessLog`` proved the port but kept the record in the
+    process: it was per-worker and cleared on restart, so the answer to "who read
+    this" was lost the moment the deployment restarted — and in a multi-worker
+    deployment the log an operator could read described only the worker that
+    answered the read. That is the same defect R40 recorded for grants, on the
+    record that exists *because* a privileged read must be auditable.
+
+    The table is append-only by construction: there is no update path in the
+    adapter and ``record`` only ever inserts. ``id`` is a surrogate autoincrement
+    key because the port promises ``recent`` newest-first, and ordering by a
+    monotonic integer is the only portable way to recover insertion order — two
+    reads can share a timestamp, and sorting by ``at`` would make the order
+    implementation-defined.
+
+    ``user_id`` is **not** a foreign key to ``users`` and does not cascade. An
+    access record must outlive the deletion of the account that made it: cascading
+    would let deleting a user erase the evidence of what that user read, which is
+    exactly what an audit trail must not permit. The id is stored as a value.
+    """
+
+    __tablename__ = "operator_access_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUIDType, nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("length(operation) > 0", name="operation_not_empty"),
+        Index("ix_operator_access_log_at_id", "at", "id"),
     )
 
 
@@ -792,6 +941,7 @@ __all__ = [
     "NotePermissionRow",
     "NoteRow",
     "NoteStarRow",
+    "OperatorAccessRow",
     "OperatorGrantRow",
     "OrganizationMembershipRow",
     "OrganizationRow",

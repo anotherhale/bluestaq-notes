@@ -41,6 +41,8 @@ from notes_service.domain.governance.policy import (
     PolicyVersion,
     evaluate,
     new_policy_version,
+    separation_of_duties,
+    supersedes,
 )
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
@@ -56,8 +58,14 @@ def _rule(rule_id: str = "r1", effect: PolicyEffect = PolicyEffect.ALLOW, when=N
 
 
 def _published(rules: tuple[PolicyRule, ...], *, policy_id: str = "test-policy") -> PolicyVersion:
-    draft = new_policy_version(policy_id=policy_id, version=1, rules=rules, rationale="test policy")
-    return draft.publish(now=NOW, published_by="alice")
+    draft = new_policy_version(
+        policy_id=policy_id,
+        version=1,
+        rules=rules,
+        rationale="test policy",
+        drafted_by="dana",
+    )
+    return draft.approve(now=NOW, approved_by="reviewer-1").publish(now=NOW, published_by="alice")
 
 
 # --------------------------------------------------------------------------- #
@@ -231,6 +239,44 @@ def test_a_draft_cannot_be_evaluated() -> None:
         evaluate((draft,), {})
 
 
+def test_a_retired_version_cannot_be_evaluated() -> None:
+    """A superseded release must not stay in force (regression: fail-open).
+
+    A retired version is a perfectly valid object, so the only thing marking it
+    out of force is its status. Before this test, ``evaluate`` refused a draft
+    but *consulted* a retired version, so a caller that passed a policy's
+    ``history()`` instead of its ``all_published()`` would keep enforcing rules
+    a later release had already replaced — an allow rule would still allow.
+    """
+    draft = new_policy_version(
+        policy_id="p",
+        version=1,
+        rules=(_rule("allow-all", PolicyEffect.ALLOW),),
+        rationale="x",
+        drafted_by="dana",
+    )
+    retired = (
+        draft.approve(now=NOW, approved_by="reviewer-1")
+        .publish(now=NOW, published_by="alice")
+        .retire()
+    )
+    assert retired.status is PolicyStatus.RETIRED
+    with pytest.raises(ValidationError, match="is retired and cannot be evaluated"):
+        evaluate((retired,), {})
+
+
+def test_a_retired_version_alongside_a_published_one_still_refuses() -> None:
+    """One retired version in the set refuses the whole evaluation, not just itself.
+
+    Silently skipping it would be the other half of the same bug: the caller
+    would believe the retired rules applied when they did not.
+    """
+    live = _published((_rule("live", PolicyEffect.ALLOW, None),), policy_id="alpha")
+    stale = _published((_rule("stale", PolicyEffect.ALLOW, None),), policy_id="beta").retire()
+    with pytest.raises(ValidationError, match="is retired and cannot be evaluated"):
+        evaluate((live, stale), {})
+
+
 def test_decision_records_the_versions_consulted() -> None:
     """A decision must name which policy versions produced it."""
     a = _published((_rule("r", PolicyEffect.ALLOW, None),), policy_id="alpha")
@@ -254,8 +300,12 @@ def test_a_draft_carries_no_publication_data() -> None:
 
 
 def test_publish_returns_a_new_immutable_value() -> None:
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
-    published = draft.publish(now=NOW, published_by="alice")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
+    published = draft.approve(now=NOW, approved_by="reviewer-1").publish(
+        now=NOW, published_by="alice"
+    )
     assert published.status is PolicyStatus.PUBLISHED
     assert published.published_at == NOW
     assert published.published_by == "alice"
@@ -266,8 +316,12 @@ def test_publish_returns_a_new_immutable_value() -> None:
 
 
 def test_publishing_twice_is_an_invariant_violation() -> None:
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
-    published = draft.publish(now=NOW, published_by="alice")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
+    published = draft.approve(now=NOW, approved_by="reviewer-1").publish(
+        now=NOW, published_by="alice"
+    )
     with pytest.raises(InvariantViolation, match="already published"):
         published.publish(now=NOW, published_by="alice")
 
@@ -280,8 +334,12 @@ def test_only_a_published_version_can_be_retired() -> None:
 
 def test_retire_preserves_publication_provenance() -> None:
     """Retiring supersedes; it does not erase who published what, or when."""
-    draft = new_policy_version(policy_id="p", version=1, rules=(_rule(),), rationale="x")
-    published = draft.publish(now=NOW, published_by="alice")
+    draft = new_policy_version(
+        policy_id="p", version=1, rules=(_rule(),), rationale="x", drafted_by="dana"
+    )
+    published = draft.approve(now=NOW, approved_by="reviewer-1").publish(
+        now=NOW, published_by="alice"
+    )
     retired = published.retire()
     assert retired.status is PolicyStatus.RETIRED
     assert retired.published_at == NOW
@@ -335,3 +393,157 @@ def test_rationale_is_bounded() -> None:
 def test_version_number_must_be_positive() -> None:
     with pytest.raises(ValidationError, match="at least 1"):
         new_policy_version(policy_id="p", version=0, rules=(_rule(),), rationale="x")
+
+
+# --------------------------------------------------------------------------- #
+# A version in force from before approval was recorded (NEX-066)
+# --------------------------------------------------------------------------- #
+
+
+def _legacy_published() -> PolicyVersion:
+    """A row as it existed before NEX-065: in force, with no approval columns."""
+    return PolicyVersion(
+        policy_id="legacy",
+        version=1,
+        rules=(_rule("allow-all", PolicyEffect.ALLOW),),
+        rationale="published before approval became a recorded transition",
+        status=PolicyStatus.PUBLISHED,
+        created_at=NOW,
+        published_at=NOW,
+        published_by="alice",
+        drafted_by="dana",
+    )
+
+
+def test_a_legacy_published_version_still_loads() -> None:
+    """Refusing to hydrate it would withdraw a live policy and deny everything it allowed."""
+    legacy = _legacy_published()
+    assert legacy.status is PolicyStatus.PUBLISHED
+    assert legacy.has_approval_record is False
+
+
+def test_a_legacy_version_still_applies_its_rules() -> None:
+    legacy = _legacy_published()
+    assert evaluate((legacy,), {}).allowed
+
+
+def test_a_legacy_version_never_claims_an_approval() -> None:
+    """``has_approval_record`` is how a caller asks "was this reviewed?" - status is not."""
+    assert _legacy_published().has_approval_record is False
+
+
+def test_an_approved_version_reports_its_approval() -> None:
+    published = _published((_rule(),))
+    assert published.has_approval_record is True
+    assert published.approved_by == "reviewer-1"
+
+
+def test_a_half_written_approval_is_refused_at_construction() -> None:
+    """Tolerating "no approval" must not tolerate a corrupt record."""
+    with pytest.raises(ValidationError, match="completely or not at all"):
+        PolicyVersion(
+            policy_id="corrupt",
+            version=1,
+            rules=(_rule(),),
+            rationale="r",
+            status=PolicyStatus.PUBLISHED,
+            created_at=NOW,
+            published_at=NOW,
+            published_by="alice",
+            drafted_by="dana",
+            approved_at=NOW,
+        )
+
+
+# --------------------------------------------------------------------------- #
+# supersedes: a release must outrank the one in force
+# --------------------------------------------------------------------------- #
+
+
+def _release(version: int) -> PolicyVersion:
+    """A published version carrying a chosen version number, built via the factory."""
+    draft = new_policy_version(
+        policy_id="p", version=version, rules=(_rule(),), rationale="r", drafted_by="dana"
+    )
+    return draft.approve(now=NOW, approved_by="reviewer-1").publish(now=NOW, published_by="alice")
+
+
+def test_supersedes_allows_a_newer_release() -> None:
+    supersedes(_release(3), _release(2))
+
+
+def test_supersedes_allows_the_first_release() -> None:
+    """Nothing in force means nothing to outrank."""
+    supersedes(_release(1), None)
+
+
+def test_supersedes_refuses_an_older_release() -> None:
+    """The fail-open this guard exists to close: publishing a superseded version.
+
+    A retired version is still a well-formed, previously-approved value, so every
+    other check in the lifecycle passes it. Only the version number says it is no
+    longer current.
+    """
+    with pytest.raises(InvariantViolation, match="is already in force and is newer"):
+        supersedes(_release(1), _release(2))
+
+
+def test_supersedes_does_not_refuse_an_equal_version() -> None:
+    """Re-publishing what is already in force is the store's transition to refuse.
+
+    Kept out of this guard so the two failures stay distinguishable: this one
+    answers "is it newer?", the store answers "was it approved?".
+    """
+    supersedes(_release(2), _release(2))
+
+
+# -- separation of duties (three-way) ---------------------------------------
+def test_separation_of_duties_accepts_three_distinct_principals() -> None:
+    """Author, approver and publisher as three different principals is the goal."""
+    separation_of_duties(author="dana", approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_approver_who_also_publishes() -> None:
+    """The gap NEX-078 closes: one operator performs both halves of the control.
+
+    Before this rule only ``author != publisher`` was checked, so an approver
+    could then publish the very draft they reviewed and the two-person control
+    collapsed into one person after a third wrote the rules.
+    """
+    with pytest.raises(InvariantViolation, match="bob approved it"):
+        separation_of_duties(author="dana", approver="bob", publisher="bob", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_author_who_publishes() -> None:
+    with pytest.raises(InvariantViolation, match="alice drafted it"):
+        separation_of_duties(author="alice", approver="bob", publisher="alice", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_author_who_approves() -> None:
+    with pytest.raises(InvariantViolation, match="both drafted and approved"):
+        separation_of_duties(author="bob", approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_unrecorded_author() -> None:
+    """Fail closed: a version with no recorded author cannot be checked, so it
+    must not be published — otherwise the control is bypassed by omitting a
+    field."""
+    with pytest.raises(InvariantViolation, match="drafting principal is not recorded"):
+        separation_of_duties(author=None, approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_unrecorded_approver() -> None:
+    with pytest.raises(InvariantViolation, match="no approving principal is recorded"):
+        separation_of_duties(author="dana", approver=None, publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_checks_every_pair_not_just_one() -> None:
+    """All three pairs are refused, so the rule cannot be satisfied by fixing one."""
+    refusals = (
+        {"author": "a", "approver": "b", "publisher": "a"},
+        {"author": "a", "approver": "a", "publisher": "b"},
+        {"author": "a", "approver": "b", "publisher": "b"},
+    )
+    for principals in refusals:
+        with pytest.raises(InvariantViolation):
+            separation_of_duties(ref="p v1", **principals)  # type: ignore[arg-type]

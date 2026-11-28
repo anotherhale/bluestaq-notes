@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import ALICE, BOB, CAROL, auth_headers
+from tests.conftest import ALICE, BOB, CAROL, DEMO_USERS, auth_headers
 
 
 def create_org(client: TestClient, owner: str, slug: str, name: str | None = None) -> dict:
@@ -176,6 +176,179 @@ class TestTenantIsolation:
         assert "manage_roles" not in body["caller_capabilities"]
 
 
+class TestOrganizationRoster:
+    """Who the roster lists after a membership changes lifecycle state.
+
+    Offboarding is a soft delete: the row survives for audit history, so the
+    listing has to exclude it explicitly. The team roster already does
+    (``SqlAlchemyTeamMembershipRepository.list_for_team``); the organization
+    roster did not, and showed deprovisioned people as current members.
+    """
+
+    def roster(self, client: TestClient, org_id: str) -> dict:
+        response = client.get(
+            f"/api/v1/organizations/{org_id}/members", headers=auth_headers(ALICE)
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_a_deprovisioned_member_leaves_the_roster(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+        invite(client, ALICE, org["id"], BOB, "org_member")
+        carol_membership = invite(client, ALICE, org["id"], CAROL, "org_member")
+        assert (
+            client.post(
+                f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/deprovision",
+                headers=auth_headers(ALICE),
+            ).status_code
+            == 200
+        )
+
+        roster = self.roster(client, org["id"])
+
+        users = [member["user_id"] for member in roster["items"]]
+        assert CAROL not in users, "an offboarded person is still listed as a member"
+        assert set(users) == {ALICE, BOB}
+        # The total describes the roster, so it must not count the offboarded row
+        # either — otherwise a client sees "3 members" above two rows.
+        assert roster["meta"]["total"] == 2
+
+    def test_a_suspended_member_stays_in_the_roster(self, client: TestClient) -> None:
+        # Suspension is a reversible pause, not an offboarding: the membership
+        # id must stay reachable or nothing could ever be reactivated. Filtering
+        # the roster to active members only would look like a fix and break that.
+        org = create_org(client, ALICE, "acme")
+        bob_membership = invite(client, ALICE, org["id"], BOB, "org_member")
+        client.post(
+            f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/suspend",
+            headers=auth_headers(ALICE),
+        )
+
+        roster = self.roster(client, org["id"])
+
+        listed = {member["user_id"]: member for member in roster["items"]}
+        assert BOB in listed, "a suspended member must stay on the roster to be reactivated"
+        assert listed[BOB]["status"] == "suspended"
+        assert listed[BOB]["id"] == bob_membership["id"]
+        assert roster["meta"]["total"] == 2
+
+    def test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster(
+        self, client: TestClient
+    ) -> None:
+        # Offboarding is terminal, so the roster's silence about that person is
+        # consistent rather than lossy: there is no action left to take on them.
+        org = create_org(client, ALICE, "acme")
+        carol_membership = invite(client, ALICE, org["id"], CAROL, "org_member")
+        client.post(
+            f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/deprovision",
+            headers=auth_headers(ALICE),
+        )
+
+        response = client.post(
+            f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/reactivate",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 422, response.text
+        assert CAROL not in [m["user_id"] for m in self.roster(client, org["id"])["items"]]
+
+
+class TestOrganizationRosterPaging:
+    """The roster must be readable one window at a time (NEX-098).
+
+    The route answered with every member of the organization and derived ``total``
+    from that same list. There is no per-organization member cap, so a large
+    tenant made one read — and one response — grow without bound, and the caller
+    had no way to ask for a window. A page-derived total is also the NEX-082…
+    NEX-097 family's defect: it cannot distinguish a complete listing from a
+    truncated one.
+    """
+
+    def add_invitees(self, client: TestClient, org_id: str, count: int) -> list[str]:
+        # ALICE is the creating owner, so invitees are drawn from the remaining
+        # seeded identities; the roster total is one more than this count. Read
+        # them from the seed rather than inventing ids, so a seed change is not a
+        # silent divergence between the fixture and the generator.
+        invitees = [spec.id for spec in DEMO_USERS if spec.id != ALICE][:count]
+        assert len(invitees) == count, "not enough seeded identities to invite"
+        return [invite(client, ALICE, org_id, user, "org_member")["id"] for user in invitees]
+
+    def test_total_is_the_roster_size_not_the_page_size(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 3)  # owner + three invitees
+
+        page = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=1&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert len(page["items"]) == 1
+        # A page-derived total would read "1" and hide that three more exist.
+        assert page["meta"]["total"] == 4
+        assert page["meta"]["limit"] == 1
+        assert page["meta"]["offset"] == 0
+
+    def test_offset_walks_the_roster_without_repeating_a_row(self, client: TestClient) -> None:
+        # Memberships invited in one burst can share created_at, so the adapter's
+        # order must be total or an OFFSET window can repeat a row while skipping
+        # another. This pins the observable contract, not the tiebreaker.
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 3)
+
+        first = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=2&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+        second = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=2&offset=2",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+
+        first_ids = {item["id"] for item in first}
+        second_ids = {item["id"] for item in second}
+        assert first_ids.isdisjoint(second_ids)
+        assert len(first_ids | second_ids) == 4
+
+    def test_a_page_beyond_the_roster_is_empty_not_an_error(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+
+        page = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=10&offset=5",
+            headers=auth_headers(ALICE),
+        )
+
+        assert page.status_code == 200
+        assert page.json()["items"] == []
+        # The total still describes the set, so an empty page past the end is
+        # distinguishable from an empty organization.
+        assert page.json()["meta"]["total"] == 1
+
+    def test_a_page_size_beyond_the_cap_is_rejected(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+
+        response = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=201",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 422, response.text
+
+    def test_the_window_does_not_widen_the_authorization_check(self, client: TestClient) -> None:
+        # Paging must not become a way to read another tenant's roster: the
+        # caller still has to belong to the organization. The outsider is a
+        # seeded identity who was never invited, not one of the invitees.
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 2)
+        outsider = DEMO_USERS[-1].id
+
+        response = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=1&offset=0",
+            headers=auth_headers(outsider),
+        )
+
+        assert response.status_code == 404, response.text
+
+
 class TestPrivilegeEscalation:
     def test_admin_cannot_grant_a_role_above_their_own(self, client: TestClient) -> None:
         org = create_org(client, ALICE, "acme")
@@ -244,6 +417,13 @@ class TestMembershipLifecycle:
     def test_suspend_removes_all_authority(self, client: TestClient) -> None:
         org = create_org(client, ALICE, "acme")
         bob_membership = invite(client, ALICE, org["id"], BOB, "org_admin")
+        # A second, active membership keeps Bob authenticated, so the assertion
+        # below isolates org visibility (404) from authentication. Without it
+        # tenant access would already refuse Bob at the identity boundary (401,
+        # matching the bearer and session paths), and the test could not tell
+        # "the org is invisible" apart from "the caller is not signed in".
+        second = create_org(client, ALICE, "globex")
+        invite(client, ALICE, second["id"], BOB, "org_member")
 
         suspended = client.post(
             f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/suspend",
@@ -291,8 +471,14 @@ class TestMembershipLifecycle:
         )
 
     def test_reactivate_does_not_revive_a_deprovisioned_member(self, client: TestClient) -> None:
+        third = create_org(client, ALICE, "initech")
+        invite(client, ALICE, third["id"], BOB, "org_member")
         org = create_org(client, ALICE, "acme")
         bob_membership = invite(client, ALICE, org["id"], BOB, "org_member")
+        # Bob keeps tenant access through `initech`, so the assertions below test
+        # that reactivation is refused rather than that Bob can no longer sign
+        # in. Offboarding from his only tenant would instead deny him at the
+        # identity boundary (401), which is a different property.
         client.post(
             f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/deprovision",
             headers=auth_headers(ALICE),

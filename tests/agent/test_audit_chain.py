@@ -23,6 +23,9 @@ import uuid
 from notes_service.domain.agent.audit_chain import (
     GENESIS_HASH,
     ChainAnchor,
+    _canonical,
+    _sha256,
+    _timestamp,
     verify_chain,
 )
 from notes_service.domain.agent.tools import InvocationStatus, ToolInvocation, resolve_tool
@@ -205,3 +208,101 @@ class TestTruncatingTheTailIsDetected:
 
         assert verdict.verified is True
         assert verdict.checked == 0
+
+
+class TestPolicyVersionCitationIsVersionedIntoTheSeal:
+    """NEX-052 added ``policy_versions`` to the intent payload. That is a change
+    to a hash function over data that is already stored, which is exactly the
+    kind of change that can invalidate every historical row.
+
+    The field is therefore versioned *into* the payload rather than added to it:
+    an invocation that consulted no policy must seal to the byte-identical
+    ``v: 1`` payload it always did, and only one that cites policy moves to
+    ``v: 2``. These tests pin both halves — the compatibility promise and the
+    fact that a citation is genuinely sealed rather than merely recorded.
+    """
+
+    def test_an_uncited_entry_seals_exactly_as_the_v1_payload(self) -> None:
+        # The pre-NEX-052 payload, rebuilt here by hand. If ``intent_hash`` ever
+        # adds a key to every payload, this stops matching and every historical
+        # audit row starts reporting as tampered.
+        entry = _begin(key="k-v1", note="n1")
+
+        expected = _sha256(
+            _canonical(
+                {
+                    "v": 1,
+                    "kind": "tool_invocation.intent",
+                    "id": str(entry.id),
+                    "agent_id": str(AGENT),
+                    "token_id": None,
+                    "tool_name": entry.tool_name,
+                    "capability": entry.capability.value,
+                    "idempotency_key": "k-v1",
+                    "arguments_digest": entry.arguments_digest,
+                    "resource_ref": "note:n1",
+                    "approval_request_id": None,
+                    "invoked_at": _timestamp(entry.invoked_at),
+                    "previous_hash": GENESIS_HASH,
+                }
+            )
+        )
+
+        assert entry.policy_versions == ()
+        assert entry.intent_hash == expected
+
+    def test_a_cited_entry_is_sealed_under_v2_and_still_verifies(self) -> None:
+        entry = ToolInvocation.begin(
+            agent_id=AGENT,
+            token_id=None,
+            tool=resolve_tool("delete_note"),
+            idempotency_key="k-v2",
+            arguments={"note_id": "n1"},
+            resource_ref="note:n1",
+            previous_hash=GENESIS_HASH,
+            chain_sequence=1,
+            policy_versions=("gateway@v1",),
+        )
+        entry.succeed(outcome="deleted")
+
+        assert entry.policy_versions == ("gateway@v1",)
+        assert verify_chain([entry]).verified is True
+
+    def test_the_citation_changes_the_seal(self) -> None:
+        # The whole point of sealing it: an operator cannot rewrite which policy
+        # a decision was made under without breaking the hash.
+        uncited = _begin(key="k-same", note="n1")
+        cited = ToolInvocation.begin(
+            agent_id=AGENT,
+            token_id=None,
+            tool=resolve_tool("delete_note"),
+            idempotency_key="k-same",
+            arguments={"note_id": "n1"},
+            resource_ref="note:n1",
+            invocation_id=uncited.id,
+            previous_hash=GENESIS_HASH,
+            chain_sequence=1,
+            policy_versions=("gateway@v1",),
+        )
+
+        assert cited.intent_hash != uncited.intent_hash
+
+    def test_rewriting_the_citation_is_detected(self) -> None:
+        # The forgery this defends against: keep a valid-looking row, swap the
+        # policy it claims to have been decided under.
+        entry = ToolInvocation.begin(
+            agent_id=AGENT,
+            token_id=None,
+            tool=resolve_tool("delete_note"),
+            idempotency_key="k-swap",
+            arguments={"note_id": "n1"},
+            resource_ref="note:n1",
+            previous_hash=GENESIS_HASH,
+            chain_sequence=1,
+            policy_versions=("gateway@v1",),
+        )
+        entry.succeed(outcome="deleted")
+        entry.policy_versions = ("gateway@v2",)
+
+        verdict = verify_chain([entry])
+        assert verdict.verified is False

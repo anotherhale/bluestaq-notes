@@ -42,11 +42,18 @@ from notes_service.domain.agent.value_objects import (
     ApprovalStatus,
     Capability,
     DelegatedAuthorizationId,
+    DelegationStatus,
     TokenAudience,
 )
 from notes_service.domain.errors import InvariantViolation
 from notes_service.domain.identity.principal import Principal
+from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.organization.tenant_access import TenantAccessStatus
+from notes_service.domain.organization.value_objects import (
+    OrganizationId,
+    OrgPermission,
+    capabilities_for,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,12 +143,33 @@ class RegisterAgent(UseCase):
             return agent
 
 
-class ListAgents(UseCase):
-    """List the caller's own agents. Never another user's."""
+@dataclass(frozen=True, slots=True)
+class AgentPage:
+    """One page of a user's agents plus the set's exact size.
 
-    def run(self, principal: Principal) -> list[AgentIdentity]:
+    ``total`` is counted, never ``len(items)``. An owner of more agents than one
+    page could otherwise not tell a complete listing from the first 50 of 300 —
+    and the page that is truncated is the one where "did my agent get created"
+    is being asked.
+    """
+
+    items: list[AgentIdentity]
+    total: int
+
+
+class ListAgents(UseCase):
+    """List the caller's own agents. Never another user's.
+
+    Bounded and paged: an unbounded read of every agent a user owns is a
+    denial-of-service on the database that any client can trigger by looping
+    registrations. The window is ``(created_at, id)`` so pages are disjoint.
+    """
+
+    def run(self, principal: Principal, *, limit: int = 50, offset: int = 0) -> AgentPage:
         with self._uow_factory() as uow:
-            return uow.agents.list_for_owner(principal.user_id)
+            items = uow.agents.list_for_owner(principal.user_id, limit=limit, offset=offset)
+            total = uow.agents.count_for_owner(principal.user_id)
+            return AgentPage(items=items, total=total)
 
 
 class GetAgent(UseCase):
@@ -177,6 +205,7 @@ class GrantDelegation(UseCase):
                 agent=agent,
                 delegator_user_id=principal.user_id,
                 capabilities=parse_capabilities(capabilities),
+                assurance=principal.assurance,
             )
             uow.delegations.add(delegation)
             uow.commit()
@@ -393,6 +422,26 @@ class DecideApprovalRequest(UseCase):
     Separation of duties is enforced in the aggregate: the approver must be a
     distinct human identity. The caller here is always a human principal; an
     agent has no user id and cannot reach this path.
+
+    Two authorities may reach a request, and which one applies depends on what
+    the request still needs (NEX-071):
+
+    * **The owner** of the agent the request belongs to. The owner always signs,
+      and their signature is the *first* one.
+    * **A tenant approver** — a human holding ``APPROVE_AGENT_ACTION`` in an
+      organization the owner also belongs to — for the *second* signature of a
+      two-person request.
+
+    Without the second authority the two-person control was unsatisfiable
+    through the API: only the owner could decide, and the aggregate refuses the
+    owner signing twice, so every ``second-approver`` policy (and every
+    ``HIGH``-risk capability, whose floor is two) deadlocked permanently. The
+    obligation read as enforced in the audit trail while no request could ever
+    complete. The security architecture requires an *independent* approver for
+    high-risk actions; this is where that approver is authorised.
+
+    A caller who holds neither authority gets 404, not 403, so an approval id
+    cannot be used to probe for another user's agent.
     """
 
     def run(
@@ -408,10 +457,12 @@ class DecideApprovalRequest(UseCase):
             request = uow.approvals.get(ApprovalRequestId.parse(approval_id))
             if request is None:
                 raise ResourceNotFound("approval request not found")
-            # The approver must own the agent the request was opened for, so one
-            # user cannot decide another user's agent's requests.
             agent = uow.agents.get(request.agent_id)
-            if agent is None or agent.owner_user_id != principal.user_id:
+            if agent is None:
+                raise ResourceNotFound("approval request not found")
+
+            is_owner = agent.owner_user_id == principal.user_id
+            if not is_owner and not self._may_second_sign(uow, principal, request, agent):
                 raise ResourceNotFound("approval request not found")
             if approve:
                 request.approve(approver_user_id=principal.user_id, now=now, reason=reason)
@@ -420,6 +471,84 @@ class DecideApprovalRequest(UseCase):
             uow.approvals.save(request)
             uow.commit()
             return request
+
+    @staticmethod
+    def _may_second_sign(
+        uow: UnitOfWork,
+        principal: Principal,
+        request: ApprovalRequest,
+        agent: AgentIdentity,
+    ) -> bool:
+        """Whether the caller may supply the *second* signature on ``request``.
+
+        Narrow on purpose. A tenant approver is admitted only for a request that
+        already carries its first signature and is waiting on one more. They may
+        not open the control's first signature — that is the owner's act, made
+        where the agent was created — and they cannot act at all on a request
+        nobody has signed.
+
+        Both decisions are permitted once admitted: approving completes the
+        control, and denying ends it. Refusal is fail-closed, and the aggregate
+        already models "a second human refuses a half-approved request" as a
+        distinct recorded outcome (``denied_by_user_id``), so an independent
+        approver who judges the action unsafe must be able to say so.
+        """
+        if request.required_approvals != 2 or request.decided_by_user_id is None:
+            return False
+        if request.status is not ApprovalStatus.PENDING:
+            return False
+        if request.second_approver_user_id is not None:
+            return False
+        return _holds_agent_approval_in_shared_tenant(
+            uow, user_id=principal.user_id, owner_user_id=agent.owner_user_id
+        )
+
+
+def _holds_agent_approval_in_shared_tenant(
+    uow: UnitOfWork, *, user_id: UserId, owner_user_id: UserId
+) -> bool:
+    """Whether ``user_id`` may co-sign agent actions in a tenant the owner shares.
+
+    Requires an *active* membership carrying ``APPROVE_AGENT_ACTION`` in an
+    organization where the agent's owner is also an active member. The shared
+    tenant is what keeps the authority bounded: an org admin cannot co-sign for
+    an agent whose owner is outside their tenant, because the two never share an
+    organization to be responsible within.
+
+    Read-only roles are excluded by the capability matrix itself rather than by
+    a role check here, so ``ORG_SECURITY_ADMIN`` and ``ORG_AUDITOR`` — whose
+    separation from administration is a deliberate invariant — cannot approve.
+    """
+    approver = user_id
+    owner = owner_user_id
+    if approver == owner:
+        # Separation of duties: the same human is never a second approver. The
+        # aggregate refuses this too; refusing here keeps the 404 rule intact
+        # for a caller who is only the owner.
+        return False
+
+    # Organizations where the approver holds the co-signing capability.
+    approver_tenants: set[OrganizationId] = set()
+    for membership in uow.organization_memberships.list_for_user(approver):
+        if not membership.grants_access:
+            continue
+        if OrgPermission.APPROVE_AGENT_ACTION in capabilities_for(membership.role):
+            approver_tenants.add(membership.organization_id)
+    if not approver_tenants:
+        return False
+
+    # The authority only reaches agents whose owner is in the same tenant: the
+    # two must share an organization to be jointly responsible within.
+    for membership in uow.organization_memberships.list_for_user(owner):
+        if not membership.grants_access:
+            continue
+        if membership.organization_id not in approver_tenants:
+            continue
+        organization = uow.organizations.get(membership.organization_id)
+        if organization is None or not organization.is_operational:
+            continue
+        return True
+    return False
 
 
 class RevokeApprovalRequest(UseCase):
@@ -456,6 +585,71 @@ class RevokeApprovalRequest(UseCase):
             return request
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalRequestPage:
+    """One page of an agent's approval history plus the history's exact size.
+
+    ``total`` counts the whole requested set, not the page. A page is capped, so a
+    page-derived total equals the page size and makes "3 denied approvals" look
+    like the complete answer when it is the first 3 of 300 — an auditor cannot
+    then tell a finished review from a truncated one.
+    """
+
+    items: list[ApprovalRequest]
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
+class DelegationPage:
+    """One page of an agent's consent records plus the set's exact size.
+
+    Same reasoning as :class:`ApprovalRequestPage`: ``total`` counts every
+    delegation matching the status filter, not the page. A delegator reviewing
+    "what have I handed this agent" must be able to tell a complete list from
+    the first 50 of 300.
+    """
+
+    items: list[DelegatedAuthorization]
+    total: int
+
+
+class ListDelegations(UseCase):
+    """List the consent records behind one of the caller's agents.
+
+    A delegation is the only thing that lets an agent act *as* a human, and it is
+    revocable — but until now the revocation id existed only in the grant
+    response. A delegator who closed that response could not name the grant to
+    withdraw it, so the only reachable remedy was ``RevokeAgent``, an emergency
+    stop that also kills every other grant, every token, and the agent itself.
+    Reading the grants is what makes narrow revocation usable.
+
+    Owner-only, and a non-owner gets ``404`` rather than ``403``: the existence of
+    another user's agent must not be probeable, and the consent set names which
+    capabilities a human handed over — the same reason the approval listing is
+    owner-only.
+
+    ``total`` is counted, never the page length. See :class:`DelegationPage`.
+    """
+
+    def run(
+        self,
+        principal: Principal,
+        *,
+        agent_id: str,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> DelegationPage:
+        with self._uow_factory() as uow:
+            agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
+            wanted = DelegationStatus(status) if status is not None else None
+            items = uow.delegations.list_for_agent(
+                agent.id, status=wanted, limit=limit, offset=offset
+            )
+            total = uow.delegations.count_for_agent(agent.id, status=wanted)
+            return DelegationPage(items=items, total=total)
+
+
 class ListApprovalRequests(UseCase):
     """List approval requests for one of the caller's agents.
 
@@ -465,6 +659,21 @@ class ListApprovalRequests(UseCase):
     what makes a decision reviewable after the fact: a decided approval used to
     disappear from the only read path, so an approver could not confirm what they
     had approved, and an auditor could not see the grant at all through the API.
+
+    Bounded and server-side filtered (NEX-089)
+    -------------------------------------------
+
+    The history is never pruned and grows with every approval an agent opens, yet
+    this read loaded all of it and filtered by status in Python — one ``GET``
+    fetching every approval ever opened in order to return a subset. The status
+    filter and the window now happen in the store, and the total is a ``COUNT``
+    over the same filtered set, so ``meta.total`` is the size of the answer rather
+    than of the window.
+
+    Both reads happen in one transaction, so the page and its total cannot straddle
+    a commit boundary; under ``READ COMMITTED`` a concurrent open may still land
+    between the two statements, and the count answers "how many are there now",
+    which is the honest answer and is never derived from the page.
     """
 
     def run(
@@ -473,17 +682,17 @@ class ListApprovalRequests(UseCase):
         *,
         agent_id: str,
         status: str | None = None,
-    ) -> list[ApprovalRequest]:
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ApprovalRequestPage:
         wanted = ApprovalStatus(status) if status is not None else ApprovalStatus.PENDING
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            if wanted is ApprovalStatus.PENDING:
-                return uow.approvals.list_pending_for_agent(agent.id)
-            return [
-                request
-                for request in uow.approvals.list_for_agent(agent.id)
-                if request.status is wanted
-            ]
+            items = uow.approvals.list_for_agent(
+                agent.id, status=wanted, limit=limit, offset=offset
+            )
+            total = uow.approvals.count_for_agent(agent.id, status=wanted)
+            return ApprovalRequestPage(items=items, total=total)
 
 
 class GetApprovalRequest(UseCase):
@@ -507,6 +716,19 @@ class GetApprovalRequest(UseCase):
             return request
 
 
+@dataclass(frozen=True, slots=True)
+class ToolInvocationAuditPage:
+    """One page of an agent's audit trail plus the trail's exact size.
+
+    ``total`` counts the whole trail, not the page. A page is capped, so a
+    page-derived total would equal the page size and make a window over 3,412
+    attempts indistinguishable from a complete trail of 50.
+    """
+
+    items: list[ToolInvocation]
+    total: int
+
+
 class ListToolInvocations(UseCase):
     """List the tool-invocation audit trail for one of the caller's agents.
 
@@ -518,6 +740,12 @@ class ListToolInvocations(UseCase):
     which tools an agent reached for and when, so it is the owning human's
     evidence. A non-owner gets ``404``, never ``403``, so the endpoint cannot be
     used to probe for the existence of another user's agent.
+
+    The count and the page are read in one transaction, so the pair cannot
+    straddle a commit boundary between them. Under ``READ COMMITTED`` a
+    concurrent invocation may still land between the two statements; the count
+    answers "how long is the trail now", which is the honest answer to give,
+    and it is never derived from the page.
     """
 
     def run(
@@ -527,10 +755,12 @@ class ListToolInvocations(UseCase):
         agent_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ToolInvocation]:
+    ) -> ToolInvocationAuditPage:
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            return uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
+            items = uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
+            total = uow.tool_invocations.count_for_agent(agent.id)
+            return ToolInvocationAuditPage(items=items, total=total)
 
 
 class VerifyToolInvocationChain(UseCase):
@@ -558,13 +788,17 @@ class VerifyToolInvocationChain(UseCase):
 
 
 __all__ = [
+    "AgentPage",
+    "ApprovalRequestPage",
     "DecideApprovalRequest",
+    "DelegationPage",
     "GetAgent",
     "GrantDelegation",
     "IssueAgentToken",
     "IssuedToken",
     "ListAgents",
     "ListApprovalRequests",
+    "ListDelegations",
     "ListToolInvocations",
     "OpenApprovalRequest",
     "RegisterAgent",

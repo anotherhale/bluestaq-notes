@@ -3,10 +3,10 @@
 This is the application-layer seam between "the caller proved who they are" and
 "the caller may still act". It is shared by every path that establishes or
 restores an identity: the OIDC login callback, per-request session resolution,
-the bearer-token provider, and agent-token resolution (where the *delegator*
-must still be entitled, because an agent acts as its delegator). Keeping it in
-one place is what stops the paths from drifting apart — a membership revocation
-must take effect everywhere or nowhere.
+the bearer-token provider, agent-token resolution (where the *delegator* must
+still be entitled, because an agent acts as its delegator), and the demo
+identity provider. Keeping it in one place is what stops the paths from
+drifting apart — a membership revocation must take effect everywhere or nowhere.
 
 The decision itself is the pure domain rule in
 ``domain/organization/tenant_access.py``; this module only loads the data it

@@ -17,9 +17,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
-from notes_service.domain.identity.value_objects import UserId
+from notes_service.domain.identity.value_objects import ExternalIdentityId, UserId
 from notes_service.domain.organization.value_objects import (
     OrganizationId,
     OrganizationMembershipId,
@@ -28,6 +28,9 @@ from notes_service.domain.organization.value_objects import (
 )
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
+    ExternalIdentityLinkRequest,
+    ExternalIdentityListResponse,
+    ExternalIdentityResponse,
     MemberInviteRequest,
     MemberManagerRequest,
     MemberRoleChangeRequest,
@@ -48,6 +51,7 @@ from notes_service.presentation.schemas import (
     TeamMembershipListResponse,
     TeamMembershipResponse,
     TeamResponse,
+    UnlinkExternalIdentityResponse,
 )
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -246,13 +250,30 @@ def create_team(
     dependencies=[RateLimitDep],
 )
 def list_organization_members(
-    organization_id: UUID, principal: PrincipalDep, container: ContainerDep
+    organization_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> MembershipListResponse:
-    members = container.list_organization_members().run(
-        principal, organization_id=OrganizationId(str(organization_id))
+    """One page of the organization roster, with the set's exact size.
+
+    Paged rather than whole-set: there is no per-organization member cap, so an
+    unpaged read is a database read and a response body any member can grow
+    without bound. ``meta.total`` is the counted roster size, not ``len(items)``;
+    a page-derived total cannot distinguish a complete roster from a truncated
+    one.
+    """
+    page = container.list_organization_members().run(
+        principal,
+        organization_id=OrganizationId(str(organization_id)),
+        limit=limit,
+        offset=offset,
     )
-    items = [MembershipResponse.from_domain(member) for member in members]
-    return MembershipListResponse(items=items, meta=_page(items))
+    items = [MembershipResponse.from_domain(member) for member in page.items]
+    return MembershipListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(
@@ -321,6 +342,77 @@ def set_member_manager(
         manager_user_id=UserId(str(payload.manager_user_id)) if payload.manager_user_id else None,
     )
     return MembershipResponse.from_domain(membership)
+
+
+@router.get(
+    "/{organization_id}/members/{user_id}/identities",
+    response_model=ExternalIdentityListResponse,
+    summary="List the external IdP identities linked to a member (NEX-091)",
+    dependencies=[RateLimitDep],
+)
+def list_member_identities(
+    organization_id: UUID,
+    user_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> ExternalIdentityListResponse:
+    identities = container.list_user_external_identities().run(
+        principal,
+        organization_id=OrganizationId(str(organization_id)),
+        user_id=UserId(str(user_id)),
+    )
+    return ExternalIdentityListResponse(
+        items=[ExternalIdentityResponse.from_domain(i) for i in identities]
+    )
+
+
+@router.post(
+    "/{organization_id}/members/{user_id}/identities",
+    response_model=ExternalIdentityResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Link an external IdP identity to a member (enables OIDC login)",
+    dependencies=[RateLimitDep],
+)
+def link_member_identity(
+    organization_id: UUID,
+    user_id: UUID,
+    payload: ExternalIdentityLinkRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> ExternalIdentityResponse:
+    identity = container.link_external_identity().run(
+        principal,
+        organization_id=OrganizationId(str(organization_id)),
+        user_id=UserId(str(user_id)),
+        provider=payload.provider,
+        subject=payload.subject,
+    )
+    return ExternalIdentityResponse.from_domain(identity)
+
+
+@router.delete(
+    "/{organization_id}/members/{user_id}/identities/{identity_id}",
+    response_model=UnlinkExternalIdentityResponse,
+    summary="Unlink an IdP identity from a member (revokes its live sessions)",
+    dependencies=[RateLimitDep],
+)
+def unlink_member_identity(
+    organization_id: UUID,
+    user_id: UUID,
+    identity_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> UnlinkExternalIdentityResponse:
+    # The link id is addressed rather than the (provider, subject) pair: an IdP
+    # subject is opaque and routinely contains "/", "@" or "+", which a path
+    # segment cannot carry unescaped.
+    revoked = container.unlink_external_identity().run(
+        principal,
+        organization_id=OrganizationId(str(organization_id)),
+        user_id=UserId(str(user_id)),
+        identity_id=ExternalIdentityId(str(identity_id)),
+    )
+    return UnlinkExternalIdentityResponse(sessions_revoked=revoked)
 
 
 @router.post(

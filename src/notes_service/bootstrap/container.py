@@ -49,6 +49,7 @@ from notes_service.application.use_cases.agents import (
     IssueAgentToken,
     ListAgents,
     ListApprovalRequests,
+    ListDelegations,
     ListToolInvocations,
     OpenApprovalRequest,
     RegisterAgent,
@@ -81,6 +82,11 @@ from notes_service.application.use_cases.identity import (
     ListDemoIdentities,
     ListUsers,
 )
+from notes_service.application.use_cases.identity_linking import (
+    LinkExternalIdentity,
+    ListUserExternalIdentities,
+    UnlinkExternalIdentity,
+)
 from notes_service.application.use_cases.notes import (
     CreateNote,
     DeleteNote,
@@ -92,8 +98,16 @@ from notes_service.application.use_cases.notes import (
     UpdateNote,
 )
 from notes_service.application.use_cases.operator_access_report import GetOperatorAccessReport
+from notes_service.application.use_cases.operator_access_retention import (
+    PurgeOperatorAccessLog,
+)
 from notes_service.application.use_cases.operator_gate import OperatorGate
-from notes_service.application.use_cases.operator_grants import ListOperatorGrants
+from notes_service.application.use_cases.operator_grants import (
+    IssueOperatorGrant,
+    ListOperatorGrants,
+    ListRevokedOperatorGrants,
+    RevokeOperatorGrant,
+)
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
     ChangeMemberRole,
@@ -125,17 +139,23 @@ from notes_service.application.use_cases.permissions import (
     ShareNote,
 )
 from notes_service.application.use_cases.policy_lifecycle import (
+    ApproveDraft,
     DraftPolicy,
     GetPolicyHistory,
+    ListPoliciesInForce,
     PublishDraft,
     RollbackPolicy,
 )
 from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
+from notes_service.domain.governance.retention import OperatorAccessRetentionPolicy
 from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
+from notes_service.infrastructure.db.operator_access_log import (
+    SqlAlchemyOperatorAccessLog,
+)
 from notes_service.infrastructure.db.operator_grants import (
     SqlAlchemyOperatorGrantRepository,
 )
@@ -151,9 +171,6 @@ from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRel
 from notes_service.infrastructure.identity.routing_provider import RoutingIdentityProvider
 from notes_service.infrastructure.identity.session_provider import SessionIdentityProvider
 from notes_service.infrastructure.security.clock import SystemClock
-from notes_service.infrastructure.security.operator_access_log import (
-    InMemoryOperatorAccessLog,
-)
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from notes_service.infrastructure.security.withholding_recorder import (
     InMemoryWithholdingRecorder,
@@ -242,6 +259,13 @@ class Container:
     remove_team_member: Callable[[], RemoveTeamMember]
     list_team_members: Callable[[], ListTeamMembers]
 
+    # External identity links. An operator holding ``MANAGE_MEMBERSHIPS``
+    # attaches an IdP subject to a tenant member, which is what makes real
+    # OIDC login resolve to a local account at all.
+    link_external_identity: Callable[[], LinkExternalIdentity]
+    unlink_external_identity: Callable[[], UnlinkExternalIdentity]
+    list_user_external_identities: Callable[[], ListUserExternalIdentities]
+
     # Agent identity. Authority here is a chain — agent ceiling, then a user's
     # delegation, then a short-lived token — and every hop only narrows the one
     # above it. ``resolve_agent_token`` is the only entry point that turns a
@@ -251,6 +275,10 @@ class Container:
     get_agent: Callable[[], GetAgent]
     revoke_agent: Callable[[], RevokeAgent]
     grant_delegation: Callable[[], GrantDelegation]
+    # Reading the grants is what makes *narrow* revocation usable: a delegation
+    # id existed only in the POST that created it, so a lost response left
+    # RevokeAgent (which also kills the agent) as the only reachable remedy.
+    list_delegations: Callable[[], ListDelegations]
     revoke_delegation: Callable[[], RevokeDelegation]
     issue_agent_token: Callable[[], IssueAgentToken]
     resolve_agent_token: Callable[[], ResolveAgentToken]
@@ -300,12 +328,25 @@ class Container:
     # the question a static allowlist could not answer: it held strings, not
     # holders.
     list_operator_grants: Callable[[], ListOperatorGrants]
+    # Handing a grant to another user, bounded and attributable (NEX-074).
+    issue_operator_grant: Callable[[], IssueOperatorGrant]
+    # Taking a grant away, attributable and immediate (NEX-079).
+    revoke_operator_grant: Callable[[], RevokeOperatorGrant]
+    # Reading grants that were revoked, so the provenance NEX-079 records is
+    # actually readable (NEX-080).
+    list_revoked_operator_grants: Callable[[], ListRevokedOperatorGrants]
+    # Pruning the access log by the configured retention window (NEX-075).
+    # ``None`` when retention is disabled, so the endpoint can answer 404 rather
+    # than expose a purge that would delete nothing.
+    purge_operator_access_log: Callable[[], PurgeOperatorAccessLog | None]
     # The policy lifecycle (NEX-047/NEX-048). Durable: a published version is
     # what a past decision was made against, so it must survive a restart.
     draft_policy: Callable[[], DraftPolicy]
+    approve_draft: Callable[[], ApproveDraft]
     publish_draft: Callable[[], PublishDraft]
     rollback_policy: Callable[[], RollbackPolicy]
     get_policy_history: Callable[[], GetPolicyHistory]
+    list_policies_in_force: Callable[[], ListPoliciesInForce]
 
 
 def _seed_operator_grants(
@@ -440,7 +481,11 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         window_seconds=settings.rate_limit_window_seconds,
     )
     withholding_recorder = InMemoryWithholdingRecorder()
-    operator_access_log = InMemoryOperatorAccessLog()
+    # The record of *who read a platform-wide view* is durable for the same reason
+    # the grants below are (R42, mirroring R40): an in-memory ring is per-worker and
+    # cleared on restart, so the trail an operator audits described only the worker
+    # that answered and vanished with a deploy. Append-only by construction.
+    operator_access_log: OperatorAccessLog = SqlAlchemyOperatorAccessLog(session_factory)
     # Stored grants (NEX-045), durable since NEX-046. The environment variable is
     # a *seed path* into this store, not the allowlist itself: seeding at startup
     # produces one unbounded grant per configured scope, and the gate then
@@ -540,13 +585,84 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             clock=clock,
         )
 
+    # The write side of the grant store. Bounded-only and attenuation-checked in
+    # the use case, so this wiring only has to answer "does that user exist" — and
+    # it answers from the same user repository every other use case reads.
+    def make_issue_operator_grant() -> IssueOperatorGrant:
+        def user_exists(user_id: UserId) -> bool:
+            with uow_factory() as uow:
+                return uow.users.get(user_id) is not None
+
+        return IssueOperatorGrant(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+            clock=clock,
+            user_exists=user_exists,
+        )
+
+    # The undo of the grant store (NEX-079). A revocation ends a grant immediately
+    # and records who ended it, which is the only way to stop a mistaken hand-out
+    # before its deadline — and the only way to stop a configuration grant at all.
+    # It shares the issue use case's dependencies and nothing else: no user lookup,
+    # because revoking from a user who does not exist is simply "nothing to revoke".
+    def make_revoke_operator_grant() -> RevokeOperatorGrant:
+        return RevokeOperatorGrant(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+            clock=clock,
+        )
+
+    # The read side of a revocation (NEX-080). NEX-079 wrote an attributable
+    # revocation and nothing could read it back; this use case reads the same store
+    # through the same read gate as the holder report, so an auditor who may see
+    # who holds what may also see who lost it, and from whom.
+    def make_list_revoked_operator_grants() -> ListRevokedOperatorGrants:
+        return ListRevokedOperatorGrants(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+        )
+
+    # Retention (NEX-075). Built only when the deployment configured a window:
+    # ``None`` means "keep everything", and the endpoint then answers 404 rather
+    # than offering a purge with no mandate. The policy validates the window when
+    # it is constructed here, so a too-short or absurd value fails the boot, not
+    # the first purge an operator runs.
+    retention_policy: OperatorAccessRetentionPolicy | None = (
+        None
+        if settings.operator_access_retention_days is None
+        else OperatorAccessRetentionPolicy(
+            window=timedelta(days=settings.operator_access_retention_days)
+        )
+    )
+
+    def make_purge_operator_access_log() -> PurgeOperatorAccessLog | None:
+        if retention_policy is None:
+            return None
+        return PurgeOperatorAccessLog(
+            access_log=operator_access_log,
+            operator_gate=operator_gate,
+            clock=clock,
+            policy=retention_policy,
+        )
+
     # Policy versions are stored, not held in memory: the published version in
     # force is evidence for decisions already taken, so it must outlive the
     # process that published it (NEX-048).
     policy_versions: PolicyVersionRepository = SqlAlchemyPolicyVersionRepository(session_factory)
 
     def make_draft_policy() -> DraftPolicy:
-        return DraftPolicy(store=policy_versions, clock=clock, operator_gate=operator_gate)
+        return DraftPolicy(
+            store=policy_versions,
+            clock=clock,
+            operator_gate=operator_gate,
+            # Pass the real wiring, not an assumption: the authoring path refuses a
+            # rule naming ``rate-limit`` exactly when the gateway would have no
+            # limiter to enforce it with.
+            rate_limiter_configured=rate_limiter is not None,
+        )
+
+    def make_approve_draft() -> ApproveDraft:
+        return ApproveDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)
 
     def make_publish_draft() -> PublishDraft:
         return PublishDraft(store=policy_versions, clock=clock, operator_gate=operator_gate)
@@ -556,6 +672,17 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
 
     def make_get_policy_history() -> GetPolicyHistory:
         return GetPolicyHistory(store=policy_versions, operator_gate=operator_gate)
+
+    # The published set, reported as data. ``rate_limiter_configured`` is the same
+    # value the gateway and the drafting guard receive, so the enforcement gaps
+    # this report names are the gaps the gateway would refuse on.
+    def make_list_policies_in_force() -> ListPoliciesInForce:
+        return ListPoliciesInForce(
+            store=policy_versions,
+            operator_gate=operator_gate,
+            clock=clock,
+            rate_limiter_configured=rate_limiter is not None,
+        )
 
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:
@@ -597,6 +724,16 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
                 authorization=authorization_provider,
                 clock=clock,
             ),
+            # Published policy is enforced here, at the one seam every agent
+            # action passes through (NEX-051). Until this was wired the lifecycle
+            # could publish rules nothing consulted.
+            policy_versions=policy_versions,
+            # A policy's ``rate-limit`` obligation is enforced against this limiter
+            # (NEX-056). It is the same port the HTTP boundary uses, so swapping in
+            # a shared store covers both. Omitting it would not silently disable the
+            # obligation: the gateway reports ``rate-limit`` as unsatisfiable and
+            # refuses the call.
+            rate_limiter=rate_limiter,
         )
 
     def make_plan_agent_run() -> PlanAgentRun:
@@ -681,11 +818,15 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         add_team_member=make_organization(AddTeamMember),
         remove_team_member=make_organization(RemoveTeamMember),
         list_team_members=make_organization(ListTeamMembers),
+        link_external_identity=make_organization(LinkExternalIdentity),
+        unlink_external_identity=make_organization(UnlinkExternalIdentity),
+        list_user_external_identities=make_organization(ListUserExternalIdentities),
         register_agent=make(RegisterAgent),
         list_agents=make(ListAgents),
         get_agent=make(GetAgent),
         revoke_agent=make(RevokeAgent),
         grant_delegation=make(GrantDelegation),
+        list_delegations=make(ListDelegations),
         revoke_delegation=make(RevokeDelegation),
         issue_agent_token=make(IssueAgentToken),
         resolve_agent_token=make(ResolveAgentToken),
@@ -709,8 +850,14 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         sweep_audit_integrity=make_sweep_audit_integrity,
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
+        issue_operator_grant=make_issue_operator_grant,
+        revoke_operator_grant=make_revoke_operator_grant,
+        list_revoked_operator_grants=make_list_revoked_operator_grants,
+        purge_operator_access_log=make_purge_operator_access_log,
         draft_policy=make_draft_policy,
+        approve_draft=make_approve_draft,
         publish_draft=make_publish_draft,
         rollback_policy=make_rollback_policy,
         get_policy_history=make_get_policy_history,
+        list_policies_in_force=make_list_policies_in_force,
     )

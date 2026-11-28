@@ -36,6 +36,7 @@ from notes_service.application.ports.oidc import OidcRelyingParty
 from notes_service.application.use_cases.base import UnitOfWorkFactory
 from notes_service.application.use_cases.tenant_access import ensure_tenant_access
 from notes_service.domain.errors import DomainError
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.entities import User
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.session import (
@@ -92,7 +93,14 @@ class OidcUseCase:
         self._session_idle_ttl = session_idle_ttl
         self._session_absolute_ttl = session_absolute_ttl
 
-    def _principal_for(self, user: User, *, provider: str, subject: str) -> Principal:
+    def _principal_for(
+        self,
+        user: User,
+        *,
+        provider: str,
+        subject: str,
+        assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR,
+    ) -> Principal:
         return Principal(
             user_id=user.id,
             email=user.email,
@@ -100,6 +108,7 @@ class OidcUseCase:
             provider=provider,
             subject=subject,
             claims={"mechanism": "session"},
+            assurance=assurance,
         )
 
 
@@ -166,13 +175,17 @@ class CompleteLogin(OidcUseCase):
             idle_ttl=self._session_idle_ttl,
             absolute_ttl=self._session_absolute_ttl,
             now=now,
+            assurance=id_token.assurance,
         )
         with self._uow_factory() as uow:
             uow.sessions.add(session)
             uow.commit()
 
         principal = self._principal_for(
-            user, provider=self._relying_party.provider_name, subject=id_token.subject
+            user,
+            provider=self._relying_party.provider_name,
+            subject=id_token.subject,
+            assurance=session.assurance,
         )
         return EstablishedSession(session_token=token, session=session, principal=principal)
 
@@ -222,7 +235,12 @@ class ResolveSession(OidcUseCase):
             session.touch(now, idle_ttl=self._session_idle_ttl)
             uow.sessions.save(session)
             uow.commit()
-        return self._principal_for(user, provider=session.provider, subject=session.subject)
+        return self._principal_for(
+            user,
+            provider=session.provider,
+            subject=session.subject,
+            assurance=session.assurance,
+        )
 
 
 class EndSession(OidcUseCase):

@@ -23,6 +23,8 @@ authorization model that every later phase depends on.
 | M1.1 Organization hierarchy domain + persistence | COMPLETE | Migration `189c359206d3` |
 | M1.2 Organization/team/member use cases + policy | COMPLETE | Last-admin and escalation guards |
 | M1.3 Organization REST API | COMPLETE | `routers/organizations.py` |
+| M1.3a Organization roster excludes offboarded people | **VERIFIED** (NEX-097, `febb810`; CI 4/4 on the product commit itself) | Roster filters only the terminal `DEPROVISIONED` state so suspended members stay reactivatable |
+| M1.3b Organization roster paged with a counted total | **IMPLEMENTED/TESTED/PUSHED** (NEX-098, `f4a2845`; VERIFIED withheld pending CI on that commit itself) | `limit`/`offset` window, `(created_at, id)` total order, separate `COUNT` under the same predicate |
 | M1.4 Organization security tests | COMPLETE | `tests/security/test_org_admin_scope.py` |
 | M1.5 OIDC authentication | NOT STARTED | NEX-002 |
 | M1.6 Identity linkage to memberships | NOT STARTED | Depends on M1.5 |
@@ -57,10 +59,10 @@ interruption without duplicating side effects.
 
 | Milestone | Status | Depends on |
 | --- | --- | --- |
-| M3.1 Governance policy model + versioning | IN PROGRESS - domain + lifecycle done (NEX-047, 379a98a); durable adapter + HTTP next | M1.2 |
-| M3.2 Audit integrity (append-only, tamper-evident) | NOT STARTED | M2.5 |
-| M3.3 Separation of duties / approval workflows | NOT STARTED | M3.1 |
-| M3.4 System One / Jev classifier integration | NOT STARTED | M2.5 |
+| M3.1 Governance policy model + versioning | **VERIFIED** — typed AST with immutable published versions (NEX-047 `379a98a`), durable `PolicyVersionRepository` (NEX-048), lifecycle + three-way SoD on publish (NEX-065, NEX-078 `6637c50`) | M1.2 |
+| M3.2 Audit integrity (append-only, tamper-evident) | **VERIFIED** — per-agent hash-chained trails; deployment-wide operator sweep (NEX-042), now pageable via `offset`/`next_offset` so a capped sweep can be finished rather than excluding the newest trails forever (NEX-081 `3a05db2`). This table said NOT STARTED long after both slices had shipped. | M2.5 |
+| M3.3 Separation of duties / approval workflows | **VERIFIED** — author/approver/publisher all pairwise distinct, enforced in domain, use cases and a DB CHECK (NEX-078); a real second-approver control (NEX-059); risk-based approval with a threshold floor (NEX-063, ADR-016); assurance held to two independent factor families (NEX-067) | M3.1 |
+| M3.4 System One / Jev classifier integration | **VERIFIED, with no live-vendor default** — an advisory classifier reaches deterministic policy through the gateway; no default code path calls a live vendor (NEX-040) | M2.5 |
 
 ## Phase 4 — Admin console (frontend)
 

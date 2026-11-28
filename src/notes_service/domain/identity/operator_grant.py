@@ -38,6 +38,13 @@ Fail-closed decisions, stated
   defect where one clock wrote a bound and another read it. ``is_active`` takes
   the caller's ``now`` so the gate's clock and the bound's clock are provably the
   same one.
+* **Every timestamp must be timezone-aware.** A naive datetime does not name an
+  instant, it names a wall-clock reading in an unstated zone, so two deployments
+  reading the same grant would disagree about when it expires. The old code
+  accepted one and then compared it to an aware clock, which raised ``TypeError`` —
+  a 500 on the grant-issue path, and a bound whose meaning depended on which side
+  happened to be naive. Refusing it at construction makes the requirement
+  checkable once, for every writer, instead of at each comparison.
 """
 
 from __future__ import annotations
@@ -56,6 +63,58 @@ never caller-supplied text, so this bound only catches a typo or a pasted blob.
 It is deliberately generous relative to the longest real name.
 """
 
+MAX_RATIONALE_LENGTH = 500
+"""Upper bound on the free-text reason an operator records for a grant.
+
+A rationale is human-written prose explaining *why* authority was widened. The
+bound is generous enough for a sentence or two of context and small enough that
+the column is a note, not a document store. It is enforced here rather than only
+in the request schema so every path that constructs a grant — HTTP, a future CLI,
+a test — obeys the same limit.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class OperatorGrantRationale:
+    """Why an operator widened someone else's authority, as a validated value.
+
+    A grant record answers *who* may do *what* until *when*. It cannot answer
+    *why*, and "why" is the question an auditor actually asks about a privileged
+    hand-out. Before this value existed the rationale had no column and was
+    therefore discarded at the boundary; recording intent on a widening is the
+    difference between an audit that can reconstruct a decision and one that can
+    only list its effects.
+
+    Normalisation and bounds are enforced at construction, so a caller cannot
+    store an empty or over-long reason that would later read as a real one:
+
+    * **Not blank.** A rationale of only whitespace is absence pretending to be a
+      record; it is rejected rather than silently trimmed to nothing.
+    * **Trimmed, not interior-collapsed.** Surrounding whitespace is stripped
+      (it is never meaningful in a note); interior spacing and newlines are kept,
+      because the operator's own sentence structure is part of the record.
+    * **Bounded.** See :data:`MAX_RATIONALE_LENGTH`.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise ValidationError("operator grant rationale must be text")
+        trimmed = self.value.strip()
+        if not trimmed:
+            raise ValidationError("operator grant rationale must not be blank")
+        if len(trimmed) > MAX_RATIONALE_LENGTH:
+            raise ValidationError(
+                f"operator grant rationale must be at most {MAX_RATIONALE_LENGTH} characters"
+            )
+        # Freeze the normalised form so equality and persistence agree with what
+        # the operator actually meant, not with incidental padding.
+        object.__setattr__(self, "value", trimmed)
+
+    def __str__(self) -> str:
+        return self.value
+
 
 @dataclass(frozen=True, slots=True)
 class OperatorGrant:
@@ -69,6 +128,41 @@ class OperatorGrant:
     that came from deployment configuration (the seed path). Recording it means
     a stored grant can answer "who gave this", which a config string never can.
     ``None`` is an honest "no human issued this", not a missing field.
+
+    ``rationale`` is the *why*: the operator's stated reason for widening this
+    user's authority. It is required for every human-issued grant (``granted_by``
+    set) and must be absent for a configuration grant, because the two are
+    different facts — configuration is reviewed with the deployment, whereas a
+    hand-out between people needs a recorded justification. Requiring it here,
+    at the type level, means a caller cannot create an attributable grant whose
+    purpose is unknown.
+
+    ``revoked_at``/``revoked_by`` are the *undo* (NEX-079). Before them the only
+    way to end a grant was to wait for ``expires_at``, so a mistaken hand-out — or
+    a configuration grant, which never expires — stayed live until a redeploy
+    rewrote the seed. A revocation is the one authority change that can be made
+    *authoritatively* and immediately, so it is recorded as a fact on the grant
+    rather than applied by deleting the row: an audit that can see a grant was
+    taken away, by whom and when, is the point of keeping it.
+
+    Revocation only ever *removes* authority, so it is honoured unconditionally —
+    see :meth:`is_active`. ``revoked_at`` and ``revoked_by`` are written together
+    by the revoke path, but a revocation deliberately remains valid without its
+    actor (NEX-080). The actor columns are foreign keys to ``users`` with
+    ``ON DELETE SET NULL``, so deleting the account of whoever revoked or issued a
+    grant rewrites these columns. Two consequences, both fixed here rather than
+    papered over:
+
+    * a **revocation outlives its revoker**, which is the whole point — the record
+      that authority was taken away must survive the removal of the person who
+      took it;
+    * the *issuer* columns (``granted_by``/``revoked_by``) may now be NULL on a
+      grant that still carries a ``rationale``. Before NEX-080 the pairing checks
+      below treated that as a contradiction, so a deleted issuer made every read
+      of the store — the gate lookup included — raise ``ValidationError``, which
+      locked the whole ``/ops`` surface out with a 500. Provenance is therefore
+      validated at **write** time, where a human supplies it, and tolerated as
+      merely absent when a user deletion has erased the reference.
     """
 
     user_id: UserId
@@ -77,6 +171,9 @@ class OperatorGrant:
     granted_by: UserId | None = None
     not_before: datetime | None = None
     expires_at: datetime | None = None
+    rationale: OperatorGrantRationale | None = None
+    revoked_at: datetime | None = None
+    revoked_by: UserId | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_id, UserId):
@@ -92,6 +189,47 @@ class OperatorGrant:
             )
         if scope != self.scope:
             raise ValidationError("operator grant scope must not have surrounding whitespace")
+        if self.rationale is not None and not isinstance(self.rationale, OperatorGrantRationale):
+            raise ValidationError("operator grant rationale must be an OperatorGrantRationale")
+        if self.granted_by is not None and self.rationale is None:
+            # A grant a person issued must say why. Configuration grants are the
+            # one exception: their reason is the deployment itself.
+            raise ValidationError("a human-issued operator grant must carry a rationale")
+        # NOTE (NEX-080): ``granted_by is None`` with a non-None ``rationale`` is
+        # *not* rejected here. It is the shape a row takes after its issuer's
+        # account is deleted, because ``granted_by`` is an ``ON DELETE SET NULL``
+        # foreign key while ``rationale`` is plain text that survives. The pairing
+        # is still enforced where a human supplies it — ``IssueOperatorGrant``
+        # requires a rationale and a configuration seed forbids one — so this type
+        # accepts the post-deletion state rather than making every read of the
+        # store raise. Previously this branch existed and a deleted issuer turned
+        # the gate lookup itself into a 500.
+        # Awareness is checked before any comparison, because comparing a naive to
+        # an aware datetime raises TypeError rather than returning False - an
+        # unhandled 500 rather than the fail-closed refusal this type promises.
+        # ``utcoffset() is None`` is checked as well as ``tzinfo is None`` because a
+        # tzinfo that yields no offset (a misconfigured zone) is naive too, by the
+        # same rule the stdlib uses.
+        for field_name in ("granted_at", "not_before", "expires_at", "revoked_at"):
+            value = getattr(self, field_name)
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise ValidationError(
+                    f"operator grant {field_name} must be timezone-aware; "
+                    "a naive datetime names a wall-clock reading, not an instant"
+                )
+        if self.revoked_by is not None and self.revoked_at is None:
+            # Naming a revoker for a grant that is still live reads as a revocation
+            # that never happened, so this half is still refused. The *other* half
+            # — ``revoked_at`` with no ``revoked_by`` — is deliberately allowed:
+            # see ``revoked_by`` in the class docstring. NEX-080 removed the
+            # matching CHECK because ``ON DELETE SET NULL`` on a real foreign key
+            # silently rewrote these rows to exactly that state.
+            raise ValidationError("a revoker on an operator grant requires revoked_at")
+        if self.revoked_at is not None and self.revoked_at < self.granted_at:
+            # A grant cannot be revoked before it existed. This is the same class
+            # as an expiry before issue: a clock-skewed fact that would otherwise
+            # look like a working revocation.
+            raise ValidationError("operator grant revoked_at must not be before granted_at")
         if self.expires_at is not None and self.expires_at <= self.granted_at:
             # A grant that expires at or before it was issued is a mistake that
             # would otherwise look like a working grant until the first check.
@@ -108,9 +246,21 @@ class OperatorGrant:
 
         ``now`` is supplied by the caller's clock (R29): the same clock that
         stamped the request decides whether the grant covers it. A grant is
-        inactive before ``not_before``, at or after ``expires_at``, and — by
-        definition — a bare grant with no bounds is active once granted.
+        inactive before ``not_before``, at or after ``expires_at``, once revoked,
+        and — by definition — a bare grant with no bounds is active once granted.
+
+        **A revoked grant is inactive regardless of ``now``.** This is the one
+        branch that deliberately ignores the clock: revocation is not a time
+        bound, it is a decision, and honouring it "from now on" would resurrect
+        authority for any caller whose clock ran behind the revoker's. A grant
+        taken away must confer nothing to anyone the instant the record says so.
+        Checking it first makes that true even for a future-dated revocation.
         """
+        if self.revoked_at is not None:
+            # Deliberately not compared to ``now``: see the docstring. Revocation
+            # only ever removes authority, so there is no case where honouring it
+            # early could grant something.
+            return False
         if now < self.granted_at:
             # A grant cannot be used before it was issued. This is not pedantry:
             # a clock skew that put granted_at in the future would otherwise
@@ -121,9 +271,14 @@ class OperatorGrant:
         return self.expires_at is None or now < self.expires_at
 
     @property
+    def is_revoked(self) -> bool:
+        """True once this grant has been revoked."""
+        return self.revoked_at is not None
+
+    @property
     def is_expiring(self) -> bool:
         """True when this grant has a deadline at all."""
         return self.expires_at is not None
 
 
-__all__ = ["MAX_SCOPE_LENGTH", "OperatorGrant"]
+__all__ = ["MAX_RATIONALE_LENGTH", "MAX_SCOPE_LENGTH", "OperatorGrant", "OperatorGrantRationale"]

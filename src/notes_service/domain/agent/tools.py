@@ -32,6 +32,7 @@ from enum import StrEnum
 
 from notes_service.domain.agent.audit_chain import (
     GENESIS_HASH,
+    DecisionEvidence,
     intent_hash,
     outcome_hash,
 )
@@ -299,6 +300,19 @@ class ToolInvocation:
     ``intent_hash``, so deleting, reordering or editing an attempt is detectable
     after the fact. The chain is sealed at construction and at finalisation and
     is never recomputed from mutable state.
+
+    ``policy_versions`` names the policy versions that were in force when the
+    gateway decided this call (``policy@v3``): the security architecture's
+    "matched policy versions" field. It is sealed into the intent hash, so the
+    decision stays explainable after the policies move on and the cited versions
+    cannot be quietly erased. Empty when no policy was consulted.
+
+    ``decision_evidence`` is the extra proof a policy's ``enhanced-audit``
+    obligation requires (NEX-055): which rules matched, which obligations were
+    imposed, and the attribute snapshot the decision was made against. It is
+    sealed into the intent hash exactly as ``policy_versions`` is, so the extra
+    evidence cannot be added to, trimmed from, or rewritten after the fact
+    without breaking the chain. ``None`` for an ordinary attempt.
     """
 
     id: ToolInvocationId
@@ -309,6 +323,8 @@ class ToolInvocation:
     idempotency_key: str
     arguments_digest: str
     resource_ref: str
+    policy_versions: tuple[str, ...] = ()
+    decision_evidence: DecisionEvidence | None = None
     status: InvocationStatus = InvocationStatus.STARTED
     outcome: str | None = None
     approval_request_id: uuid.UUID | None = None
@@ -333,6 +349,8 @@ class ToolInvocation:
         invocation_id: ToolInvocationId | None = None,
         previous_hash: str = GENESIS_HASH,
         chain_sequence: int = 1,
+        policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolInvocation:
         if not isinstance(idempotency_key, str) or not idempotency_key.strip():
             raise ValidationError("an idempotency key is required")
@@ -346,6 +364,7 @@ class ToolInvocation:
         resolved_id = invocation_id or ToolInvocationId.new()
         digest = arguments_digest(tool, arguments)
         now = _utcnow()
+        consulted = tuple(policy_versions)
         return cls(
             id=resolved_id,
             agent_id=agent_id,
@@ -355,6 +374,8 @@ class ToolInvocation:
             idempotency_key=key,
             arguments_digest=digest,
             resource_ref=resource_ref,
+            policy_versions=consulted,
+            decision_evidence=decision_evidence,
             approval_request_id=approval_request_id,
             invoked_at=now,
             chain_sequence=chain_sequence,
@@ -371,6 +392,8 @@ class ToolInvocation:
                 approval_request_id=approval_request_id,
                 invoked_at=now,
                 previous_hash=previous_hash,
+                policy_versions=consulted,
+                decision_evidence=decision_evidence,
             ),
         )
 

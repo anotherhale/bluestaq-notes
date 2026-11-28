@@ -171,7 +171,7 @@ class TestTenantIsolation:
         members = harness.make(ListOrganizationMembers).run(
             principal_for(ALICE), organization_id=org.organization.id
         )
-        bob_membership = next(m for m in members if m.user_id == str(BOB))
+        bob_membership = next(m for m in members.items if m.user_id == str(BOB))
         harness.make(SuspendMember).run(
             principal_for(ALICE),
             organization_id=org.organization.id,
@@ -479,7 +479,7 @@ class TestReportingLine:
         members = harness.make(ListOrganizationMembers).run(
             principal_for(ALICE), organization_id=org.organization.id
         )
-        bob_membership = next(m for m in members if m.user_id == str(BOB))
+        bob_membership = next(m for m in members.items if m.user_id == str(BOB))
         updated = harness.make(SetMemberManager).run(
             principal_for(ALICE),
             organization_id=org.organization.id,
@@ -496,7 +496,7 @@ class TestReportingLine:
         members = harness.make(ListOrganizationMembers).run(
             principal_for(ALICE), organization_id=org.organization.id
         )
-        bob_membership = next(m for m in members if m.user_id == str(BOB))
+        bob_membership = next(m for m in members.items if m.user_id == str(BOB))
         with pytest.raises(InvalidInput):
             harness.make(SetMemberManager).run(
                 principal_for(ALICE),

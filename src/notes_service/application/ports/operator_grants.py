@@ -69,8 +69,43 @@ class OperatorGrantRepository(Protocol):
     def active_for(self, user_id: UserId, *, now: datetime) -> frozenset[str]:
         """The scopes ``user_id`` may use at ``now``. Empty when none apply.
 
-        Expired, not-yet-valid, and never-granted all yield the empty set: a
-        caller cannot distinguish them, and none of them confers anything.
+        Expired, not-yet-valid, revoked, and never-granted all yield the empty
+        set: a caller cannot distinguish them, and none of them confers anything.
+        """
+        ...
+
+    def revoke(
+        self,
+        user_id: UserId,
+        scope: str,
+        *,
+        at: datetime,
+        by: UserId,
+    ) -> int:
+        """Revoke every live grant of ``scope`` held by ``user_id`` (NEX-079).
+
+        Returns the number of rows changed. A revocation is stamped as a fact on
+        each matching grant (``revoked_at``/``revoked_by``) rather than deleting
+        it, so the fact that authority was taken away — and by whom, and when —
+        survives for an auditor. A grant already revoked is left untouched, so the
+        *first* revocation is the one recorded and a second call reports zero
+        rather than rewriting history.
+
+        Only *currently live* grants are revoked — one that already lapsed
+        confers nothing, so recording a revocation on it would be a misleading
+        audit entry. ``at`` is the revoker's clock, matching every other bound in
+        this subsystem (R29): the same clock that decides "live" stamps the
+        revocation.
+
+        This is deliberately keyed by ``(user, scope)`` and not by a single row:
+        a holder may have several live grants of one scope only through a
+        re-issue, and the operator asking to remove a permission means the
+        permission, not one row. Revoking all live rows of that scope is the
+        behaviour that matches the request.
+
+        There is no self-revoke guard or attenuation check in the port: those are
+        policy decisions for the use case, exactly as ``add`` leaves the issue
+        policy to ``IssueOperatorGrant``.
         """
         ...
 
@@ -79,6 +114,58 @@ class OperatorGrantRepository(Protocol):
 
         Insertion order, not ``(user, scope)`` order, so the answer is stable for
         a given store state and a test can assert on it without sorting.
+        """
+        ...
+
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
+        """Every grant that ended by revocation, in insertion order (NEX-080).
+
+        The counterpart of ``revoke``. A revocation is deliberately *not* an
+        absence — it is a recorded fact with an actor and an instant — but until
+        this method existed nothing could read those facts back: they were written
+        to ``revoked_at``/``revoked_by`` and were visible nowhere, so "who removed
+        whose authority, and when" was answerable only by querying the database by
+        hand. That is the same gap NEX-076 closed for ``rationale``.
+
+        Requires no ``now``, unlike the active views: a revocation is historical
+        and does not change with the clock. A row whose actor was later deleted
+        still appears, with ``revoked_by`` ``None`` — the revocation outlives its
+        revoker, which is the point of recording it.
+
+        "Ended by revocation" is ``revoked_at IS NOT NULL``, not "revoked and not
+        expired": a grant revoked while still live and a grant that lapsed on its
+        own are different facts, and the second is not in this list at all.
+
+        Bounded reads (NEX-086)
+        -----------------------
+
+        Insertion order is oldest-first, and revoked rows are **never pruned** — a
+        revocation is a standing audit fact, not a value the retention window may
+        erase. So this list grows without bound for the lifetime of the
+        deployment, and the original signature returned the *whole* history in one
+        tuple. That is the same unbounded-response defect NEX-082 fixed for the
+        access log: an operator on a long-lived deployment could not read the
+        report without loading every revocation ever recorded.
+
+        ``limit`` and ``offset`` bound one page against that total order.
+        ``offset`` (not a keyset cursor) is correct here precisely because this
+        list is *not* appended to by reading it — unlike the access log, a read of
+        the revocation history writes nothing, so pages cannot shift under a
+        walker. ``limit=None`` keeps the old whole-history behaviour for callers
+        that genuinely need it (tests, export); a serving path always passes one.
+        """
+        ...
+
+    def count_revoked(self) -> int:
+        """The total number of revoked grants, without materialising them (NEX-086).
+
+        A paged report must state ``revoked_total`` so the reader can tell a full
+        page from the last one and know how far the history reaches. Counting
+        through the same ``is_revoked`` predicate as ``revoked_grants`` keeps the
+        total and the page consistent — a faster count that disagreed with the
+        list would make ``next_offset`` point past the end of the set.
         """
         ...
 

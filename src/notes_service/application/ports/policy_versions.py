@@ -55,13 +55,31 @@ class PolicyVersionRepository(Protocol):
         """
         ...
 
-    def publish(self, version: PolicyVersion) -> None:
-        """Replace the stored draft with its published form.
+    def approve(self, version: PolicyVersion) -> None:
+        """Replace the stored draft with its approved form (NEX-065).
 
         The stored draft for the same ``(policy_id, version)`` is replaced in
+        place. Approving a version that was never added is a programming error,
+        and only a draft can be approved: an approval records who decided, so a
+        second approval must not overwrite the first.
+
+        The store enforces the transition rather than trusting the caller for the
+        same reason ``publish`` does — a row that skipped the approval step must
+        not be able to look approved afterwards.
+        """
+        ...
+
+    def publish(self, version: PolicyVersion) -> None:
+        """Replace the stored approved version with its published form.
+
+        The stored version for the same ``(policy_id, version)`` is replaced in
         place; nothing else is touched. Publishing a version that was never added
         is a programming error, and a published version cannot be published
         again.
+
+        Only an approved version may be published (NEX-065). The store refuses a
+        draft, so the approval record cannot be skipped by writing through this
+        port directly.
         """
         ...
 

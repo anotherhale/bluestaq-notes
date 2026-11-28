@@ -159,6 +159,14 @@ class Settings(BaseSettings):
     # Examples: ``ops_operator_user_ids=1111...:withholding-report,2222...:*``
     ops_operator_user_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # How long the durable operator access log is kept before a purge may remove
+    # it (NEX-075). ``None`` (the default) leaves retention disabled: the log is
+    # kept indefinitely and nothing prunes it. A number turns the purge endpoint
+    # on with that window, which the domain policy then bounds on both sides — a
+    # value below the 90-day floor or above the 10-year ceiling fails the boot
+    # rather than silently shortening or voiding retention.
+    operator_access_retention_days: int | None = None
+
     # -- logging ----------------------------------------------------------
     log_level: str = "INFO"
     log_json: bool = True

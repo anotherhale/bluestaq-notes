@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import pytest
 
-from notes_service.application.errors import ResourceNotFound
+from notes_service.application.errors import InvalidInput, ResourceNotFound
 from notes_service.application.ports.operator_access import OperatorAccessEntry
 from notes_service.application.use_cases.operator_access_report import (
     DEFAULT_LIMIT,
@@ -204,3 +204,75 @@ def test_a_window_with_room_is_not_truncated() -> None:
 
     assert len(snapshot.entries) < snapshot.limit
     assert snapshot.truncated is False
+
+
+# --------------------------------------------------------------------------
+# Keyset paging: the trail must be readable past the first window (NEX-082).
+# --------------------------------------------------------------------------
+
+
+def test_the_cursor_selects_entries_older_than_it() -> None:
+    log = InMemoryOperatorAccessLog()
+    use_case = _use_case(operators=frozenset({ALICE}), access_log=log)
+
+    first = use_case.run(_principal(ALICE), limit=1)
+    assert first.next_position is not None
+
+    second = use_case.run(_principal(ALICE), limit=10, before_position=first.next_position)
+    assert [entry.position for entry in second.entries] == []
+    # The second call itself appended an entry at the head; the cursor kept it out
+    # of the page, which is the whole point of paging by position rather than index.
+
+    third = use_case.run(_principal(ALICE), limit=10)
+    assert len(third.entries) == 3
+
+
+def test_the_cursor_is_the_oldest_position_on_the_page() -> None:
+    """A reader resumes from the last entry it saw, not from an arithmetic guess."""
+    log = InMemoryOperatorAccessLog()
+    for _ in range(4):
+        log.record(
+            OperatorAccessEntry(user_id=ALICE, operation="withholding", at=SystemClock().now())
+        )
+    use_case = _use_case(operators=frozenset({ALICE}), access_log=log)
+
+    page = use_case.run(_principal(ALICE), limit=3)
+
+    assert len(page.entries) == 3
+    assert page.next_position == page.entries[-1].position
+
+
+def test_a_page_from_a_cursor_is_truncated_even_when_under_full() -> None:
+    """A middle page is partial: newer entries are missing from it."""
+    log = InMemoryOperatorAccessLog()
+    for _ in range(5):
+        log.record(
+            OperatorAccessEntry(user_id=ALICE, operation="withholding", at=SystemClock().now())
+        )
+    use_case = _use_case(operators=frozenset({ALICE}), access_log=log)
+
+    head = use_case.run(_principal(ALICE), limit=2)
+    tail = use_case.run(_principal(ALICE), limit=MAX_LIMIT, before_position=head.next_position)
+
+    assert len(tail.entries) < tail.limit
+    assert tail.next_position is None
+    assert tail.truncated is True
+    assert tail.requested_from == head.next_position
+
+
+def test_a_non_positive_cursor_is_rejected() -> None:
+    """Zero would silently mean "the whole log", the opposite of a cursor."""
+    use_case = _use_case(operators=frozenset({ALICE}))
+    with pytest.raises(InvalidInput):
+        use_case.run(_principal(ALICE), before_position=0)
+
+
+def test_a_bad_cursor_from_a_non_operator_is_still_not_found() -> None:
+    """The gate runs before the cursor is validated, so 404 still hides existence.
+
+    Reversing the order would tell a non-operator that this endpoint parses
+    ``before_position`` — a detail only a route that exists would know.
+    """
+    use_case = _use_case(operators=frozenset({ALICE}))
+    with pytest.raises(ResourceNotFound):
+        use_case.run(_principal(BOB), before_position=0)

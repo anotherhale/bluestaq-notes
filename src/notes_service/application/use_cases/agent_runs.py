@@ -409,24 +409,65 @@ class GetAgentRun(_RunUseCase):
         return run
 
 
+@dataclass(frozen=True, slots=True)
+class AgentRunPage:
+    """One page of an agent's run history plus the history's exact size.
+
+    ``total`` counts the whole set, not the page. The listing is capped, so a
+    page-derived total would equal the page size on every page and make a window
+    over 1,208 runs indistinguishable from a complete history of 50 — the
+    difference between "this agent ran 50 times" and "the first 50 of many".
+    """
+
+    items: list[AgentRun]
+    total: int
+
+
 class ListAgentRuns(_RunUseCase):
-    """List runs for one agent the caller owns, newest first."""
+    """List runs for one agent the caller owns, newest first.
+
+    Bounded and totalled (NEX-090)
+    ------------------------------
+
+    The store's listing was capped at 50 rows while the route reported
+    ``total=len(items)``, so an agent with more history than one page looked
+    like it had exactly one page of it, and there was no way to reach the rest:
+    the endpoint took no ``limit``/``offset`` at all. The window is now the
+    caller's, ``meta.total`` is a ``COUNT`` over the same agent-scoped set, and
+    both statements run in one transaction so a page and its total describe the
+    same moment.
+
+    ``resumable_only`` is deliberately *not* windowed. It is the recovery set —
+    a caller resuming interrupted work must see every run that needs resuming,
+    so truncating it would silently abandon runs. Its total is the exact size of
+    that set, which is the whole set.
+    """
 
     def run(
-        self, principal: Principal, *, agent_id: str, resumable_only: bool = False
-    ) -> list[AgentRun]:
+        self,
+        principal: Principal,
+        *,
+        agent_id: str,
+        resumable_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AgentRunPage:
         with self._uow_factory() as uow:
             agent = uow.agents.get(AgentId.parse(agent_id))
             if agent is None or agent.owner_user_id != principal.user_id:
                 raise ResourceNotFound("agent not found")
             if resumable_only:
-                return uow.agent_runs.list_resumable_for_agent(agent.id)
-            return uow.agent_runs.list_for_agent(agent.id)
+                resumable = uow.agent_runs.list_resumable_for_agent(agent.id)
+                return AgentRunPage(items=resumable, total=len(resumable))
+            items = uow.agent_runs.list_for_agent(agent.id, limit=limit, offset=offset)
+            total = uow.agent_runs.count_for_agent(agent.id)
+            return AgentRunPage(items=items, total=total)
 
 
 __all__ = [
     "AbortAgentRun",
     "AdvanceAgentRun",
+    "AgentRunPage",
     "GetAgentRun",
     "ListAgentRuns",
     "PlanAgentRun",

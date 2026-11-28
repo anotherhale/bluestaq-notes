@@ -98,29 +98,48 @@ def intent_hash(
     approval_request_id: uuid.UUID | str | None,
     invoked_at: datetime,
     previous_hash: str,
+    policy_versions: tuple[str, ...] = (),
+    decision_evidence: DecisionEvidence | None = None,
 ) -> str:
-    """Seal one immutable attempt, chained to the entry before it."""
-    return _sha256(
-        _canonical(
-            {
-                "v": 1,
-                "kind": "tool_invocation.intent",
-                "id": str(invocation_id),
-                "agent_id": str(agent_id),
-                "token_id": str(token_id) if token_id is not None else None,
-                "tool_name": tool_name,
-                "capability": capability,
-                "idempotency_key": idempotency_key,
-                "arguments_digest": arguments_digest,
-                "resource_ref": resource_ref,
-                "approval_request_id": (
-                    str(approval_request_id) if approval_request_id is not None else None
-                ),
-                "invoked_at": _timestamp(invoked_at),
-                "previous_hash": previous_hash,
-            }
-        )
-    )
+    """Seal one immutable attempt, chained to the entry before it.
+
+    The payload version rises only when a field is actually present, so an entry
+    written before that field existed still verifies byte for byte:
+
+    * ``v: 1`` — the original attempt.
+    * ``v: 2`` — NEX-052: the attempt cites ``policy_versions``.
+    * ``v: 3`` — NEX-055: a policy imposed the ``enhanced-audit`` obligation and
+      the attempt carries ``decision_evidence``.
+
+    Adding a key unconditionally would report every historical row as tampered —
+    a false alarm that trains an operator to ignore the verifier. Evidence wins
+    over versions when both are present: an enhanced-audit attempt always cites
+    the policy versions that imposed it, so ``v: 3`` implies ``v: 2``.
+    """
+    payload: dict[str, object] = {
+        "v": 1,
+        "kind": "tool_invocation.intent",
+        "id": str(invocation_id),
+        "agent_id": str(agent_id),
+        "token_id": str(token_id) if token_id is not None else None,
+        "tool_name": tool_name,
+        "capability": capability,
+        "idempotency_key": idempotency_key,
+        "arguments_digest": arguments_digest,
+        "resource_ref": resource_ref,
+        "approval_request_id": (
+            str(approval_request_id) if approval_request_id is not None else None
+        ),
+        "invoked_at": _timestamp(invoked_at),
+        "previous_hash": previous_hash,
+    }
+    if policy_versions:
+        payload["v"] = 2
+        payload["policy_versions"] = list(policy_versions)
+    if decision_evidence is not None:
+        payload["v"] = 3
+        payload["decision_evidence"] = decision_evidence.to_payload()
+    return _sha256(_canonical(payload))
 
 
 def outcome_hash(
@@ -143,6 +162,55 @@ def outcome_hash(
             }
         )
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionEvidence:
+    """Extra proof recorded when a policy imposes the ``enhanced-audit`` obligation.
+
+    The obligation says the attempt "must be recorded with more evidence than the
+    default" (security architecture section 5). A boolean, or a word in the
+    outcome string, would not be evidence — it would be a claim that evidence
+    exists. So this type names the three things the default trail omits and the
+    default trail therefore cannot answer:
+
+    * ``matched_rules`` — *which* rules decided, not just which policy versions
+      were consulted. Without it, "policy@v3 allowed this" cannot distinguish a
+      rule that was meant to apply from one that merely happened to match.
+    * ``obligations`` — the conditions the decision imposed, so a reader sees the
+      call was allowed *conditionally* and what the conditions were.
+    * ``attributes`` — the snapshot the policy was evaluated against, which is
+      what makes the decision reproducible. Without the inputs, the rules can be
+      replayed but the answer cannot be reproduced.
+
+    Every field is a string, because the attribute vocabulary the enforcement
+    path can attest to is strings (capability, tool, resource, agent owner), and
+    because the value is sealed into a hash: a value whose *type* changed between
+    write and read would recompute a different hash and be reported as tampering.
+    ``to_payload`` is the single place that decides how the value renders, so the
+    writer and the verifier cannot disagree.
+
+    None of this is secret. The fields are names and identifiers, never note
+    content or credentials — which is what makes it safe to record them on a
+    trail that more people can read than could read the response.
+    """
+
+    matched_rules: tuple[str, ...] = ()
+    obligations: tuple[str, ...] = ()
+    attributes: tuple[tuple[str, str], ...] = ()
+
+    def to_payload(self) -> dict[str, object]:
+        """A JSON-native rendering, identical on the write and verify paths.
+
+        Lists rather than tuples because a value read back from storage is a
+        list; rendering a tuple here would hash differently from the list the
+        verifier sees and report every enhanced-audit row as tampered.
+        """
+        return {
+            "matched_rules": list(self.matched_rules),
+            "obligations": list(self.obligations),
+            "attributes": dict(self.attributes),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +290,7 @@ class ChainAuditFinding:
 
 @dataclass(frozen=True, slots=True)
 class ChainAuditReport:
-    """The result of verifying every agent's trail in one deployment.
+    """The result of verifying one *page* of a deployment's agent trails.
 
     ``agents_checked`` against ``agents_total`` is the honesty of the sweep. A
     sweep that silently examined the first fifty agents and reported "all
@@ -230,22 +298,43 @@ class ChainAuditReport:
     and the caller cannot mistake a partial sweep for a complete one. The same
     principle as ``ChainVerdict.checked``: a pass must carry the size of the
     thing it passed over.
+
+    ``offset`` and ``next_offset`` are what make a capped sweep finishable.
+    Before NEX-081 the sweep was always the *oldest* ``max_agents`` agents and
+    there was no way to ask for the rest, so on a deployment with more agents
+    than the cap the newest trails — the ones written most recently, and so the
+    likeliest to be tampered with by whoever just gained write access — were
+    outside the sweep permanently. A cap with no cursor is not a bound on one
+    request, it is a silent exclusion of everything past it.
     """
 
     agents_total: int
     agents_checked: int
     truncated: bool
     broken: tuple[ChainAuditFinding, ...]
+    offset: int = 0
+    next_offset: int | None = None
+
+    @property
+    def covered(self) -> int:
+        """How many agents, from the start of the deployment, this page reaches."""
+        return self.offset + self.agents_checked
 
     @property
     def verified(self) -> bool:
-        """True only when a complete sweep found no contradiction.
+        """True only when a *complete* sweep found no contradiction.
 
-        A truncated sweep is never ``verified``: the unexamined agents could
-        each be broken, so the honest answer to "is every chain intact" is
-        "unknown", and ``truncated`` is how the caller tells that apart.
+        Three ways to fail to earn it, and each is a different fact:
+
+        * ``truncated`` — agents after this page were not examined, so the answer
+          to "is every chain intact" is "unknown".
+        * ``broken`` — a contradiction was found.
+        * ``offset > 0`` — this page starts after the beginning, so even reaching
+          the end of the deployment it says nothing about the agents before it.
+          A clean second page is *not* an all-clear, and collapsing the two would
+          let an operator page through a broken deployment and see only passes.
         """
-        return not self.truncated and not self.broken
+        return self.offset == 0 and self.covered >= self.agents_total and not self.broken
 
 
 class VerifiableEntry(Protocol):
@@ -277,6 +366,12 @@ class VerifiableEntry(Protocol):
 
     @property
     def resource_ref(self) -> str: ...
+
+    @property
+    def policy_versions(self) -> tuple[str, ...]: ...
+
+    @property
+    def decision_evidence(self) -> DecisionEvidence | None: ...
 
     @property
     def approval_request_id(self) -> uuid.UUID | None: ...
@@ -354,6 +449,8 @@ def verify_chain(
             approval_request_id=entry.approval_request_id,
             invoked_at=entry.invoked_at,
             previous_hash=previous,
+            policy_versions=entry.policy_versions,
+            decision_evidence=entry.decision_evidence,
         )
         if recomputed_intent != entry.intent_hash:
             return ChainVerdict(

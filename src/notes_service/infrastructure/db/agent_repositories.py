@@ -16,11 +16,15 @@ import uuid
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
-from notes_service.domain.agent.audit_chain import GENESIS_HASH, ChainAnchor
+from notes_service.domain.agent.audit_chain import (
+    GENESIS_HASH,
+    ChainAnchor,
+    DecisionEvidence,
+)
 from notes_service.domain.agent.delegation import DelegatedAuthorization
 from notes_service.domain.agent.entities import AgentIdentity, ApprovalRequest
 from notes_service.domain.agent.runs import (
@@ -46,6 +50,7 @@ from notes_service.domain.agent.value_objects import (
     TokenAudience,
 )
 from notes_service.domain.errors import VersionConflict
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import (
     AgentRow,
@@ -93,6 +98,7 @@ def _delegation_to_domain(row: DelegationRow) -> DelegatedAuthorization:
         delegator_user_id=UserId.parse(row.delegator_user_id),
         capabilities=_decode_capabilities(row.capabilities),
         status=DelegationStatus(row.status),
+        assurance=AuthenticationAssurance.parse(row.assurance),
         created_at=row.created_at,
         revoked_at=row.revoked_at,
     )
@@ -130,7 +136,65 @@ def _approval_to_domain(row: ApprovalRequestRow) -> ApprovalRequest:
             UserId.parse(row.revoked_by_user_id) if row.revoked_by_user_id else None
         ),
         revoke_reason=row.revoke_reason,
+        required_approvals=row.required_approvals,
+        second_approver_user_id=(
+            UserId.parse(row.second_approver_user_id) if row.second_approver_user_id else None
+        ),
+        second_decided_at=row.second_decided_at,
+        second_reason=row.second_reason,
+        denied_by_user_id=(UserId.parse(row.denied_by_user_id) if row.denied_by_user_id else None),
         version=row.version,
+    )
+
+
+def _decode_policy_versions(raw: str | None) -> tuple[str, ...]:
+    """Read the stored policy-version list back into a tuple.
+
+    An empty or absent column means "no policy was consulted" — the state of every
+    row written before NEX-052 — and must read back as ``()`` so the verifier
+    recomputes the v1 intent payload for it. A malformed value is not swallowed:
+    the row is untrusted on the way back in, and silently degrading it to ``()``
+    would let a corrupted citation verify as if nothing were cited.
+    """
+    if not raw:
+        return ()
+    decoded = json.loads(raw)
+    if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+        raise ValueError("policy_versions must be a JSON array of strings")
+    return tuple(decoded)
+
+
+def _decode_decision_evidence(raw: str | None) -> DecisionEvidence | None:
+    """Read the stored enhanced-audit evidence back into a value object.
+
+    An empty or absent column means "this was not an enhanced-audit attempt" —
+    the state of every row written before NEX-055 — and must read back as
+    ``None`` so the verifier recomputes the earlier intent payload for it. A
+    malformed value is not swallowed: the row is untrusted on the way back in,
+    and silently degrading it would let corrupted evidence verify as if the
+    decision had never been sealed.
+    """
+    if not raw:
+        return None
+    decoded = json.loads(raw)
+    if not isinstance(decoded, dict):
+        raise ValueError("decision_evidence must be a JSON object")
+    matched = decoded.get("matched_rules", [])
+    obligations = decoded.get("obligations", [])
+    attributes = decoded.get("attributes", {})
+    if not isinstance(matched, list) or not all(isinstance(item, str) for item in matched):
+        raise ValueError("decision_evidence.matched_rules must be a JSON array of strings")
+    if not isinstance(obligations, list) or not all(isinstance(item, str) for item in obligations):
+        raise ValueError("decision_evidence.obligations must be a JSON array of strings")
+    if not isinstance(attributes, dict):
+        raise ValueError("decision_evidence.attributes must be a JSON object")
+    # Sort the attribute pairs by name: the sealing renderer turns them into a
+    # dict, whose canonical form is key-sorted anyway, but a stable order here
+    # keeps a decoded value equal to the one that was sealed.
+    return DecisionEvidence(
+        matched_rules=tuple(matched),
+        obligations=tuple(obligations),
+        attributes=tuple(sorted((str(name), str(value)) for name, value in attributes.items())),
     )
 
 
@@ -144,6 +208,8 @@ def _invocation_to_domain(row: ToolInvocationRow) -> ToolInvocation:
         idempotency_key=row.idempotency_key,
         arguments_digest=row.arguments_digest,
         resource_ref=row.resource_ref,
+        policy_versions=_decode_policy_versions(row.policy_versions),
+        decision_evidence=_decode_decision_evidence(row.decision_evidence),
         status=InvocationStatus(row.status),
         outcome=row.outcome,
         approval_request_id=(
@@ -190,24 +256,47 @@ class SqlAlchemyAgentRepository:
         ).scalar_one_or_none()
         return _agent_to_domain(row) if row else None
 
-    def list_for_owner(self, owner_user_id: UserId) -> list[AgentIdentity]:
+    def list_for_owner(
+        self, owner_user_id: UserId, *, limit: int | None = None, offset: int = 0
+    ) -> list[AgentIdentity]:
+        # ``id`` breaks ties so an ``OFFSET`` window is stable: agents registered
+        # in one request burst share ``created_at`` to the microsecond, and an
+        # order that is not total can repeat a row while skipping another as the
+        # window shifts — with the page still looking full.
+        statement = (
+            select(AgentRow)
+            .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
+            .order_by(AgentRow.created_at, AgentRow.id)
+        )
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
+        return [_agent_to_domain(row) for row in rows]
+
+    def count_for_owner(self, owner_user_id: UserId) -> int:
+        # Scoped by owner, like the listing: an unscoped aggregate would disclose
+        # how many agents other users hold.
+        return int(
+            self._session.execute(
+                select(func.count())
+                .select_from(AgentRow)
+                .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
+            ).scalar_one()
+        )
+
+    def list_all_for_integrity_sweep(self, *, limit: int, offset: int = 0) -> list[AgentIdentity]:
+        # Deterministic order so a capped sweep always covers the same agents;
+        # ``id`` breaks ties when two agents share a ``created_at``. Both columns
+        # stay in the ORDER BY because paging depends on the order being total:
+        # with a tie broken differently between two queries, an ``OFFSET`` page
+        # could skip the agent it should have started at and still return a full
+        # page, so the sweep would report complete coverage of a set it never saw.
         rows = (
             self._session.execute(
                 select(AgentRow)
-                .where(AgentRow.owner_user_id == _as_uuid(owner_user_id))
-                .order_by(AgentRow.created_at)
-            )
-            .scalars()
-            .all()
-        )
-        return [_agent_to_domain(row) for row in rows]
-
-    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
-        # Deterministic order so a capped sweep always covers the same agents;
-        # ``id`` breaks ties when two agents share a ``created_at``.
-        rows = (
-            self._session.execute(
-                select(AgentRow).order_by(AgentRow.created_at, AgentRow.id).limit(limit)
+                .order_by(AgentRow.created_at, AgentRow.id)
+                .limit(limit)
+                .offset(offset)
             )
             .scalars()
             .all()
@@ -273,6 +362,7 @@ class SqlAlchemyDelegationRepository:
                 delegator_user_id=_as_uuid(delegation.delegator_user_id),
                 capabilities=_encode_capabilities(delegation.capabilities),
                 status=delegation.status.value,
+                assurance=delegation.assurance.value,
                 created_at=delegation.created_at,
                 revoked_at=delegation.revoked_at,
             )
@@ -282,17 +372,35 @@ class SqlAlchemyDelegationRepository:
         row = self._session.get(DelegationRow, _as_uuid(delegation_id))
         return _delegation_to_domain(row) if row else None
 
-    def list_for_agent(self, agent_id: AgentId) -> list[DelegatedAuthorization]:
-        rows = (
-            self._session.execute(
-                select(DelegationRow)
-                .where(DelegationRow.agent_id == _as_uuid(agent_id))
-                .order_by(DelegationRow.created_at)
-            )
-            .scalars()
-            .all()
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: DelegationStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[DelegatedAuthorization]:
+        statement = (
+            select(DelegationRow)
+            .where(DelegationRow.agent_id == _as_uuid(agent_id))
+            .order_by(DelegationRow.created_at, DelegationRow.id)
         )
+        if status is not None:
+            statement = statement.where(DelegationRow.status == status.value)
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_delegation_to_domain(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId, *, status: DelegationStatus | None = None) -> int:
+        statement = (
+            select(func.count())
+            .select_from(DelegationRow)
+            .where(DelegationRow.agent_id == _as_uuid(agent_id))
+        )
+        if status is not None:
+            statement = statement.where(DelegationRow.status == status.value)
+        return int(self._session.execute(statement).scalar_one())
 
     def list_active_for_delegator(self, user_id: UserId) -> list[DelegatedAuthorization]:
         rows = (
@@ -420,6 +528,23 @@ class SqlAlchemyApprovalRequestRepository:
                     else None
                 ),
                 revoke_reason=request.revoke_reason,
+                # The two-person control travels with the row from creation. A
+                # save that omitted these would reset the threshold to the column
+                # default and quietly downgrade a request that needs two
+                # signatures back to one.
+                required_approvals=request.required_approvals,
+                second_approver_user_id=(
+                    _as_uuid(request.second_approver_user_id)
+                    if request.second_approver_user_id is not None
+                    else None
+                ),
+                second_decided_at=request.second_decided_at,
+                second_reason=request.second_reason,
+                denied_by_user_id=(
+                    _as_uuid(request.denied_by_user_id)
+                    if request.denied_by_user_id is not None
+                    else None
+                ),
                 version=request.version,
             )
         )
@@ -437,24 +562,73 @@ class SqlAlchemyApprovalRequestRepository:
                     ApprovalRequestRow.agent_id == _as_uuid(agent_id),
                     ApprovalRequestRow.status == ApprovalStatus.PENDING.value,
                 )
-                .order_by(ApprovalRequestRow.requested_at)
+                .order_by(
+                    ApprovalRequestRow.requested_at,
+                    ApprovalRequestRow.id,
+                )
             )
             .scalars()
             .all()
         )
         return [_approval_to_domain(row) for row in rows]
 
-    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
-        rows = (
-            self._session.execute(
-                select(ApprovalRequestRow)
-                .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
-                .order_by(ApprovalRequestRow.requested_at)
-            )
-            .scalars()
-            .all()
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ApprovalRequest]:
+        """An agent's approval requests, optionally one status, optionally paged.
+
+        ``status`` is pushed into SQL rather than filtered after the read: it is a
+        stored column, so the database's answer and the domain's ``status`` field
+        are the same value, and selecting in the store is what lets a page of one
+        status be a page of *that* status rather than "the first N rows overall,
+        most of which are discarded".
+
+        ``limit=None`` reads the whole history. The tool gateway needs exactly
+        that (NEX-089): it must see every live approval to decide whether a
+        sensitive action is authorised, and a bounded read there would silently
+        refuse actions whose approval fell outside the page.
+
+        ``id`` breaks ``requested_at`` ties. A page is an ``OFFSET`` window, so a
+        non-deterministic order lets the same row appear twice while another is
+        skipped as the windows shift; approvals opened in the same instant are
+        exactly the case where that happens. The tool gateway's unbounded read
+        has the same problem for a different reason: a sensitive action's
+        authorisation must not depend on which order the database chose for its
+        approvals (NEX-093).
+        """
+        statement = (
+            select(ApprovalRequestRow)
+            .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
+            .order_by(ApprovalRequestRow.requested_at, ApprovalRequestRow.id)
         )
+        if status is not None:
+            statement = statement.where(ApprovalRequestRow.status == status.value)
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_approval_to_domain(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId, *, status: ApprovalStatus | None = None) -> int:
+        """Count an agent's approvals with a ``COUNT`` aggregate, not a page.
+
+        The count is filtered by the same ``agent_id`` and ``status`` the listing
+        is, so a page and its total describe one set. An unscoped count here would
+        disclose how many approvals another agent has opened, exactly the leak the
+        tool-invocation total is scoped to avoid.
+        """
+        statement = (
+            select(func.count())
+            .select_from(ApprovalRequestRow)
+            .where(ApprovalRequestRow.agent_id == _as_uuid(agent_id))
+        )
+        if status is not None:
+            statement = statement.where(ApprovalRequestRow.status == status.value)
+        return int(self._session.execute(statement).scalar_one())
 
     def save(self, request: ApprovalRequest) -> None:
         """Persist the decision, refusing to overwrite a newer stored version.
@@ -496,6 +670,19 @@ class SqlAlchemyApprovalRequestRepository:
                     else None
                 ),
                 revoke_reason=request.revoke_reason,
+                required_approvals=request.required_approvals,
+                second_approver_user_id=(
+                    _as_uuid(request.second_approver_user_id)
+                    if request.second_approver_user_id is not None
+                    else None
+                ),
+                second_decided_at=request.second_decided_at,
+                second_reason=request.second_reason,
+                denied_by_user_id=(
+                    _as_uuid(request.denied_by_user_id)
+                    if request.denied_by_user_id is not None
+                    else None
+                ),
                 version=request.version,
             )
         )
@@ -526,6 +713,15 @@ class SqlAlchemyApprovalRequestRepository:
                 # A revoked grant is not spendable even if a concurrent writer
                 # has not yet flipped the status column.
                 ApprovalRequestRow.revoked_at.is_(None),
+                # The two-person control, enforced in the same statement that
+                # spends the grant rather than in a separate read: a row that
+                # requires two signatures and carries one must not be consumed
+                # even if its status column somehow reads approved. Checking it
+                # here means no caller can spend it by skipping the aggregate.
+                or_(
+                    ApprovalRequestRow.required_approvals < 2,
+                    ApprovalRequestRow.second_approver_user_id.is_not(None),
+                ),
             )
             .values(consumed_at=now, version=ApprovalRequestRow.version + 1)
         )
@@ -577,6 +773,12 @@ class SqlAlchemyToolInvocationRepository:
                 idempotency_key=invocation.idempotency_key,
                 arguments_digest=invocation.arguments_digest,
                 resource_ref=invocation.resource_ref,
+                policy_versions=json.dumps(list(invocation.policy_versions), ensure_ascii=True),
+                decision_evidence=(
+                    json.dumps(invocation.decision_evidence.to_payload(), ensure_ascii=True)
+                    if invocation.decision_evidence is not None
+                    else ""
+                ),
                 status=invocation.status.value,
                 outcome=invocation.outcome,
                 approval_request_id=(
@@ -601,6 +803,10 @@ class SqlAlchemyToolInvocationRepository:
         row.status = invocation.status.value
         row.outcome = invocation.outcome
         row.completed_at = invocation.completed_at
+        # ``policy_versions`` is deliberately not updated here. It is part of the
+        # sealed intent, fixed before the handler ran; letting a finalisation
+        # rewrite it would make the cited policy set mutable after the fact and
+        # defeat the point of sealing it.
         # The outcome seal is written with the verdict it covers, in the same
         # UPDATE: a crash between the two would leave a completed row whose
         # outcome_hash is missing, which the verifier reports as tampering.
@@ -628,11 +834,23 @@ class SqlAlchemyToolInvocationRepository:
     def list_for_agent(
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[ToolInvocation]:
+        """An agent's invocations, newest first, one page at a time.
+
+        ``chain_sequence`` breaks ``invoked_at`` ties. It is unique per agent
+        (``uq_tool_invocations_agent_chain_sequence``) and, unlike ``id``, it
+        orders the tied rows the way the audit chain read them, so a page of
+        invocations lines up with the chain a verifier walks. Without a
+        tiebreaker an ``OFFSET`` window over a non-unique timestamp can show one
+        invocation twice and skip another (NEX-093).
+        """
         rows = (
             self._session.execute(
                 select(ToolInvocationRow)
                 .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
-                .order_by(ToolInvocationRow.invoked_at.desc())
+                .order_by(
+                    ToolInvocationRow.invoked_at.desc(),
+                    ToolInvocationRow.chain_sequence.desc(),
+                )
                 .limit(limit)
                 .offset(offset)
             )
@@ -640,6 +858,15 @@ class SqlAlchemyToolInvocationRepository:
             .all()
         )
         return [_invocation_to_domain(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        return int(
+            self._session.execute(
+                select(func.count())
+                .select_from(ToolInvocationRow)
+                .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
+            ).scalar_one()
+        )
 
     def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
         anchor = self.chain_anchor(agent_id)
@@ -769,11 +996,18 @@ class SqlAlchemyAgentRunRepository:
     def list_for_agent(
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[AgentRun]:
+        """An agent's runs, newest first, one page at a time.
+
+        ``id`` breaks ``created_at`` ties deliberately. A page is an ``OFFSET``
+        window, so a non-deterministic order can return the same row twice and
+        skip another as the windows shift; two runs planned in the same instant
+        are exactly the case where that happens.
+        """
         rows = (
             self._session.execute(
                 select(AgentRunRow)
                 .where(AgentRunRow.agent_id == _as_uuid(agent_id))
-                .order_by(AgentRunRow.created_at.desc())
+                .order_by(AgentRunRow.created_at.desc(), AgentRunRow.id.desc())
                 .limit(limit)
                 .offset(offset)
             )
@@ -781,6 +1015,21 @@ class SqlAlchemyAgentRunRepository:
             .all()
         )
         return [self._hydrate(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """Count this agent's runs with a ``COUNT`` aggregate, not a page.
+
+        Filtered by the same ``agent_id`` the listing is, so a page and its total
+        describe one set. An unscoped count here would disclose how many runs
+        another agent has scheduled, which is the same leak the listing is scoped
+        to avoid.
+        """
+        statement = (
+            select(func.count())
+            .select_from(AgentRunRow)
+            .where(AgentRunRow.agent_id == _as_uuid(agent_id))
+        )
+        return int(self._session.execute(statement).scalar_one())
 
     def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
         resumable = (RunStatus.PENDING.value, RunStatus.RUNNING.value, RunStatus.INTERRUPTED.value)

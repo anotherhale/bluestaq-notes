@@ -2620,3 +2620,2125 @@ ever adding an `approve` step to the lifecycle.
 **Delivery state.** NEX-046 and NEX-047 delivery debt is **CLEAR** as of run
 `NEX-2026-11-27-50`: CI 4/4 `completed/success` at `379a98a`, issue #2 comment
 `7219198697`, PR #3 section appended. NEX-048 starts with no debt outstanding.
+
+## NEX-056 (run `NEX-2026-11-27-57`) — the `rate-limit` obligation got an enforcement adapter
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **VERIFIED** — CI 4/4 `completed/success` at `e7c7315` (polled 2026-11-27T18:14Z) |
+| Dependencies | NEX-053 (obligations as a separate axis), NEX-054 (redaction adapter seam) |
+
+**Objective:** make the `rate-limit` obligation enforceable, so a policy can express a volume
+bound on one capability instead of refusing every call.
+
+**Architecture refs:** `ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` §5 (obligations),
+ADR-014 (obligations as a separate axis), `application/ports/rate_limit.py`.
+
+**Scope**
+
+- `InvokeTool` accepts an optional `RateLimiter`; the obligation is enforced on a
+  per-agent-per-tool key before the approval gate.
+- `container.py` passes the `InMemoryRateLimiter` it already builds from
+  `rate_limit_requests` / `rate_limit_window_seconds`.
+- No new port, no new dependency, no schema change.
+
+**Acceptance criteria**
+
+- A call within the bound succeeds.
+- A call over the bound raises `RateLimited` carrying the retry window (mapped to 429).
+- The refusal is written as a `denied` invocation naming the obligation and the window.
+- The bound is per tool, not per agent: exhausting one tool does not block another.
+- An idempotent replay under a recorded key does not consume budget.
+- With no limiter wired the obligation is unsatisfiable and the call is refused.
+
+**Required tests:** `tests/agent/test_tool_gateway_obligations.py` (five new cases),
+`tests/agent/test_tool_gateway_policy.py` (unsatisfiable case in a no-limiter harness).
+
+**Security considerations**
+
+- Fail closed with no limiter: never run unbounded because a dependency is missing.
+- Enforcement precedes approval so a flood cannot fill the human approval queue.
+- The refusal is audited, not merely returned: a throttled agent must be visible in the trail.
+
+**Migration implications:** none.
+
+**Observability:** the denial row is the signal; no new metric was added.
+
+**Rollback:** stop passing `rate_limiter` into `InvokeTool`. The obligation reverts to
+fail-closed refusal — no caller or port changes.
+
+**Known limit, recorded deliberately:** the bound is deployment configuration, not policy
+vocabulary. `PolicyObligation` is a closed set of names with no parameters, so a rule says "a
+volume bound applies" and the operator sets the number. A per-rule bound needs a parameterised
+obligation — an ADR, not a quiet widening (D-056).
+
+---
+
+## NEX-057 — the `step-up` obligation: what evidence raises the assurance requirement
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **IMPLEMENTED** (ADR delivered; enforcement deferred to NEX-058) |
+| Dependencies | NEX-053, NEX-054, NEX-055, NEX-056 (the four satisfied obligations) |
+| ADR | [ADR-015](../ADR/ADR-015-step-up-assurance-signal.md) |
+
+**Objective:** give `step-up` a mechanism, or record an ADR explaining why it cannot have one
+in the current model. Today a policy that names it refuses every call.
+
+**Why this is the hardest of the five:** `approval`, `redaction`, `enhanced-audit` and
+`rate-limit` all have a *deterministic* mechanism that either fires or does not. `step-up`
+requires a judgement — that the current assurance level is insufficient for this attempt — and
+a judgement made by an AI model would be exactly the thing §10 of the directive forbids: a
+model raising its own requirement. So the decision is *what deterministic signal raises the
+requirement*, not *what model should decide*.
+
+**First deliverable is an ADR, not code.** Candidate deterministic signals to evaluate:
+
+- The capability's declared sensitivity (a static attribute on `ToolDefinition`).
+- The classification of the data the call would touch (already modelled).
+- Whether the delegating human's own session assurance is below the capability's floor.
+- Accumulated risk in the window (a count of denials, not a model score).
+
+The ADR must state what "stepped up" *means* — a fresh human confirmation, a re-authentication,
+a second credential — because an obligation whose satisfaction is undefined is not enforceable.
+
+**Acceptance criteria**
+
+- An ADR names the deterministic signal and what satisfies the requirement.
+- If a mechanism is feasible: the gateway enforces it and a test pins both the raise and the
+  satisfy paths.
+- If it is not feasible without a vocabulary change: the ADR says so and the backlog records the
+  prerequisite, rather than the gateway quietly accepting the obligation.
+
+**Security considerations:** a model must never raise its own assurance requirement. Any
+step-up trigger is a deterministic application-layer control.
+
+**Next:** `second-approver` follows and depends on the approval flow supporting a second
+*distinct* approver rather than reusing the first — separation of duties, not a repeat click.
+
+**Resolution (NEX-057, run NEX-2026-11-27-58):** the second acceptance path was taken — *not
+feasible without a vocabulary change* — but narrowly: the signal itself is deterministic and
+half-modelled already; the assurance vocabulary and its persistence do not exist yet.
+
+ADR-015 names the signal as the **recorded authentication assurance of the delegating human**.
+An agent has no assurance of its own — every tool handler acts as the delegator — so the honest
+question is how strongly the *human* authenticated when they granted this authority. That is a
+stored fact, read by the gateway, never inferred. Assurance is a closed ordered vocabulary
+(`single-factor` < `multi-factor`) derived server-side from the IdP's `acr`/`amr` claims at
+login, carried on `Principal`, copied onto `DelegatedAuthorization.grant`, and compared against a
+static `STEP_UP_FLOOR` of multi-factor by ordinal rank. Absent or unrecognised assurance reads as
+single-factor, so an unpersisted value can never become authority. The gateway keeps refusing
+`step-up` until NEX-058 lands — correct, because an obligation satisfied by a weaker check than
+its name promises is worse than a refusal.
+
+Rejected in the ADR, with reasons: a model-scored risk signal (§10 forbids a model raising its
+own requirement, and it is unauditable); denial-count risk accumulation (measures behaviour, not
+identity, and an adversary can steer it in both directions); deriving it from the capability's
+`requires_approval` (makes it the same obligation as `approval` under a second name); data
+classification (says what data may flow, not who is acting, and lets a policy author widen the
+step-up set by relabelling data); and reading the delegator's live session assurance per call
+(the delegation can outlive the session, and it couples the gateway to the session store for a
+fact that should be fixed at consent).
+
+---
+
+## NEX-058 — persist authentication assurance so `step-up` becomes enforceable
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **VERIFIED** at `38292d2` (run 73). Backend pair 2/2 `completed/success`; frontend 1/2 `success`, the single failure being a pre-existing `App.test.tsx` race (NEX-073) in code this commit does not touch. All 7 scope items now implemented; item 7 (the claim-shape diagnostic) was the last gap. |
+| Dependencies | NEX-057 (ADR-015), NEX-053 (delegation model) |
+| Blocks | NEX-057 enforcement; `second-approver` (needs distinct-human identity) |
+
+**Objective:** implement ADR-015's prerequisites so the gateway satisfies `step-up` instead of
+refusing it.
+
+**Scope**
+
+1. `domain/identity/assurance.py` — `AuthenticationAssurance` (`single-factor`,
+   `multi-factor`), `rank`, `meets()`. Closed vocabulary; absent reads as the lowest rank.
+2. `Principal.assurance` — default `SINGLE_FACTOR`; derived in
+   `infrastructure/identity/oidc_relying_party.py` from `acr`/`amr`, never from a request.
+3. `DelegatedAuthorization.assurance`, set in `grant()` from the granting principal.
+4. `DelegationRow.assurance` + migration: NOT NULL with `server_default='single-factor'`, then
+   drop the default in a second batch (the `b7d2c48e91af` pattern).
+5. `_delegation_to_domain` / `SqlAlchemyDelegationRepository.add` / `.save` carry the field.
+6. Gateway: `STEP_UP` satisfied iff `resolved.delegation.assurance.meets(STEP_UP_FLOOR)`.
+7. The OIDC adapter logs the raw *claim shape* (not the value) when it defaults to
+   single-factor, so an operator whose IdP does support MFA can see why step-up policies refuse.
+
+**Acceptance criteria**
+
+- Raise path: a single-factor delegation is refused `step-up`, audited as a denial.
+- Satisfy path: a multi-factor delegation is allowed and its assurance appears in the evidence.
+- Fail-closed path: absent or unknown assurance is refused, never treated as satisfied.
+- A test asserts that no request body or header can set assurance.
+
+**Required tests:** the three gateway paths above, the migration on a populated table, and the
+`acr`/`amr` mapping in the OIDC adapter.
+
+**Security considerations:** the only writer of `assurance` is the verified-token path; the
+gateway never re-derives it. Widening the enum is a vocabulary change and needs an ADR.
+
+**Migration implications:** one additive column, nullable-then-NOT-NULL via server default.
+
+**Next:** after NEX-058 lands, implement `second-approver` on the same distinct-human footing.
+
+**Verified (run 73).** Scope item 7 landed at `38292d2`: the OIDC adapter logs the claim
+*shape* (never a value) when `derive_assurance()` returns below `STEP_UP_FLOOR`, naming which
+stage failed — claim absent, type unusable, method unrecognised, too few independent families,
+or an `acr` negation vetoing the marker. The line is silent on a satisfying login. The marker
+scan is shared with enforcement (`_acr_multi_factor_markers()`), and returns *every* marker with
+a per-marker veto, so the diagnostic cannot drift from the decision — a first version returned
+only the first marker, which would have silently changed enforcement for
+`mfa-optional:multi-factor`. 7 tests added through the real `_verify_id_token` path, proved
+non-vacuous by reverting the log call (4 fail). Full suite 1508 passed / 4 skipped; mypy clean
+on 141 files; backend CI 2/2 success at `38292d2`.
+
+## NEX-059 — make `second-approver` a real two-person control
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 |
+| Status | **IMPLEMENTED + TESTED** (this run); CI verification pending |
+| Dependencies | NEX-058 (distinct-human identity), NEX-053 (delegation model) |
+| Blocks | `step-up`/`second-approver` being the last unimplemented named obligations |
+
+**Objective:** the gateway must stop refusing `second-approver` and enforce it — one
+signature from one human must not authorise a two-person control.
+
+**The failure mode this task exists to prevent.** The obvious implementation — "if the
+obligation is present, accept any approval" — *silently defeats* the control it claims to
+enforce. The request is approved, the action runs, and nothing anywhere records that only
+one person signed. So the threshold must live on the request (`required_approvals`), not be
+re-derived by the gateway at spend time: a gateway that forgot to pass the number would
+otherwise accept one signature for a two-person control.
+
+**Scope delivered**
+
+1. `domain/agent/entities.py` — `ApprovalRequest.required_approvals` (1 or 2, closed
+   vocabulary), `second_approver_user_id`/`second_decided_at`/`second_reason`,
+   `denied_by_user_id`, `approvals_recorded`, `awaiting_second_approval`.
+   `approve(approver_user_id=…)` records the first signature and leaves the status
+   `PENDING`; the **second, distinct** human completes it. Distinctness is enforced in the
+   aggregate, not the use case. `raise_required_approvals()` may only raise (never lower),
+   and refuses once any signature exists — silently un-approving a recorded human decision
+   would rewrite history. `is_usable` fails closed when `approvals_recorded <
+   required_approvals`, so a contradictory row (hand-written UPDATE, partial migration,
+   future writer) never spends a control it never satisfied.
+2. `application/use_cases/tools.py` — `second_approver_required()` derives the threshold
+   from the matched obligations; `_approved_request()` opens the request with it.
+3. `infrastructure/db/models.py` + `agent_repositories.py` — persist the new columns;
+   `consume(request_id, now=)` carries the timestamp.
+4. `migrations/versions/e5a9c3b7d812_two_person_approval.py` — additive, nullable-then-
+   NOT-NULL via `server_default`, the `b7d2c48e91af` pattern.
+5. `tests/agent/test_tool_gateway_obligations.py` — the fail-closed test claimed
+   `second-approver` had no adapter. That is no longer true, so it was retargeted to a
+   non-sensitive tool; the module docstring's "unsupported" claim was corrected rather
+   than left to mislead the next reader.
+
+**Acceptance criteria**
+
+- Raise path: a policy with `second-approver` opens a request needing **two** signatures.
+- One signature: status stays `PENDING`, `is_usable` is false, action is refused.
+- Same human signing twice: refused as an invariant violation, not counted.
+- Second distinct human: approved, usable, consumed once (replay refused).
+- Denial after a partial approval: refused action, and *both* the grant and the refusal
+  remain on the record for the auditor.
+- Fail-closed: a row with `status=APPROVED` but fewer signatures than required is unusable.
+
+**Required tests:** `tests/agent/test_second_approver_obligation.py` — 11 tests covering all
+six paths above plus threshold weakening. **All 11 pass.**
+
+**Security considerations:** the threshold is a property of the persisted request, never a
+gateway argument and never settable from a request body or header. The vocabulary is closed
+at 1–2; widening it needs an ADR (a variable threshold a caller can widen is not a control).
+
+**Migration implications:** additive columns only; no backfill needed because `required_approvals`
+defaults to 1, which is the behaviour every existing row already had.
+
+**Next:** commit, push, poll CI, then report NEX-057/058/059 together to PR #5 and issue #2
+— the interesting fact is that ADR-015 now has two of its three named obligations enforced.
+
+## NEX-063 — risk-based approval: the gate follows the blast radius, not only the policy
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 — foundational |
+| Status | VERIFIED — CI 4/4 `completed/success` at `934774e`, polled 2026-11-27T20:52Z (run 63) |
+| Dependencies | NEX-059 (`required_approvals`, closed 1–2 vocabulary), ADR-015 |
+| Blocks | the "risk-based approval" clause of `ENTERPRISE_SECURITY_ARCHITECTURE_V1` L147 and L212 |
+
+**Objective.** Make approval strength follow how dangerous the action is, not only what a
+policy author happened to write, and put that risk on the decision record.
+
+**Why it was the right next task.** It is the last named ADR-015 obligation without a
+mechanism, and it is the one the security architecture calls out twice (L147 "risk-based
+approval", L212 "Tier 2 risk-based durable"). It also unlocks a later slice: once the record
+carries a tier, a policy can require a control *at or above* it.
+
+**Design.** `domain/agent/risk.py` — a pure, total, deterministic classifier from `Capability`
+to a closed ordered tier (`low` < `elevated` < `high`). Code, not a model score: a risk figure
+that sets an approval threshold is authority, and §10 forbids a model from widening its own.
+`required_approvals_for()` returns the max of what the policy asked and the tier floor, clamped
+to 1–2. `_policy_attributes()` emits `risk` so the gate's reasoning is on `DecisionEvidence`.
+Full reasoning in `docs/ADR/ADR-016-risk-based-approval.md`.
+
+**Acceptance criteria**
+
+- A silent policy does **not** reduce a `HIGH` action below two signatures. *(pure test)*
+- A policy **may** raise a `LOW` action to two. *(pure test)*
+- The threshold result is always in the closed 1–2 vocabulary, for every capability and any
+  input threshold including 0 and 99. *(pure test, parametrised)*
+- Every capability is classed; `ORG_SEARCH` is the only `HIGH`; every sensitive capability is
+  at least `ELEVATED`. *(pure tests)*
+- The recorded decision evidence carries `risk`. *(gateway path, existing evidence assertions
+  still green)*
+- `assess_action_risk` refuses a bare string rather than coercing. *(pure test)*
+
+**Required tests:** `tests/agent/test_risk_based_approval.py` — 25 tests. **All 25 pass.**
+
+**Security considerations.** The tier is computed in the enforcement path from the capability
+and is never read from a policy or a request body, so no caller can lower it. The approval
+vocabulary stays closed at 1–2; widening it needs an ADR.
+
+**Migration implications:** none — no schema change. `required_approvals` already defaults to 1.
+
+**Honest limit.** `ORG_SEARCH` is `HIGH` *and* non-delegable, so no agent token reaches it and
+the two-signature floor has no production caller yet. It is kept for the day a future ADR
+permits delegated org-wide search. Because that branch cannot be exercised end to end, the
+threshold logic is tested as a pure function; every other tier is exercised through the gateway.
+
+**Deferred, with reasons in the ADR:** approval *preview* (no proposal surface to render), and
+non-capability risk signals — bulk volume, unusual patterns, export size — which need
+request-level facts the gateway does not collect.
+
+**Next:** poll CI on the pushed head; if green, promote to VERIFIED and extend PR #5.
+
+---
+
+## NEX-064 — a retired policy version must not stay in force (fail-open closure)
+
+| Field | Value |
+| --- | --- |
+| Task ID | NEX-064 |
+| Phase | 3 (governance) |
+| Priority | P1 — authorization correctness |
+| Status | VERIFIED — CI 4/4 `completed/success` at `7456a89`, polled 2026-11-27T21:13Z |
+| Dependencies | none — `evaluate()` already existed |
+
+**Objective.** Make `evaluate()` honour its own rule 3, *"Only published versions may be
+consulted"*. It refused a `DRAFT` but **consulted a `RETIRED`** version, so an `allow` rule from
+a superseded release still allowed.
+
+**Scope.** `domain/governance/policy.py` — one predicate in the version loop; two regression
+tests in `tests/domain/test_governance_policy.py`. No port, no adapter, no schema, no migration.
+
+**Architecture references.** ADR-015 (deterministic enforcement), `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md`
+(fail-closed), §10 (deterministic application-layer controls, never model judgement).
+
+**Acceptance criteria.**
+- A retired version alone raises `ValidationError` naming it `retired`.
+- A retired version in a set **with** a published one refuses the whole evaluation — it is not
+  silently skipped, because a caller would otherwise believe retired rules applied.
+- The draft message keeps its exact existing wording (`"is a draft and cannot be evaluated"`).
+- Full suite, ruff format/check, and mypy stay green.
+
+**Required tests.** `test_a_retired_version_cannot_be_evaluated`,
+`test_a_retired_version_alongside_a_published_one_still_refuses`. Both pass (verified: 3 passed
+for `-k retired`).
+
+**Security considerations.** This is a **fail-open** closure. It was latent — the gateway passes
+`all_published()`, which cannot contain a retired row — so no production path was exploitable.
+The exposure is the next caller: `history()` (what the history endpoint returns) would keep
+enforcing replaced rules. Fixing the predicate makes the invariant true for every caller rather
+than only the one that happened to pass a safe argument.
+
+**Migration implications.** None.
+
+**Observability implications.** None — the failure is now a `ValidationError` at the same point
+a draft already failed, so existing audit behaviour is unchanged.
+
+**Rollback.** Revert one predicate; no state to unwind.
+
+**Complexity.** Low.
+
+**Verified.** CI 4/4 `completed/success` at `7456a89` (2026-11-27T21:13Z); PR #5 body and issue #2 updated by run 64.
+**Named follow-up (not this task):** the policy lifecycle has no `approve` verb — `DRAFT →
+PUBLISHED` is direct, so approval of a policy change is not itself recorded. That is the
+next governance slice.
+
+
+## NEX-067 — MFA requires independent factor families, not distinct method names
+
+| Field | Value |
+| --- | --- |
+| Task ID | NEX-067 |
+| Phase | 3 (governance / identity assurance) |
+| Priority | P1 — authorization correctness (a security control that overstates the login) |
+| Status | VERIFIED — CI 4/4 `completed/success` at `c01fde5`, polled 2026-11-27T22:47Z |
+| Dependencies | ADR-015 `step-up` obligation (NEX-058) — this is the fact that obligation enforces |
+
+**Objective.** Make `derive_assurance()` grant `MULTI_FACTOR` only on evidence of two
+*independent* authentication factor categories, not on two distinct strings in `amr`.
+
+**Scope.** `infrastructure/identity/oidc_relying_party.py` — one family table plus the
+predicate; `tests/authentication/test_derive_assurance.py` — negative and positive cases. No
+port, no adapter, no schema, no migration, no new module.
+
+**Architecture references.** ADR-015 (deterministic enforcement; obligations), ADR-008/ADR-016
+(authorization decisions come from deterministic application-layer controls), §10 of
+`docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (fail-closed; AI never overrides policy).
+
+**Acceptance criteria.**
+- `otp + totp` and `sms + tel` read as `SINGLE_FACTOR` — the two combinations the review named.
+- Other same-family spellings behave the same: `hwk+swk`, `webauthn+passkey`, `face+iris`,
+  `pwd+password+pin`, `fpt+face+iris+vbm`.
+- Genuine independent pairs still read `MULTI_FACTOR`: `pwd+otp`, `pwd+fpt`, `pwd+hwk`,
+  `otp+fpt`, `pin+hwk`.
+- An unrecognised method is ignored, never counted, so the closed vocabulary can only
+  understate assurance.
+- Full suite, ruff format/check, and mypy stay green.
+
+**Required tests.** `test_amr_methods_from_one_factor_family_read_as_single` (parametrised, 8
+same-family cases) and `test_amr_methods_from_independent_families_read_as_multi`. Both pass;
+12 cases fail if the family guard is reverted, so they are proved to catch the defect.
+
+**Security considerations.** This closes a **fail-open**. The `step-up` obligation demanded two
+factors and one factor satisfied it, because the gateway trusted a derived value that counted
+spellings. The vulnerability was not reachable from an unauthenticated position — an attacker
+had to control the `amr` claim, which the IdP signs — but a permissive IdP or a confused
+deployment could mint it, and the control then enforced nothing.
+
+**Migration implications.** None.
+
+**Observability implications.** Assurance may now read lower for the same claim set. That is the
+intended direction and is visible in existing audit records, which already carry the derived
+assurance.
+
+**Rollback.** Revert the family table and predicate; no state to unwind.
+
+**Complexity.** Low.
+
+**Verified.** CI 4/4 `completed/success` at `c01fde5` (2026-11-27T22:47Z); PR #5 body and
+comment `7229055417` carry the evidence.
+**Named follow-up (not this task):** NEX-065 — the policy lifecycle has no `approve` verb, so a
+policy change is not itself recorded as approved.
+
+## NEX-073 — de-race the note-list assertions in `App.test.tsx`
+
+| Field | Value |
+| --- | --- |
+| Phase | 4 (developer experience / gate trust) |
+| Priority | P4 (but cheap, and it protects every future verdict) |
+| Status | **VERIFIED** at `09888ac` (test-only; 127 passed / 9 files, `tsc -b --force` + `eslint` + `vite build` clean, 20/20 repeat runs 0 failures) — **CI 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T01:56Z.** |
+| Dependencies | None |
+| Blocks | Nothing functionally; it degrades the reliability of the frontend CI signal |
+| Owner | FRONTEND |
+
+**Objective:** make the frontend test gate deterministic, so a red frontend run is evidence of a
+real defect rather than a coin flip.
+
+**The defect.** `frontend/src/App.test.tsx > App — identity and ownership > shows the current
+user and lists owned notes` does this:
+
+```tsx
+expect(await screen.findByText("Alice Anderson")).toBeInTheDocument();
+expect(screen.getByText("Alice private")).toBeInTheDocument();
+```
+
+The identity header and the note list are rendered by *different* effects. Awaiting the header
+therefore says nothing about the list, and the synchronous `getByText` for the note title can
+run before the list has committed. It failed one of two frontend CI runs on `38292d2` and passed
+the other on the identical SHA, on a commit that touches **no** frontend file.
+
+**Evidence.** Check-run `140815503026` (`failure`, 26s) vs `140815484127` (`success`, 67s) on
+`38292d2dc5286f9f8bd05ed57fa8af30008fb394`. Annotation: `TestingLibraryElementError: Unable to
+find an element with the text: Alice private`, with the app shell and identity select present in
+the dumped DOM but no note list. The shorter runtime is consistent with failing early.
+
+**Scope**
+
+1. Replace synchronous `getByText` assertions on *asynchronously rendered* content with
+   `findByText` / `waitFor` in `App.test.tsx`.
+2. Audit the rest of the file for the same shape — a `getBy*` on note/folder content that
+   follows an `await` on something else. The same race can be latent elsewhere and merely not
+   have lost the coin flip yet.
+3. Prefer asserting through a role/`aria` query over raw text where it makes the intent clearer,
+   but do not rewrite tests wholesale: the goal is determinism, not churn.
+
+**Acceptance criteria**
+
+- The suite passes repeatedly in a loop (e.g. 20 consecutive runs of the file) with no failure.
+- No assertion is weakened or deleted to achieve that; each changed assertion must still fail if
+  the corresponding rendering is removed.
+- No production code changes.
+
+**Required tests:** the existing file, run in a loop locally; `npm run typecheck`, `npm run lint`,
+`npm test`, `npm run build`.
+
+**Security considerations:** none. This is test-only.
+
+**Migration implications:** none.
+
+**Complexity:** Low.
+
+**Next action:** change the note-title assertions to `findByText`, audit the file for the same
+pattern, then prove determinism with a loop.
+
+### Resolution (run `NEX-2026-11-27-74`)
+
+> **Correction (run `NEX-2026-11-27-73`, later pass).** The paragraph below originally claimed
+> "Only one assertion had the race" and cleared line 172. **That was wrong.** The item-2 audit
+> was completed properly in a later pass and found a *second*, worse instance in the two search
+> tests. The corrected account is in **Resolution, corrected** at the end of this entry; read
+> that instead. The paragraph is kept so the error stays visible.
+
+Only one assertion had the race. The other synchronous `getByText` calls in the file are safe:
+line 172 (`Quarterly Report`) follows a `waitFor` on the *same* `listNotes` result that the
+debounced search re-renders, so it cannot beat a fetch it is already gated behind; line 216
+(`/read-only access/i`) is rendered from `noteDetail` which the preceding `await
+findByText("Shared design doc")` click already resolved; line 374 (`No boards yet`) is a
+synchronous board-store empty state with no fetch. Only line 47 awaited the identity header and
+then read note-list content — two different effects.
+
+Fix at the assertion site, not in `boot()`: a shared barrier in `boot()` would have to be
+something that renders *with* the note list. `Search notes` is in `AppHeader` and renders
+regardless of `loadingNotes`, so awaiting it would have been a fake barrier that looked like a
+fix — which is why the first attempt at that was reverted.
+
+Proved non-vacuous by a temporary `FakeApiClient` subclass delaying `listNotes` 50 ms: the old
+synchronous read throws, the awaited one resolves. Temp file removed (0 remnants).
+
+Determinism: 20/20 consecutive `vitest run src/App.test.tsx` passed, 0 failures.
+Gates: 127 passed / 9 files; `tsc -b --force` clean; `eslint .` clean; `vite build` succeeded.
+
+### Resolution, corrected — scope item 2 (run `NEX-2026-11-27-73`, later pass)
+
+Item 2 ("audit the rest of the file") was **not** actually done in run 74; the paragraph above
+asserted it had been. Doing it properly found a second, more serious instance, in the two search
+tests (`filters notes by title as the user types` and `clears the search and restores the view`):
+
+```tsx
+await user.type(screen.getByLabelText("Search notes"), "quarter");
+await waitFor(() => expect(screen.queryByText("Groceries")).not.toBeInTheDocument());
+expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+```
+
+**The real mechanism is not ordering — it is that `NoteWorkspace.tsx:189` swaps the entire list
+for a loading state while `loadingNotes` is true.** So during a search refetch the list is
+*empty*, not filtered, and an absence-only `waitFor` is satisfied trivially. Empirically proved
+with a 50 ms-delayed `listNotes`: after the old `waitFor` resolved, `document.body.textContent`
+did **not** contain `Quarterly Report` at all — the assertion that should have proved filtering
+was checking an empty screen. The following synchronous `getByText("Quarterly Report")` then
+threw. This is a *vacuous pass* plus a *latent failure*, i.e. strictly worse than the identity
+test: that one always failed loudly when it lost the race, whereas this one silently proved
+nothing on every green run.
+
+Fix: assert both halves **atomically inside one `waitFor`**, so the absence check can only
+succeed on a screen where the matching note is also present:
+
+```tsx
+await waitFor(() => {
+  expect(screen.getByText("Quarterly Report")).toBeInTheDocument();
+  expect(screen.queryByText("Groceries")).not.toBeInTheDocument();
+});
+```
+
+This also removed the need for a "wait for the unfiltered list first" barrier — an earlier
+attempt at that barrier *after* typing failed, correctly, because `Groceries` is filtered out by
+then and may never render.
+
+Verified under a 50 ms `listNotes` delay: both fixed tests pass; a control test reproducing the
+old shape passes the absence-only `waitFor` and then shows `Quarterly Report` is absent, proving
+the old assertion was vacuous (3/3 passed).
+
+Determinism after both fixes: 20/20 consecutive `vitest run src/App.test.tsx`, 0 failures.
+Gates: 127 passed / 9 files; `tsc -b --force` clean; `eslint .` clean.
+
+**Lesson for future audits:** in this file a `waitFor` around a *negative* assertion is not a
+synchronisation point — `loadingNotes` empties the list. Never assert absence alone; pair it with
+a positive assertion in the same `waitFor`.
+
+### Third instance: the tenant-isolation test (same pass)
+
+`does not reveal another user's private note when switching identity` had the identical shape and
+is the most important one in the file, because absence is its **entire** evidence:
+
+```tsx
+await waitFor(() => expect(screen.getByText("Bob Baker")).toBeInTheDocument());
+await waitFor(() => expect(screen.queryByText("Alice private")).not.toBeInTheDocument());
+```
+
+`Bob Baker` is the identity header, rendered from a different effect than the note list, so it is
+not a barrier for list content. If Bob's list ever rendered empty — a load failure, a
+`listNotes` bug, or a regression that returns nothing — the assertion would pass while proving
+nothing, and a *leak* is exactly what it is meant to catch.
+
+Fix: seed a note for Bob and anchor on it, so the absence check only runs on a screen where the
+list has actually rendered for the new identity:
+
+```tsx
+await waitFor(() => expect(screen.getByText("Bob private")).toBeInTheDocument());
+expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
+```
+
+**Proved it can catch a leak** (the point of the test) with a temporary `FakeApiClient` subclass
+whose `canRead()` returns `true` and whose `listNotes` forces `view: "all"`. The new assertion
+failed exactly at `expected document not to contain element, found <span>Alice private</span>` —
+i.e. it detects a real isolation regression. Temp file removed.
+
+The other two absence-only `waitFor` calls were checked and left alone, because in both the
+absence check is *not* the sole evidence: line ~111 (`Temp`) is followed by
+`api.getNoteSync(note.id)?.folder_id === null`, and line ~290 (`Temporary access`) is followed by
+`expect(api.getNote(note.id)).rejects.toMatchObject({ status: 404 })`. Those backend assertions
+carry the real proof, so the DOM check is a UI hint, not the verdict.
+
+## NEX-074 — Let an operator issue a bounded, attributable operator grant
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **VERIFIED** at `e375a1f` — CI 4/4 `completed/success`, polled 2026-11-28T02:20Z |
+| Priority | P1 — an incident remedy with no caller is a remedy that does not exist |
+| Dependencies | NEX-072 (durable `operator_access_log`), the operator-grant store and `OperatorAccessLog` port |
+| Architecture | `application/use_cases/operator_grants.py`, `application/ports/operator_grants.py`, ADR-008 (404-vs-403), ADR-015 |
+
+**Objective.** `OperatorGrant` carried `expires_at` and `granted_by`, the store was durable, and
+the holder report could read it — but no code path could *write* a human-issued grant. The only
+writer was the deployment-configuration seed, which issues unbounded grants with
+`granted_by=None`. The bounded, attributable grant the record exists for was unreachable.
+
+**Delivered.** `IssueOperatorGrant` use case, container wiring, `POST /ops/operator-grants`
+(`OperatorGrantIssueRequest`). Four refusals: an unbounded grant; a self-grant; a scope the issuer
+does not hold (attenuation, checked against the gate's *live* scopes so a lapsed issuer cannot
+delegate a stale one); and an unknown scope that no use case asks for. The issuer is stamped by
+the application layer from the authenticated principal — the body carries no `granted_by`, so a
+caller cannot attribute a widening to someone else. `ISSUE_OPERATION` is a distinct scope from
+the read-side `operator-access-report`: reading who holds a grant and minting one are different
+authorities.
+
+**Deliberately omitted: `rationale`.** The grant row has no column for it, so a required
+free-text field would be validated and thrown away — a record that reads as evidence but is
+never written. Intent is carried by `granted_by` and the gate's access log.
+
+**Follow-up (not a defect).** Persisting an issuance rationale needs a column and a migration;
+until then nothing may promise one.
+
+**Tests.** 11 in `tests/application/test_issue_operator_grant.py`, including a positive pin on
+what the stored row actually records (`granted_by`, `expires_at`, `granted_at`, `is_active`).
+Full suite 1545 passed / 4 skipped; ruff format+check and mypy (141 files) clean locally.
+
+**Acceptance criteria.** An operator can issue a bounded grant; the stored row names the issuer;
+a non-operator, a self-grant, an over-broad scope and an unknown scope are each refused; no
+request body can set the issuer.
+
+## NEX-075 — Retain the operator access log on a bounded window, and make erasing it its own authority
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **VERIFIED** at `319a3dd` — CI 4/4 `completed/success`, polled 2026-11-28T02:45Z |
+| Priority | P1 — an audit log that grows without limit and never forgets is a compliance and storage liability |
+| Dependencies | NEX-072 (durable `operator_access_log`), NEX-074 (operator-grant issuance), the `OperatorAccessLog` port |
+| Architecture | `domain/governance/retention.py`, `application/use_cases/operator_access_retention.py`, ADR-017, ADR-008 (404-vs-403) |
+
+**Objective.** NEX-072 made the operator access log durable and NEX-074 made it the record of who
+may read and issue operator grants. Nothing ever removed a row: every granted `/ops` read appends
+one, forever, attributed to a named user. The table grows without limit, and a read by someone who
+has since left the organisation stays attributed to them indefinitely. Both are risks NEX-074's
+checkpoint recorded as follow-up work; no backlog task existed, so this one was created first.
+
+**Delivered.** `OperatorAccessRetentionPolicy` (window bounded 90–3650 days, validated at
+construction), `PurgeOperatorAccessLog` use case, `purge_before` on the `OperatorAccessLog` port,
+`POST /ops/operator-access-log/purge`, container wiring from `OPERATOR_ACCESS_RETENTION_DAYS`, and
+`tests/…` across four layers. ADR-017 records the decisions.
+
+**Design note — the obvious fix is the wrong one.** Letting an operator delete rows destroys the
+property the log exists for. So deletion is bounded from every direction: the window is a domain
+policy rather than a request field (no caller can express "delete everything" or "delete Bob's
+rows"); `access-log-retention` is a distinct authority from `operator-access-report`; the purge
+records itself through the gate, stamped `now` inside the window it prunes, so it cannot erase the
+record of its own action; and retention is off by default, with the endpoint answering 404 rather
+than offering a purge with no mandate.
+
+**Boundary.** The cutoff is inclusive at its near edge — a row stamped exactly `window` ago is kept
+— and the same rule drives both the adapter's `at < cutoff` and `covers()`, so they cannot disagree
+at the oldest surviving row. Proved by mutation: widening to `at <= cutoff` fails two tests.
+
+**Deliberately omitted: a scheduled purge.** An unattended purger changes who is accountable for an
+erasure. That is a separate decision with its own approval question, not a configuration flag.
+
+**Tests.** `tests/domain/test_operator_access_retention.py` (window bounds, fail-closed),
+`tests/application/test_operator_access_retention.py` (23), `tests/api/test_ops_access_retention_api.py`
+(19, incl. 404-when-unconfigured and fail-boot-on-short-window), and an extension to
+`tests/persistence/test_operator_access_log.py`. Full suite 1551 passed / 4 skipped; ruff
+format+check and mypy (143 files) clean locally.
+
+**Remaining.** None. VERIFIED at `319a3dd` (CI 4/4, polled 2026-11-28T02:45Z). PR #5's body carries
+NEX-074 and NEX-075.
+
+## NEX-076 — Record why a human issued an operator grant
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **VERIFIED** — CI `4fa0463` 4/4 `completed/success`, polled 2026-11-28T03:22Z; 1569 passed / 4 skipped locally |
+| Priority | P1 — an audit of a privileged hand-out that cannot say *why* answers half the question |
+| Dependencies | NEX-074 (operator-grant issuance), NEX-072 (durable `operator_access_log`) |
+| Architecture | `domain/identity/operator_grant.py`, `application/use_cases/operator_grants.py`, migration `b4e6f1a2c9d7` |
+
+**Objective.** NEX-074 made a grant issuable and stamped the issuer, but the grant row had no
+column for a reason — the omission NEX-074 recorded as its explicit follow-up. An auditor could
+reconstruct *that* a grant was handed out and *who* handed it out, but never *why* it was
+justified. `granted_by` plus the gate's access log names an actor and an instant, not a
+justification.
+
+**Delivered.**
+
+- `OperatorGrantRationale` value object (stripped, non-empty, bounded).
+- `OperatorGrant` enforces the pairing: a **human-issued** grant (`granted_by` set) must carry a
+  rationale; a **configuration** grant (`granted_by IS NULL`) must not. This keeps the two
+  provenance kinds honestly distinguishable.
+- `IssueOperatorGrantRequest` gains a required `rationale`; `POST /ops/operator-grants` accepts it
+  and returns it.
+- Migration `b4e6f1a2c9d7` adds a nullable `rationale TEXT` column with a check constraint
+  (`IS NULL OR length > 0`), via `batch_alter_table` so it runs on both SQLite and PostgreSQL.
+
+**Design note — nullability mirrors provenance.** The column is nullable on purpose: a
+configuration grant's reason *is* the reviewed deployment, so storing a per-row reason for it
+would be redundant. Only human-issued grants are forced to state one, which is exactly where an
+auditor's question lands. No backfill: existing rows predate the requirement and are configuration
+grants by construction (the human write path did not exist before NEX-074), so inventing reasons
+for them would fabricate audit facts.
+
+**Boundary refusals.** A blank or over-long rationale is a `422` at the HTTP boundary (schema
+`min_length`/`max_length`); the domain value object enforces the same bound for every other caller,
+so the two cannot drift.
+
+**Tests.**
+
+- `tests/domain/test_operator_grant.py` — pairing rule (human-issued without rationale refused;
+  configuration grant with rationale refused), rationale value object.
+- `tests/application/test_issue_operator_grant.py` — the reason is persisted, not discarded.
+- `tests/persistence/test_operator_grants.py` — the rationale survives a restart through a second
+  adapter; an empty-string rationale is refused by the column constraint; migrated-schema column
+  set includes `rationale`.
+- `tests/api/test_ops_operator_grants_api.py` — 201 round-trips the reason; missing / blank /
+  over-long reasons are `422`; non-operator `404`; self-grant `409`.
+
+**Acceptance criteria.** An operator can issue a grant only with a stated reason; the reason is
+stored, returned, and readable after a restart; a human-issued grant cannot be constructed without
+one; a configuration grant cannot carry a fabricated one; the schema and domain agree on the bound.
+
+**Remaining.** Nothing. Delivered to GitHub: PR #5's body now carries NEX-052..NEX-076.
+
+**Follow-ups recorded by this slice (not part of it).** Expose the rationale on the grant read path
+(a disclosure decision — the issue response already echoes it, listings do not), and ask the owner
+whether PR #5's twenty-two stacked slices should be split before review.
+
+
+## NEX-077 — Expose per-grant provenance (issuer and reason) on the read path
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `9f9a70f`; CI pending at the time of writing. 1574 passed / 4 skipped locally |
+| Priority | P1 — NEX-076 stored a justification no read path returned; a write-only audit field is not an audit trail |
+| Dependencies | NEX-076 (the rationale exists), NEX-074 (issuer), NEX-072 (durable access log) |
+| Architecture | `application/use_cases/operator_grants.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** NEX-076 recorded `granted_by` and `rationale` on an operator grant, but nothing
+read them back. `ListOperatorGrants` folded per-scope grants into one `OperatorHolder` row per
+user, and a fold cannot carry per-grant provenance: a holder with three grants has three issuers
+and three reasons, so a single field on the holder row would either pick one arbitrarily or drop
+them all. The stored justification was therefore write-only — one step short of an audit trail an
+auditor can actually read.
+
+**Delivered.**
+
+- `OperatorGrantDetail` — a frozen dataclass with one row per *active* grant: `user_id`, `scope`,
+  `granted_by`, `rationale`, `granted_at`, `expires_at`.
+- `OperatorGrantSnapshot.grants` (detail rows) and `grant_count`, alongside the unchanged
+  `holders` summary.
+- `OperatorGrantDetailResponse` in `presentation/schemas.py`; `OperatorGrantReportResponse`
+  now carries `grants`.
+
+**Design note — detail is additive, not a replacement.** Both views are built from the same
+`active_grants()` tuple at the same instant, so they cannot describe different sets; the detail
+adds provenance without changing what the summary means. Keeping `holders` avoids breaking the
+existing consumer contract (and its tests) for a field that is still the right answer to "who holds
+what, in total".
+
+**Tests.**
+
+- `tests/application/test_operator_grants.py` — a human-issued grant reports its issuer and reason;
+  a configuration grant reports neither (null, not invented); two grants for one holder keep their
+  own reasons (the case a fold cannot express); the detail excludes an expired grant, so detail
+  and summary describe the same active set; `grant_count == len(grants)`.
+- `tests/api/test_ops_operator_grants_api.py` — the round-trip test now asserts the reason is
+  readable in the *listing* response, not merely that the POST returned `200`.
+
+**Mutation control.** Forcing `rationale=None` in the detail (the pre-NEX-077 behaviour) fails
+four tests — two application, two API — so the new assertions are load-bearing rather than vacuous.
+
+**Acceptance criteria.** An operator listing grants can read, per grant, who issued it and why;
+a configuration grant honestly reports no issuer and no reason; the summary and the detail agree on
+the active set; an expired grant appears in neither.
+
+**Remaining.** Nothing for the read path. The disclosure question NEX-076 raised is answered here
+for operators (the listing is operator-gated); non-operator callers still see nothing.
+
+### NEX-078 — Three-way separation of duties and tz-aware grant expiry
+
+- **Phase:** 3 (governance)
+- **Priority:** P0 (security)
+- **Status:** VERIFIED — CI 4/4 `completed/success` at `6637c50` (Backend ×2, Frontend ×2; polled 2026-11-27T20:43Z by run 78). This row said "CI pending" long after CI had passed; corrected here.
+- **Source:** the two security findings in PR #5's discussion
+- **Dependencies:** NEX-065 (approval columns), NEX-077 (rationale) — both met
+- **Objective:** close two controls that were documented but not enforced at every boundary.
+  1. Policy author, approver and publisher must be three distinct principals (all three pairs),
+     enforced in the domain, the use cases and a DB CHECK.
+  2. An operator grant's `expires_at` must be timezone-aware, refused before any comparison.
+- **Acceptance criteria:**
+  - Approving one's own draft is refused; publishing a version one approved is refused.
+  - A naive `expires_at` is refused with a validation error, never a 500.
+  - Legacy published rows with no approver stay readable.
+  - The migration round-trips.
+- **Tests:** domain (`test_governance_policy.py`, `test_operator_grant.py`), application
+  (`test_policy_lifecycle.py`), API (`test_ops_policy_lifecycle_api.py`), persistence
+  (`test_policy_versions_db.py`).
+- **Security:** removes a one-person governance boundary wearing three names, and an
+  ambiguous-expiry grant that could silently extend access by the deployment's UTC offset.
+- **Next action:** poll CI on `6637c50`; mark VERIFIED only when all check-runs succeed.
+
+### NEX-080 — Revocation provenance is recorded but not readable
+
+- **Phase:** 3 (governance / audit)
+- **Priority:** P1
+- **Status:** **VERIFIED** — product `9336ba3`, docs checkpoint `139edf6`; CI 4/4 `completed/success` on both (Backend x2, Frontend x2, polled 2026-11-28T04:55Z). Corrected in run 85: this line still read "CI UNVERIFIED" long after the evidence existed — stale in the pessimistic direction, which invites wasted re-verification.
+- **Dependencies:** NEX-079 (the write side), NEX-077 (the detail view) — both met
+- **Objective:** surface the revocation facts NEX-079 stores. `revoked_at`/`revoked_by` existed,
+  were paired by a CHECK, and survived their revoker, but nothing read them: an operator could see
+  a grant was gone without learning who ended it, when, or whether it was revoked at all rather
+  than merely expired. An audit fact no interface reads is half a control.
+- **Acceptance criteria:**
+  - `GET /api/v1/ops/operator-grants/revoked` returns each revoked grant with its instant and
+    revoker, under the existing `operator-access-report` scope.
+  - A live grant and a grant that merely expired are absent from that list.
+  - A revoked grant whose revoker's account was deleted still appears, with `revoked_by: null`.
+  - The holdings report (`OperatorGrantDetail`) carries `revoked_at`/`revoked_by`.
+  - A non-operator gets `404`.
+  - The migration round-trips and the CHECK still refuses an actor with no instant.
+- **Tests:** `tests/api/test_ops_operator_grant_revoked_read_api.py` (new, 5), plus widened field
+  set in `tests/api/test_ops_operator_grants_api.py`, use-case cases in
+  `tests/application/test_operator_grants.py`, and store cases in
+  `tests/persistence/test_operator_grants.py`.
+- **Security:** read-only and gated. No new scope — reading the removal history is the authority
+  the holder report already requires, and a fifth token would make an auditor be granted twice to
+  answer one question. The gate runs before the read, so a refused caller learns nothing about
+  how much authority has been removed.
+- **Defects fixed in passing:** the NEX-079 revocation CHECK made any account holding revocation
+  history undeletable; the domain refused the `SET NULL` post-deletion shape for `granted_by`,
+  which turned one account deletion into an outage of the whole `/ops` surface. Both are
+  consequences of `ON DELETE SET NULL` being ignored by validation written as if those columns
+  only ever hold writer-supplied values.
+- **Next action:** poll CI on `9336ba3`. Then append NEX-078…NEX-080 to PR #5's body and post the
+  issue #2 comment — the standing delivery debt.
+
+## NEX-081 — Let a capped integrity sweep be finished (run `NEX-2026-11-28-81`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations |
+| Priority | P1 — the check covered the OLDEST agent trails and could never reach the newest |
+| Status | **VERIFIED** — CI 4/4 `completed/success` at `85a013c` (Backend ×2, Frontend ×2, polled 2026-11-28T05:18Z); product commit `3a05db2` |
+| Dependencies | NEX-042 (the sweep, operator-gated) — met; closes its cap gap |
+| Architecture | `application/ports/agents.py`, `application/use_cases/audit_sweep.py`, `domain/agent/audit_chain.py`, `infrastructure/db/agent_repositories.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** `SweepAuditIntegrity` (NEX-042) asks the one question no owner can: *is any
+agent's audit trail in this deployment broken*. It read
+`list_all_for_integrity_sweep(limit=max_agents)`. The cap is a legitimate bound — a sweep loads
+every agent's whole trail, so an uncapped scan would hold the database open far longer than a
+request should. The report said `truncated` when the cap bit, which is the honest half.
+
+The defect is that `truncated` was a dead end. There was no `offset` and no cursor, so the
+sweep was *always* the oldest `max_agents` agents: on any deployment with more agents than the
+cap, everything past it was outside the integrity check permanently. Because the walk is
+oldest-first, the excluded agents were the **newest** trails — written most recently, and so the
+likeliest to have been tampered with by whoever just gained write access.
+
+A cap with no cursor is not a bound on one request. It is a silent exclusion of everything past
+it.
+
+**Delivered.**
+
+- `GET /api/v1/ops/audit-integrity?offset=N`; the response carries `offset` and `next_offset`.
+  Follow `next_offset` while non-null to reach every agent.
+- `ChainAuditReport.offset`, `.next_offset`, `.covered` (`offset + agents_checked`).
+- `verified` additionally requires `offset == 0`. A second page that reaches the last agent and
+  finds nothing examined *some* agents, not the deployment, and says nothing about the agents
+  before it; without this term an operator could page through a broken deployment and see
+  nothing but passes.
+- `list_all_for_integrity_sweep(*, limit, offset=0)` ordered by `(created_at, id)` — paging
+  needs a **total** order, or an `OFFSET` page can skip the agent it should have started at and
+  still return a full page, reporting complete coverage of a set it never saw.
+- `offset` validated as `InvalidInput` (422) **after** the operator gate, so a non-operator
+  still gets `404` and cannot probe the validation by watching the error change.
+
+**Tests.** `tests/application/test_audit_sweep.py` (`TestACappedSweepCanBeFinished`, 5 tests)
+and `tests/api/test_ops_audit_integrity_api.py` (2). 16 targeted tests pass.
+
+**Mutation control.** Removing `self.offset == 0` from `ChainAuditReport.verified` makes
+`test_a_clean_second_page_is_not_an_all_clear` fail — observed failing, then the guard was
+re-verified present and the module re-parsed before the commit. The guard was written alongside
+its test and had never been seen failing; a test never seen fail is a hypothesis.
+
+**Acceptance criteria.** ✅ A truncated sweep offers a cursor that reaches the remainder.
+✅ Paging the whole set with the cap yields the same findings as one uncapped sweep. ✅ A clean
+page after the first never reports `verified`. ✅ A negative offset is refused with 422, and a
+non-operator gets 404 regardless of the offset. ✅ A non-operator cannot distinguish a valid
+from an invalid offset.
+
+**Remaining.** Nothing for this slice. CI 4/4 at `85a013c`; PR #5's body carries NEX-081 and
+issue #2 comment `7234571708` reports it.
+
+---
+
+## NEX-082 — Page the operator access trail so the whole thing is readable (run `NEX-2026-11-28-82`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Audit Center |
+| Priority | P1 — an audit surface that could only show its newest window, permanently |
+| Status | **VERIFIED** — CI 2/2 `completed/success` at `4f8e15d` (polled 2026-11-28T05:36Z); docs head `ab018b2`; PR #5 and issue #2 updated |
+| Dependencies | ADR-017 (access-log retention), NEX-075 (bounded retention) — met |
+| Architecture | `application/ports/operator_access.py`, `application/use_cases/operator_access_report.py`, `infrastructure/db/operator_access_log.py`, `infrastructure/security/operator_access_log.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** `GET /ops/access-report` returned at most `limit` newest entries and offered no
+way to reach further back, while retention keeps the operator access log for years. Every
+granted operator read older than the newest window was permanently unreadable: the log
+recorded it, and no endpoint could show it. On an audit surface "read the trail" silently
+meant "read its most recent few hundred rows".
+
+**Delivered.**
+
+- `OperatorAccessEntry.position` — an opaque, monotonic insertion ordinal, exposed for
+  comparison only and documented as *not* a count (retention deletes and the ring evicts).
+- `recent(*, limit, before_position=None)` — returns entries strictly older than the cursor.
+- SQL adapter: the surrogate `id` is the position and is unique, so a page boundary can never
+  land between two entries; predicate `id < cursor`.
+- In-memory ring: a monotonic counter, **not** `len(entries)`, because the ring evicts.
+- `before_position` query param on the route; per-entry `position` and per-page `next_position`
+  in the response.
+- A non-positive cursor is rejected; `next_position` is offered only when the window filled;
+  `truncated` is true for a middle page too.
+
+**Why keyset and not offset.** Reading this endpoint appends to the log it reads, so an OFFSET
+page shifts by one row per page — repeating one entry and skipping another. See D-082 in
+`DECISIONS.md`.
+
+**Validation.** Full suite `1652 passed, 4 skipped` on `4f8e15d`; ruff format 321 files
+unchanged; ruff check clean; mypy clean on 143 source files. 14 new API paging tests, 15 adapter
+keyset tests, 16 use-case tests. Mutation control observed failing (forcing the cursor to `None`
+fails 3 of 6 new paging tests).
+
+**Remaining.** Poll CI for `4f8e15d`/`25f5a6c`, then append this section to PR #5's body and
+update issue #2 (both still end at NEX-081).
+
+## NEX-084 — A delegated grant may not outlive the grant it was delegated from (run `NEX-2026-11-28-84`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Access Center |
+| Priority | P1 — a bounded authority could be converted into a longer one by its holder |
+| Status | **VERIFIED** — `09cc4ad`, CI 4/4 success (Backend + Frontend, pull_request and push events, polled 2026-11-28 run 84) |
+| Dependencies | NEX-045 (operator grant store), NEX-074 (writable grant record), NEX-078 (aware `expires_at`), NEX-079 (revocation) — all met |
+| Architecture | `application/use_cases/operator_grants.py` (`IssueOperatorGrant`, `_require_attenuation`); tests at `tests/application/test_issue_operator_grant.py` and `tests/api/test_ops_operator_grants_api.py`; no migration |
+
+**Objective.** Operator grants support upper-bound attenuation in *scope*: an issuer may only
+hand on a scope they themselves hold. Nothing bounded the *lifetime*. An operator holding a
+one-hour incident grant could issue the same scope with a thirty-day expiry, so the recipient
+held authority the issuer never had and could not have kept. A grant whose holder can convert
+it into a longer one is not bounded in the dimension that makes it safe: expiry is the whole
+safety property of a bounded grant.
+
+**Delivered.**
+
+- `_require_attenuation` now returns the issuer's **temporal ceiling** for the requested scope
+  rather than only validating the scope: the furthest `expires_at` among the issuer's own live
+  grants that cover it, or `None` when any such grant is unbounded.
+- `IssueOperatorGrant` refuses with `409 Conflict` when the requested `expires_at` exceeds that
+  ceiling, naming the instant the issuer may delegate until.
+- Scope and lifetime are read in **one** store call, at the gate's clock, so attenuation and
+  the horizon describe the same instant — the scope check can no longer pass against a grant
+  that has already lapsed by the time the lifetime is compared.
+- The ceiling is the **furthest** covering grant, not the nearest. An issuer who holds a scope
+  for a week has not narrowed their authority by also holding an unrelated five-minute grant of
+  the same scope; refusing on the nearer one would reject a hand-out they plainly cover.
+- A wildcard grant covers both the scope and the horizon. A settings-seeded operator is
+  unbounded (`expires_at=None`, `granted_by=None`), so the ceiling is `None` and existing
+  deployments are unaffected.
+
+**Why 409 and not 403.** The caller is authorized to issue grants; the *requested grant* is in
+conflict with the issuer's own authority. A 403 would say the caller may not issue at all,
+which is false, and would collide with the permission split in ADR-008.
+
+**Validation.** Full suite `1678 passed, 4 skipped`, exit 0. `ruff format --check` 321 files
+clean; `ruff check` clean; `mypy` clean on 143 source files. Mutation control **observed
+failing**: with the temporal comparison disabled, all three new tests fail — the two use-case
+tests and the API test — so neither the unit nor the HTTP assertion is vacuous.
+
+**Tests.** Use-case level: a deadline beyond the issuer's own is a `Conflict`; a deadline
+exactly at the ceiling is allowed; a wildcard issuer is still bounded by their own wildcard
+deadline. API level: the 409 survives the store round trip through `TestClient`, asserting the
+nested envelope `body["error"]["code"] == "conflict"` rather than a bare status, so a change to
+the error contract is caught here.
+
+**Remaining.** None for implementation. The only open item is documentation delivery: append this
+section to PR #5's body and comment on issue #2.
+
+## NEX-085 — The strongest grant in the system could not be revoked (run `NEX-2026-11-28-85`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Access Center |
+| Priority | P1 — a configuration-seeded wildcard operator was unrevokable through the platform |
+| Status | **VERIFIED — CI 4/4 success on `d9d0a3a` (runs `46120082100` push and `46120085453` pull_request; Backend and Frontend each `success`), polled 2026-11-28 run 85. The product commit `c698979`'s own runs read `completed/cancelled` — superseded in the concurrency group by this docs commit, never a failure; `d9d0a3a` carries the identical product tree (proved with `git diff c698979 d9d0a3a -- src/ tests/`, empty). |
+| Dependencies | NEX-079 (revocation path), NEX-084 (attenuation) — both met |
+| Architecture | `application/use_cases/operator_grants.py` (`RevokeOperatorGrant`, `REVOCABLE_OPERATOR_SCOPES`); `presentation/schemas.py` docstring; tests at `tests/api/test_ops_operator_grant_revoke_api.py`; no migration |
+
+**Objective.** `RevokeOperatorGrant` reused `KNOWN_OPERATOR_OPERATIONS` — the *issue*
+allowlist — as its scope guard. That set deliberately omits `"*"`, because issuing amplifies
+authority and the wildcard should be a deployment decision, not a request. Reusing it on the
+revoke path meant a revocation refused the wildcard as an *unknown scope*. The consequence was
+that the strongest grant in the system — a wildcard operator seeded from configuration — could
+not be stood down through the running platform at all, only by editing the deployment seed and
+restarting. That is precisely the "edit configuration to revoke" hole NEX-079 existed to close,
+reappearing one level up.
+
+**Delivered.**
+
+- `REVOCABLE_OPERATOR_SCOPES = KNOWN_OPERATOR_OPERATIONS | {WILDCARD}`, used on the revoke
+  path only. The issue path keeps rejecting `"*"`: revoking removes authority, so the
+  fail-closed direction is to *permit* it; issuing adds authority, so the fail-closed
+  direction there is to *refuse* it. One set per direction, not one set shared.
+- The asymmetry is documented at the definition and at the use site, so the two allowlists
+  cannot be re-conflated by a future refactor without a failing test.
+- Naming `"*"` is a *specific* revocation, not a blanket "revoke everything": revocation is
+  keyed by `(user, scope)`, so an explicit grant held beside the wildcard survives. The audit
+  entry still names the single authority removed.
+
+**Validation.** Full suite `1679 passed, 4 skipped`, exit 0. `ruff format --check` clean;
+`ruff check` clean; `mypy` clean on 143 source files. Mutation control **observed failing**:
+with `src/.../operator_grants.py` stashed, both wildcard-revocation tests fail with `422`
+(the old "unknown scope" refusal), so the assertions are not vacuous. An unknown scope is
+still refused, proving the new set did not become a wildcard-only hole.
+
+**Tests.** `test_the_wildcard_grant_can_be_revoked` — a wildcard holder loses access to an
+unrelated operator view after revocation; `test_revoking_the_wildcard_leaves_an_explicit_scope_in_place`
+— an explicit grant survives the wildcard revocation; `test_an_unknown_scope_is_still_refused_now_that_the_wildcard_is_accepted`
+— a bogus scope is still a validation error.
+
+**Remaining.** None for implementation or verification. Delivery (append this section to
+PR #5's body, comment on issue #2) is done in run 85 after this promotion.
+
+---
+
+## NEX-086 — Page the revocation history so the whole thing is readable (run `NEX-2026-11-28-86`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Audit Center |
+| Priority | P1 — the report could not be read at all on a long-lived deployment |
+| Status | **VERIFIED** — product commit `70d7667`, CI **4/4 `completed/success`** on docs head `f780afb` (identical product tree, proved with `git --diff -- src/ tests/` empty). Runs `46122302349` (push) and `46122306894` (pull_request), Backend and Frontend both `success`, polled 2026-11-28T07:42:52Z. `70d7667`'s own Backend push-run reads `completed/cancelled` — superseded in the concurrency group, never a failure. |
+| Dependencies | NEX-080 (the read side, whose endpoint this bounds), NEX-082 (the same defect fixed for the access trail) — met |
+| Architecture | `application/ports/operator_grants.py`, `application/use_cases/operator_grants.py`, `infrastructure/db/operator_grants.py`, `infrastructure/security/operator_grants.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** NEX-080 made the revocation history readable; it served *all* of it in one
+tuple. Revoked rows are never pruned — a revocation is a standing audit fact, not a value a
+retention window may erase — so the history grows without bound for the life of the
+deployment. On a long-lived deployment, reading the report meant loading every revocation
+ever recorded into memory in a single response. That is the same unbounded-response defect
+NEX-082 fixed for the operator access trail, in a second report.
+
+**Delivered.**
+
+- `OperatorGrantRepository.revoked_grants(*, limit=None, offset=0)` on the port; both adapters
+  implement it. `limit=None` keeps the whole-history behaviour for the tests and a future
+  export path; a serving path always passes a limit.
+- `OperatorGrantRepository.count_revoked() -> int` — the total, counted through the same
+  `is_revoked` domain predicate as the listing rather than `revoked_at IS NOT NULL` in SQL, so
+  the total and the page can never describe different sets.
+- `RevokedOperatorGrantSnapshot` carries `revoked_total`, `offset` and `next_offset`, plus a
+  `truncated` property (`next_offset is not None`). `grant_count` still counts rows *on this
+  page*; it is deliberately not the total.
+- `GET /api/v1/ops/operator-grants/revoked?limit=&offset=`; `limit` is `ge=1, le=MAX_LIMIT`, so
+  a mistyped value is refused rather than silently clamped and a caller cannot believe it read
+  more than the cap. `offset` is `ge=0`.
+- `_clamp_limit()` in the use case, mirroring `GetOperatorAccessReport`: a non-positive limit
+  becomes `1`, never "everything". `offset < 0` raises `InvalidInput` (422) **after** the gate,
+  so a non-operator still gets `404` and cannot probe the validation by watching the error
+  change.
+
+**Why offset and not a keyset cursor.** NEX-082's access trail is *appended to by reading it*
+(the read is itself audited), so its pages would shift under a walker and it needs a keyset
+cursor. Reading the revocation history writes nothing, so offset paging over a total order is
+correct and simpler. The adapter keeps `is_revoked` in Python rather than pushing a
+`revoked_at IS NOT NULL` predicate into SQL for exactly that reason: the definition of
+"revoked" must stay in one place or the page could drift from the count.
+
+**Tests.** +17. `tests/application/test_operator_grants.py` (6): the page reports the total
+beyond it, the last page has no cursor, walking pages covers every revocation once, an offset
+past the end is an empty final page, a non-positive limit does not serve everything, an
+over-ceiling limit clamps. `tests/api/test_ops_operator_grant_revoked_read_api.py` (8): the
+response carries the paging fields, paging reaches every revocation, `limit=0/-1` and
+`limit=10000` are 422, a negative offset is 422, a non-operator cannot page the history.
+`tests/persistence/test_operator_grants.py` (2): the adapter pages over the same stable order
+it returns whole, and `count_revoked` omits live and merely-expired grants.
+
+**Mutation control.** Two mutations at once — `next_offset` forced to `None`, and the limit
+ignored — was observed failing 4/4 (`test_a_page_reports_the_total_beyond_the_page`,
+`test_the_last_page_has_no_next_offset`, `test_a_non_positive_limit_does_not_serve_the_whole_history`,
+`test_paging_reaches_every_revocation_and_the_total_holds`), then the source was restored and
+re-run green before the commit.
+
+**Local gates on the committed tree.** `ruff format --check .` 321 files already formatted;
+`ruff check .` all checks passed; `mypy` 143 source files clean; `pytest` 1696 passed,
+4 skipped, exit 0.
+
+**Security.** Read-only and gated, unchanged scope. The gate still runs before the read, and
+`count_revoked` is called *after* it — a refused caller must not learn how much authority has
+been removed, and the total is that number. Bounding the read also bounds the resource a single
+authorized operator can force the service to hold.
+
+**Remaining.** None. Implementation, local gates and CI are all green; the delivery to PR #5's
+body and issue #2 is owed by the next run.
+
+---
+
+
+## NEX-087 — Report the exact oldest retained access entry (run `NEX-2026-11-28-87`)
+
+**Phase.** 3 (governance) — audit integrity.
+**Priority.** P1 (foundational: the one number that states how far back retained evidence reaches).
+**Status.** **VERIFIED** — IMPLEMENTED · TESTED · COMMITTED `82d8a64` · PUSHED · **CI PASSED**
+(4/4 `completed/success` on docs head `cf44c89`, runs `46125167112` push and `46125170933`
+pull_request, polled 08:22:33Z) · DELIVERED (PR #5 body, issue #2 comment `7236499955`).
+**Depends on.** NEX-075 (the purge and its `retained_from` field), NEX-072 (the durable log).
+
+### The defect
+
+`PurgeOperatorAccessLog` is the only mutation the append-only operator access log permits, and it
+reports `retained_from` — "the oldest entry still in the log after the purge". That field is the
+whole reason the result is not just a count: an operator reads it to learn how far back the
+retained evidence actually reaches. NEX-075 documented it as *the* oldest surviving entry and the
+API schema promises the same.
+
+The implementation computed it from `self._access_log.recent(limit=1000)[-1]`. `recent` is
+newest-first and capped, so its last element is the oldest entry of **that page**, not of the log.
+Once the log held more than one page of survivors, the field reported an entry that was too
+recent: the trail looked shorter than it was, and the error grew with traffic. It is the
+dangerous direction. An auditor asking "does our retained evidence still cover the incident?" gets
+"no, it starts on the 31st" when the evidence in fact starts earlier — the answer that makes them
+conclude history is gone when it is not, or, worse, the answer that makes a shorter-than-claimed
+retention look compliant.
+
+The existing suite passed because every fixture was smaller than one page. The bug was invisible
+below 1000 entries and monotonic above it.
+
+### Evidence, before any change
+
+A probe recorded one old entry plus 1500 newer ones into the in-memory ring and read the use case:
+
+```
+removed: 0
+true oldest survivor:   2026-08-31T12:00:00+00:00
+reported retained_from: 2026-08-31T12:08:22+00:00
+field lies? True   understates age by: 0:08:22
+```
+
+The understatement is exactly the width of the discarded window, which is why it scales with
+volume and vanishes on a quiet deployment.
+
+### The fix
+
+`recent` cannot answer this question at all — it is newest-first and has to be capped — so the
+question is asked directly. The port gains `oldest_retained() -> datetime | None`:
+
+- **SQL adapter**: `select(func.min(OperatorAccessRow.at))`. An aggregate reads no rows and cannot
+  be truncated by volume. The result is relabelled to aware UTC with the same rule
+  `UTCDateTime.process_result_value` applies, because SQLite hands back a naive value for a plain
+  `TIMESTAMP` column and the domain speaks aware UTC.
+- **In-memory ring**: `self._entries[0].at` under the lock — the `deque` already keeps insertion
+  order, so the first element *is* the oldest.
+- **Test spy**: `min(entry.at ...)`, so the fake stays honest against the port rather than
+  certifying whatever the use case happens to do.
+
+`None` still means "empty log". An empty log is a fact; the caller must be able to say "nothing is
+retained" without inventing a timestamp.
+
+The use case now delegates: `oldest = self._access_log.oldest_retained()`. The `_OLDEST_SCAN_LIMIT`
+constant and its apologetic comment ("never claims to be exhaustive") are deleted — a constant that
+exists to paper over a truncation should not survive the fix that removes the truncation.
+
+### Tests — built to fail against the old answer
+
+Each new assertion is chosen so a page-derived implementation *cannot* satisfy it:
+
+- `test_the_oldest_surviving_entry_is_exact_beyond_one_page` (application): 1500 survivors, past
+  the ring's `DEFAULT_CAPACITY` of 1000. Asserts `retained_from == true_oldest` exactly.
+- `test_oldest_retained_is_exact_beyond_one_page` (persistence): one 10-year-old row plus 1200
+  filler rows, past `_OLDEST_SCAN_LIMIT`.
+- `test_oldest_retained_is_aware_utc`: pins that SQLite's naive `MIN` does not leak into the
+  domain as a naive datetime.
+- `test_oldest_retained_is_none_on_an_empty_log`: empty is a fact, not an invented stamp.
+- `test_oldest_retained_advances_past_a_purge`: after the ancient row is purged, the read names the
+  actual survivor — it tracks reality, not the pre-purge state.
+
+**Mutation control.** With the page-derived read restored inside the use case, the application
+regression fails on the observed wrong value (`2026-08-30T17:08:22` where `2026-08-31T12:00:00`
+was expected). Source restored, re-run green before the commit. This is the NEX-083 guard: the
+test was proved to fail without the fix, not merely to pass with it.
+
+### Local gates on the committed tree
+
+`ruff format .` (1 file reformatted) then clean; `ruff check .` all checks passed; `mypy` 143
+source files clean; `pytest` full suite exit 0 (4 skipped). Run bare, as `.github/workflows/ci.yml`
+does.
+
+### Security
+
+Read-only, gated, unchanged scope. No new authority, no new endpoint, no migration. The gate still
+runs before the purge. The change makes an audit field truthful, which is the security property:
+a retention report that understates how far back the evidence reaches is a report an operator
+cannot use to decide whether history was destroyed prematurely.
+
+### Remaining
+
+None. CI concluded 4/4 on a docs head whose product tree is identical to `82d8a64`
+(`git diff 82d8a64 cf44c89 -- src/ tests/` empty), and delivery to PR #5 and issue #2 is done.
+
+Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the grant table in
+   Python (recorded as a risk); this slice is the same *shape* of defect — a bounded read standing
+   in for an exact answer — so an audit of the remaining audit reads for page-derived values is
+   warranted.
+
+---
+
+## NEX-088 — Report the exact trail size on the tool-invocation audit page (run `NEX-2026-11-28-88`)
+
+**Phase.** 3 (governance) — audit integrity.
+**Priority.** P1 (foundational: the total on an audit page decides whether the trail looks complete).
+**Status.** IMPLEMENTED · TESTED · COMMITTED `06b5b32` · PUSHED · **VERIFIED — CI 4/4.**
+**Depends on.** NEX-082 (the access trail's pagination, whose shape this mirrors).
+
+### The defect
+
+`GET /agents/{agent_id}/tool-invocations` accepted `limit`/`offset` but filled `meta.total`
+with `len(items)` — the size of the page it had just built. On a three-entry trail the first
+page answered `total: 2`, the second answered `total: 1`, and neither number survived a turn of
+the page. A window that reports its own size as the total is indistinguishable from a complete
+trail, which is exactly the difference between "this agent made 50 tool attempts" and "these are
+the first 50 of thousands". The suite did not catch it because no fixture asked for a second page.
+
+### The fix
+
+The count is asked for directly rather than inferred from a page, the same resolution as NEX-082
+and NEX-087: `count_for_agent(agent_id)` on `ToolInvocationRepository`, implemented as
+`SELECT count(*) ... WHERE agent_id = :agent_id` — an aggregate that reads no rows and cannot be
+truncated by volume. `ListToolInvocations` returns `ToolInvocationAuditPage` (items + exact total),
+mirroring `NotePage`, and the router puts the true count in `PageMeta.total`.
+
+Four sibling listings (`agent_runs`, and three others) keep `total=len(items)`: each was checked
+and none accepts `limit`/`offset`, so on an unpaginated listing the page size *is* the total and
+the number is honest. Only the paginated one lied.
+
+### Tests — built to fail against the old answer
+
+- `test_meta_total_is_the_whole_trail_not_the_window`: two pages of a three-entry trail, asserting
+  `meta.total == 3` on both. The page-derived implementation returns 2 and then 1.
+- `test_meta_total_counts_only_this_agents_trail`: a second agent with its own invocations must not
+  appear in the first agent's total. This half was found by mutation — an **unscoped** count (no
+  `agent_id` filter) satisfied the first test while leaking another agent's trail size into this
+  one's total, so it passed. It now fails.
+
+### Validation
+
+`ruff format` / `ruff check` / `mypy` (143 source files) clean; `pytest` full suite exit 0
+(4 skipped), run bare as `.github/workflows/ci.yml` does. Mutation controls: reverting the router
+to `total=len(items)` fails the first test; dropping the `agent_id` scope fails the second.
+
+### Security
+
+Read-only, gated, unchanged scope, no migration. The property is the truthfulness of the total: a
+counting-scope bug (unscoped count) would disclose how many tool invocations another agent made,
+so the count is filtered by the same `agent_id` the page is filtered by.
+
+### Verification
+
+**VERIFIED — CI 4/4 `completed/success`.** Runs `46127299155` (push) and `46127304188` (pull_request) on docs head `592ba07`, whose product tree is identical to `06b5b32` (`git diff --stat 06b5b32 592ba07 -- src/ tests/ frontend/ Dockerfile docker/ .github/` empty); plus run `46127157086` directly on product `06b5b32`, 2/2 success. The `pull_request` run on `06b5b32` itself (`46127161135`) reads `completed/cancelled` because this push superseded it in the concurrency group — superseded, not a failure, and never evidence on its own.
+
+NEX-088 is **VERIFIED**. Delivered to PR #5 and issue #2 in the same run that read this verdict.
+
+### Remaining
+
+None. Four sibling `total=len(items)` sites were each confirmed unpaginated and left alone;
+the `PageMeta(total=len(items))` sweep on this surface is complete.
+
+---
+
+## NEX-089 — Window the approval history, and count the status it returns (run `NEX-2026-11-28-89`)
+
+**Status: COMMITTED `b3130ce` · PUSHED · CI pending** (not VERIFIED until a CI verdict is read).
+
+`GET /agents/{agent_id}/approvals` is an auditor's view of what an agent asked to do. It read
+every approval the agent had ever opened — the history is never pruned — and filtered by status
+in Python afterwards. So one request's body grew with the agent's age, and it fetched a whole
+history to answer with one slice of it.
+
+The listing now takes `limit`/`offset` (`ge=1, le=200`, default 50, offset `ge=0`), and the status
+predicate and the window are both applied in the store. `meta.total` is a `COUNT(*)` over the same
+filtered set, so every page of one status reports the same total — the number of approvals *in
+that status*, not the size of the page just built.
+
+### Why the total mattered more than the paging
+
+The previous `meta.total` was `len(items)`. That is not "a page that forgot to count"; it is a
+response that looks bounded and complete while being neither. Three denied approvals and the first
+three of three hundred both answered `total: 3`, so the field an auditor would use to tell a
+complete answer from a truncated one was the one field guaranteed to hide the difference.
+
+### What was deliberately *not* bounded
+
+`list_for_agent` keeps `limit=None` meaning "the whole history", and both tool-gateway call sites
+(`use_cases/tools.py`, the sensitive-action authorization check and its live-approval scan) are
+unchanged. The gateway must see every live approval to decide whether an action is authorised;
+paging that read would silently drop an approval from the enforcement decision — trading a
+reporting defect for an authorization one. Only the reporting path is windowed.
+
+### Tests — built to fail against the old answer
+
+Six tests in `TestApprovalListingIsPaged` (`tests/api/test_agents_api.py`):
+
+- `test_the_default_page_is_capped_and_the_total_is_the_whole_set` — `limit=2` over three approvals
+  returns two items and `total: 3`. The page-derived total returns 2.
+- `test_every_page_draws_from_the_same_total` — offset 0 and offset 1 both report `total: 3`, with
+  disjoint items. A per-page total returns 3 and then 2.
+- `test_an_offset_past_the_end_is_empty_but_still_counts_the_set` — empty page, `total: 2`.
+- `test_total_counts_the_requested_status_not_the_pending_queue` — after one denial, the `denied`
+  view totals 1 and the default (`pending`) view totals 2. This is the test the store-side filter
+  mutation breaks.
+- `test_the_window_cannot_be_disabled` — `limit=0` and `limit=201` both answer 422, so a caller
+  cannot reopen the unbounded read by asking for it.
+- `test_paging_does_not_bypass_ownership` — a non-owner gets 404 (not 403) on a paged, filtered
+  request, so paging does not become a probe for another user's agent.
+
+### Validation
+
+`ruff format` (321 files, unchanged), `ruff check` (All checks passed), `mypy` (143 source files,
+no issues), `pytest` full suite exit 0 — 1710 passed, 4 skipped, **1714 collected**, run bare as
+`.github/workflows/ci.yml` does and covering the feature-only suites (`test_audit_sweep`,
+`test_policy_lifecycle`, `test_risk_based_approval` each run green individually as well).
+
+Falsifiability, both mutations applied and reverted:
+
+1. Router back to `total=len(items)` → `test_the_default_page_is_capped_and_the_total_is_the_whole_set`
+   and `test_every_page_draws_from_the_same_total` fail. **Caught.**
+2. Store status filter removed from the page query *and* the count query → the denied/pending
+   totals disagree → `test_total_counts_the_requested_status_not_the_pending_queue` fails. **Caught.**
+
+### Security
+
+Read-only, gated, unchanged scope, no migration, no new authority. Ownership is still enforced
+before the read and still answers 404 to a non-owner, now including on a paged request.
+
+### Remaining
+
+`list_for_agent` (delegations) and `list_pending_for_agent` remain unpaginated. Neither is exposed
+on a listing route, so neither has this defect today; they are noted for whenever such a route is
+added rather than changed speculatively now.
+
+### Verification
+
+**VERIFIED.** CI concluded **4/4 `completed/success`** on docs head `c5a1250` — runs `46129490407`
+(push) and `46129494580` (pull_request), each with `Backend (ruff, mypy, pytest, migrations)`
+and `Frontend (typecheck, lint, test, build)` green, polled 02:14Z. The product tree of `c5a1250` is
+identical to the product commit `b3130ce` — `git diff --stat b3130ce c5a1250 -- src/ tests/ frontend/
+Dockerfile docker/ .github/` is empty, and the only files that differ are the four `docs/NEXUS/` files
+— so the green runs tested exactly the code this slice ships.
+
+`b3130ce`'s own two runs read `completed/cancelled`: they were superseded by the docs push in the
+concurrency group. Per the standing rule, a superseded run is never evidence — which is why the
+verdict is anchored to `c5a1250` and to the empty product diff that licenses that anchor.
+
+---
+
+## NEX-090 — Page the run history, and make the total a count rather than the page size (run `NEX-2026-11-28-91`)
+
+**Status: VERIFIED** — product `aa4b2c8`, CI **4/4 `completed/success`** on docs head `ea0a696` (runs `46131679941` push, `46131683446` pull_request), polled 02:41Z. Delivered to PR #5 and issue #2 in run 91.
+
+`GET /agent-runs?agent_id=…` is how a client reads what an agent has run. The store's listing was
+capped at 50 rows, the use case returned that capped list unchanged, and the route described it with
+`PageMeta(total=len(items), limit=len(items), offset=0)`. So an agent with 60 runs answered
+`items: 50, total: 50, limit: 50` — a complete-looking history of fifty — and there was no
+`limit`/`offset` on the route to reach runs 51–60 at all.
+
+This is the same family as NEX-082/086/087/088/089: a derived or bounded value standing in for the
+exact one. What makes this instance worse than a plain `total` bug is that the *escape hatch* was
+also missing. Every earlier slice could at least be paged once the total was honest; here the
+window was fixed at 50 and nothing in the request could move it.
+
+### The fix
+
+- `AgentRunRepository.count_for_agent(agent_id)` — a `COUNT(*)` scoped by the same `agent_id` as the
+  listing, so a page and its total describe one set. An unscoped count would disclose how many runs
+  another agent has scheduled, which is the leak the listing is scoped to avoid.
+- `ListAgentRuns.run(...)` now takes `limit`/`offset`, returns an `AgentRunPage(items, total)`, and
+  derives the total from the count rather than from `len(items)`. Both statements run inside one
+  unit of work, so the page and its total are read at the same moment.
+- The route takes `limit` (`ge=1, le=200`, default 50) and `offset` (`ge=0`) as `Query` parameters.
+  `le=200` keeps one request from reloading the history the window exists to bound.
+- `list_for_agent` orders by `(created_at DESC, id DESC)`. Offset paging over a non-deterministic
+  order can return a row twice and skip another as the windows shift, and two runs planned in the
+  same instant are exactly when `created_at` alone ties.
+
+The ad-hoc `_page` helper is removed: with `meta` no longer implying "this is everything", nothing
+needs it.
+
+### What was deliberately *not* windowed
+
+`resumable_only=True` returns the whole set and ignores `limit`/`offset`. It is the recovery set — a
+client resuming interrupted work must see every run that needs resuming, so a window there would
+silently abandon runs. Its `meta` describes the set it actually returned (`limit=len(items),
+offset=0`) rather than echoing a `limit` the request did not apply; a `limit: 1` beside three items
+would read as a truncated page when nothing was truncated.
+
+### Tests — built to fail against the old answer
+
+Application level (`tests/agent/test_agent_runs.py`), because the boundary is the use case:
+
+- `test_a_page_reports_the_true_total_and_offset_walks_the_rest` — plans **60** runs, then asserts
+  `len(items) == 50`, `total == 60`, that `offset=50` returns the remaining 10 with the same total,
+  and that the two pages together contain each run id exactly once. The count-bound tests deliberately
+  exceed the default window; a three-run test passes even with the cap in place, which is how this
+  defect survived the suite.
+- `test_the_resumable_set_is_returned_whole_not_windowed` — 55 pending runs with `limit=50` still
+  returns 55. A window would abandon five resumable runs.
+
+HTTP level (`tests/api/test_agent_runs_api.py`):
+
+- `test_listing_reports_the_whole_history_not_the_window`, `test_paging_reaches_past_the_default_window`,
+  `test_the_total_counts_only_this_agents_runs` — the contract and its per-agent scoping.
+- `test_resumable_listing_is_never_windowed` — `limit=1` over three pending runs returns three items,
+  `total: 3`, and `meta.limit: 3`, pinning that the meta does not claim a window it did not apply.
+- `test_paging_parameters_are_validated` — `limit=0`, `limit=201` and `offset=-1` answer 422;
+  `limit=200, offset=0` answers 200. Without `ge=1`, `limit=0` would answer an empty page that reads
+  as an empty history.
+
+### Validation
+
+`ruff format` (321 files, unchanged), `ruff check` (All checks passed), `mypy` (143 source files, no
+issues), `pytest` full suite exit 0 — **1717 passed, 4 skipped**, run bare as `.github/workflows/ci.yml`
+does.
+
+Falsifiability, one mutation applied and reverted: the use case back to `total = len(items)` →
+`test_a_page_reports_the_true_total_and_offset_walks_the_rest` fails. **Caught.** The resumable test
+correctly stays green under that mutation, since it does not use the count.
+
+### Security
+
+Read-only, unchanged scope, no migration, no new authority. Ownership is still enforced before the
+read and still answers 404 (not 403) to a non-owner, now including on a paged request — the paging
+parameters cannot be used to probe another user's agent.
+
+### Remaining
+
+`list_for_agent` (delegations) and `list_pending_for_agent` remain unpaginated and are still not on a
+listing route; they are unchanged here rather than speculatively reworked.
+
+---
+
+
+## NEX-091 — Link, list and unlink external IdP identities (run `NEX-2026-11-28-92`)
+
+**Status: VERIFIED** — product `977b21f`, CI **4/4 `completed/success`** on docs head `6f8ca19` (runs `46134645157` push, `46134650328` pull_request), polled 10:21Z. Delivered to PR #5 and issue #2 (comment `7237852341`) in run 92.
+
+OIDC login (NEX-002) resolves an incoming `(provider, subject)` pair to a local account through
+`external_identities`, but nothing exposed the write path: there was no way for an operator to create
+a binding, enumerate an account's bindings, or revoke one. Offboarding from an IdP therefore had no
+expression in the platform, and a mis-typed subject could not be corrected.
+
+### The slice
+
+| Layer | Change |
+| --- | --- |
+| Ports | external-identity lookup/insert/delete; `revoke_for_identity` on the session port |
+| Adapter | SQLAlchemy implementations of both |
+| Application | `LinkExternalIdentity`, `ListExternalIdentities`, `UnlinkExternalIdentity` |
+| API | `POST`/`GET`/`DELETE` under `/api/v1/organizations/{org}/members/{user}/identities` |
+| Tests | 10 application, 13 HTTP |
+
+No migration: the table and its uniqueness constraint already existed.
+
+### The routing decision, and why it is not cosmetic
+
+The unlink route addresses the link by **its own id**, not by `(provider, subject)`. An IdP subject is
+opaque and routinely contains `/`, `@` or `+` — `auth0|64f/0a+b@tenant/realms/acme#user` is a perfectly
+ordinary subject. A path segment cannot carry those unescaped, and the observed failure was not a clean
+`400`: the route failed to **match**, answering `404` without ever reaching the use case. The link
+therefore looked *absent* rather than *unaddressable*, which is a misleading error on an administrative
+surface. Addressing the id removes the escaping problem instead of documenting a workaround around it.
+`test_opaque_subject_with_path_characters_survives_round_trip` pins it.
+
+### Security properties, each pinned by a test
+
+- **Linking cannot escalate.** An admin may not attach a login to an account more privileged than their
+  own (`403`). Linking is a takeover route, so a less privileged target is the only permitted one.
+- **`(provider, subject)` is unique system-wide.** Re-linking the same pair to the same user is
+  idempotent; binding a pair already owned by a **different** account is refused `422` rather than
+  silently rebinding that user's login to someone else.
+- **Unlink revokes only the sessions minted from that exact `(provider, subject)`**, in the same
+  transaction. Unrelated sessions survive, and a live cookie from the removed link cannot outlive it.
+- **`404` unreadable / `403` unauthorized**, matching the rest of the admin surface (ADR-008). A link is
+  removable only through the member that owns it, so a guessed id cannot cross accounts.
+- **The audit entry names actor, target, provider and subject — never a credential** — and only after
+  the change succeeds.
+
+### Test-writing lesson
+
+Three list assertions were written as absolute counts and failed — correctly. The seeded demo users
+**already carry a `demo` identity link**, so an absolute count was asserting the *seed*, not the change
+under test. They are now delta-based: membership of the new id, and "exactly one `entra` link". A test
+that asserts a pristine world fails the moment the fixture becomes realistic.
+
+### Validation (committed tree)
+
+`ruff format` clean (1 reformatted, 323 unchanged) · `ruff check` all passed · `mypy` clean on **144**
+files · full suite **1740 passed / 4 skipped**, exit 0.
+
+### CI verdict — read, not assumed
+
+`977b21f`'s own runs read `completed/cancelled` (superseded in the concurrency group by the docs
+push), which is never evidence in either direction. The verdict was taken on the docs head
+`6f8ca19` — **4/4 `completed/success`** on both events — and is licensed by an **empty product
+diff**: `git diff 977b21f 6f8ca19` touches only the four `docs/NEXUS/` files, so the green runs
+tested exactly the tree `977b21f` ships.
+
+Nothing outstanding: the slice is in PR #5's body and reported on issue #2.
+
+## NEX-092 — Bound the revoked-grant read in the store, not after it (run `NEX-2026-11-28-93`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED · **Complexity** S
+**Depends on** NEX-086 (which recorded the read as bounded), NEX-087/NEX-088 (the same defect elsewhere)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (audit integrity), ADR-008
+
+### Objective
+
+`SqlAlchemyOperatorGrantRepository.revoked_grants(limit, offset)` and `count_revoked()` both ran
+`select(OperatorGrantRow)` with **no `WHERE`**, built a domain object per row, and only then sliced or
+counted. NEX-086's docstrings assert these reads are bounded; the bodies read the whole table. Filter,
+order and window now happen in SQL.
+
+### Acceptance criteria
+
+- [x] `revoked_grants` issues `WHERE revoked_at IS NOT NULL ORDER BY id OFFSET … LIMIT …`
+- [x] `count_revoked` issues `SELECT count(*) … WHERE revoked_at IS NOT NULL` and reads no rows
+- [x] Domain conversion happens only for rows in the requested page
+- [x] Same rows, same order, same results — no contract or migration change
+- [x] `is_active` filtering deliberately stays in Python (clock + two nullable deadlines = real logic)
+- [x] Docstrings corrected to describe the statement, not the intention
+
+### Required tests
+
+- [x] `test_a_page_does_not_read_the_whole_grant_table` — 80 grants (40 live, 40 revoked), page of 5,
+      asserts exactly 5 `_to_domain` calls
+- [x] Mutation control: restoring the old adapter fails the test with `assert 80 == 5`
+
+### Security considerations
+
+The predicate pushdown rests on a verified equivalence, not an assumption: `is_revoked` is
+`revoked_at is not None` with no logic, and `CheckConstraint("revoked_by IS NULL OR revoked_at IS NOT
+NULL")` forbids the only incoherent row, so SQL and domain cannot disaggregate on any admitted row. A
+revoked grant can therefore never be filtered out of the revocation report — the failure mode that
+would hide an authority removal from audit.
+
+### Validation
+
+`ruff format` 324 unchanged · `ruff check` passed · `mypy` 144 files · suite **1741 passed / 4
+skipped**. **CI 4/4 `completed/success`** on `3159555` itself.
+
+---
+
+## NEX-094 — Bound the *active* operator-grant reads in the store (run `NEX-2026-11-28-93`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED — product `d8353ff`, CI 4/4 `completed/success` via docs head `d4abd07` (runs `46141744541`, `46141737990`) · **Complexity** S
+**Depends on** NEX-087 (the same defect class, closed elsewhere), NEX-079 (revocation as recorded fact), NEX-080 (`granted_by` provenance)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (audit integrity), ADR-008
+
+### Objective
+
+`active_grants()` and `active_for()` — the two reads that answer *what authority is in force right
+now* — each ran `select(OperatorGrantRow)` over the whole table, built a domain object per row, and
+discarded the revoked and long-expired ones in Python. Grants are never pruned: revocation is
+recorded, not deleted (NEX-079), so the table only grows and every authorisation read cost the
+deployment's entire grant history. NEX-087/088/092 closed this class in the listing, revocation-report
+and count reads; these two were the remaining seam.
+
+### The blocker this run actually cleared
+
+The reason it had not been done is real and was documented in the code: `active_for` carried a
+comment saying `is_active` is *the* definition of "in force" and that filtering in SQL would duplicate
+it and let the two drift. That is correct in principle. It is only safe to push down if the SQL form is
+an **exact** translation, not an approximation — and for `revoked_grants` that was obvious
+(`revoked_at IS NOT NULL`), while for `is_active` it had been assumed to be "real logic: a clock and
+two nullable deadlines" that a SQL translation could drift from.
+
+### Why it turned out to be exact
+
+`is_active` is four independent branch tests, each a bare comparison against a single column: not
+revoked; `granted_at <= now`; `not_before IS NULL OR not_before <= now`; `expires_at IS NULL OR
+expires_at > now`. No arithmetic, no cross-field expression, no clock evaluation the database performs
+differently from Python. So `_active_predicate(now)` is a transcription, not a paraphrase — and the
+equivalence is *pinned by test* across the boundary instants rather than argued in a comment.
+
+### The fix
+
+- New module-level `_active_predicate(now) -> ColumnElement[bool]` in
+  `infrastructure/db/operator_grants.py`, kept directly beside the reads it serves, with a docstring
+  that states *why* it is exact and what now holds the two definitions together.
+- `active_grants` and `active_for` both carry it in their `WHERE`, so only in-force rows are returned to
+  the application, `order_by(id)` unchanged (insertion order — the port's contract and what lets tests
+  assert without sorting).
+- `active_for` no longer calls `_to_domain` at all: it reads `row.scope` straight off the filtered rows.
+- `revoked_grants`' docstring updated: it previously said `is_active` "carries real logic … which is why
+  that filter stays in Python". That claim is now false and would have misled the next reader.
+
+### Acceptance criteria
+
+- [x] Both active reads carry the active-window predicate in the `WHERE`, not a Python filter
+- [x] `is_active` remains the single definition of "in force"; the SQL form is pinned to it by test
+- [x] Same rows, same order, same results — no contract, port or migration change
+- [x] Stale comments in `active_for` and `revoked_grants` corrected rather than left to contradict the code
+
+### Required tests
+
+- [x] `test_active_grants_does_not_read_the_whole_grant_table` — 40 revoked + 20 lapsed + live grants,
+      asserts the adapter converts exactly the live ones (work-count probe, not SQL text)
+- [x] `test_active_reads_filter_in_the_store_rather_than_in_python` — records executed statements via
+      `before_cursor_execute`; both active-read `SELECT`s must contain `revoked_at is null` and
+      `expires_at`. Chosen because `active_for` has no per-row conversion to count, so its *statement*
+      is the only evidence of where the work happens
+- [x] `test_active_predicate_agrees_with_the_domain` — 10 boundary cases (each exactly on or one second
+      either side of a bound) × 3 instants; adapter result must equal domain-side filtering of all rows
+- [x] Mutation controls, both observed: (a) restoring the old adapter fails the work-count and the
+      statement tests; (b) changing one operator in the predicate (`<=` → `<`) fails all three
+      equivalence instants — so the boundary test bites on a one-character drift, not just a revert
+
+### Security considerations
+
+These two reads are what a policy gate consults to decide whether an operator may act. Two failure modes
+matter, and both are covered:
+
+- **Dropping a live grant** (under-select) would silently remove authority — fails closed for the
+  operator, but a wrong answer to "may this person act". The boundary equivalence test is what prevents
+  a `<`/`<=` drift silently narrowing the set.
+- **Admitting a lapsed or revoked grant** (over-select) would confer authority the record no longer
+  grants. `revoked_at IS NULL` is asserted in both statements, and revoked-grant exclusion is covered
+  by `test_a_revoked_grant_is_excluded_even_when_its_other_bounds_are_open`.
+
+No migration, no contract change, no new dependency. The predicate reads only columns already present.
+
+### Validation
+
+`ruff format` 325 files unchanged · `ruff check` all passed ·
+`mypy` no issues in 144 source files · full suite **1754 passed, 4 skipped** (1758 collected; the
+skips are `postgresql`-marked). Product commit **`d8353ff`**, committed and pushed. CI verdict:
+pending on that commit — this entry is COMMITTED + PUSHED, not yet VERIFIED. The test that carries
+the equivalence was proved load-bearing by mutating `granted_at <= now` to `< now`: 14 tests fail,
+including all three boundary instants.
+
+### Remaining / next
+
+The adapter sweep for reads documented as bounded whose bodies still materialise the table is now
+closed for `operator_grants.py`. `list_all_for_integrity_sweep` already carries `(created_at, id)`;
+the two delegation reads and `list_for_owner` use `created_at` alone but are unpaged whole-set reads,
+so an unstable tie can only reorder presentation — not this defect class, and not to be opened without
+a consumer that depends on the order.
+
+## NEX-095 — Let a delegator see the grants it can withdraw one at a time (run `NEX-2026-11-28-95`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED — product `fb027ee`, CI 4/4 `completed/success` on the product commit itself (runs `46143797699` pull_request, `46143793292` push; Backend 12/12 and Frontend 11/11 steps green, zero skipped) · **Complexity** S
+**Depends on** NEX-053 (delegation model), NEX-085 (revocation as a recorded fact), NEX-089 (the page/total split this copies)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (delegation, revocation, audit), ADR-008 (404-not-403)
+
+### Objective
+
+A delegation is the only thing that lets an agent act *as* a human, and revocation is recorded rather
+than deleted (NEX-085), so the set only grows. But the delegation id existed in exactly one place: the
+`POST /agents/{id}/delegations` response that created it. A delegator who closed that response — or
+granted the delegation in an earlier session — could not name the grant to withdraw. The only reachable
+remedy was `RevokeAgent`, an emergency stop that also kills every other grant, every token, and the
+agent itself. Reading the grants is what makes *narrow* revocation usable.
+
+### The gap
+
+`DelegationRepository` had `get`, `list_for_agent`, `list_active_for_delegator` and
+`revoke_all_for_agent`. `list_for_agent` existed but was an unfiltered whole-set reader with no HTTP
+surface and no tiebreak, and `RevokeAgent` does not walk the list (it calls `revoke_all_for_agent`). So
+nothing in production read the set, and no client could.
+
+### The fix
+
+- Port: `list_for_agent(agent_id, *, status=None, limit=None, offset=0)` plus a new
+  `count_for_agent(agent_id, *, status=None)`. The total is a separate SQL `COUNT` aggregate, never
+  `len(page)`.
+- Adapter: filtering and windowing happen in the statement (`DelegationStatus` is a **stored** column,
+  `DelegationRow.status`, never derived, so SQL and a Python filter cannot disagree); order is
+  `(created_at, id)`. The `id` tiebreak matters here specifically because the window is an `OFFSET`:
+  an order that is not total lets a row repeat while another is skipped as the window shifts, and
+  grants made in the same request burst share `created_at` to the microsecond.
+- Use case: `ListDelegations` returns `DelegationPage(items, total)`; owner-only via `load_owned_agent`
+  (a non-owner gets 404, not 403 — an agent's existence is private).
+- API: `GET /agents/{id}/delegations` with `status`, `limit` (1..200), `offset`; response
+  `DelegationListResponse { items, meta: PageMeta }`. Omitted `status` means every delegation, so a
+  withdrawn grant stays visible rather than vanishing.
+
+This closes the "Remaining / next" note on NEX-094 that named the delegation reads as unpaged: a paging
+consumer now depends on the order, so the tiebreak is no longer cosmetic.
+
+### Acceptance criteria
+
+- [x] A delegator can list an agent's delegations and read each `id`
+- [x] The id read back is enough to `DELETE /agents/delegations/{id}` and withdraw exactly that grant
+- [x] A non-owner gets 404, never 403
+- [x] `meta.total` is the filtered set size, not the page length
+- [x] `status` filter narrows to `active` or `revoked`; omitted means both
+- [x] Paging windows are disjoint and together cover the set; replaying a window returns the same rows
+
+### Required tests
+
+- [x] `test_listing_recovers_the_id_needed_to_revoke_one_grant` — list, revoke one, the other survives
+- [x] `test_a_non_owner_gets_404_not_403`
+- [x] `test_an_unknown_agent_is_404`
+- [x] `test_the_status_filter_narrows_to_active_or_revoked`
+- [x] `test_an_unknown_status_is_rejected_as_a_client_error` (422, not a 500)
+- [x] `test_total_is_the_set_size_not_the_page_size`
+- [x] `test_offset_walks_the_set_without_repeating_a_row`
+- [x] Load-bearing proofs, each observed and restored: (a) `total = len(items)` fails only the total
+      test while the listing test still passes; (b) deleting `DelegationRow.status == status.value`
+      from the statement fails the status-filter test; (c) removing
+      `agent.owner_user_id != principal.user_id` from `load_owned_agent` turns the 404 into a 200
+      that discloses the delegations
+
+### Security considerations
+
+The set names *which capabilities a human handed to this agent*, so it is owner-only and 404s for
+everyone else, matching the approval listing. The count is scoped by `agent_id` for the same reason: an
+unscoped aggregate would disclose how many delegations another agent holds. No migration, no contract
+change, no new dependency.
+
+### Validation
+
+`ruff format` 325 unchanged · `ruff check` all passed · `mypy` no issues in 144 source files · full suite
+**1761 passed, 4 skipped** (the skips are `postgresql`-marked). Product commit **`fb027ee`**, pushed;
+remote head confirmed with `git ls-remote`, not `git rev-parse origin/<branch>`.
+
+### Remaining / next
+
+`list_active_for_delegator` remains an unpaged whole-set read ordered by `created_at` alone; it has no
+paging consumer, so an unstable tie can only reorder presentation. Do not add a tiebreak there until a
+consumer depends on the order.
+
+
+---
+
+## NEX-096 — Bound the owner agent listing, and count the set it returns (run `NEX-2026-11-28-96`)
+
+**Phase.** 3 (governance / agent platform surface). **Priority.** P1 — an unbounded read any
+authenticated client can grow, and a total that cannot distinguish a complete listing from a
+truncated one.
+**Status.** **VERIFIED** — CI 4/4 `completed/success` on the product commit `87936d4` itself (runs
+`46145902373` pull_request, `46145897805` push; Backend 12/12 and Frontend 11/11 steps green, zero
+failed, zero skipped, both `head_sha = 87936d4`), so no docs-head anchor was needed. Verdict commented
+on issue #2 as `7239449984`; PR #5 body extended to NEX-096.
+**Depends on.** NEX-082, NEX-087, NEX-088, NEX-090, NEX-095 — the exact-total paging pattern this
+mirrors.
+
+### The defect
+
+`GET /agents` was the one listing route in this family still reading a whole set.
+`SqlAlchemyAgentRepository.list_for_owner` ran `select(AgentRow).where(owner=...).order_by(created_at)`
+with no window, and the router filled `PageMeta(total=len(items), limit=len(items), offset=0)`.
+There is no per-user cap on agent registration, so an owner can register agents in a loop and make
+every listing request price the entire set — a self-inflicted denial of service on the database that
+the route gave the client no way to bound.
+
+The `total` half was the more damaging half. On an unpaginated route `len(items)` *is* the total,
+which is exactly why NEX-088 exempted this route from its `PageMeta(total=len(items))` sweep. That
+exemption was correct for the code as written, and wrong as a resting place: the number was honest
+only because the route refused to truncate, and refusing to truncate was the defect. Adding `limit`
+without adding an exact count would have converted an honest unpaginated listing into a lying
+paginated one — the same failure each of NEX-088's four siblings had.
+
+### The fix
+
+- `AgentRepository.list_for_owner(owner_user_id, *, limit=None, offset=0)` applies `.limit()` /
+  `.offset()` and orders by `(created_at, id)`. The `id` tiebreak is load-bearing: agents registered
+  in one request burst share `created_at` to the microsecond, and an order that is not total lets an
+  `OFFSET` window repeat one row while skipping another — with the page still looking full.
+- `AgentRepository.count_for_owner(owner_user_id)` answers the set's real size with
+  `SELECT count(*) ... WHERE owner_user_id = :owner`: an aggregate that reads no rows and cannot be
+  truncated by volume. It is scoped by owner for the same reason the listing is — an unscoped count
+  would disclose how many agents other users hold.
+- `ListAgents.run(principal, *, limit=50, offset=0)` returns `AgentPage(items, total)`.
+- `GET /agents` accepts `limit` (1..200, default 50) and `offset` (>= 0). `PageMeta.total` is
+  `AgentPage.total`, never `len(items)`. The dead `_page()` helper and its `Sequence` import are
+  removed.
+
+### Tests — `tests/api/test_agents_api.py`, class `TestAgentListingHttp`
+
+- [x] `test_list_returns_only_the_callers_agents` (pre-existing; still asserts `meta.total == 1`)
+- [x] `test_total_is_the_set_size_not_the_page_size` — three agents, `limit=1`: the total must read 3
+- [x] `test_offset_walks_the_set_without_repeating_a_row` — pages are disjoint, together they cover the
+      set, and replaying a page returns the same rows
+- [x] `test_total_counts_only_the_callers_agents` — Bob's three agents must not enter Alice's total
+- [x] `test_a_page_beyond_the_set_is_empty_not_an_error` — empty page, total still the set size
+- [x] `test_a_page_size_beyond_the_cap_is_rejected` — `limit=201` is 422, not a silently clamped page
+- [x] **Load-bearing, proved and restored.** Reverting the four source files to the parent commit fails
+      exactly the four new tests (`total_is_the_set_size`, `offset_walks`, `page_beyond_the_set`,
+      `page_size_beyond_the_cap`) and leaves the pre-existing listing test green: 4 failed, 73 passed.
+      Restored the fix, re-ran: 77 passed.
+
+### Security considerations
+
+Read-only, owner-scoped, default-deny unchanged. The listing names only the caller's own agents and
+the count is filtered by the same `owner_user_id`, so the total cannot leak another user's agent
+volume. No migration, no envelope-shape change, no new dependency: the route gains two optional query
+parameters. The bound is itself a control — response cost no longer scales with how many agents the
+caller registered.
+
+### Validation
+
+`ruff format --check` 325 files already formatted · `ruff check` all passed · `mypy` no issues in 144
+source files · full suite **1766 passed, 4 skipped** (the skips are `postgresql`-marked), run bare as
+`.github/workflows/ci.yml` does. Product commit **`87936d4`**, pushed; remote head confirmed with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.
+
+### Remaining / next
+
+`FoldersRepository.list_for_owner` is still a whole-set read, but folders are user-authored and small
+and no route exposes them paged, so the page size *is* the total there and the number is honest; leave
+it until a consumer needs a window. The frontend has no `/agents` consumer, so no UI change applies.
+Next: select the next dependency-ready slice.
+
+---
+
+## NEX-097 — The organization roster must not list offboarded people (run `NEX-2026-11-28-97`)
+
+**Phase.** 1 (organization & identity foundation). **Priority.** P1 — a governance list that names
+people who no longer have standing, and counts them.
+**Status.** **VERIFIED** — product commit `febb810`, CI **4/4 `completed/success` on the product
+commit itself** (runs `46148603437` push and `46148607713` pull_request; Backend 12/12 and Frontend
+11/11 steps green, zero failed, zero skipped, both `head_sha` = `febb810`), so no docs-head anchor is
+needed. Gate re-run in this run against this tree: **1769 passed, 4 skipped**; ruff, mypy clean.
+NEX-001's acceptance criterion "soft-deleted memberships never appear in rosters" is what this
+restores.
+**Depends on.** NEX-001 — the organization membership lifecycle this completes.
+
+### The defect
+
+`GET /organizations/{id}/members` listed deprovisioned people as current members.
+`SqlAlchemyOrganizationMembershipRepository.list_for_organization` selected every membership row for
+the organization with no status predicate, and `meta.total` was the length of that same list.
+
+Offboarding is a **soft delete**: the row is kept for audit history (status → `DEPROVISIONED`) rather
+than removed. So the listing had to exclude it explicitly, and did not. The sibling team roster
+(`SqlAlchemyTeamMembershipRepository.list_for_team`) already filtered `status == ACTIVE` for exactly
+this reason; the organization roster was the one that never got the treatment.
+
+NEX-001 recorded this criterion as verified, and its test did not cover the organization roster's
+deprovision path — which is how a governance invariant sat broken behind a green suite.
+
+### The fix, and the line not to cross
+
+- The listing now filters `status != DEPROVISIONED` — **only** the terminal state, not every
+  non-active one.
+- `meta.total` follows the same query, so the count no longer includes people it does not show.
+- The port carries the contract so an adapter cannot quietly reinterpret it.
+
+Filtering to `ACTIVE` only — the obvious "make it match the team roster" move — would have been
+wrong. Suspension is a **reversible pause**, and `POST .../members/{id}/reactivate` addresses the
+membership **by id**. Dropping suspended rows from the roster would hide the only handle an
+administrator has on an account they mean to restore: the bug would move from "shows the wrong people"
+to "cannot fix the right one", and no test that only checked `ACTIVE` filtering would notice.
+
+### Tests — `tests/api/test_organizations_api.py`, class `TestOrganizationRoster`
+
+- [x] `test_a_deprovisioned_member_leaves_the_roster` — roster and `meta.total` both drop the person
+- [x] `test_a_suspended_member_stays_in_the_roster` — still listed, `status == "suspended"`, membership
+      `id` still present, total still counts them
+- [x] `test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster` — reactivate is `422`, closing
+      the loop: silence about the person is consistent, there is no action left to take on them
+- [x] **Load-bearing, proved and restored.** Reverting only the adapter fails exactly the two
+      deprovisioned-member tests (`an offboarded person is still listed as a member`), 30 passed. The
+      suspended test passes with or without the fix — by design: its job is to fail when someone
+      "corrects" the filter to `ACTIVE`.
+
+### Security considerations
+
+Read-only and admin-scoped; the route's authorization is unchanged. The fix removes an over-disclosure
+(a roster asserting an offboarded person is still a member) without narrowing what an administrator can
+act on. No migration, no contract change, no new dependency: one `WHERE` clause and the total that
+rides on it.
+
+### Validation
+
+`ruff format --check` 325 files already formatted · `ruff check` all passed · `mypy` no issues in 144
+source files · full suite **1769 passed, 4 skipped** (`postgresql`-marked), run bare as
+`.github/workflows/ci.yml` does. Product commit **`febb810`**, pushed; remote head confirmed with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.
+
+### Remaining / next
+
+The roster is still a whole-set read with no window, and it is the one organization list a large tenant
+could grow without bound — the exact-total paging family (NEX-082…NEX-096) did not reach it because it
+lives under `organizations/`, not the agent surface. That is the natural next slice. Authorization on
+the reactivate path for a suspended-then-deprovisioned membership is already covered by the third test.
+
+## NEX-098 — Bound and page the organization roster with an exact total (run `NEX-2026-11-28-98`)
+
+**Phase.** 1 (organization & identity foundation). **Priority.** P1 — the last organization list a
+large tenant can grow without bound, and the one that was reporting a total it could not stand behind.
+**Status.** **IMPLEMENTED / TESTED / COMMITTED / PUSHED** on product commit `f4a2845`; **VERIFIED is
+withheld pending CI on that commit itself.** Local gates on this tree: `ruff format` 326 unchanged,
+`ruff check` all passed, `mypy` clean on 144 files, full suite **1778 passed, 4 skipped**.
+**Depends on.** NEX-097 (the roster's row set and its honesty about `total`) and NEX-096 (`AgentPage`,
+the `items` + counted `total` shape this mirrors).
+
+### The defect
+
+`GET /organizations/{id}/members` returned every member in one array and built
+`PageMeta(total=len(items))`. There is **no per-organization member cap**, so an owner inviting members
+in a loop grows both the database read and the response body without bound. Worse, `len(items)` cannot
+distinguish a complete roster from the first 50 of 300 — so even a truncated read would have reported
+itself as complete. NEX-097 fixed *which* rows the read returned and made the count agree with them; it
+left both the read and the count unbounded.
+
+`PageMeta` already carried `limit` and `offset`, and the response was already shaped as
+`items` + `meta`, so the wire contract did not change — only the meaning of `total` and the addition of
+two query parameters.
+
+### The fix
+
+- **Port** (`application/ports/organization_repositories.py`):
+  `list_for_organization(organization_id, *, limit=None, offset=0)` plus a separate
+  `count_for_organization(organization_id) -> int`. `limit=None` preserves the whole-set form that
+  internal callers (authorization checks, team membership validation) rely on; only the client-facing
+  read bounds itself. The count is a **separate method, not a field on the list**, so a page cannot
+  report a total it derived from its own length.
+- **Adapter** (`infrastructure/db/organization_repositories.py`): a shared `_roster_predicate()`
+  feeding both the listing and the `COUNT` aggregate. A count selecting a different set than the
+  listing reports a total no page can ever reach — the same class of defect as `len(items)`, one layer
+  down. The count is an aggregate, so it reads no rows and costs the same at any tenant size.
+- **Ordering** is `(created_at, id)`. An `OFFSET` window needs a **total** order: memberships invited in
+  one burst share `created_at`, and a non-total order lets a shifting window show one member twice and
+  hide another. The persistence test seeds every row at one `TIED_AT` to make this bite.
+- **Use case** (`application/use_cases/organization.py`): `OrganizationMemberPage(items, total)`,
+  mirroring NEX-096's `AgentPage`. `ListOrganizationMembers.run(..., limit=50, offset=0)`.
+- **Router**: `limit: int = Query(default=50, ge=1, le=200)`, `offset: int = Query(default=0, ge=0)`;
+  `meta.total` now comes from the count.
+
+### Tests
+
+Persistence (`tests/persistence/test_organization_roster_paging.py`, new, 4 cases): the total is the
+roster size at every page size; walking the window with tied `created_at` neither repeats nor skips a
+member; a deprovisioned member is absent from **both** the page and the total; the unpaged form still
+returns the whole roster.
+
+API (`tests/api/test_organizations_api.py`, 5 new cases): `limit=1` on a four-member roster reports
+`meta.total == 4` — the assertion that directly refutes `len(items)`; the offset window walks without
+repeating a row; a page past the end is empty with the total still describing the set; `limit=201` is
+rejected `422`; and the authorization check is not widened by the window — a non-member asking for
+`limit=1` still gets `404`.
+
+Load-bearing proved by reverting each half of the fix on this tree, not assumed:
+
+- `meta.total` back to `len(items)` → 2 red:
+  `TestOrganizationRosterPaging::test_total_is_the_roster_size_not_the_page_size` and
+  `::test_a_page_beyond_the_roster_is_empty_not_an_error` (`2 failed`), restored green.
+- the `id` tiebreaker dropped from the adapter's `order_by` → `test_walking_the_window_neither_repeats_nor_skips_a_member`
+  red, restored green.
+
+**The second experiment first came back green, and that mattered.** The test was written with
+`for spec in DEMO_USERS[:ROSTER_SIZE]` while its own docstring claimed insertion order was reversed
+"so a database that happened to return rows in insertion order would fail". It did not: the fixture
+inserted in forward order, SQLite returned tied rows in that order, and the test passed with the
+tiebreaker *and* without it — a guard that encoded the defect it was meant to catch. Fixed by inserting
+`reversed(DEMO_USERS[:ROSTER_SIZE])` and by asserting the whole listing's sequence equals its `id`-sorted
+sequence, so the test fails on any engine that returns tied rows in insertion order instead of the
+declared order. Only then did the drop-the-tiebreaker run go red. Do not "simplify" either defence back:
+the reversal makes the ids' natural order differ from insertion order, and the sequence assertion is what
+turns a stable-but-arbitrary order into a failure.
+
+### Consumers updated
+
+The return type change broke exactly the call sites the repository had: `tests/application/test_organization.py`
+(3) and `tests/security/test_org_admin_scope.py` (2, plus one `assert harness.list_members(...)` that
+would otherwise have become a vacuous truthiness check on a dataclass — changed to `.items`). Production
+had a **single** consumer (`application/use_cases/organization.py`), already updated in the slice.
+
+### Remaining / next
+
+`FoldersRepository.list_for_owner` is still a whole-set read, but it is user-authored, small, and
+exposed on no paged route, so its page size *is* its total and the number is honest. Do not "fix" it
+without a consumer that needs a window.
+
+## NEX-099 — Enforce tenant access on the demo identity provider (run `NEX-2026-11-28-99`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 2 (identity & delegation) |
+| Priority | P0 (offboarding did not revoke access on the demo path) |
+| Status | **IMPLEMENTED + TESTED** locally; product CI pending on push |
+| Dependencies | NEX-006 (tenant access enforcement), NEX-017 (agent-token tenant access) |
+| Architecture | explicit authorization, fail-closed security, one shared decision seam |
+
+**Objective:** the shared tenant-access rule (`resolve_tenant_access` /
+`ensure_tenant_access`) was applied on four identity paths — OIDC login callback,
+per-request session resolution, the bearer provider, and agent-token resolution
+(NEX-017). The **demo identity provider** was an uncounted fifth that selected a
+user after checking only `is_active`, never the membership rule. A suspended or
+deprovisioned membership therefore still authenticated in development.
+
+**Why it mattered:** this is the same offboarding gap that NEX-006 closed for the
+three human paths and NEX-017 closed one layer up for agents. The demo provider is
+not production code, but it is a real authentication path in every dev/test
+deployment, and a defect that only exists "in development" trains the demo and the
+tests to accept a model the production paths reject. The `tenant_access.py`
+docstring said "shared by every path that establishes an identity" — it was not,
+so the prose was overclaiming, not merely imprecise.
+
+**Delivered:**
+
+- `infrastructure/identity/demo_provider.py` calls `ensure_tenant_access(uow, user_id=...)`
+  after the existing active-user check, reusing the shared seam rather than
+  re-deriving the rule.
+- `application/use_cases/tenant_access.py` docstring corrected to list the demo
+  provider as the fifth path, so the enumeration matches the code.
+- New `tests/authentication/test_tenant_access_demo.py` (6 tests): two positive
+  controls (active member, unaffiliated user → allowed to bootstrap) and four
+  refusals (suspended org, deprovisioned org, suspended membership, deprovisioned
+  membership).
+
+**Two API tests reconciled, not weakened.** `test_suspend_removes_all_authority` and
+`test_reactivate_does_not_revive_a_deprovisioned_member` in
+`tests/api/test_organizations_api.py` had been asserting a 404 for a member who had
+just lost their *only* membership. They passed before this change **only because
+the demo path bypassed the seam** — under the corrected behaviour the caller is
+refused at the identity boundary (401), which is the documented, bearer- and
+session-consistent outcome. Each test now gives Bob a second, active membership so
+he stays authenticated, which lets the original assertion test *the actual property*
+(org invisibility after suspension; reactivation refused 422) instead of conflating
+it with "is the caller signed in". The 404/422 assertions were not relaxed.
+
+**Load-bearing proved:** reverting only `demo_provider.py` on this tree turns exactly
+the four refusal tests red, while both positive controls stay green — the test is
+non-vacuous and does not merely encode the fix.
+
+**Tests:** full suite 1784 passed, 4 skipped (baseline 1778 + 6 new); `ruff format`
+327 files unchanged, `ruff check` clean, `mypy` 144 files clean, run bare as CI does.
+
+## NEX-100 — Every API route must authenticate, derived from the dependency graph (run `NEX-2026-11-28-100`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 (foundational authorization) |
+| Status | **VERIFIED** at product `9afd120`; CI `46160917496`/`46160922284` |
+| Dependencies | NEX-006, NEX-017, NEX-099 (tenant access on every identity path) |
+| Architecture | explicit authorization, fail-closed security, shared dependency graph |
+
+**Objective:** every API route proved, structurally, to reference an authenticating dependency.
+All routes did authenticate already — but only by convention; nothing held it, so a new route
+added without `PrincipalDep` (or equivalent) would be reachable anonymously and no test would
+notice.
+
+**Delivered:** `tests/architecture/test_route_authentication.py` parses every router and the
+authentication graph in `presentation/dependencies.py`, then requires all 81 routes across 9
+routers to reference an authenticating dependency or appear in a documented four-entry exemption
+list (`begin_login`, `complete_login`, `logout`, demo identity discovery). Two tests guard the
+exemption list against staleness and against contradicting the graph. The measured topology — all
+77 protected routes name their own auth alias, none relies on `RateLimitDep` alone — is pinned by
+`test_protected_routes_name_authentication_explicitly` rather than narrated in prose.
+
+---
+
+## NEX-101 — Pin the operator-gate boundaries structurally (run `NEX-2026-11-28-103`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 (foundational authorization) |
+| Status | **VERIFIED** at product `ff8b6e63`; CI `46163954848`/`46163960436`, per job and per step |
+| Dependencies | NEX-050 (`OperatorGate`), NEX-052…NEX-099 (the gated operational views) |
+| Architecture | explicit authorization, authorization-before-action, single enforcement seam |
+
+**Objective:** `OperatorGate.authorize` is the single enforcement point in front of every
+platform-wide operational view — it decides whether the caller holds a live grant scoped to the
+operation, refuses with `ResourceNotFound`, and records exactly one access entry. Fourteen use
+cases across six modules call it. `ops.py` and `policies.py` carry only `PrincipalDep` and
+`RateLimitDep`, which *any* authenticated user satisfies, so the gate was the whole control and
+nothing structural held it.
+
+**Three boundaries were convention, not enforcement:**
+
+1. a new operational view whose use case omits `authorize(...)` is reachable by every
+   authenticated user, and nothing notices;
+2. a view calling `authorize` *after* reading its data has already leaked the count it meant to
+   gate — "gate first, never after" was a docstring, not a mechanism;
+3. a scope token in `KNOWN_OPERATOR_OPERATIONS` that no use case asks for is stored, listed, and
+   enforces nothing, though that registry promises a view and its token land in the same change.
+
+**Delivered:** `tests/architecture/test_operator_gate_boundaries.py` (415 lines, 19 cases, 14
+parametrised per operator container field). It derives each answer from the source tree rather
+than restating the docstrings: AST-walks the use cases for gate *calls* (a mention is not a call),
+resolves each `OPS_FIELDS` entry on the container to the use case its factory annotation
+constructs, follows the routers to the callables they expose, and reconciles the enforced
+operations against the registry in both directions. Pinned invariants: gate-before-any-read
+ordering; every container field resolves to a gated use case; every operator route reaches a gated
+use case; the registry neither omits an enforced operation nor mints an unused scope; the read and
+issue authorities stay split.
+
+**The exclusion is stated, not silent.** `GATED_ROUTERS` lists only `ops` and `policies`. The
+`agents` and `notes` routers are owner-scoped and gated by the authorization provider instead, so
+`OperatorGate` is not their control and pinning them here would assert the wrong property. Widening
+the list needs a domain judgement about which routers are platform-wide, which a syntactic test may
+not decide for itself. The docstring records the reason — an unexplained exclusion is where a
+coverage gap hides.
+
+**This is a third control, not a re-open.** The paging family (NEX-082…NEX-098) and the auth-guard
+family (NEX-099b/NEX-100) were closed and VERIFIED. NEX-101 guards scope enforcement — neither
+route authentication nor identity providers.
+
+**Load-bearing, measured:** blanking the gate call in `withholding_report.py` turned 5 tests red;
+injecting a read before the gate in `GetPolicyHistory` turned the ordering test red; both restored
+with an empty `git diff` before the real commit. The docstring's figure (14 use cases, 6 modules)
+was resolved from the code at runtime rather than copied.
+
+**Tests:** full suite 1901 passed / 0 failed / 0 errors / 4 skipped; `ruff format --check` 330
+files, `ruff check` clean, `mypy` 144 files clean — all run bare, as CI does. CI green at product
+`ff8b6e63` per run, per job and per step (Backend 12/12, Frontend 11/11, zero failed, zero
+skipped).
+
+**Residual limit:** a static proof, not a runtime one. A use case could call `authorize` and then
+read data belonging to a different operation; the ordering test catches the realistic shape, not
+every possible one. The use-case tests remain the behavioural evidence.

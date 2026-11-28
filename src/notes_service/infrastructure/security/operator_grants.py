@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import datetime
 
 from notes_service.domain.identity.operator_grant import OperatorGrant
@@ -50,12 +51,28 @@ class InMemoryOperatorGrantRepository:
 
     def replace_configured(self, grants: Iterable[OperatorGrant]) -> None:
         with self._lock:
+            # Revoked configuration grants are kept: a revocation is a standing
+            # decision (NEX-079), not a value the seed may quietly reinstate on the
+            # next boot. Without this, revoking a configuration grant would be
+            # undone by every restart, which is exactly the fail-open the feature
+            # exists to close.
+            revoked_config: dict[tuple[UserId, str], OperatorGrant] = {
+                (grant.user_id, grant.scope): grant
+                for grant in self._grants.values()
+                if grant.granted_by is None and grant.is_revoked
+            }
             self._grants = {
                 key: grant for key, grant in self._grants.items() if grant.granted_by is not None
             }
+            # Re-instate the revoked configuration grants that were filtered out
+            # above, so their revocation survives this reconciliation.
+            for grant in revoked_config.values():
+                self._grants[(grant.user_id, grant.scope, grant.granted_at)] = grant
             for grant in grants:
                 if grant.granted_by is not None:
                     raise ValueError("replace_configured only accepts configuration grants")
+                if (grant.user_id, grant.scope) in revoked_config:
+                    continue
                 self._grants[(grant.user_id, grant.scope, grant.granted_at)] = grant
 
     def active_for(self, user_id: UserId, *, now: datetime) -> frozenset[str]:
@@ -65,10 +82,44 @@ class InMemoryOperatorGrantRepository:
             grant.scope for grant in grants if grant.user_id == user_id and grant.is_active(now=now)
         )
 
+    def revoke(self, user_id: UserId, scope: str, *, at: datetime, by: UserId) -> int:
+        """Stamp a revocation on every live grant of ``scope`` (NEX-079).
+
+        The in-memory store keeps grants keyed by ``(user, scope, granted_at)``, so
+        one live grant of a scope may coexist with an older, already-lapsed one.
+        Only the live ones are stamped — see the port docstring. Because
+        ``granted_at`` is part of the key, the revoked grant is replaced under the
+        same key: its identity in this store is the grant, and its revocation is a
+        new fact about that grant, not a new grant.
+        """
+        with self._lock:
+            changed = 0
+            for key, grant in tuple(self._grants.items()):
+                if grant.user_id != user_id or grant.scope != scope:
+                    continue
+                if grant.is_revoked or not grant.is_active(now=at):
+                    continue
+                self._grants[key] = replace(grant, revoked_at=at, revoked_by=by)
+                changed += 1
+            return changed
+
     def active_grants(self, *, now: datetime) -> tuple[OperatorGrant, ...]:
         with self._lock:
             grants = tuple(self._grants.values())
         return tuple(grant for grant in grants if grant.is_active(now=now))
+
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
+        with self._lock:
+            grants = tuple(grant for grant in self._grants.values() if grant.is_revoked)
+        if limit is None:
+            return grants[offset:]
+        return grants[offset : offset + limit]
+
+    def count_revoked(self) -> int:
+        with self._lock:
+            return sum(1 for grant in self._grants.values() if grant.is_revoked)
 
 
 __all__ = ["InMemoryOperatorGrantRepository"]

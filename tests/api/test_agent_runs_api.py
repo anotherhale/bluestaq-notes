@@ -22,6 +22,7 @@ def _agent_with_token(
     client: TestClient,
     *capabilities: str,
     owner: dict[str, str] = ALICE,
+    runtime_identity: str = "svc-runner",
 ) -> tuple[str, str]:
     """Register an agent, delegate ``capabilities``, and mint one tool-gateway token."""
     registered = client.post(
@@ -29,7 +30,7 @@ def _agent_with_token(
         headers=auth_headers(owner),
         json={
             "display_name": "Runner",
-            "runtime_identity": "svc-runner",
+            "runtime_identity": runtime_identity,
             "capabilities": list(capabilities),
         },
     )
@@ -219,6 +220,153 @@ def test_listing_is_scoped_to_the_callers_agent(client: TestClient) -> None:
         "/api/v1/agent-runs", headers=auth_headers(BOB), params={"agent_id": agent_id}
     )
     assert foreign.status_code == 404, foreign.text
+
+
+def test_listing_reports_the_whole_history_not_the_window(client: TestClient) -> None:
+    """``meta.total`` counts every run, so a page cannot pass itself off as the answer.
+
+    Before NEX-090 the store capped the listing at 50 rows and the route reported
+    ``total=len(items)``, so an agent with 60 runs looked like it had exactly 50
+    and the other 10 were unreachable: there was no ``limit``/``offset`` to page
+    with. An auditor reading ``meta.total`` had no way to tell a complete history
+    from a truncated one.
+    """
+    agent_id, secret = _agent_with_token(client, CREATE)
+    for index in range(3):
+        planned = _plan(
+            client,
+            secret,
+            steps=[{"tool": CREATE, "arguments": {"title": f"h{index}", "content": "b"}}],
+        )
+        assert planned.status_code == 201, planned.text
+
+    body = client.get(
+        "/api/v1/agent-runs",
+        headers=auth_headers(ALICE),
+        params={"agent_id": agent_id, "limit": 2},
+    ).json()
+    assert len(body["items"]) == 2, body
+    assert body["meta"]["total"] == 3, body
+    assert body["meta"]["limit"] == 2, body
+    assert body["meta"]["offset"] == 0, body
+
+
+def test_paging_reaches_past_the_default_window(client: TestClient) -> None:
+    """Offset walks the rest of the history, so no run is unreachable.
+
+    This is what the missing paging cost: an agent with more runs than one window
+    could not read the remainder through the API at all, not even one at a time.
+    """
+    agent_id, secret = _agent_with_token(client, CREATE)
+    planned = []
+    for index in range(3):
+        response = _plan(
+            client,
+            secret,
+            steps=[{"tool": CREATE, "arguments": {"title": f"p{index}", "content": "b"}}],
+        )
+        assert response.status_code == 201, response.text
+        planned.append(response.json()["id"])
+
+    first = client.get(
+        "/api/v1/agent-runs",
+        headers=auth_headers(ALICE),
+        params={"agent_id": agent_id, "limit": 2, "offset": 0},
+    ).json()
+    second = client.get(
+        "/api/v1/agent-runs",
+        headers=auth_headers(ALICE),
+        params={"agent_id": agent_id, "limit": 2, "offset": 2},
+    ).json()
+
+    seen = [run["id"] for run in first["items"]] + [run["id"] for run in second["items"]]
+    assert seen == list(reversed(planned)), "newest first, and every run once"
+    assert second["meta"]["total"] == 3, "the total describes the set, not the page"
+    assert second["meta"]["offset"] == 2
+
+
+def test_the_total_counts_only_this_agents_runs(client: TestClient) -> None:
+    """A total is scoped to the agent, so it cannot disclose another agent's activity."""
+    busy_id, busy_secret = _agent_with_token(client, CREATE)
+    quiet_id, _quiet_secret = _agent_with_token(client, CREATE, runtime_identity="svc-runner-quiet")
+    for index in range(2):
+        assert (
+            _plan(
+                client,
+                busy_secret,
+                steps=[{"tool": CREATE, "arguments": {"title": f"b{index}", "content": "x"}}],
+            ).status_code
+            == 201
+        )
+
+    busy = client.get(
+        "/api/v1/agent-runs", headers=auth_headers(ALICE), params={"agent_id": busy_id}
+    ).json()
+    quiet = client.get(
+        "/api/v1/agent-runs", headers=auth_headers(ALICE), params={"agent_id": quiet_id}
+    ).json()
+
+    assert busy["meta"]["total"] == 2
+    assert quiet["meta"]["total"] == 0
+    assert quiet["items"] == []
+
+
+def test_resumable_listing_is_never_windowed(client: TestClient) -> None:
+    """The recovery set is complete even when a window would truncate it.
+
+    ``resumable_only`` is what a client resumes interrupted work from. Applying
+    ``limit`` to it would silently abandon runs, so it is exempt from paging and
+    its total is the size of the whole recovery set.
+    """
+    agent_id, secret = _agent_with_token(client, CREATE)
+    for index in range(3):
+        assert (
+            _plan(
+                client,
+                secret,
+                steps=[{"tool": CREATE, "arguments": {"title": f"r{index}", "content": "b"}}],
+            ).status_code
+            == 201
+        )
+
+    body = client.get(
+        "/api/v1/agent-runs",
+        headers=auth_headers(ALICE),
+        params={"agent_id": agent_id, "resumable_only": True, "limit": 1},
+    ).json()
+
+    assert len(body["items"]) == 3, "all pending runs, despite limit=1"
+    assert body["meta"]["total"] == 3
+    assert body["meta"]["limit"] == 3, "meta describes the set, not the ignored limit"
+    assert body["meta"]["offset"] == 0
+
+
+def test_paging_parameters_are_validated(client: TestClient) -> None:
+    """A nonsensical window is a 422, not a silently different query.
+
+    ``le=200`` caps how much one request can read, and ``ge=1`` rejects
+    ``limit=0``, which would otherwise return an empty page that looks like an
+    empty history. ``offset`` accepts ``0`` because the first page has no offset.
+    """
+    agent_id, _secret = _agent_with_token(client, CREATE)
+    headers = auth_headers(ALICE)
+
+    for params in (
+        {"limit": 0},
+        {"limit": 201},
+        {"offset": -1},
+    ):
+        response = client.get(
+            "/api/v1/agent-runs", headers=headers, params={"agent_id": agent_id, **params}
+        )
+        assert response.status_code == 422, (params, response.text)
+
+    ok = client.get(
+        "/api/v1/agent-runs",
+        headers=headers,
+        params={"agent_id": agent_id, "limit": 200, "offset": 0},
+    )
+    assert ok.status_code == 200, ok.text
 
 
 def test_advance_is_idempotent_on_a_completed_run(client: TestClient) -> None:

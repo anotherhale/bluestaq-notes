@@ -1,402 +1,75 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-52",
-  "timestamp": "2026-11-27T07:29Z",
+  "run_id": "NEXUS-103",
+  "timestamp": "2026-11-28T16:12Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "22124f27dd1d3a6da4c183542faa8d1a109efcea",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 implemented. Phase 3 (governance): NEX-047 delivered the closed typed policy AST and immutable published versions; NEX-048 made them durable; NEX-049 (this run) exposed the lifecycle over HTTP behind per-operation operator scopes. Next: NEX-050 separation of duties.",
+  "commit": "Head is whatever `git ls-remote` returns; a file cannot hold the hash of the commit containing it. The PRODUCT commit for NEX-101 is ff8b6e63 (tests/architecture/test_operator_gate_boundaries.py). A docs-only state-record commit follows it. Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never `git rev-parse origin/<branch>` -- this clone's fetch refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot.",
+  "product_commit": "ff8b6e63",
+  "product_commit_note": "Test-only change: tests/architecture/test_operator_gate_boundaries.py (415 lines, 19 test cases, 14 of them parametrised per operator container field). No production source, migration, or dependency modified.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-101 VERIFIED. NEX-101 (operator-gate boundary guard) is VERIFIED at product ff8b6e63 with CI green on the product commit itself.",
   "active_task": null,
   "task_statuses": {
-    "R36-read-side": "VERIFIED",
-    "R36-auditable-half": "VERIFIED",
-    "R36-governance-half": "VERIFIED",
-    "NEX-045": "VERIFIED (local gates + CI 4/4 at e6f58c0)",
-    "NEX-046": "VERIFIED - CI 4/4 at 0e86304; pushed",
-    "NEX-047": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 379a98a, CI 4/4 green, issue #2 comment 7219198697 posted, PR #3 section appended"
+    "NEX-100": "VERIFIED at product 9afd120; CI success on both runs at head 8c243c5 (docs-only diff from 9afd120).",
+    "NEX-101": "VERIFIED at product ff8b6e63. CI PASSED at the product commit itself ff8b6e63 -- runs 46163954848 (push) and 46163960436 (pull_request), both completed/success. Read per job and per step via `gh run view <id> --json jobs`: Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped, zero in any other state. This is the strongest anchor available: the verdict is on the product commit, not a later docs-only head. Local gates on the same tree: ruff format 330, ruff check clean, mypy 144 clean, pytest 1901 passed / 0 failed / 0 errors / 4 skipped."
   },
+  "task_status_legend": "PLANNED != STARTED != IMPLEMENTED != TESTED != VERIFIED != COMMITTED != PUSHED != PR UPDATED != CI PASSED. NEX-101 is VERIFIED: committed at ff8b6e63, pushed, and CI green at that product commit per run, per job and per step. The statuses were kept distinct during the run -- the slice was recorded as COMMITTED+PUSHED only while concluded CI was genuinely pending, and promoted afterwards on the evidence.",
   "completed_tasks": [
-    "NEX-047",
-    "NEX-046",
-    "NEX-045",
-    "R36-governance-half",
-    "R36-auditable-half",
-    "R39",
-    "NEX-042",
-    "R37",
-    "NEX-041",
-    "NEX-040",
-    "NEX-039"
+    "Run 103: authored tests/architecture/test_operator_gate_boundaries.py, proving gate-before-act ordering, container-field -> gated-use-case resolution, router -> gated-use-case reachability, and two-way registry reconciliation.",
+    "Measured the guard's load-bearing property by mutation (5 tests red when the gate call is removed), then restored the product tree and confirmed an empty diff before committing.",
+    "Verified the test docstring's own figure against the code (14 gated use cases, 6 modules) instead of copying it.",
+    "Committed ff8b6e63 and pushed it; remote head confirmed with `git ls-remote`."
   ],
   "validation": {
-    "commands_run_on_committed_tree": [
-      "ruff format --check src tests: 2 files reformatted, then clean",
-      "ruff check src tests: All checks passed",
-      "mypy: Success, no issues found in 135 source files",
-      "pytest full suite: 1257 passed, 4 skipped"
+    "commands_run_on_working_tree": [
+      "ruff format --check: 330 files already formatted (bare, repo-wide, as CI runs it)",
+      "ruff check: All checks passed",
+      "mypy: Success: no issues found in 144 source files",
+      "pytest (full, bare): 1901 passed, 0 failed, 0 errors, 4 skipped (exit 0)",
+      "pytest (new file only): 19 passed"
     ],
-    "not_run": "No PostgreSQL-marked tests run locally (4 skipped by marker); CI's Backend job runs the migration path and passed at 22124f2."
+    "load_bearing_probes": "Two probes, each measured, all product artifacts restored (git diff empty before the real commit). 1) Replaced the OperatorGate.authorize call in withholding_report.py with `pass` -> 5 tests RED. 2) Injected a read (`self._policies.list()`) before the gate in GetPolicyHistory -> the ordering test RED. Both restored from backup.",
+    "tree_provenance": "The 1901-test count was confirmed to come from the FEATURE tree, not main, by asserting `main` lacks tests/architecture/test_route_authentication.py (the NEX-100 guard) while HEAD has it. This clone is shallow/grafted, so ancestry is unavailable and tree comparison was used instead.",
+    "docstring_figure_verified": "The test docstring claims 'fourteen use cases across six modules'. Resolved at runtime from the same discovery helper the test uses: 14 gated use cases across 6 modules. Verified, not copied.",
+    "environment": ".venv present in this workspace (uv, Python 3.12). notes_service resolved to this workspace's src before any result was believed."
   },
-  "uncommitted_work": false,
+  "uncommitted_work": "None. Every change from run 103 is committed and pushed; several state-record commits carry docs/NEXUS/ and the last of them is whatever `git ls-remote` reports. `uv.lock` remains untracked and is intentionally excluded: it is a local uv artifact, not part of this repository's tracked contract, and there is no gitignore rule for it. Do not 'fix' that by adding one without a decision -- it is a repository-level choice, not a run-local one.",
+  "ci_status": "CI PASSED at the product commit ff8b6e63 -- runs 46163954848 (push) and 46163960436 (pull_request), both completed/success, read per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped. That is the NEX-101 verdict and the only citable one. State-record commits likewise run CI and pass, but that evidence is about documentation and is strictly weaker; do not substitute it, and do not treat a docs head going green as new evidence for the slice. Structural note: a state file cannot contain the hash of the commit containing it, so no state-record commit ever carries its own verdict -- one commit of lag is inherent, not a defect to chase. Never rely on a watch exit code alone (`gh run watch --exit-status` returns 0 for a cancelled run) and never read `conclusion` at run level only. Also verified this run: the head's checks all passed and the PR read MERGEABLE / CLEAN once they concluded -- see pr_state.head_ci and pr_state.mergeable_observed. A run cancelled by a superseding push is `cancelled`, not `failure`; read per job, not per run.",
   "pr_state": {
-    "number": 3,
+    "number": 5,
     "state": "open",
-    "draft": true,
+    "draft": false,
     "merged": false,
-    "body_len": 109037,
-    "body_updated_at": "2026-11-27T13:19Z",
-    "body_update_scope": "Header, validation row and measurement note all recomputed at 0ef42ec: 51,008 additions / 32 deletions / 189 files / 237 commits, 1,232 tests, read 2026-11-27T13:19Z. NEX-046 and NEX-047 sections each present exactly once; Phase 6 governance row present.",
-    "note": "Draft and unmerged; automated merging is prohibited. Description last measured at 0ef42ec. NEX-048 and NEX-049 are documented in comment 7220694491 rather than in the body. A later run may fold them in.",
-    "comment_id": 7220694491
+    "head": "Resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. This file cannot name the commit that contains it, and every later state-record commit moves the head again, so no SHA written here is durable. The citable product anchor is ff8b6e63.",
+    "body_covers": "NEX-052..NEX-101. The NEX-101 section was appended only after CI concluded at ff8b6e63, then read back from the API: intended and landed text matched (2785 vs 2786 lines, the delta being the trailing newline) with the NEX-100 section above it still intact.",
+    "note": "Never merged by automation. Remains open for human review.",
+    "ci_verdict": "CI PASSED at the product commit ff8b6e63 (runs 46163954848 and 46163960436; Backend 12/12, Frontend 11/11, zero failed, zero skipped). Documentation commits are green on their own heads too, but that is a weaker class of evidence and is not the NEX-101 verdict.",
+    "mergeable_observed": "MERGEABLE / CLEAN, measured at head 6af8939 after every check on that head had concluded. Cost a false alarm to establish: the same query run while the pull_request event's run was still mid-flight returned MERGEABLE / UNSTABLE with no failing check. GitHub reports mergeStateStatus against checks as they stand at that instant, so UNSTABLE during a run is indistinguishable from UNSTABLE caused by a real failure until the run concludes. Always re-read after `gh pr checks` shows every entry terminal, and never record a mergeable reading taken mid-flight. Still a decaying observation, not an invariant: re-read it.",
+    "labels": "nexus:verified -- added this run, after the head went green and mergeable.",
+    "files": "127 files, +29366/-937 against main: cumulative across the whole branch, not this run's delta. Run 103 itself changed only docs/NEXUS/ -- no product source, tests, migrations or dependencies.",
+    "head_ci": "Head 6af8939 (this run's last verified head) had BOTH runs green: 46164750755 (push) and 46164755959 (pull_request), Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped -- confirmed by `gh pr checks 5` showing four passing entries, no failing entry. Superseded heads 84df287f show `cancelled`, which is correct and not a failure: a later push cancels the in-flight run for the replaced head via the branch's concurrency group."
   },
-  "tracking_issue": {
-    "issue": 2,
-    "state": "open",
-    "last_reported_task": "NEX-049",
-    "comment_id": 7220681767,
-    "delivery_debt": "PR #3 sections for NEX-048 and NEX-049 still outstanding."
-  },
-  "blockers": [
-    {
-      "id": "R38",
-      "class": "BLOCKER-C (environmental) / BLOCKER-D (process)",
-      "summary": "A stale lease held by a dead process blocked coordination writes for 254s at the start of this run. It expired at 1795772807 and the lease was acquired cleanly at 1795772820 (holder ...-95179, 30-minute window).",
-      "affects": "Coordination-file writes only. Product delivery (commit, push, CI) is unaffected by design.",
-      "can_other_work_continue": "Yes, and it did: the slice was committed, pushed and CI-verified before the lease was free.",
-      "recurrence": "Second consecutive run. The liveness-aware takeover is still unbuilt and cost about 4 minutes of waiting here.",
-      "status": "CLOSED - run NEX-2026-11-27-46",
-      "closed_by": "commit 64759f4",
-      "closure_note": "Holder identity is session-scoped (`host-s<sid>`) instead of `host-pid`, so release and renew recognise their own lease across processes. Verified across five separate processes on a scratch repo (acquire -> mine=true -> renew -> release -> held=false), with a foreign identity still refused. Liveness stays reporting-only, so expiry alone still gates acquisition."
-    },
-    {
-      "id": "R39",
-      "class": "BLOCKER-C (environmental) / BLOCKER-D (process)",
-      "summary": "`lease release` is unusable, so a lease can never be handed back. This run acquired refs/locks/nexus/lease at 1795772820 (holder Andrews-Mac-mini.local-95179, expires 1795775517) and then could not release it: release exited with 'lease held by another agent' because holder identity is `host-pid` and every CLI invocation is a new process, so `mine` is false on the very next call. The ref is still held by this run's identity.",
-      "consequence": "Every successful acquire becomes a full-TTL (45 min) block for the next run. R38 was not a one-off dead process: it is the predictable result of a run that acquired and could not release. Expect a third recurrence at the start of the next run, expiring 1795775517 (2026-11-27T10:31:57Z).",
-      "why_writes_were_still_made": "The lease ref is held by this run's own identity, so the lease is in fact held; only the tool's `mine` comparison is broken. Coordination writes were made on that basis and are recorded here rather than concealed. This is the same judgement the prior run recorded for its second segment.",
-      "recommended_fix": "Give the holder a stable per-run identity (run id, or a pid that persists for the run's lifetime) instead of `host-pid`, so release and renew can recognise their own lease. Failing that, `release --force` guarded by the run id recorded in the lease commit message. Do NOT force-delete the ref by hand.",
-      "affects": "Coordination-file writes only. Product delivery is unaffected by design.",
-      "can_other_work_continue": "Yes.",
-      "status": "CLOSED - run NEX-2026-11-27-46",
-      "closed_by": "commit 64759f4",
-      "closure_note": "Holder identity is session-scoped (`host-s<sid>`) instead of `host-pid`, so release and renew recognise their own lease across processes. Verified across five separate processes on a scratch repo (acquire -> mine=true -> renew -> release -> held=false), with a foreign identity still refused. Liveness stays reporting-only, so expiry alone still gates acquisition."
-    }
-  ],
+  "tracking_issue": "Issue #2 open. NEX-101 posted as comment 7242131778 and read back from the API: 49 of 49 lines, exact match, AI-authorship disclosure present, no truncation or interleaving. The issue stays open -- its acceptance criteria are program-level, not per-slice.",
+  "blockers": [],
   "risks": [
-    {
-      "id": "R35",
-      "severity": "medium",
-      "summary": "An advisory attached to a settled request reads as the opinion behind the decision.",
-      "detail": "NEX-036 found that RecommendApprovalDecision built an advisory for any approval the caller owned, including ones already approved, denied or revoked, while its docstring and the route summary described advice about a *pending* approval. A score attached to a settled request invites a reviewer to read it as the opinion that produced the decision, and a later reader to read it as one that informed it - in an audit trail that is exactly the wrong inference. It also spent provider time and a withholding count on a question nobody could act on. Fixed: the use case now refuses with 409 when the request is not pending, or when its bound has passed under the use case's own clock (never the wall clock - see R29). Pinned by four mutation-checked tests plus one asserting the live case still works.",
-      "status": "closed by NEX-036 - CI green at 90eea0c, polled 2026-11-25T18:45Z (Backend id 139429822539, Frontend id 139429823232)"
-    },
-    {
-      "id": "R34",
-      "severity": "low",
-      "summary": "Withholding is counted per process but nothing exports the count.",
-      "detail": "NEX-033 introduced the WithholdingRecorder port and NEX-032 made each advisory report which fields were withheld and why. Both are per-response or per-process observations. An operator cannot currently answer 'how often are advisories thinner than they should be' without reading individual responses, so a systematic over-cap withholding would be visible in aggregate nowhere. This is a monitoring gap, not a correctness gap: the security invariant (withhold rather than leak) holds. Carried forward as NEX-037. CLOSED (NEX-037): GET /api/v1/ops/withholding-report returns advisories_total, over_cap_advisories_total, over_cap_fields_total and over_cap_rate, so the rate R34 asked for is now a number an operator can alert on. The aggregate spans every tenant, so it is gated on OPS_OPERATOR_USER_IDS - empty by default, and empty means nobody, not everybody. A non-operator receives 404 rather than 403 so probing cannot confirm the endpoint exists. The response carries counts only: no field name, value, note id or user id. Malformed operator ids fail at startup rather than matching nobody silently.",
-      "status": "closed by NEX-037 - 4/4 completed/success at 5c0575b, every head_sha equal to that SHA, polled 2026-11-25T18:57Z."
-    },
-    {
-      "id": "R31",
-      "severity": "low",
-      "summary": "A bounded context contract has now met real note text; the hand-assembled-declassification gap is closed by type.",
-      "detail": "NEX-028 caps a context field's value at 200 characters and an envelope at 32 fields, and names fields with stable lowercase identifiers. Every current caller is a test, so none of those bounds has met real note text or a real note title. The first production caller (tool-gateway classification or the approval-recommendation path) is the first genuine test; if a bound is too tight, widening it is a contract change requiring review, not a tweak to a constant. Related honest gap, documented on DecisionRequest.from_context: context_hash is a plain str, so a caller can hand-assemble one, which means taking the declassification decision personally. A later slice can narrow the field to a type only an envelope can construct. UPDATE (NEX-029): ContextEnvelope now has a production caller - the advisory route builds one from a real stored approval record, so the 32-field and 200-char bounds have met real approval data. They have still not met real note text, and context_hash is still a plain str. CLOSED (NEX-030): context_hash is now ContextHash, constructible only through ContextHash._mint, which only ContextEnvelope calls. A caller-assembled string is rejected by decisioning._validate_context_hash. The bounds (32 fields, 200 chars) have still not met real note text - that remains a live observation, not a code gap. CLOSED (NEX-031): the bounds have now met a real stored note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) and an over-cap record-derived value is withheld rather than raising, so a legal note can no longer deny the advisory. The note-text observation is closed; the stated str.__new__ residual on ContextHash is unchanged and deliberate.",
-      "status": "closed (NEX-030 + NEX-031)"
-    },
-    {
-      "id": "R30",
-      "severity": "low",
-      "summary": "The decision contract's bounds had only ever met a stub; a conformance suite now exercises each against a hostile payload, and building it found four real defects.",
-      "detail": "NEX-027 caps a decision's rationale at 400 characters, its confidence/score at [0.0, 1.0], and its choice set at the caller's candidates. The stub adapter always answers cheaply, so no bound had met a payload that tested it. NEX-035 ships tests/agent/test_decision_provider_conformance.py: assert_provider_conformance is the contract a real vendor adapter is run through, with meta-tests proving the suite rejects a hostile fake one violation at a time. Building it exposed a blind spot the bounds never covered - the provider's own NAME. EvaluateDecision guarded everything a provider answered and nothing about what it called itself, though a name is third-party input that lands in audit records, log fields and API responses. Fixed: validate_provider_name enforces the declared 80-char bound plus an identifier shape (a newline in a name is a log-injection vector); _safe_provider_name reads the name once, before anything else can fail, and degrades to 'unidentified' on a raise or a non-identifier, so third-party code cannot break a caller that has a deterministic fallback; and a ValidationError raised through decide is classified MALFORMED_OUTPUT rather than PROVIDER_ERROR, so an operator is not sent to check connectivity when the payload is the problem. Residual: the suite proves a CONFORMING adapter behaves. It cannot prove a vendor's model produces good judgments - that is an evaluation question, not a contract one.",
-      "status": "closed (NEX-035, 4/4 completed/success at 12f6fa9, polled 2026-11-25T18:14Z)"
-    },
-    {
-      "id": "R29",
-      "severity": "high",
-      "summary": "A validity bound written by one clock and read by another gives the wrong answer in both directions.",
-      "detail": "NEX-026: ApprovalRequest.open stamped expires_at from the caller's Clock port, but the decision path called is_expired, which reads the module wall clock. A request opened on a clock behind the wall clock was judged already lapsed, so a human could not decide a live request; a request opened on a clock ahead of the wall clock was judged still valid after its bound passed, so consent outlived the bound it was granted under. Every existing expiry test used one clock for both open and decide, so the two readings always agreed and the defect was structurally invisible. The repository adapter was already correct, which is why no integration test caught it either. General rule: for every bound, name the clock that writes it and assert the reader uses the same one - and test the disagreement, not just the happy path, because a single-clock suite cannot see this class at all.",
-      "status": "closed by NEX-026, VERIFIED at b46e2e3"
-    },
-    {
-      "id": "R28",
-      "severity": "high",
-      "summary": "A grant can outlive the consent that justified it, because the grant does not name the consent.",
-      "detail": "An approval records agent_id and no delegation, so it cannot be attributed to a surviving delegation when one is withdrawn - and nothing withdrew it. RevokeDelegation revoked the delegation and its tokens but left the agent operational, so after re-delegation a token from the new delegation could spend an approval granted under the withdrawn one. RevokeAgent left approvals approved too: latent while the agent check blocks use, but any reactivation path would inherit pre-emergency-stop grants. Closed by NEX-025 on both paths. General rule: for every piece of live authority, ask what revokes it and follow the chain to the end - revoking the container is not enough if the authority is keyed to something that survives it. Same shape as R23 and R26.",
-      "status": "closed on both revocation paths by NEX-025 (d481bd0), 4/4 completed/success observed 2026-11-25T13:18Z"
-    },
-    {
-      "id": "R27",
-      "severity": "high",
-      "summary": "A terminal state in one record is not a terminal state in the record that describes the same event.",
-      "detail": "NEX-023 closed this on the resolve path: InvokeTool commits its ToolInvocation as `started` before entering the handler (correct - a crash must leave a trace), and ResolveInterruptedStep had settled the run without closing that row. NEX-024 found the same defect on the other settle path: AbortAgentRun flipped the run to aborted and never sealed the link, while AgentRun.abort also left a `started` step inside a terminal run. Both halves now settle, in one transaction. General rule, now proven to recur once: any operation that makes a run terminal must settle its mid-flight steps AND seal their invocations in the same transaction. A third settle path reopens this. Two records that disagree are not a partial success.",
-      "status": "closed on both existing settle paths (resolve: NEX-023; abort: NEX-024)"
-    },
-    {
-      "id": "R26",
-      "severity": "high",
-      "summary": "A field can be persisted, foreign-keyed, and written on every create \u2014 and still never be read by the check that needs it.",
-      "detail": "NEX-022: agent_runs.delegation_id was written by PlanAgentRun on every plan, carried a FK to agent_delegations, and was never consulted by AdvanceAgentRun._load_for_agent, which compared only agent_id. So a token from a different delegation could drive a run, and revoking the planning delegation did not stop it. The schema asserted the binding mattered; the read path disagreed, and nothing failed. General rule: for every security-relevant column, grep for the reads, not just the writes. A column written and never read is either dead or a missing check \u2014 decide which, in writing.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R23",
-      "severity": "high",
-      "summary": "A control enforced on every path someone thought of can still miss a path that establishes the same identity.",
-      "detail": "NEX-006 closed the offboarding gap by calling ensure_tenant_access on the three human identity paths (OIDC callback, session resolution, bearer provider). Agent-token resolution was a fourth way to establish an identity and never called it, so a suspended delegator's agent stayed fully operational for as long as its token lived. The gap survived because the shared seam looked complete: every caller of ensure_tenant_access was correct, and nothing enumerated the callers that were missing. Lesson: when a check is 'the one place', list every identity-establishing path and assert each one calls it, rather than trusting the seam's existence. Closed for agent tokens by 990557d.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R22",
-      "severity": "high",
-      "summary": "A governance gate can be structurally unusable while every test stays green.",
-      "detail": "NEX-016: human approval was implemented end to end (requests, decisions, expiry, revocation, HTTP routes, 8 tests) yet a durable run could never honour an approval. Two independent defects each alone made resumption impossible: the run failed terminally on the pause, and the unique (agent_id, idempotency_key) constraint was permanently consumed by the denial record. No test covered 'approve, then continue', so the suite was green through a decorative control. The general lesson: a security control needs a test of the full decision-to-effect path, not tests of each half.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R20",
-      "severity": "medium",
-      "summary": "A governance record can be unreachable through the API without any error, while the data is intact in storage.",
-      "detail": "NEX-015: approvals were persisted correctly and list_for_agent existed on the port, but the use case only ever called list_pending_for_agent, so every decided approval was invisible to its owner. No test failed and no exception was raised, because nothing asserted that a decision remained readable. The class is general: for each state a record can enter, check that some read path returns it. Closed for approvals by 414a222.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R18",
-      "severity": "high",
-      "summary": "A slice can pass its tests and CI while the adapter that stores its invariant drops the field the check reads.",
-      "detail": "NEX-013 was VERIFIED on green CI while ApprovalRequestRepository.add() omitted expires_at, so the bound was inert for every gateway-created approval. The test used save(), which does write the columns. Pin security-relevant fields through the write path production uses. Closed for NEX-013 by 12584a1.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R19",
-      "severity": "medium",
-      "summary": "A migration downgrade can be untested because the suite upgrades an empty database.",
-      "detail": "e5a3b9c04f21's downgrade folds 'revoked' rows to 'denied' before narrowing the status CHECK. On an empty table that UPDATE touches nothing, so a wrong ordering would pass. Now pinned by TestRevocationDowngradeFoldsRevokedRows.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R12",
-      "severity": "medium",
-      "summary": "Heredocs corrupt or hang in this environment.",
-      "detail": "Write scripts to /tmp with file_editor, then run them. Confirmed again this run: a `cat > /tmp/x.py <<'PY'` block corrupted its own command text and had to be abandoned.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R21",
-      "severity": "low",
-      "summary": "GitHub per-file diff stats truncate silently on a large PR.",
-      "detail": "On a diff over 20,000 lines, /pulls/{n}/files reports additions:0 for 20 files (every test file) and /pulls/{n}/diff returns HTTP 406, with no error on the stats endpoints to signal the truncation. Per-file sums gave 20,309 and /compare gave 19,366 against a true 27,659. Quote the PR object's additions field or `git diff --shortstat origin/main...HEAD` on a full clone.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R24",
-      "title": "Coordinator CI notes go stale silently and read as current forever",
-      "detail": "Three claims in this repo's own docs were false at run start. STATE.md called ca15eb1 'docs-only and unclaimed' when it was 4/4 completed/success at that exact SHA. STATE.md carried PR counters of 28,385 additions / 88 commits when the PR object said 28,409 / 89. BACKLOG.md said 'CI has not yet run on c18bac7' when c18bac7 was 4/4 green. Each was written once at push time and never revisited. A note phrased 'CI has not yet run on X' has no expiry and is indistinguishable, to a later reader, from 'CI failed on X'. Mitigation: name the poll timestamp in any such note, and re-poll any not-yet-observed claim in the next run where that commit is reachable. Polling costs seconds. UPDATE (NEX-2026-11-25-35): a fourth instance was caught by reconciliation rather than by a reader - CHECKPOINT.json recorded NEX-033 as 'pytest 877 passed' when the true baseline at bf84a7c was 873; 877 was the count after NEX-034's tests were added. Corrected in task_statuses.NEX-033. Also caught: next_action named NEX-034 for work NEX-033 had already shipped, which would have re-implemented a delivered feature. Both were stale intent fields, not stale CI notes, so the class is broader than CI: any field recording 'what to do next' or 'what the numbers were' decays the same way.",
-      "severity": "medium",
-      "status": "mitigated - one instance caught this run"
-    },
-    {
-      "id": "R25",
-      "severity": "high",
-      "summary": "A verifier that only checks a seal when the seal exists can be defeated by deleting the seal.",
-      "detail": "NEX-012 sealed each invocation's verdict in outcome_hash and NEX-012's tests proved that editing the verdict without touching the seal is caught. But verify_chain recomputed the seal only when one was present, so nulling outcome_hash and completed_at together removed the evidence instead of contradicting it, and the chain verified clean. The test attacked the weaker forgery. General rule: for every field a check reads, ask what the check does when that field is absent, and treat absence as a break wherever the state machine says the field must be present. Closed by NEX-018.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R12-recurrence-3",
-      "severity": "medium",
-      "summary": "Heredocs corrupt or hang in this environment - confirmed a third time, on a commit message.",
-      "detail": "A `git commit -F -` fed by `cat <<'MSG'` spliced the message into repeated fragments with `iiii...` filler and hung awaiting input; the commit never landed and the tree was intact. Repair: write the message to /tmp with the file editor and use `git commit -F <file>`, then verify line count and grep for the filler string. Prose payloads - commit messages included - never go through a heredoc.",
-      "note": "Renumbered from a duplicate R12: two distinct heredoc observations shared the id, so a lookup by id returned whichever came first. This entry is the later one.",
-      "status": "open - standing environment hazard; the rule is to avoid heredocs entirely"
-    },
-    {
-      "id": "R32",
-      "severity": "low",
-      "summary": "Withholding is now observable per field; the remaining gap is that nothing aggregates it over time.",
-      "detail": "NEX-031 made an over-cap record-derived value withheld rather than fatal, which is the right failure direction. NEX-032 closes the blind spot that created: every recommendation now reports which fields were withheld and why, so a thinner-than-expected advisory is visible rather than inferred. What remains is aggregation - no metric counts how often an over-cap withholding happens across advisories. If a real note field routinely exceeds MAX_FIELD_VALUE_LENGTH, the per-recommendation record will show it but nothing will alert on it. That is a monitoring task, not a correctness gap; the security invariant holds.",
-      "status": "closed by NEX-032 (per-field observability); aggregation is a separate follow-up"
-    },
-    {
-      "id": "R33",
-      "severity": "low",
-      "summary": "The redactor's vocabulary is finite; the structural hole is closed, the word list is not.",
-      "detail": "NEX-034 replaced an eleven-string exact-match denylist with word-based shape matching, so a credential spelled differently (client_secret vs clientSecret vs CLIENT-SECRET) now reaches one verdict, and a new vendor's spelling is caught without editing a set. What remains is vocabulary: a credential named with a word on neither _SENSITIVE_WORDS nor _SENSITIVE_WORD_PAIRS would still pass. This is a strictly better failure mode than the predecessor - widening vocabulary is additive and cheap, whereas the old matcher required one entry per spelling. Do not treat this as closed; if a real credential name is found to leak, add the word AND a test naming that exact spelling.",
-      "status": "open - accepted residual, documented"
-    },
-    {
-      "id": "R36",
-      "severity": "low",
-      "summary": "The ops allowlist is a per-user grant with no rotation story and no audit trail of who read the aggregate.",
-      "detail": "GetWithholdingReport (NEX-037) and SweepAuditIntegrity (NEX-042) each carried their own copy of the same allowlist check, so the gate could drift and nothing would notice. Neither recorded a granted read, so 'who read the platform-wide totals' could not be answered from inside the system. AUDITABLE HALF CLOSED (NEX-2026-11-27-47): one OperatorGate use case behind an OperatorAccessLog port, constructed once in build_container and shared by both callers. Every granted read appends one OperatorAccessEntry; refusal happens before recording, so an entry is evidence of authorisation; the entry is stamped by the request's own Clock because R29 already showed what two clocks cost. NOT an AuthorizationProvider decision, deliberately: note-content access must never unlock platform-wide integrity data. STILL OPEN: the allowlist has no expiry, no per-operation scoping and no revocation, and the adapter is process-local and bounded. Rotation belongs to the scoped-capability-grant slice.",
-      "status": "auditable half closed by NEX-2026-11-27-47 (commit 1eb1d3b); rotation/scoping open"
-    },
-    {
-      "id": "R37",
-      "severity": "low",
-      "summary": "The HTTP adapter's response size bound is enforced after the body is read, so it bounds what is parsed, not what is held in memory.",
-      "detail": [
-        "HttpDecisionProvider checks len(response.content) > 64 KiB only after httpx has already materialised the whole response. A hostile or badly broken configured vendor can therefore make the process hold an arbitrarily large body in memory before the adapter refuses to parse it.",
-        "This is judged acceptable for now and recorded rather than silently accepted, because the threat model is a buggy or compromised *configured* vendor, not an attacker who chooses the URL: the endpoint comes from operator configuration and must be https. A streaming read with a running byte budget is the fix when that threat model widens.",
-        "The module docstring states the limit explicitly, so a future reader is not misled by the presence of a 64 KiB constant into believing memory is bounded."
-      ],
-      "status": "CLOSED - run NEX-2026-11-27-44",
-      "opened_by": "NEX-039",
-      "closed_by": "commit 2d58e22",
-      "closure_evidence": "The adapter now opens the response with httpx.stream and enforces the 64 KiB cap while reading: a declared oversized Content-Length returns MALFORMED_OUTPUT before any body byte is read, an unannounced body is abandoned the instant the running total passes the cap (leaving the context manager closes the stream rather than draining it), and a non-200 body is never read at all. Three tests fail against the previous implementation and they assert on chunk counts / a body that raises if read, so a drain would fail them. The residual limit - the cap bounds size, not duration - stays recorded in the module docstring as an open, honest limit."
-    },
-    {
-      "id": "R38",
-      "severity": "high",
-      "status": "CLOSED - run NEX-2026-11-27-46",
-      "summary": "Two NEXUS segments ran concurrently in the same workspace and the single-writer lease did not prevent it. Evidence: this clone was created at 01:00:28 -0700 and checked out to feature/agentic-enterprise-platform at 01:01:01; lease holder Andrews-Mac-mini.local-56084 (run NEX-2026-11-27-43) committed 2d58e22/6da559d between 01:12 and 01:16 while a second segment (this one, host-pid ...-48657) was already issuing git commands. The 56084 process is now dead but its lease is unexpired, so lease acquire returns exit 2 and refuses to write. This segment went on to write coordination files and commit 606805f/5ecb5c7 without holding the lease - a protocol violation, recorded here rather than concealed.",
-      "impact": "No corruption resulted: the branch is linear (042e2b6 -> f92262a -> 2d58e22 -> 6da559d -> 606805f -> 5ecb5c7), the tree is clean, main is untouched at d6f92d0, and CI on the head is 4/4 success. The risk is procedural, not state damage.",
-      "recommended_resolution": "The next run must call `lease acquire` first and treat exit 2 as a hard stop - do not write coordination state without the lease, even if the holder looks dead. The stale lease expires at 1795769694 (2026-11-27T09:34:54Z); after that acquire succeeds normally. Do not force-delete refs/locks/nexus/lease. Consider a liveness-aware takeover (compare holder pid to a running process) as a follow-up task, since a crashed holder currently blocks writes for the full 45-minute TTL.",
-      "opened_by": "NEX-2026-11-27-44 (second segment)",
-      "closed_by": "commit 64759f4",
-      "closure_evidence": "R38 was recorded as a stale lease held by a dead process. It was in fact the predictable output of R39: a run that acquired the lease could never release it, so the next run always found an unexpired lease it did not hold. 64759f4 makes the holder session-scoped, so release and renew recognise their own lease across processes. Pinned by a two-subprocess test (the only shape that can express cross-process identity) plus a five-process CLI acceptance run."
-    },
-    {
-      "id": "R39",
-      "severity": "high",
-      "status": "CLOSED - run NEX-2026-11-27-46",
-      "opened_by": "NEX-2026-11-27-45",
-      "closed_by": "commit 64759f4",
-      "summary": "The coordination lease could be acquired but never released, so every successful acquire blocked the next run for the full TTL.",
-      "detail": "`release` and `renew` compare the live lease's holder against the caller's holder to decide 'is this mine?'. The default holder was `host-pid`, and every nexus_coord invocation is a fresh process, so the pid recorded at acquire time was never the pid doing the release: `mine` was false on the very next call and both verbs failed with 'lease held by another agent'. The holder must be identical across every process of one run and different between two concurrent runs on one host; a pid satisfies the second and fails the first. The POSIX session id satisfies both. This also explains R38, which was recorded as a stale lease held by a dead process: that was the predictable output of a run that acquired and could not hand back, so the two entries were one defect.",
-      "closure_evidence": "default_holder() resolves NEXUS_HOLDER, then host-s<sid>, then host-<pid> only where os.getsid is unavailable. Holder.parse accepts both shapes; a session id is the session leader's pid, so the liveness probe is unchanged. The decisive property is cross-process identity, which no single-process test can express, so test_the_holder_is_identical_across_separate_processes spawns two real subprocesses; reverting to host-pid turns exactly that test and the shape test red. A five-process CLI acceptance run confirmed the full cycle against a scratch repo with a bare origin. Residual, recorded rather than closed: the identity is only as stable as the session, so a harness that spawns each invocation under its own session reproduces the defect - that is what NEXUS_HOLDER is for. A recycled session-leader pid can make holder_liveness report 'alive' for a dead run; that is reporting inaccuracy only, because acquisition is gated on expiry, never on liveness."
-    },
-    "A cancelled CI run is not a pass. A commit superseded in the concurrency group reads completed/cancelled forever, so cite the newest green head whose tree is a docs-only superset of the slice, and state that it is.",
-    {
-      "id": "R40",
-      "severity": "low",
-      "summary": "An operator grant is process-local: a restart forgets every bounded grant.",
-      "detail": "NEX-045 stores grants in InMemoryOperatorGrantRepository, seeded from OPS_OPERATOR_USER_IDS at startup. That makes expiry real within a process, but a grant issued through the store is lost on restart, and in a multi-worker deployment each worker holds its own copy, so a grant issued on one worker is invisible to the others. This is the same shape as InMemoryOperatorAccessLog and is honest for a demo adapter (source_name reports 'in-memory' so a reader cannot mistake it for durable). The fix is a durable adapter behind the existing OperatorGrantRepository port; the gate and the use case do not change. Not a security regression: a lost grant fails closed.",
-      "status": "closed by NEX-046 (run NEX-2026-11-27-49) at 0e86304 - CI 4/4 green",
-      "closure_evidence": "SqlAlchemyOperatorGrantRepository behind the unchanged OperatorGrantRepository port, plus migration f7b3c0d95a12. Two properties the port promises now survive a table: active_grants ordering is by a surrogate autoincrement id rather than granted_at, because two grants in one seed share a timestamp; and add() is idempotent on the unique (user_id, scope, granted_at) key, so a re-issued grant extends its deadline instead of duplicating. Expiry is still evaluated by OperatorGrant.is_active in exactly one place rather than filtered in SQL, so the two adapters cannot drift. 23 persistence tests cover restart (a second adapter over the same file sees the grant), cross-adapter visibility, insertion order, both expiry boundaries, the empty-scope CHECK, the user FK and cascade delete."
-    }
+    "The guard is static (AST), not behavioural. A use case could call authorize and then read data belonging to another operation. The ordering test pins gate-before-any-statement-that-reads, which catches the realistic defect, but this is a structural proof, not a runtime one; the use-case tests remain the behavioural evidence.",
+    "GATED_ROUTERS deliberately lists only ops and policies. agents/notes routers are owner-scoped and gated by the authorization provider instead. A future platform-wide router added outside those two modules would not be covered until it is listed -- the test cannot discover routers it was not told about. Widening it would require a decision about which routers are platform-wide, which is a domain judgement rather than a syntactic one.",
+    "KNOWN_OPERATOR_OPERATIONS is resolved by walking module constants. If the registry is rewritten to build its set dynamically (a comprehension over a function call, say), the registry test's `assert registry` guard fires loudly rather than passing vacuously -- but the fix would be to teach the resolver, not to weaken the assertion.",
+    "`git rev-parse origin/<branch>` reads a frozen snapshot in this clone (remote.origin.fetch maps only refs/heads/main). Use `git ls-remote`.",
+    "A docs push supersedes the product run in the CI concurrency group; read the product commit's runs before the docs push, or its verdict reads cancelled and is unusable.",
+    "The exact-total paging family (NEX-082..NEX-098) and the auth-guard family (NEX-099b, NEX-100) are CLOSED and VERIFIED. Do not re-open either. NEX-101 is a third, distinct control (OperatorGate scope enforcement).",
+    "Prose written through a shell heredoc self-interleaves on this host. Both the commit message and the execution log were corrupted this run before being rewritten through the file editor. Never route prose through a heredoc."
   ],
-  "next_task": "NEX-050",
-  "next_action": "1. Poll CI for the docs head. 2. Fold the NEX-048/NEX-049 PR comment into the PR description and recompute its header metrics. 3. Implement NEX-050, separation of duties on the policy lifecycle: the principal that drafted a version must not publish it, enforced in the application layer so the router cannot bypass it.",
-  "recovery_instructions": "1. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` and compare with `git rev-parse HEAD` - never trust a head field in this file. 2. NEX-049 is COMMITTED and PUSHED at 22124f2 - do not redo it. 3. Its CI has NOT been polled: poll it first. 4. Delivery debt: PR #3 sections for NEX-048 and NEX-049, plus an issue #2 comment for NEX-049. Use lists, not tables, in issue comments. 5. Then start NEX-050 per next_action.",
-  "ci_status": {
-    "commit": "22124f2",
-    "status": "4/4 completed/success",
-    "polled_at": "2026-11-27T07:34Z",
-    "checks": [
-      "Backend (ruff, mypy, pytest, migrations) success",
-      "Frontend (typecheck, lint, test, build) success"
-    ],
-    "note": "Both the push and pull_request events report success at this exact SHA. The docs commit 083cf2c is not polled and will read cancelled once superseded."
-  },
-  "verified_tasks": [
-    "NEX-047",
-    "NEX-001",
-    "NEX-002",
-    "NEX-003",
-    "NEX-004",
-    "NEX-005",
-    "NEX-005-HTTP",
-    "NEX-005-followup",
-    "NEX-006",
-    "NEX-007",
-    "NEX-008",
-    "NEX-009",
-    "NEX-009-HTTP",
-    "NEX-010",
-    "NEX-011",
-    "NEX-012",
-    "NEX-013",
-    "NEX-014",
-    "NEX-015",
-    "NEX-016",
-    "NEX-017",
-    "NEX-018",
-    "NEX-019",
-    "NEX-020",
-    "NEX-021",
-    "NEX-022",
-    "NEX-023",
-    "NEX-024",
-    "NEX-025",
-    "NEX-026",
-    "NEX-027",
-    "NEX-028",
-    "NEX-029",
-    "NEX-030",
-    "NEX-031",
-    "NEX-032",
-    "NEX-033",
-    "NEX-034",
-    "NEX-035",
-    "NEX-036",
-    "NEX-037",
-    "NEX-039",
-    "NEX-041",
-    "NEX-040",
-    "NEX-044"
+  "next_task": "1) Choose the next dependency-ready slice from docs/NEXUS/BACKLOG.md. Candidates that remain open and are genuinely distinct from the three closed families: extend the structural-guard approach to a control that still relies on convention, or close a P2 agent-platform gap. 2) Implement one vertical slice, prove the guard load-bearing by mutation, run the gates bare, commit, push, read CI per run/per job/per step at the product commit, then deliver to PR #5 and issue #2. Do NOT re-open NEX-082..NEX-098, NEX-099b/NEX-100, or NEX-101.",
+  "next_action": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md, preferring an open P1 security/authorization gap over new UI work. Do NOT re-open the paging family (NEX-082..NEX-098), the auth-guard family (NEX-099b/NEX-100), or NEX-101 -- all VERIFIED.",
+  "recovery_instructions": "Read CHECKPOINT.json then STATE.md; Git wins any disagreement. NEX-101's product commit is ff8b6e63; resolve the live head with `git ls-remote` (never `git rev-parse origin/<branch>` -- this clone's fetch refspec maps only refs/heads/main). There is no uncommitted product work. If the docs-only commit has not yet landed, the working tree will show CHECKPOINT.json / STATE.md / EXECUTION_LOG.md modified -- commit and push them; they are documentation only. First action is always the CI poll in `next_action`.",
+  "decisions_this_run": [
+    "Ran the state-file writes BEFORE the CI poll and committed them AFTER, so the docs commit cannot supersede the product run in the concurrency group. The alternative -- commit state immediately -- would have cancelled the ff8b6e63 verdict.",
+    "Recorded NEX-101 as COMMITTED+PUSHED rather than VERIFIED while concluded CI was still pending, then promoted it to VERIFIED in the same run once both runs concluded (superseded within this run -- the intermediate status was truthful at the time it was written, not a hedge). A local green suite is not CI.",
+    "Kept the guard's scope to ops+policies routers, and wrote the reason into the test docstring rather than leaving the exclusion unexplained. A silent exclusion is how a coverage gap hides.",
+    "Adopted 'NEX-101' as the task ID for this slice and documented that it is a distinct control from NEX-099b/NEX-100, so a later run reading only the family names does not wrongly treat the auth-guard family as re-opened.",
+    "Wrote the state files before the CI poll but committed them only after both runs concluded, so the docs commit could not supersede the product run in the concurrency group. This is why the verdict anchors on ff8b6e63 itself instead of on a later docs-only head -- the cheaper order (commit state immediately) would have produced a `cancelled` product run and no evidence at all."
   ],
-  "in_progress_tasks": [],
-  "status_semantics": "completed_tasks == verified_tasks == task_statuses entries whose value starts with VERIFIED. Work that exists but is not VERIFIED belongs in in_progress_tasks and must not be counted as complete. NEX-039 is marked VERIFIED on direct CI evidence at its own product commit 8e670a6 (4/4 completed/success, polled 19:32Z) - not on local tests alone.",
-  "commit_scope": "19aafa8 is the last commit carrying IMPLEMENTATION (the R36 read-side use case, schema, container wiring, ops route and tests). The docs commit that writes this file follows it and is not implementation.",
-  "head_at_checkpoint": "22124f27dd1d3a6da4c183542faa8d1a109efcea",
-  "delivery_notes": "PR #3 was opened on 2026-11-25 and its header still described head 03ead43 (34,710 additions / 124 files / 142 commits, 828 tests, CI at a3d1b32). Those figures were accurate when written and are stale now, which is the failure mode the repo has hit repeatedly. Recomputed from the pull-request object at 16bab4b and patched, with the commit and read time carried in the text so the next run can tell fresh from stale. The roadmap table also had no row for Phase 6 governance, so NEX-047 was invisible from the PR's own status table; added. One 03ead43 reference remains on purpose: it is a past-tense note recording which GitHub endpoints under-report file sums.",
-  "validation_status": "Local gates green on the exact committed tree 0e86304 (ruff format 268 files, ruff check, mypy 126 source files, pytest 1172 passed / 4 skipped / 0 failed), and CI 4/4 completed/success at 0e86304 polled 2026-11-27T12:48Z. Four PostgreSQL-marked tests remain skipped locally; CI's Backend job does run the migration path.",
-  "completed_task_notes": {
-    "NEX-030": "ContextHash is minted only by a ContextEnvelope, closing R31's hand-assembled-declassification gap. Product commit 0727628, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T15:46Z).",
-    "NEX-031": "An over-cap record-derived context value is withheld, not fatal, so a note body at MAX_CONTENT_BYTES (64 KiB, ~300x the 200-char field cap) still yields an advisory. Product commit 240a446, CI 4/4 completed/success at that exact SHA.",
-    "NEX-032": "Withholding is observable with a reason per field. Product commit fe5eadc, CI 4/4 at that SHA.",
-    "NEX-033": "Withholding becomes a rate via the WithholdingRecorder port; JsonFormatter allowlist removed; redact() wired onto the formatting path. Product commit bf84a7c, CI 4/4 at that SHA (polled 2026-11-25T17:33Z).",
-    "NEX-034": "The log redactor recognises a credential by shape rather than an exact key spelling, and replaces a sequence under a sensitive key whole. Product commit e386e02, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T17:41Z).",
-    "NEX-035": "The adapter conformance suite R30 asked for, plus four fixes at the provider identity seam that building it exposed. Product commit 12f6fa9, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T18:14Z). 555 insertions across 3 files.",
-    "NEX-037": "The withholding aggregate R34 asked for, at GET /api/v1/ops/withholding-report, gated on an explicit operator allowlist that is empty (and therefore denies everyone) by default. Product commit 5c0575b. 7 tests across the use case and the HTTP boundary.",
-    "NEX-039": "The first real DecisionProvider adapter, so decisioning stops being a capability the platform can exercise but never use. Product commit 8e670a6, CI 4/4 completed/success at that exact SHA (polled 2026-11-25T19:32Z). Four refusals carry the security argument: a vendor cannot abstain (no 'abstained' outcome on the wire; the caller's threshold decides), the request carries only kind plus sorted candidates (no context hash, no excluded field names, no correlation id), sorting makes order-independence a property of this adapter rather than a hoped-for vendor trait, and a bad answer is an abstention rather than an exception. Construction fails closed on a non-https endpoint or an unbounded name. Two honest limits are recorded in the module docstring: the response size bound is enforced after httpx has read the body, and a rationale is truncated rather than treated as fatal."
-  },
-  "branch_head_observed_at": "2026-11-27T13:44:00Z",
-  "branch_head_read_from": "git ls-remote origin feature/agentic-enterprise-platform",
-  "commits_this_run": [
-    "22124f27dd1d3a6da4c183542faa8d1a109efcea"
-  ],
-  "delivery_state": {
-    "branch": "feature/agentic-enterprise-platform",
-    "head": "84774785822d7b18d480be19d56447fe90c97ff0",
-    "remote_verified": true,
-    "remote_verified_by": "git ls-remote returned 84774785822d7b18d480be19d56447fe90c97ff0",
-    "pr_updated": true,
-    "issue_updated": true,
-    "delivery_debt": "CLEAR for NEX-048 and NEX-049. The PR description itself was not rewritten: at 109k chars a full-body patch is not a safe operation with minutes left, so the two slices are documented in PR comment 7220694491 and the description's measured head (0ef42ec) is left as a truthful, stale marker.",
-    "pr_update_kind": "comment 7220694491"
-  },
-  "run_summary": "NEX-049 delivered and pushed at 22124f2: /api/v1/ops/policies with draft, publish, rollback and history. The operator gate lives in the application use cases (DraftPolicy / PublishDraft / RollbackPolicy / GetPolicyHistory), not the router, so every future caller is gated by the same code. Scope is per operation, so a drafting grant cannot publish a policy into force. published_by is stamped from the authenticated Principal and mapped to a lowercase identifier (user-<uuid>) because the domain rejects a raw UUID; a caller cannot attribute a published policy to someone else. Local gates green; CI unpolled; PR #3 and issue #2 delivery debt open.",
-  "head_observation": {
-    "sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
-    "remote_sha": "3045a6b95b7b95af80e3d71056793a47ae375163",
-    "read_from": "git rev-parse HEAD and git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "at": "2026-11-27T12:16Z",
-    "note": "Local HEAD and the remote ref agree exactly, so the branch is fully pushed. The run began on main at d6f92d0 in a fresh shallow clone; the feature branch was fetched and the slice committed on the true remote head 99faab5, so no rebase was needed."
-  },
-  "commit_semantics": "`commit` names the last commit carrying real IMPLEMENTATION (product code), not the branch head. This run that is 19aafa8. A recovery run must read the true head from git ls-remote, never from a field here, because saving this file creates a commit.",
-  "run_id_collision": "NEX-2026-11-25-43 was used by the previous run (a different date). This run is NEX-2026-11-27-44 - date 2026-11-27, sequence 44 - and does not collide with any prior entry.",
-  "checkpoint_integrity_note": "Rewritten from HEAD 810d1dc; the previous checkpoint named 0ef42ec, which was three commits stale.",
-  "head_observed": "810d1dc",
-  "head_at_checkpoint_note": "0ef42ec is the last commit whose PR-object metrics are quoted in PR #3. The checkpoint update that records this fact is itself a later, documentation-only commit, so the live branch head will read one commit ahead of this field. That is expected and is why the PR body names the measured head and read time explicitly instead of quoting a bare count.",
-  "last_completed_task": {
-    "id": "NEX-049",
-    "title": "Policy lifecycle over HTTP behind per-operation operator scopes",
-    "status": "VERIFIED - CI 4/4 at 22124f2",
-    "evidence": [
-      "pytest full suite: 1257 passed, 4 skipped",
-      "ruff format --check clean, ruff check clean, mypy clean (135 source files)",
-      "tests/api/test_ops_policy_lifecycle_api.py: 11 tests (draft/publish/rollback/history, per-operation scope separation, 403/404/422)",
-      "tests/application/test_policy_lifecycle.py: 22 tests, unchanged count (gate added to each use case)"
-    ]
-  },
-  "closed_items": [
-    {
-      "id": "R39",
-      "title": "Lease could be acquired but never released",
-      "fixed_in": "64759f4",
-      "verified_in_run": "NEX-2026-11-27-48",
-      "verified_by": "four-process acquire/status/renew/release cycle on the real ref"
-    }
-  ]
+  "run_summary": "Run 103 delivered NEX-101, the operator-gate boundary guard: a structural test proving that every platform-wide operational view is gated, that the gate runs before any read, that every operator router route reaches a gated use case, and that the scope registry and the enforced operations agree in both directions. The slice was selected after establishing it is a different control from the two families the prior checkpoint closed (NEX-099b identity providers, NEX-100 route authentication) -- the distinction is recorded in STATE.md and DECISIONS so it is not lost. Guard proven load-bearing by two mutations (5 tests red; ordering test red), both restored with an empty diff before commit. Gates bare and green: ruff format 330, ruff check clean, mypy 144 clean, pytest 1901 passed / 0 failed / 0 errors / 4 skipped. Product commit ff8b6e63 pushed and confirmed by `git ls-remote`. CI at ff8b6e63 was in progress at checkpoint time and is recorded as in progress, not passed. Two self-inflicted file-corruption incidents (commit message, execution log) were caused by heredoc prose and both recovered: the message by amending from a file with the tree proven identical, the log by `git checkout --` and a rewrite through the editor. Delivery was then completed and verified the same run: state record dd38945 pushed (ls-remote confirmed), PR #5 body and issue #2 comment both read back from the API and compared against the intended text, and CI green on both the product and the docs commits.",
+  "push_status": "PUSHED. Two classes of commit exist on this branch and they must not be confused. PRODUCT commits carry the slice and its verdict; the one for NEX-101 is ff8b6e63. STATE-RECORD commits carry only docs/NEXUS/ and each is superseded by the next one, so their SHAs are not anchors -- resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never `git rev-parse origin/<branch>` (this clone's refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot that lies plausibly). Every state-record commit was pushed with ls-remote confirmation at the time. The working tree is clean apart from untracked uv.lock, which is deliberately not committed: it is a local uv artifact and is not part of this repository's tracked contract (there is no gitignore rule for it).",
+  "validation_status": "VERIFIED. CI PASSED at the product commit itself ff8b6e63 -- runs 46163954848 (push) and 46163960436 (pull_request), both completed/success. Read per job and per step via `gh run view <id> --json jobs`: Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped, zero in any other state. This is the strongest anchor available: the verdict is on the product commit, not a later docs-only head. Local gates on the exact committed tree were green too, but the verification rests on CI at the product commit, not on the local run. PRODUCT VERDICT: CI green at the product commit ff8b6e63, read per run, per job and per step. State-record commits are a separate and weaker class of evidence and are labelled as such."
 }

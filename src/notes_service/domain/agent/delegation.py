@@ -26,6 +26,7 @@ from notes_service.domain.agent.value_objects import (
     DelegationStatus,
 )
 from notes_service.domain.errors import InvariantViolation, ValidationError
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.value_objects import UserId
 
 
@@ -86,6 +87,11 @@ class DelegatedAuthorization:
     status: DelegationStatus = DelegationStatus.ACTIVE
     created_at: datetime = field(default_factory=_utcnow)
     revoked_at: datetime | None = None
+    # How strongly the delegating human authenticated when they granted this
+    # authority (ADR-015). Fixed at consent: the delegation may outlive the
+    # session, so this is recorded here rather than read live from the session
+    # store on every gateway call.
+    assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR
 
     @classmethod
     def grant(
@@ -95,6 +101,7 @@ class DelegatedAuthorization:
         delegator_user_id: UserId | str,
         capabilities: frozenset[Capability] | set[Capability],
         authorization_id: DelegatedAuthorizationId | None = None,
+        assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR,
     ) -> DelegatedAuthorization:
         narrowed = attenuate(
             granted=agent.capabilities,
@@ -106,6 +113,7 @@ class DelegatedAuthorization:
             agent_id=agent.id,
             delegator_user_id=UserId.parse(delegator_user_id),
             capabilities=narrowed,
+            assurance=assurance,
         )
 
     def is_active(self) -> bool:

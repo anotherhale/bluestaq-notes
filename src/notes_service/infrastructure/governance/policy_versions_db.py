@@ -88,6 +88,9 @@ def _to_domain(row: PolicyVersionRow) -> PolicyVersion:
             created_at=row.created_at,
             published_at=row.published_at,
             published_by=row.published_by,
+            drafted_by=row.drafted_by,
+            approved_at=row.approved_at,
+            approved_by=row.approved_by,
         )
     except DomainError as error:
         _LOGGER.warning(
@@ -110,6 +113,9 @@ def _apply(version: PolicyVersion) -> dict[str, object]:
         "created_at": version.created_at,
         "published_at": version.published_at,
         "published_by": version.published_by,
+        "drafted_by": version.drafted_by,
+        "approved_at": version.approved_at,
+        "approved_by": version.approved_by,
     }
 
 
@@ -160,10 +166,18 @@ class SqlAlchemyPolicyVersionRepository:
             )
             session.commit()
 
-    def publish(self, version: PolicyVersion) -> None:
+    def approve(self, version: PolicyVersion) -> None:
         self._transition(
             version,
             expected=PolicyStatus.DRAFT,
+            required=PolicyStatus.APPROVED,
+            verb="approve",
+        )
+
+    def publish(self, version: PolicyVersion) -> None:
+        self._transition(
+            version,
+            expected=PolicyStatus.APPROVED,
             required=PolicyStatus.PUBLISHED,
             verb="publish",
         )

@@ -55,9 +55,12 @@ from notes_service.application.errors import (
     ApprovalRequired,
     Conflict,
     InvalidInput,
+    RateLimited,
 )
 from notes_service.application.ports.authorization import AuthorizationProvider
 from notes_service.application.ports.clock import Clock
+from notes_service.application.ports.policy_versions import PolicyVersionRepository
+from notes_service.application.ports.rate_limit import RateLimiter
 from notes_service.application.ports.repositories import UnitOfWork
 from notes_service.application.use_cases.agents import ResolveAgentToken, ResolvedToken
 from notes_service.application.use_cases.base import UseCase
@@ -68,7 +71,9 @@ from notes_service.application.use_cases.notes import (
     ListNotes,
     UpdateNote,
 )
+from notes_service.domain.agent.audit_chain import DecisionEvidence
 from notes_service.domain.agent.entities import ApprovalRequest
+from notes_service.domain.agent.risk import assess_action_risk, required_approvals_for
 from notes_service.domain.agent.tools import (
     _MAX_IDEMPOTENCY_KEY,
     InvocationStatus,
@@ -79,9 +84,17 @@ from notes_service.domain.agent.tools import (
 )
 from notes_service.domain.agent.value_objects import ApprovalStatus, TokenAudience
 from notes_service.domain.errors import DomainError
+from notes_service.domain.governance.policy import (
+    PolicyEffect,
+    PolicyObligation,
+    deployment_obligation_gaps,
+    evaluate,
+)
+from notes_service.domain.identity.assurance import STEP_UP_FLOOR
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email
 from notes_service.domain.notes.value_objects import NoteId
+from notes_service.domain.redaction import redact
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +109,43 @@ class ToolResult:
     invocation: ToolInvocation
     output: dict[str, object] = field(default_factory=dict)
     replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyGate:
+    """What the published-policy check established about one attempt.
+
+    Bundles the two citations the attempt must carry (``consulted`` versions for
+    NEX-052, ``evidence`` for NEX-055) with the obligations that still have to be
+    enforced (NEX-053/054), so every path that seals a row passes the same three
+    values rather than re-deriving them from a decision it no longer has.
+    """
+
+    consulted: tuple[str, ...] = ()
+    obligations: tuple[PolicyObligation, ...] = ()
+    evidence: DecisionEvidence | None = None
+
+    @property
+    def redaction_required(self) -> bool:
+        return PolicyObligation.REDACTION in self.obligations
+
+    @property
+    def approval_required(self) -> bool:
+        return PolicyObligation.APPROVAL in self.obligations
+
+    @property
+    def rate_limit_required(self) -> bool:
+        return PolicyObligation.RATE_LIMIT in self.obligations
+
+    @property
+    def second_approver_required(self) -> bool:
+        """Whether the published policy demands two distinct human approvers.
+
+        Implies :attr:`approval_required`: a request that needs two signatures
+        needs approval. A policy author who writes only ``second-approver``
+        therefore gets a gate, not a requirement attached to nothing.
+        """
+        return PolicyObligation.SECOND_APPROVER in self.obligations
 
 
 def _actor_principal(resolved: ResolvedToken) -> Principal:
@@ -113,6 +163,9 @@ def _actor_principal(resolved: ResolvedToken) -> Principal:
         provider="agent-delegation",
         subject=str(resolved.agent.id),
         claims={"agent_id": str(resolved.agent.id), "token_id": str(resolved.token.id)},
+        # The agent has no assurance of its own; the handler acts as the human,
+        # so it carries the assurance that human proved when granting (ADR-015).
+        assurance=resolved.delegation.assurance,
     )
 
 
@@ -131,9 +184,13 @@ class InvokeTool(UseCase):
         authorization: AuthorizationProvider,
         clock: Clock,
         resolve_token: ResolveAgentToken,
+        policy_versions: PolicyVersionRepository | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         super().__init__(uow_factory=uow_factory, authorization=authorization, clock=clock)
         self._resolve_token = resolve_token
+        self._policy_versions = policy_versions
+        self._rate_limiter = rate_limiter
 
     def run(
         self,
@@ -177,9 +234,128 @@ class InvokeTool(UseCase):
                 uow.commit()
             raise AccessDenied(f"agent token lacks capability {tool.capability.value}")
 
+        gate = self._enforce_published_policy(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+        )
+        consulted = gate.consulted
+        obligations = gate.obligations
+
         principal = _actor_principal(resolved)
 
-        if tool.requires_approval:
+        # An allow that carries an obligation is not permission to proceed: the
+        # obligation must be met first (security architecture section 5). Four kinds
+        # have a real mechanism behind them in this gateway:
+        #
+        # * ``approval`` — the human approval flow, and only for a capability the
+        #   domain already treats as sensitive: ``ApprovalRequest.open`` refuses to
+        #   gate a non-sensitive capability, so policy cannot *invent* a human gate
+        #   for a tool the platform does not consider human-gated. Whether a
+        #   capability needs a human is a static decision in code, not something a
+        #   policy version can widen.
+        # * ``redaction`` — the response is filtered by the same shape-based
+        #   judgement the log formatter uses (``domain.redaction``), so a
+        #   credential-bearing field is withheld from the caller rather than
+        #   returned. It is applied to the output, never to the stored note, and
+        #   the audit row records that it happened.
+        # * ``rate-limit`` — a volume bound, enforced against the configured
+        #   :class:`RateLimiter` on a per-tool key (NEX-056). It is checked before
+        #   the approval gate so a flood cannot open approval requests it will
+        #   never use.
+        # * ``step-up`` — a minimum *authentication* strength for the human behind
+        #   the agent (NEX-058). Its adapter always exists: the assurance the
+        #   delegator proved when granting, recorded on the delegation. It is
+        #   satisfiable as a mechanism, but a given delegation may not *meet* the
+        #   floor — that is a separate, explicit refusal below, so "the gateway
+        #   cannot enforce step-up" is never confused with "this delegation was
+        #   granted at a weaker assurance".
+        # * ``second-approver`` — the same human-approval flow as ``approval``,
+        #   with the threshold raised to two *distinct* humans (NEX-059). It
+        #   implies ``approval``: a request needing two signatures needs one, so
+        #   a policy that names only ``second-approver`` gets a gate. Like
+        #   ``approval`` it is bound to a capability the domain already treats as
+        #   sensitive — policy may tighten an existing human gate to two people,
+        #   it may not invent a human gate for a tool the platform does not
+        #   consider human-gated.
+        #
+        # Every other obligation is refused here rather than ignored: an obligation
+        # with no enforcement adapter that was silently dropped would be worse than
+        # no policy at all, because the policy would read as enforced. One
+        # unenforceable member refuses the whole call — a set is only satisfiable
+        # when every member is, so an author cannot smuggle an unenforceable
+        # requirement alongside a real one.
+        #
+        # The deployment-wide half of that judgement (does a limiter exist at all?)
+        # comes from the domain, shared with the authoring path, so a policy that
+        # would deny everything is caught when it is drafted as well as when it is
+        # called. What is left here is what only the tool and the caller can decide.
+        deployment_gaps = deployment_obligation_gaps(
+            obligations, rate_limiter_configured=self._rate_limiter is not None
+        )
+        unsatisfiable = [
+            obligation
+            for obligation in obligations
+            if obligation in deployment_gaps
+            or not (
+                (obligation is PolicyObligation.APPROVAL and tool.requires_approval)
+                or (obligation is PolicyObligation.SECOND_APPROVER and tool.requires_approval)
+                or obligation is PolicyObligation.REDACTION
+                or obligation is PolicyObligation.ENHANCED_AUDIT
+                or obligation is PolicyObligation.STEP_UP
+                or obligation is PolicyObligation.RATE_LIMIT
+            )
+        ]
+        if unsatisfiable:
+            names = ", ".join(obligation.value for obligation in unsatisfiable)
+            reason = (
+                f"allowed only under obligation(s) {names} that this gateway cannot satisfy "
+                f"for capability {tool.capability.value}"
+            )
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=reason,
+                policy_versions=consulted,
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} is {reason}; refusing rather than proceeding "
+                "with an unmet obligation"
+            )
+
+        if PolicyObligation.STEP_UP in obligations:
+            self._enforce_step_up_obligation(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                policy_versions=consulted,
+            )
+
+        redaction_required = gate.redaction_required
+        if gate.rate_limit_required:
+            # ``rate-limit`` is enforced here rather than deferred, and before the
+            # approval gate: a caller over its budget must be refused *now*, not
+            # after it has opened an approval request a human will be asked to rule
+            # on. The key is per agent and per tool, so one hot tool cannot exhaust
+            # the budget for every other tool the same agent may call — a bound the
+            # policy author asked for on *this* capability, not a global throttle
+            # (the boundary's own ``AgentRateLimitDep`` already does that).
+            self._enforce_rate_limit_obligation(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                policy_versions=consulted,
+            )
+        if tool.requires_approval or gate.approval_required or gate.second_approver_required:
             return self._run_gated(
                 resolved=resolved,
                 tool=tool,
@@ -187,6 +363,19 @@ class InvokeTool(UseCase):
                 principal=principal,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=consulted,
+                redaction_required=redaction_required,
+                decision_evidence=gate.evidence,
+                # The two-person requirement is stamped on the request itself, so
+                # the human queue shows what is being asked of them and the
+                # gateway cannot forget the threshold when it later spends it.
+                # Risk (NEX-063) can only *raise* this number: a high-blast-radius
+                # capability needs two signatures even when no policy asked for
+                # them, and a policy that is silent must not weaken that floor.
+                required_approvals=required_approvals_for(
+                    policy_threshold=2 if gate.second_approver_required else 1,
+                    risk=assess_action_risk(tool.capability),
+                ),
             )
         return self._run_direct(
             resolved=resolved,
@@ -195,7 +384,307 @@ class InvokeTool(UseCase):
             principal=principal,
             resource_ref=resource_ref,
             idempotency_key=idempotency_key,
+            policy_versions=consulted,
+            redaction_required=redaction_required,
+            decision_evidence=gate.evidence,
         )
+
+    # -- published policy enforcement ------------------------------------
+
+    def _enforce_published_policy(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+    ) -> _PolicyGate:
+        """Refuse the call when a published policy explicitly denies it (NEX-051).
+
+        Until now the policy lifecycle could store and publish versions but
+        nothing consulted them: ``evaluate`` had no production caller, so a
+        published policy was documentation rather than an enforced control. This
+        is that caller. It runs after the capability check (a token without the
+        capability is refused before policy is even considered) and before any
+        handler is reachable, so a policy denial is a real gate, not a log line.
+
+        **Deny-only, and only on a matched rule.** ``evaluate`` returns ``DENY``
+        for an empty policy set — the correct default for a bare evaluator, but
+        fatal if used naively here: it would deny every tool call in a deployment
+        that has published no policy at all. So a denial requires a decision whose
+        effect is ``DENY`` *and* whose ``matched_rules`` is non-empty. No policy,
+        or policies that match nothing, leave the gateway's existing controls in
+        charge. Policies can therefore only subtract authority from what the
+        capability and approval checks already allow, never grant it — an allow
+        rule does not bypass a capability check that already failed.
+
+        **Fails closed.** A defect in a policy (a condition compared against an
+        attribute of the wrong type, say) raises during evaluation; that is
+        treated as a denial rather than a pass, because "the policy could not be
+        evaluated" must never mean "the action was permitted".
+
+        The refusal is audited exactly like a capability denial — a ``denied``
+        invocation row is written before raising — so a policy-blocked attempt is
+        as visible in the trail as a capability-blocked one.
+
+        Returns what the attempt must carry: the versions that were in force, the
+        obligations the matching allow rules impose, and — when the decision
+        imposes ``enhanced-audit`` — the extra evidence that obligation requires
+        (NEX-055). The first two let the attempt cite them (NEX-052) and get them
+        enforced rather than merely reported (NEX-053/054); the third is that
+        enforcement for ``enhanced-audit``, which has no separate mechanism
+        because the *record* is its mechanism.
+        """
+        if self._policy_versions is None:
+            return _PolicyGate()
+
+        published = self._policy_versions.all_published()
+        consulted = tuple(version.ref for version in published)
+        attributes = _policy_attributes(resolved=resolved, tool=tool, resource_ref=resource_ref)
+        try:
+            decision = evaluate(published, attributes)
+        except Exception as exc:
+            # Deliberately broad, and the only place in this module that catches
+            # bare Exception. "Fails closed" has to cover *every* way evaluation
+            # can fail, not only the failures the domain anticipates: a
+            # ``TypeError`` from comparing a number to a string, an
+            # ``AttributeError`` from a shape change, or any future defect in the
+            # evaluator would otherwise escape before the denial and its audit
+            # row are written. An unevaluable policy must read as a refusal, so
+            # the exception type is recorded for diagnostics while the caller
+            # only learns that evaluation failed - never the internal detail.
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=f"policy evaluation failed: {type(exc).__name__}",
+                policy_versions=consulted,
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} refused: published policy could not be evaluated"
+            ) from exc
+
+        if decision.effect is PolicyEffect.DENY and decision.matched_rules:
+            self._record_policy_denial(
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                outcome=f"denied by policy {', '.join(decision.matched_rules)}",
+                policy_versions=consulted,
+            )
+            raise AccessDenied(
+                f"tool {tool.name!r} refused by published policy "
+                f"({', '.join(decision.matched_rules)})"
+            )
+
+        evidence: DecisionEvidence | None = None
+        if PolicyObligation.ENHANCED_AUDIT in decision.obligations:
+            # The obligation is met by recording more than the default, so the
+            # record *is* the mechanism: no separate adapter, nothing to defer.
+            # The evidence names the rules that matched (the default trail names
+            # only the versions), the obligations imposed (so a reader sees the
+            # allow was conditional), and the attribute snapshot (so the decision
+            # is reproducible rather than merely plausible). Built from the same
+            # ``decision`` and ``attributes`` the gate just used — never re-derived
+            # from the repository — so the evidence cannot describe a different
+            # evaluation than the one that allowed the call.
+            evidence = DecisionEvidence(
+                matched_rules=tuple(decision.matched_rules),
+                obligations=tuple(obligation.value for obligation in decision.obligations),
+                attributes=tuple(sorted((name, str(value)) for name, value in attributes.items())),
+            )
+        return _PolicyGate(
+            consulted=consulted,
+            obligations=decision.obligations,
+            evidence=evidence,
+        )
+
+    def _enforce_step_up_obligation(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        policy_versions: tuple[str, ...],
+    ) -> None:
+        """Require the delegating human to have authenticated with multi-factor (NEX-058).
+
+        ADR-015 names the only deterministic signal a tool gateway can honestly
+        use: the *recorded* authentication assurance of the human behind the
+        agent, captured at login from the IdP's ``acr``/``amr`` claims and fixed
+        onto the delegation when consent was given. An agent has no assurance of
+        its own, so reading it live from a request (or from a claim the agent
+        presents) would let the agent assert its own step-up.
+
+        The floor is :data:`STEP_UP_FLOOR`, a static application constant. It is
+        deliberately not read from the policy version or the rule: a policy author
+        must be able to *ask* for step-up, but never to define what counts as
+        stepped up — otherwise the same rule that requests the control could
+        weaken it.
+
+        A refusal is audited as a ``denied`` invocation naming the obligation and
+        the assurance actually held, so a weaker delegation is visible in the
+        trail rather than only as a 403 the caller saw.
+        """
+        held = resolved.delegation.assurance
+        if held.meets(STEP_UP_FLOOR):
+            return
+        reason = (
+            f"allowed only under obligation step-up: the delegation was granted at "
+            f"{held.value} assurance, below the required {STEP_UP_FLOOR.value}"
+        )
+        self._record_policy_denial(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+            outcome=reason,
+            policy_versions=policy_versions,
+        )
+        raise AccessDenied(
+            f"tool {tool.name!r} is {reason}; the delegating human must re-authenticate "
+            "with multi-factor and grant a new delegation"
+        )
+
+    def _enforce_rate_limit_obligation(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        policy_versions: tuple[str, ...],
+    ) -> None:
+        """Enforce a policy's ``rate-limit`` obligation against the configured limiter (NEX-056).
+
+        The obligation previously had no adapter, so the gateway refused any call
+        a policy placed it on: honest, but it left the policy language unable to
+        express the one bound an operator most often wants ("this agent may call
+        this tool N times per window"). The mechanism now exists and reuses the
+        same :class:`RateLimiter` port the HTTP boundary already depends on, so a
+        deployment that swaps in a shared store gets the obligation enforced
+        against that store without any change here.
+
+        Three deliberate choices:
+
+        * **The key is per agent *and* per tool.** The boundary's
+          ``AgentRateLimitDep`` is a global throttle on an agent's request rate;
+          this is the narrower bound a policy author asked for on one capability.
+          Sharing one key would let a hot tool exhaust the budget of every other
+          tool the agent may call, which is not what the rule says.
+        * **An idempotent retry does not consume budget.** A retry under a
+          recorded key is a replay of a decision already made, so the limiter is
+          not consulted and the replay path returns the original outcome. Charging
+          twice would make a network retry indistinguishable from abuse.
+        * **A refusal is audited as a denial.** The row is the same ``denied``
+          invocation a capability or policy refusal writes, naming the obligation
+          and the retry window, so a throttled agent is visible in the trail
+          rather than only in a 429 the caller saw.
+
+        Fails closed when no limiter is wired: the obligation is then reported as
+        unsatisfiable by the caller's check and the call is refused, never run
+        unbounded.
+
+        The bound itself comes from the deployment's configured limiter
+        (``rate_limit_requests`` / ``rate_limit_window_seconds``), not from the
+        rule: ``PolicyObligation`` is a closed vocabulary of *names* with no
+        parameters, so a rule says "a volume bound applies" and the operator sets
+        the number. A per-rule bound would need a parameterised obligation, which
+        is a vocabulary change and therefore an ADR, not a quiet widening here.
+
+        **The bound is only as global as the limiter adapter.** The shipped
+        adapter is :class:`InMemoryRateLimiter`, whose counters live in the
+        process, so with several workers or replicas an agent gets *up to* N per
+        window *per process* rather than N in total. The enforcement is correct;
+        the scope of the bound is a deployment property. A deployment that needs
+        a true global bound must wire a shared-store adapter implementing the
+        same port - no change is needed here. Until then this should be described
+        as a per-process bound, not a platform-wide quota.
+        """
+        if self._rate_limiter is None:  # pragma: no cover - guarded by the caller
+            raise AccessDenied(
+                f"tool {tool.name!r} is allowed only under obligation rate-limit, "
+                "which this gateway has no limiter for"
+            )
+        prior = self._find_prior(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            idempotency_key=idempotency_key,
+            resource_ref=resource_ref,
+        )
+        if prior is not None:
+            return
+        decision = self._rate_limiter.check(f"agent-tool:{resolved.agent.id}:{tool.name}")
+        if decision.allowed:
+            return
+        reason = (
+            f"allowed only under obligation rate-limit: {decision.limit} calls per window "
+            f"exhausted for {tool.capability.value}; retry after {decision.retry_after}s"
+        )
+        self._record_policy_denial(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            resource_ref=resource_ref,
+            idempotency_key=idempotency_key,
+            outcome=reason,
+            policy_versions=policy_versions,
+        )
+        raise RateLimited(
+            f"tool {tool.name!r} refused: published policy imposes rate-limit "
+            f"({decision.limit} calls per window); retry after {decision.retry_after}s",
+            retry_after=decision.retry_after,
+        )
+
+    def _record_policy_denial(
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        cleaned: dict[str, object],
+        resource_ref: str,
+        idempotency_key: str,
+        outcome: str,
+        policy_versions: tuple[str, ...] = (),
+    ) -> None:
+        """Persist a ``denied`` invocation row for a policy refusal.
+
+        A retried denial replays the recorded refusal rather than colliding with
+        the ``(agent_id, idempotency_key)`` constraint, matching the capability
+        denial path.
+        """
+        prior = self._find_prior(
+            resolved=resolved,
+            tool=tool,
+            cleaned=cleaned,
+            idempotency_key=idempotency_key,
+            resource_ref=resource_ref,
+        )
+        if prior is not None:
+            return
+        with self._uow_factory() as uow:
+            invocation = self._begin_invocation(
+                uow,
+                resolved=resolved,
+                tool=tool,
+                cleaned=cleaned,
+                resource_ref=resource_ref,
+                idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
+            )
+            invocation.deny(outcome=outcome)
+            uow.tool_invocations.add(invocation)
+            uow.commit()
 
     # -- direct tools ----------------------------------------------------
 
@@ -208,6 +697,9 @@ class InvokeTool(UseCase):
         principal: Principal,
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
+        redaction_required: bool = False,
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -229,6 +721,8 @@ class InvokeTool(UseCase):
                 cleaned=cleaned,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -241,6 +735,15 @@ class InvokeTool(UseCase):
         except DomainError as exc:
             self._finalise(invocation, failed=True, outcome=type(exc).__name__)
             raise InvalidInput(str(exc)) from exc
+
+        if redaction_required:
+            output, redacted = _redact_output(output)
+            self._finalise(
+                invocation,
+                failed=False,
+                outcome=_redacted_outcome(redacted),
+            )
+            return ToolResult(invocation=invocation, output=output)
 
         self._finalise(invocation, failed=False, outcome="ok")
         return ToolResult(invocation=invocation, output=output)
@@ -256,6 +759,10 @@ class InvokeTool(UseCase):
         principal: Principal,
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
+        redaction_required: bool = False,
+        decision_evidence: DecisionEvidence | None = None,
+        required_approvals: int = 1,
     ) -> ToolResult:
         prior = self._find_prior(
             resolved=resolved,
@@ -267,7 +774,12 @@ class InvokeTool(UseCase):
         if prior is not None:
             return prior
 
-        approval = self._approved_request(resolved=resolved, tool=tool, resource_ref=resource_ref)
+        approval = self._approved_request(
+            resolved=resolved,
+            tool=tool,
+            resource_ref=resource_ref,
+            required_approvals=required_approvals,
+        )
         if approval is None:
             self._defer_awaiting_approval(
                 resolved=resolved,
@@ -275,6 +787,9 @@ class InvokeTool(UseCase):
                 cleaned=cleaned,
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
+                policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
+                required_approvals=required_approvals,
             )
 
         # Spend the approval before the side effect, in the same transaction as
@@ -291,6 +806,8 @@ class InvokeTool(UseCase):
                     resource_ref=resource_ref,
                     idempotency_key=idempotency_key,
                     approval_request_id=approval.id,
+                    policy_versions=policy_versions,
+                    decision_evidence=decision_evidence,
                 )
                 invocation.deny(outcome="approval request no longer usable")
                 uow.tool_invocations.add(invocation)
@@ -307,6 +824,8 @@ class InvokeTool(UseCase):
                 resource_ref=resource_ref,
                 idempotency_key=idempotency_key,
                 approval_request_id=approval.id,
+                policy_versions=policy_versions,
+                decision_evidence=decision_evidence,
             )
             uow.tool_invocations.add(invocation)
             uow.commit()
@@ -320,6 +839,11 @@ class InvokeTool(UseCase):
             self._finalise(invocation, failed=True, outcome=type(exc).__name__)
             raise InvalidInput(str(exc)) from exc
 
+        if redaction_required:
+            output, redacted = _redact_output(output)
+            self._finalise(invocation, failed=False, outcome=_redacted_outcome(redacted))
+            return ToolResult(invocation=invocation, output=output)
+
         self._finalise(invocation, failed=False, outcome="ok")
         return ToolResult(invocation=invocation, output=output)
 
@@ -331,6 +855,9 @@ class InvokeTool(UseCase):
         cleaned: dict[str, object],
         resource_ref: str,
         idempotency_key: str,
+        policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
+        required_approvals: int = 1,
     ) -> NoReturn:
         """Open (or reuse) an approval request and park this attempt, never failing it.
 
@@ -345,7 +872,12 @@ class InvokeTool(UseCase):
         with self._uow_factory() as uow:
             now = self._clock.now()
             request = _open_or_reuse_approval_request(
-                uow, resolved=resolved, tool=tool, resource_ref=resource_ref, now=now
+                uow,
+                resolved=resolved,
+                tool=tool,
+                resource_ref=resource_ref,
+                now=now,
+                required_approvals=required_approvals,
             )
             already_recorded = uow.tool_invocations.find_by_idempotency_key(
                 resolved.agent.id, deferred_key
@@ -359,6 +891,8 @@ class InvokeTool(UseCase):
                     resource_ref=resource_ref,
                     idempotency_key=deferred_key,
                     approval_request_id=request.id,
+                    policy_versions=policy_versions,
+                    decision_evidence=decision_evidence,
                 )
                 invocation.deny(outcome=f"human approval required for {tool.capability.value}")
                 uow.tool_invocations.add(invocation)
@@ -368,15 +902,38 @@ class InvokeTool(UseCase):
         )
 
     def _approved_request(
-        self, *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
+        self,
+        *,
+        resolved: ResolvedToken,
+        tool: ToolDefinition,
+        resource_ref: str,
+        required_approvals: int,
     ) -> ApprovalRequest | None:
-        """An approved, unspent, unexpired approval for this (agent, capability, resource)."""
+        """An approved, unspent, unexpired approval strong enough for *this* call.
+
+        The threshold check is the whole point of taking ``required_approvals``
+        here rather than trusting the row. A request stamps the threshold that
+        was in force when it was opened, and ``is_usable`` judges it against
+        *that* number — which is right for the row and wrong for the call. If a
+        policy demanded one signature yesterday and two today, a single-signature
+        approval is still "usable" by its own record while being insufficient for
+        the call about to be made on it.
+
+        Without this guard the two-person control is bypassable by timing: open a
+        one-person approval, let it be granted, tighten the policy, then spend the
+        old grant on the now-two-person action. The spend guard in SQL cannot
+        catch it either — that predicate compares against the row's own
+        ``required_approvals``, which is the weaker number. Refusing the mismatch
+        here leaves the strict approval to be opened afresh by the caller's
+        deferral path, which is the only way a human is actually asked again.
+        """
         now = self._clock.now()
         with self._uow_factory() as uow:
             for request in uow.approvals.list_for_agent(resolved.agent.id):
                 if (
                     request.capability is tool.capability
                     and request.resource_ref == resource_ref
+                    and request.required_approvals >= required_approvals
                     and request.is_usable(now=now)
                 ):
                     return request
@@ -433,6 +990,8 @@ class InvokeTool(UseCase):
         resource_ref: str,
         idempotency_key: str,
         approval_request_id: UUID | None = None,
+        policy_versions: tuple[str, ...] = (),
+        decision_evidence: DecisionEvidence | None = None,
     ) -> ToolInvocation:
         """Begin an audited invocation, sealed into the agent's hash chain.
 
@@ -441,6 +1000,16 @@ class InvokeTool(UseCase):
         consistent with what is committed. A concurrent insert that claims the
         same sequence is rejected by the unique constraint rather than silently
         forking the chain.
+
+        ``policy_versions`` are the published policy versions in force when the
+        gateway decided this call. They are sealed into the intent hash, so the
+        citation is as tamper-evident as the rest of the attempt.
+
+        ``decision_evidence`` is passed only when a published policy imposed
+        ``enhanced-audit`` on this call (NEX-055); it is sealed into the same
+        intent hash, so the extra detail the obligation demands is as
+        tamper-evident as the citation it accompanies. ``None`` is the normal
+        case and records that no enhanced-audit obligation was in force.
         """
         sequence, previous = uow.tool_invocations.next_chain_link(resolved.agent.id)
         invocation = ToolInvocation.begin(
@@ -453,6 +1022,8 @@ class InvokeTool(UseCase):
             approval_request_id=approval_request_id,
             previous_hash=previous,
             chain_sequence=sequence,
+            policy_versions=policy_versions,
+            decision_evidence=decision_evidence,
         )
         # Move the anchor in the same transaction that will insert the entry, so
         # the two cannot disagree. Doing it here rather than at each call site
@@ -584,6 +1155,7 @@ def _open_or_reuse_approval_request(
     tool: ToolDefinition,
     resource_ref: str,
     now: datetime,
+    required_approvals: int = 1,
 ) -> ApprovalRequest:
     """Reuse this agent's open request for the same action, or open a new one.
 
@@ -591,6 +1163,12 @@ def _open_or_reuse_approval_request(
     decision: the human revisits the queue and would face the same approval many
     times over. Only a still-decidable request for the identical
     (capability, resource) pair is reused; anything else opens afresh.
+
+    A reused request is *raised* to the threshold the current policy demands, never
+    lowered. Reuse is an efficiency, and it must not become a way to escape a
+    stricter obligation: if the policy gained ``second-approver`` between two
+    advances, an already-approved single-signature request would otherwise be
+    spent under the weaker rule that was in force when it was opened.
 
     ``now`` is the gateway's clock and is used for *both* the reuse test and the
     new request's validity bound, so a request is judged against the same clock
@@ -603,15 +1181,47 @@ def _open_or_reuse_approval_request(
             and existing.resource_ref == resource_ref
             and not existing.expired_at(now=now)
         ):
+            if existing.required_approvals < required_approvals:
+                existing.raise_required_approvals(required_approvals)
+                uow.approvals.save(existing)
             return existing
     request = ApprovalRequest.open(
         agent=resolved.agent,
         capability=tool.capability,
         resource_ref=resource_ref,
         now=now,
+        required_approvals=required_approvals,
     )
     uow.approvals.add(request)
     return request
+
+
+def _policy_attributes(
+    *, resolved: ResolvedToken, tool: ToolDefinition, resource_ref: str
+) -> dict[str, object]:
+    """The attribute snapshot a published policy is evaluated against.
+
+    Deliberately small and non-secret: the capability being exercised, the tool
+    name, the resource reference (``note:<id>`` or ``tool:<name>`` — never note
+    content), and the agent's owner. A policy cannot reference an attribute that
+    is not here, and a missing attribute never matches (the evaluator's rule), so
+    an unknown attribute fails toward *not* matching a deny rather than granting.
+    The vocabulary is what the enforcement path can attest to; widening it is a
+    deliberate change, not an incidental one.
+
+    ``risk`` (NEX-063) is the derived blast-radius tier. It is exposed to policy
+    so a rule can *require* a control at or above a tier, but note what it can
+    not do: a policy cannot lower the tier, because the tier is computed here
+    from the capability, not read from the policy. Recording it also puts risk on
+    the decision record, which is where the architecture asks for it.
+    """
+    return {
+        "capability": tool.capability.value,
+        "tool": tool.name,
+        "resource": resource_ref,
+        "agent_owner": str(resolved.agent.owner_user_id),
+        "risk": assess_action_risk(tool.capability).tier.value,
+    }
 
 
 def _resource_ref(tool: ToolDefinition, arguments: dict[str, object]) -> str:
@@ -624,6 +1234,48 @@ def _resource_ref(tool: ToolDefinition, arguments: dict[str, object]) -> str:
     if isinstance(note_id, str) and note_id:
         return f"note:{note_id}"
     return f"tool:{tool.name}"
+
+
+def _redact_output(output: dict[str, object]) -> tuple[dict[str, object], tuple[str, ...]]:
+    """Apply the ``redaction`` obligation to a tool result.
+
+    Returns the filtered output and the names of the top-level keys that were
+    replaced, so the audit row can say *that* redaction happened without
+    recording *what* was withheld — the field name is a hint an attacker should
+    not get for free, but an operator needs to know the obligation fired.
+
+    Filtering happens on the way out only: the note the handler read is untouched
+    in the store, because the obligation governs what this caller may see, not
+    what the platform may keep.
+    """
+    redacted = redact(output)
+    withheld = tuple(sorted(key for key in output if not _same(redacted.get(key), output[key])))
+    return redacted, withheld
+
+
+def _same(left: object, right: object) -> bool:
+    """Whether a redacted value equals the original, tolerating odd ``__eq__``.
+
+    A value whose comparison raises is treated as *changed*, so an unusual object
+    is reported as withheld rather than silently dropped from the count.
+    """
+    try:
+        return bool(left == right)
+    except Exception:
+        return False
+
+
+def _redacted_outcome(withheld: tuple[str, ...]) -> str:
+    """An audit outcome that records the obligation fired.
+
+    ``ok`` would be indistinguishable from an unredacted success, so an operator
+    auditing the trail could not tell that a policy had filtered a response. The
+    count, not the field names, is recorded: the trail is already readable by
+    more people than the response was.
+    """
+    if not withheld:
+        return "ok (redaction applied; nothing withheld)"
+    return f"ok (redaction applied; {len(withheld)} field(s) withheld)"
 
 
 def _note_summary(note: Any) -> dict[str, object]:

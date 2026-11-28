@@ -22,16 +22,18 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from notes_service.application.use_cases.policy_lifecycle import (
+    ApprovePolicyVersion,
     DraftPolicyVersion,
     PublishPolicyVersion,
     RollbackPolicyVersion,
 )
 from notes_service.domain.errors import ValidationError
-from notes_service.domain.governance.policy import PolicyEffect, PolicyRule
-from notes_service.domain.identity.principal import Principal
+from notes_service.domain.governance.policy import PolicyEffect, PolicyObligation, PolicyRule
 from notes_service.infrastructure.governance.policy_codec import decode_condition
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
+    PoliciesInForceResponse,
+    PolicyApproveRequest,
     PolicyDraftRequest,
     PolicyHistoryResponse,
     PolicyPublishRequest,
@@ -41,19 +43,6 @@ from notes_service.presentation.schemas import (
 )
 
 router = APIRouter(prefix="/ops/policies", tags=["ops"])
-
-
-def _publisher_label(principal: Principal) -> str:
-    """The actor string stamped on a published version.
-
-    The domain requires a lowercase identifier (policy ids land in audit records
-    and log fields), while the authoritative identity is a UUID that begins with a
-    digit. The prefix makes it a legal identifier and keeps it recognisable as a
-    user rather than a policy id. Attribution uses ``user_id`` and never
-    ``provider``/``subject``: those record how the caller authenticated and are
-    not an identity source.
-    """
-    return f"user-{principal.user_id}"
 
 
 def _to_rules(requests: list[PolicyRuleRequest]) -> tuple[PolicyRule, ...]:
@@ -72,7 +61,22 @@ def _to_rules(requests: list[PolicyRuleRequest]) -> tuple[PolicyRule, ...]:
                 f"unknown policy effect {request.effect!r}; expected 'allow' or 'deny'"
             ) from error
         condition = decode_condition(request.when) if request.when is not None else None
-        rules.append(PolicyRule(rule_id=request.rule_id, effect=effect, when=condition))
+        obligations: list[PolicyObligation] = []
+        for name in request.obligations:
+            try:
+                obligations.append(PolicyObligation(name))
+            except ValueError as error:
+                raise ValidationError(
+                    f"unknown obligation {name!r} on rule {request.rule_id!r}"
+                ) from error
+        rules.append(
+            PolicyRule(
+                rule_id=request.rule_id,
+                effect=effect,
+                when=condition,
+                obligations=tuple(obligations),
+            )
+        )
     return tuple(rules)
 
 
@@ -100,6 +104,32 @@ def draft_policy_version(
 
 
 @router.post(
+    "/{policy_id}/approve",
+    response_model=PolicyVersionResponse,
+    summary="Approve a draft policy version, making it publishable (operators only)",
+    dependencies=[RateLimitDep],
+)
+def approve_policy_version(
+    policy_id: str,
+    body: PolicyApproveRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> PolicyVersionResponse:
+    """Record an approval against a stored draft.
+
+    Approval is a separate verb with a separate scope on purpose (NEX-065): a
+    publish that also approved would let one operator satisfy the whole
+    two-person control alone. Only a draft can be approved; anything else is a
+    ``409`` because it conflicts with the version's state.
+    """
+    version = container.approve_draft().execute(
+        principal,
+        ApprovePolicyVersion(policy_id=policy_id, version=body.version),
+    )
+    return PolicyVersionResponse.from_domain(version)
+
+
+@router.post(
     "/{policy_id}/publish",
     response_model=PolicyVersionResponse,
     summary="Publish a policy version, putting it in force (operators only)",
@@ -119,11 +149,7 @@ def publish_policy_version(
     """
     version = container.publish_draft().execute(
         principal,
-        PublishPolicyVersion(
-            policy_id=policy_id,
-            version=body.version,
-            published_by=_publisher_label(principal),
-        ),
+        PublishPolicyVersion(policy_id=policy_id, version=body.version),
     )
     return PolicyVersionResponse.from_domain(version)
 
@@ -149,10 +175,7 @@ def rollback_policy(
     version = container.rollback_policy().execute(
         principal,
         RollbackPolicyVersion(
-            policy_id=policy_id,
-            to_version=body.to_version,
-            published_by=_publisher_label(principal),
-            rationale=body.rationale,
+            policy_id=policy_id, to_version=body.to_version, rationale=body.rationale
         ),
     )
     return PolicyVersionResponse.from_domain(version)
@@ -176,3 +199,34 @@ def get_policy_history(
     """
     history = container.get_policy_history().execute(principal, policy_id)
     return PolicyHistoryResponse.from_domain(history)
+
+
+@router.get(
+    "",
+    response_model=PoliciesInForceResponse,
+    summary="Every policy version in force right now (operators only)",
+    dependencies=[RateLimitDep],
+)
+def list_policies_in_force(
+    principal: PrincipalDep, container: ContainerDep
+) -> PoliciesInForceResponse:
+    """Return the set the enforcement gateway is evaluating at this instant.
+
+    Every other policy route takes a ``policy_id`` from the path, so the only way
+    to ask "what is restricting this deployment" was to already know every id, and
+    an id is free-form text no endpoint lists. The published set was therefore
+    unreachable in its entirety even though the gateway calls ``all_published`` on
+    every gated action. This is the read half of that loop: the same call the
+    enforcement path makes, reported as data.
+
+    An empty list is ``200``, not ``404``. Nothing published means the evaluator
+    has nothing to allow, so "deny everything" is a real answer an operator needs
+    to see; making it an error would hide the most restrictive state behind the
+    same status as a missing route.
+
+    Gated on ``policy-history``, which already discloses strictly more (drafts and
+    retired versions), and recorded like every other ops read. A non-operator gets
+    ``404``.
+    """
+    snapshot = container.list_policies_in_force().execute(principal)
+    return PoliciesInForceResponse.from_domain(snapshot)

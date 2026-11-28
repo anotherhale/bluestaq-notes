@@ -43,12 +43,45 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import OperatorGrantRow
+
+
+def _active_predicate(now: datetime) -> ColumnElement[bool]:
+    """The SQL translation of ``OperatorGrant.is_active(now=now)`` (NEX-094).
+
+    ``is_active`` is four branch tests: not revoked, granted at or before ``now``,
+    not ``not_before`` a future instant, and (when bounded) expires after ``now``.
+    Each is a bare comparison against a single column, with no arithmetic, no
+    cross-field expression and nothing the database evaluates differently from
+    Python — so this is an *exact* translation rather than an approximation of the
+    domain rule. That equivalence is what lets the read be bounded in the store:
+    before this, ``active_grants`` and ``active_for`` selected every grant row —
+    including the revoked and long-expired ones, which are never pruned — built a
+    domain object for each, and discarded most of them in Python. The table only
+    grows, so an operator read cost the deployment's entire grant history.
+
+    ``is_active`` stays the single definition of "in force"; this predicate is kept
+    directly beside the reads it serves and is pinned to the domain rule by
+    ``test_active_predicate_agrees_with_the_domain``, which compares the two across
+    boundary instants (exactly ``granted_at``, exactly ``not_before``, exactly
+    ``expires_at``). A future change to ``is_active`` that this does not mirror
+    fails that test rather than silently dropping a live grant from the answer.
+
+    ``UTCDateTime`` normalises values to naive UTC on bind, so comparing these
+    columns against an aware ``now`` is the same comparison
+    ``list_active_for_user`` and ``list_pending_for_agent`` already make.
+    """
+    return (
+        (OperatorGrantRow.revoked_at.is_(None))
+        & (OperatorGrantRow.granted_at <= now)
+        & ((OperatorGrantRow.not_before.is_(None)) | (OperatorGrantRow.not_before <= now))
+        & ((OperatorGrantRow.expires_at.is_(None)) | (OperatorGrantRow.expires_at > now))
+    )
 
 
 def _as_uuid(value: object) -> uuid.UUID:
@@ -63,6 +96,13 @@ def _to_domain(row: OperatorGrantRow) -> OperatorGrant:
         granted_by=UserId(str(row.granted_by)) if row.granted_by is not None else None,
         not_before=row.not_before,
         expires_at=row.expires_at,
+        # A stored rationale is re-validated on the way out, exactly like a scope:
+        # the value object is the single definition of "a valid reason", so a row
+        # written before a bound changed (or by hand) fails loudly here rather
+        # than surfacing as an unchecked string.
+        rationale=(OperatorGrantRationale(row.rationale) if row.rationale is not None else None),
+        revoked_at=row.revoked_at,
+        revoked_by=UserId(str(row.revoked_by)) if row.revoked_by is not None else None,
     )
 
 
@@ -98,6 +138,7 @@ class SqlAlchemyOperatorGrantRepository:
                         ),
                         not_before=grant.not_before,
                         expires_at=grant.expires_at,
+                        rationale=(grant.rationale.value if grant.rationale is not None else None),
                     )
                 )
             else:
@@ -106,6 +147,7 @@ class SqlAlchemyOperatorGrantRepository:
                 )
                 existing.not_before = grant.not_before
                 existing.expires_at = grant.expires_at
+                existing.rationale = grant.rationale.value if grant.rationale is not None else None
             session.commit()
 
     def replace_configured(self, grants: Iterable[OperatorGrant]) -> None:
@@ -116,7 +158,30 @@ class SqlAlchemyOperatorGrantRepository:
             if grant.granted_by is not None:
                 raise ValueError("replace_configured only accepts configuration grants")
         with self._session_factory() as session:
-            session.execute(delete(OperatorGrantRow).where(OperatorGrantRow.granted_by.is_(None)))
+            # Delete only configuration grants that are still live. A revoked
+            # configuration grant is kept (NEX-079): the revocation is a standing
+            # decision, and deleting the row here would let the next boot's seed
+            # silently reinstate authority an operator deliberately removed.
+            live_config = [
+                row
+                for row in session.execute(
+                    select(OperatorGrantRow).where(OperatorGrantRow.granted_by.is_(None))
+                ).scalars()
+                if row.revoked_at is None
+            ]
+            for row in live_config:
+                session.delete(row)
+            # A scope that was revoked for this user stays revoked: skip its re-seed
+            # so the same boot cannot add a fresh live grant beside the revoked one.
+            revoked_pairs = {
+                (row.user_id, row.scope)
+                for row in session.execute(
+                    select(OperatorGrantRow).where(
+                        OperatorGrantRow.granted_by.is_(None),
+                        OperatorGrantRow.revoked_at.is_not(None),
+                    )
+                ).scalars()
+            }
             session.add_all(
                 [
                     OperatorGrantRow(
@@ -128,6 +193,7 @@ class SqlAlchemyOperatorGrantRepository:
                         expires_at=grant.expires_at,
                     )
                     for grant in materialised
+                    if (_as_uuid(grant.user_id), grant.scope) not in revoked_pairs
                 ]
             )
             session.commit()
@@ -136,18 +202,124 @@ class SqlAlchemyOperatorGrantRepository:
         with self._session_factory() as session:
             rows = session.execute(
                 select(OperatorGrantRow)
-                .where(OperatorGrantRow.user_id == _as_uuid(user_id))
+                .where(
+                    OperatorGrantRow.user_id == _as_uuid(user_id),
+                    _active_predicate(now),
+                )
                 .order_by(OperatorGrantRow.id)
             ).scalars()
-            # ``is_active`` is the domain's decision, so expiry is evaluated in
-            # exactly one place regardless of which adapter answered. Filtering in
-            # SQL would duplicate the rule and let the two drift.
-            return frozenset(row.scope for row in rows if _to_domain(row).is_active(now=now))
+            return frozenset(row.scope for row in rows)
+
+    def revoke(self, user_id: UserId, scope: str, *, at: datetime, by: UserId) -> int:
+        """Stamp a revocation on every live grant of ``scope`` (NEX-079).
+
+        ``is_active`` is the domain's decision, so the rows that count as "live" are
+        selected here and filtered through it rather than through a SQL predicate on
+        ``expires_at`` — one definition of "in force", the same one the gate uses.
+        The update itself is still a single statement per row, and it only writes
+        the two revocation columns: the grant's original bound and provenance are
+        never rewritten by a revocation.
+
+        A row already carrying a revocation is skipped, so the *first* revocation is
+        the one recorded and a repeat call reports zero (see the port). The commit
+        happens once, after every matching row is stamped, so a partial revocation
+        cannot be observed.
+        """
+        changed = 0
+        with self._session_factory() as session:
+            candidates = session.execute(
+                select(OperatorGrantRow)
+                .where(
+                    OperatorGrantRow.user_id == _as_uuid(user_id),
+                    OperatorGrantRow.scope == scope,
+                )
+                .order_by(OperatorGrantRow.id)
+            ).scalars()
+            for row in candidates:
+                if row.revoked_at is not None:
+                    continue
+                if not _to_domain(row).is_active(now=at):
+                    continue
+                row.revoked_at = at
+                row.revoked_by = _as_uuid(by)
+                changed += 1
+            session.commit()
+        return changed
 
     def active_grants(self, *, now: datetime) -> tuple[OperatorGrant, ...]:
+        """Every grant in force at ``now``, in insertion order (NEX-094).
+
+        Filtering happens in the store. Before this, the read selected *every*
+        grant row — the table keeps revoked and expired grants by design, so it
+        only grows — built a domain object for each, and discarded most of them in
+        Python, so listing the operators cost the deployment's whole grant history.
+
+        The predicate is ``_active_predicate``, the exact SQL form of
+        ``is_active``; the equivalence is pinned by test rather than assumed.
+        """
         with self._session_factory() as session:
-            rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
-            return tuple(grant for row in rows if (grant := _to_domain(row)).is_active(now=now))
+            rows = session.execute(
+                select(OperatorGrantRow).where(_active_predicate(now)).order_by(OperatorGrantRow.id)
+            ).scalars()
+            return tuple(_to_domain(row) for row in rows)
+
+    def revoked_grants(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> tuple[OperatorGrant, ...]:
+        """Filter, order and bound in the store (NEX-092).
+
+        NEX-086 recorded that this read was bounded and it was not: the selection
+        ran in Python over every grant row — ``select(OperatorGrantRow)`` with no
+        ``WHERE``, a domain object built for each — and only then sliced the
+        materialised list. A page of 50 therefore cost the whole table, which is
+        the unbounded-response defect NEX-087 fixed for the access log and NEX-088
+        for the audit trail, one layer down in the adapter.
+
+        NEX-086 kept the predicate in Python to avoid a SQL translation drifting
+        from ``is_revoked``. The premise does not hold: ``is_revoked`` is a single
+        attribute test, ``self.revoked_at is not None``, with no logic in it, so
+        ``revoked_at IS NOT NULL`` is its exact translation rather than an
+        approximation of it. There is nothing to drift, and the ``CHECK`` on the
+        table forbids the only incoherent half (a named revoker with no instant).
+        ``is_active`` carries four comparisons but no arithmetic, so its SQL form in
+        ``_active_predicate`` is likewise exact — NEX-094 uses it to bound the active
+        reads, and pins the equivalence by test.
+
+        ``id`` ordering is the port's insertion order, and it is also what makes
+        ``LIMIT``/``OFFSET`` here stable: the list is never appended to by reading
+        it, so a page cannot shift under a walker.
+        """
+        statement = (
+            select(OperatorGrantRow)
+            .where(OperatorGrantRow.revoked_at.is_not(None))
+            .order_by(OperatorGrantRow.id)
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        with self._session_factory() as session:
+            rows = session.execute(statement).scalars()
+            return tuple(_to_domain(row) for row in rows)
+
+    def count_revoked(self) -> int:
+        """How many grants have been revoked, ever — an aggregate (NEX-086, NEX-092).
+
+        A paged report needs the total to say whether a page is the last one and
+        to page without the caller knowing the size in advance. NEX-086 counted by
+        materialising every row and filtering in Python, so the "without loading
+        them" promise in the port was not kept either. ``count(*)`` over
+        ``revoked_at IS NOT NULL`` reads no rows and cannot be truncated by volume,
+        and it selects through the same predicate as ``revoked_grants`` — the
+        ``WHERE`` clause is written once, in the adapter, beside the one it must
+        agree with.
+        """
+        with self._session_factory() as session:
+            total = session.execute(
+                select(func.count())
+                .select_from(OperatorGrantRow)
+                .where(OperatorGrantRow.revoked_at.is_not(None))
+            ).scalar_one()
+        return int(total)
 
 
 __all__ = ["SqlAlchemyOperatorGrantRepository"]

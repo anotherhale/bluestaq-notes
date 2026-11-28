@@ -18,12 +18,11 @@ maps HTTP to use cases and nothing more, with three consequences worth stating:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
-from notes_service.domain.agent.value_objects import ApprovalStatus
+from notes_service.domain.agent.value_objects import ApprovalStatus, DelegationStatus
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     AgentListResponse,
@@ -40,6 +39,7 @@ from notes_service.presentation.schemas import (
     ApprovalRevokeRequest,
     ChainVerdictResponse,
     DelegationGrantRequest,
+    DelegationListResponse,
     DelegationResponse,
     PageMeta,
     ResolvedAgentTokenResponse,
@@ -48,11 +48,6 @@ from notes_service.presentation.schemas import (
 )
 
 router = APIRouter(prefix="/agents", tags=["agents"])
-
-
-def _page(items: Sequence[object]) -> PageMeta:
-    """These listings are unpaginated, so the meta describes the full set."""
-    return PageMeta(total=len(items), limit=len(items), offset=0)
 
 
 # -- agents ---------------------------------------------------------------
@@ -64,10 +59,25 @@ def _page(items: Sequence[object]) -> PageMeta:
     summary="List the agents the caller owns",
     dependencies=[RateLimitDep],
 )
-def list_agents(principal: PrincipalDep, container: ContainerDep) -> AgentListResponse:
-    agents = container.list_agents().run(principal)
-    items = [AgentResponse.from_domain(agent) for agent in agents]
-    return AgentListResponse(items=items, meta=_page(items))
+def list_agents(
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> AgentListResponse:
+    """The caller's own agents, oldest first, with the set's exact size.
+
+    Paged rather than whole-set: an owner can register agents in a loop, so an
+    unpaged read is a database read any authenticated client can grow without
+    bound. ``meta.total`` is the count of the caller's agents, not of ``items``;
+    a page-derived total cannot distinguish a complete listing from a truncated
+    one.
+    """
+    page = container.list_agents().run(principal, limit=limit, offset=offset)
+    items = [AgentResponse.from_domain(agent) for agent in page.items]
+    return AgentListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(
@@ -113,6 +123,52 @@ def revoke_agent(agent_id: UUID, principal: PrincipalDep, container: ContainerDe
 
 
 # -- delegations ----------------------------------------------------------
+
+
+@router.get(
+    "/{agent_id}/delegations",
+    response_model=DelegationListResponse,
+    summary="List the consent records behind one of the caller's agents",
+    dependencies=[RateLimitDep],
+)
+def list_delegations(
+    agent_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    status_filter: DelegationStatus | None = Query(
+        default=None,
+        alias="status",
+        description=(
+            "Which state to list. Omitted means every delegation, active and "
+            "revoked, so a withdrawn grant stays visible rather than vanishing."
+        ),
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> DelegationListResponse:
+    """Delegations this agent holds, newest last, with the set's exact size.
+
+    This is the read path that makes *narrow* revocation usable. A delegation id
+    existed only in the ``POST`` response that created it, so a delegator who lost
+    that response could not withdraw one grant without ``RevokeAgent`` — an
+    emergency stop that also kills every other grant, every token, and the agent.
+
+    A non-owner gets 404, never 403, so the route cannot probe for another user's
+    agent. ``meta.total`` is the count of delegations matching the filter, not of
+    ``items``; a page-derived total cannot distinguish a complete list from a
+    truncated one.
+    """
+    page = container.list_delegations().run(
+        principal,
+        agent_id=str(agent_id),
+        status=status_filter.value if status_filter is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    items = [DelegationResponse.from_domain(delegation) for delegation in page.items]
+    return DelegationListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(
@@ -232,12 +288,33 @@ def list_approval_requests(
             "other value reads the agent's full history so a decision stays reviewable."
         ),
     ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> ApprovalRequestListResponse:
-    requests = container.list_approval_requests().run(
-        principal, agent_id=str(agent_id), status=status.value
+    """Approvals this agent opened, one status at a time.
+
+    A non-owner gets 404, never 403, so the route cannot probe for another user's
+    agent. Paging is explicit here rather than the unpaginated ``_page`` helper:
+    an agent's approval history is never pruned, so a fixed default window keeps
+    one request from loading every approval it ever opened. The status filter and
+    the window are applied in the store.
+
+    ``meta.total`` is the number of approvals in this status, not of ``items``. A
+    window that reported its own size would make "3 denied approvals" and "the
+    first 3 of 300" indistinguishable, which is exactly what an auditor must be
+    able to tell apart.
+    """
+    page = container.list_approval_requests().run(
+        principal,
+        agent_id=str(agent_id),
+        status=status.value,
+        limit=limit,
+        offset=offset,
     )
-    items = [ApprovalRequestResponse.from_domain(request) for request in requests]
-    return ApprovalRequestListResponse(items=items, meta=_page(items))
+    items = [ApprovalRequestResponse.from_domain(request) for request in page.items]
+    return ApprovalRequestListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.get(
@@ -259,13 +336,18 @@ def list_tool_invocations(
     is explicit here rather than the unpaginated ``_page`` helper used by the
     other listings: an audit trail grows without bound, so a fixed default window
     keeps one request from returning an agent's entire history.
+
+    ``meta.total`` is the length of the whole trail, not of ``items``. A window
+    that reports its own size as the total cannot be told apart from a complete
+    trail, which is the difference between "this agent made 50 attempts" and
+    "the first 50 of thousands".
     """
-    invocations = container.list_tool_invocations().run(
+    page = container.list_tool_invocations().run(
         principal, agent_id=str(agent_id), limit=limit, offset=offset
     )
-    items = [ToolInvocationAuditResponse.from_domain(item) for item in invocations]
+    items = [ToolInvocationAuditResponse.from_domain(item) for item in page.items]
     return ToolInvocationAuditListResponse(
-        items=items, meta=PageMeta(total=len(items), limit=limit, offset=offset)
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
     )
 
 

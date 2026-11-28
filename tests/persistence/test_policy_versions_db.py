@@ -29,6 +29,12 @@ from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from notes_service.application.errors import Conflict
+from notes_service.application.use_cases.operator_gate import OperatorGate
+from notes_service.application.use_cases.policy_lifecycle import (
+    RollbackPolicy,
+    RollbackPolicyVersion,
+)
 from notes_service.domain.errors import InvariantViolation, ValidationError
 from notes_service.domain.governance.policy import (
     AllOf,
@@ -40,14 +46,49 @@ from notes_service.domain.governance.policy import (
     PolicyEffect,
     PolicyRule,
     PolicyStatus,
+    PolicyVersion,
+    evaluate,
     new_policy_version,
 )
+from notes_service.domain.identity.principal import Principal
+from notes_service.domain.identity.value_objects import Email, UserId
+from notes_service.infrastructure.governance.policy_codec import encode_rules
 from notes_service.infrastructure.governance.policy_versions_db import (
     SqlAlchemyPolicyVersionRepository,
 )
+from notes_service.infrastructure.security.operator_access_log import (
+    InMemoryOperatorAccessLog,
+)
+from tests.application.grant_helpers import grants_from_scopes
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 RISK = AttributeRef("risk", AttributeType.STRING)
+
+_OPERATOR = Principal(
+    user_id=UserId("11111111-1111-1111-1111-111111111111"),
+    email=Email("operator@example.com"),
+    display_name="Operator",
+    provider="demo",
+    subject="11111111-1111-1111-1111-111111111111",
+)
+
+
+class _FixedClock:
+    def now(self) -> datetime:
+        return NOW
+
+
+def _permissive_gate() -> OperatorGate:
+    """A gate granting the operator every scope, so a refusal is about approval.
+
+    These tests assert why a rollback is refused; a scope failure would be a
+    different refusal and must not be mistaken for the one under test.
+    """
+    return OperatorGate(
+        grants=grants_from_scopes({_OPERATOR.user_id: frozenset({"*"})}),
+        access_log=InMemoryOperatorAccessLog(),
+        clock=_FixedClock(),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -83,8 +124,23 @@ def _draft(policy_id: str = "content.access", version: int = 1):
         version=version,
         rules=_rules(),
         rationale="initial release",
+        drafted_by="dana",
         created_at=NOW,
     )
+
+
+def _publish(store: SqlAlchemyPolicyVersionRepository, draft: PolicyVersion) -> PolicyVersion:
+    """Approve then publish through the store.
+
+    NEX-065 made approval a recorded transition, so publishing a draft straight
+    through the adapter is now refused by design. Tests that only care about the
+    published end state go through both steps.
+    """
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    published = approved.publish(now=NOW, published_by="operator-1")
+    store.publish(published)
+    return published
 
 
 def test_reports_a_distinct_name(store: SqlAlchemyPolicyVersionRepository) -> None:
@@ -121,7 +177,7 @@ def test_published_version_survives_a_restart(
     """
     draft = _draft()
     store.add_draft(draft)
-    store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    _publish(store, draft)
 
     restarted = _restart(session_factory)
 
@@ -149,7 +205,7 @@ def test_next_version_number_counts_retired_versions(
 ) -> None:
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     retired = store.get("content.access", 1)
     assert retired is not None
     store.retire(retired.retire())
@@ -160,7 +216,11 @@ def test_next_version_number_counts_retired_versions(
 
 
 def test_add_draft_refuses_a_non_draft(store: SqlAlchemyPolicyVersionRepository) -> None:
-    published = _draft().publish(now=NOW, published_by="operator-1")
+    published = (
+        _draft()
+        .approve(now=NOW, approved_by="reviewer-1")
+        .publish(now=NOW, published_by="operator-1")
+    )
     with pytest.raises(InvariantViolation, match="only a draft can be added"):
         store.add_draft(published)
 
@@ -182,7 +242,11 @@ def test_add_draft_requires_a_policy_version(
 
 def test_publish_requires_a_stored_draft(store: SqlAlchemyPolicyVersionRepository) -> None:
     with pytest.raises(InvariantViolation, match="was never added"):
-        store.publish(_draft().publish(now=NOW, published_by="operator-1"))
+        store.publish(
+            _draft()
+            .approve(now=NOW, approved_by="reviewer-1")
+            .publish(now=NOW, published_by="operator-1")
+        )
 
 
 def test_publish_refuses_an_already_published_version(
@@ -190,10 +254,14 @@ def test_publish_refuses_an_already_published_version(
 ) -> None:
     draft = _draft()
     store.add_draft(draft)
-    store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    store.publish(approved.publish(now=NOW, published_by="operator-1"))
 
-    with pytest.raises(InvariantViolation, match="it is published, not draft"):
-        store.publish(draft.publish(now=NOW, published_by="operator-1"))
+    # The store transition, not only the domain, refuses the second publish: the
+    # stored row is already published, so re-publishing would rewrite history.
+    with pytest.raises(InvariantViolation, match="it is published, not approved"):
+        store.publish(approved.publish(now=NOW, published_by="operator-1"))
 
 
 def test_retire_requires_a_retired_value(
@@ -207,8 +275,7 @@ def test_retire_requires_a_retired_value(
     """
     draft = _draft()
     store.add_draft(draft)
-    published = draft.publish(now=NOW, published_by="operator-1")
-    store.publish(published)
+    published = _publish(store, draft)
 
     with pytest.raises(InvariantViolation, match="retire requires a retired version value"):
         store.retire(published)
@@ -222,7 +289,7 @@ def test_history_is_oldest_first_and_includes_every_status(
 ) -> None:
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     retired = store.get("content.access", 1)
     assert retired is not None
     # Retire before publishing v2: the schema allows only one published version
@@ -230,7 +297,7 @@ def test_history_is_oldest_first_and_includes_every_status(
     store.retire(retired.retire())
     v2 = _draft(version=2)
     store.add_draft(v2)
-    store.publish(v2.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v2)
 
     history = store.history("content.access")
 
@@ -253,7 +320,7 @@ def test_all_published_is_sorted_by_policy_id(
     for policy_id in ("zeta.policy", "alpha.policy", "mid.policy"):
         draft = _draft(policy_id=policy_id)
         store.add_draft(draft)
-        store.publish(draft.publish(now=NOW, published_by="operator-1"))
+        _publish(store, draft)
 
     # Deterministic order is what makes a decision's policy_versions list stable.
     assert [v.policy_id for v in store.all_published()] == [
@@ -275,7 +342,7 @@ def test_schema_refuses_a_second_published_version_of_one_policy(
     """
     v1 = _draft(version=1)
     store.add_draft(v1)
-    store.publish(v1.publish(now=NOW, published_by="operator-1"))
+    _publish(store, v1)
     store.add_draft(_draft(version=2))
 
     with pytest.raises(IntegrityError), session_factory() as session:
@@ -288,6 +355,48 @@ def test_schema_refuses_a_second_published_version_of_one_policy(
             {"at": NOW, "by": "operator-1", "pid": "content.access"},
         )
         session.commit()
+
+
+def test_schema_refuses_an_approver_who_also_publishes(
+    store: SqlAlchemyPolicyVersionRepository,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The third pair, in the schema (NEX-078).
+
+    The domain refuses this, but a rule held only in the domain is one an
+    alternative writer — a migration, a script, a future adapter — can walk
+    around. This pins the constraint itself, so the check survives any caller
+    that skips ``PublishDraft``.
+    """
+    draft = _draft(version=1)
+    store.add_draft(draft)
+    store.approve(draft.approve(now=NOW, approved_by="reviewer-1"))
+
+    with pytest.raises(IntegrityError), session_factory() as session:
+        session.execute(
+            text(
+                "UPDATE policy_versions SET status = 'published',"
+                " published_at = :at, published_by = :by"
+                " WHERE policy_id = :pid AND version_number = 1"
+            ),
+            # Same principal as the recorded approver: both halves of the
+            # two-person control performed alone.
+            {"at": NOW, "by": "reviewer-1", "pid": "content.access"},
+        )
+        session.commit()
+
+
+def test_schema_accepts_three_distinct_principals(
+    store: SqlAlchemyPolicyVersionRepository,
+) -> None:
+    """The constraint refuses the collapse, not publication itself."""
+    draft = _draft(version=1)
+    store.add_draft(draft)
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    published = approved.publish(now=NOW, published_by="carol")
+    store.publish(published)
+    assert published.status is PolicyStatus.PUBLISHED
 
 
 def test_schema_refuses_reusing_a_version_number(
@@ -364,3 +473,85 @@ def test_rules_survive_a_round_trip_unchanged(
 
     assert reread is not None
     assert reread.rules == rich
+
+
+# --------------------------------------------------------------------------- #
+# A version in force from before approval was recorded (NEX-066)
+# --------------------------------------------------------------------------- #
+
+
+def _insert_legacy_published(
+    session_factory: sessionmaker[Session], *, policy_id: str = "content.access"
+) -> None:
+    """Write a row the way pre-NEX-065 code did: in force, no approval columns.
+
+    Raw SQL is the point. No use case can produce this row any more, which is
+    exactly why it can only arrive from a deployment that predates the column.
+    """
+    with session_factory() as session:
+        session.execute(
+            text(
+                "INSERT INTO policy_versions"
+                " (policy_id, version_number, status, rationale, rules,"
+                "  created_at, published_at, published_by, drafted_by)"
+                " VALUES (:pid, 1, 'published', 'published before approval existed',"
+                " :rules, :at, :at, 'operator-1', 'dana')"
+            ),
+            {"pid": policy_id, "rules": encode_rules(_rules()), "at": NOW},
+        )
+        session.commit()
+
+
+def test_a_legacy_published_row_stays_readable(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The migration tolerates the row; the reader must still return it.
+
+    ``_to_domain`` used to raise for a version in force with no approval, so
+    ``published_for`` and ``history`` — and therefore every policy decision —
+    failed on a database that had been running before NEX-065. Reading it as "no
+    approval on record" keeps the live policy in force.
+    """
+    _insert_legacy_published(session_factory)
+
+    live = _restart(session_factory).published_for("content.access")
+
+    assert live is not None
+    assert live.status is PolicyStatus.PUBLISHED
+    assert live.has_approval_record is False
+    assert live.approved_at is None and live.approved_by is None
+
+
+def test_a_legacy_version_still_decides(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Withdrawing it would deny everything it permitted — a fail-closed outage."""
+    _insert_legacy_published(session_factory)
+
+    in_force = _restart(session_factory).all_published()
+
+    assert [v.version for v in in_force] == [1]
+    assert evaluate(in_force, {"risk": "low"}).allowed
+
+
+def test_rollback_refuses_a_legacy_version_and_leaves_no_draft(
+    store: SqlAlchemyPolicyVersionRepository,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A rollback copies the source's approval record; a legacy row has none.
+
+    Stamping a fresh approval would put rules back in force under a review that
+    never happened, so the rollback is refused. The refusal must land before the
+    draft is written, or a failed rollback would still consume a version number.
+    """
+    _insert_legacy_published(session_factory)
+
+    with pytest.raises(Conflict, match="no review to inherit"):
+        RollbackPolicy(store=store, clock=_FixedClock(), operator_gate=_permissive_gate()).execute(
+            _OPERATOR,
+            RollbackPolicyVersion(policy_id="content.access", to_version=1, rationale="restore"),
+        )
+
+    assert [v.version for v in store.history("content.access")] == [1], (
+        "a refused rollback must not leave a draft behind"
+    )

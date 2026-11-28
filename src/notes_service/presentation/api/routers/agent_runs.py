@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from notes_service.domain.agent.runs import PlannedStep
 from notes_service.presentation.dependencies import (
@@ -45,11 +45,6 @@ from notes_service.presentation.schemas import (
 )
 
 router = APIRouter(prefix="/agent-runs", tags=["agent-runs"])
-
-
-def _page(items: list[AgentRunResponse]) -> PageMeta:
-    """Listings are unpaginated, so the meta describes the full set."""
-    return PageMeta(total=len(items), limit=len(items), offset=0)
 
 
 def _planned_steps(payload: PlanAgentRunRequest) -> list[PlannedStep]:
@@ -113,13 +108,48 @@ def list_runs(
     agent_id: UUID,
     principal: PrincipalDep,
     container: ContainerDep,
-    resumable_only: bool = False,
+    resumable_only: bool = Query(
+        default=False,
+        description=(
+            "Return only runs that stopped without reaching a terminal state. This "
+            "is the recovery set, so it is returned whole and ignores limit/offset."
+        ),
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> AgentRunListResponse:
-    runs = container.list_agent_runs().run(
-        principal, agent_id=str(agent_id), resumable_only=resumable_only
+    """Runs this agent planned, newest first.
+
+    A non-owner gets 404, never 403, so the route cannot probe for another user's
+    agent. Paging is explicit here rather than the unpaginated ``_page`` helper
+    used by the identity listings: run history is append-only, so a fixed default
+    window keeps one request from loading every run an agent ever planned.
+
+    ``meta.total`` is the number of runs the agent has, not of ``items``. A window
+    that reported its own size would make "this agent ran 3 times" and "the first
+    3 of 300" indistinguishable, and before NEX-090 there was no way to reach past
+    the first page at all.
+
+    ``resumable_only`` is exempt: it is what a client resumes from, so it must be
+    complete. Its total is the size of that set and ``limit``/``offset`` do not
+    apply, so the meta describes the whole set rather than echoing a window the
+    request did not apply — a ``limit`` below ``total`` alongside more items than
+    ``limit`` would read as a truncated page.
+    """
+    page = container.list_agent_runs().run(
+        principal,
+        agent_id=str(agent_id),
+        resumable_only=resumable_only,
+        limit=limit,
+        offset=offset,
     )
-    items = [AgentRunResponse.from_domain(run) for run in runs]
-    return AgentRunListResponse(items=items, meta=_page(items))
+    items = [AgentRunResponse.from_domain(run) for run in page.items]
+    meta = (
+        PageMeta(total=page.total, limit=len(items), offset=0)
+        if resumable_only
+        else PageMeta(total=page.total, limit=limit, offset=offset)
+    )
+    return AgentRunListResponse(items=items, meta=meta)
 
 
 @router.get(

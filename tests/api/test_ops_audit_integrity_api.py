@@ -49,12 +49,39 @@ def test_operator_sweeps_an_empty_deployment(operator_client: TestClient) -> Non
     assert response.status_code == 200, response.text
 
     body = response.json()
-    assert set(body) == {"verified", "agents_total", "agents_checked", "truncated", "broken"}
+    assert set(body) == {
+        "verified",
+        "agents_total",
+        "agents_checked",
+        "truncated",
+        "broken",
+        "offset",
+        "next_offset",
+    }
     assert body["agents_total"] == 0
     assert body["agents_checked"] == 0
     assert body["truncated"] is False
     assert body["broken"] == []
+    assert body["offset"] == 0
+    assert body["next_offset"] is None
     assert body["verified"] is True
+
+
+def test_a_negative_offset_is_rejected(operator_client: TestClient) -> None:
+    """``offset`` is validated at the boundary, so a nonsense page is a 422 not a scan."""
+    response = operator_client.get(PATH, headers=auth_headers(ALICE), params={"offset": -1})
+    assert response.status_code == 422, response.text
+
+
+def test_an_offset_page_is_served_and_never_verified_alone(operator_client: TestClient) -> None:
+    """A page after the first is answered, and it does not claim to be an all-clear."""
+    response = operator_client.get(PATH, headers=auth_headers(ALICE), params={"offset": 5})
+    assert response.status_code == 200, response.text
+
+    body = response.json()
+    assert body["offset"] == 5
+    assert body["agents_checked"] == 0
+    assert body["verified"] is False
 
 
 def test_empty_allowlist_admits_nobody(app: FastAPI) -> None:

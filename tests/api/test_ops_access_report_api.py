@@ -45,7 +45,14 @@ def test_operator_reads_the_access_report(operator_client: TestClient) -> None:
     assert response.status_code == 200, response.text
 
     body = response.json()
-    assert set(body) == {"entries", "limit", "log_name", "capacity", "truncated"}
+    assert set(body) == {
+        "entries",
+        "limit",
+        "log_name",
+        "capacity",
+        "truncated",
+        "next_position",
+    }
 
     # Reading this view is itself a granted operator read, so at least the
     # current call is recorded and names the operator.
@@ -53,7 +60,7 @@ def test_operator_reads_the_access_report(operator_client: TestClient) -> None:
     assert body["entries"][0]["user_id"] == ALICE
     assert body["entries"][0]["operation"] == "operator-access-report"
     for entry in body["entries"]:
-        assert set(entry) == {"user_id", "operation", "at"}
+        assert set(entry) == {"user_id", "operation", "at", "position"}
 
     assert isinstance(body["limit"], int)
     assert body["limit"] >= 1

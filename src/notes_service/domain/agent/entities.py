@@ -213,6 +213,25 @@ class ApprovalRequest:
     decided_by_user_id: UserId | None = None
     reason: str | None = None
     expires_at: datetime | None = None
+    # How many *distinct* humans must approve before this request authorises the
+    # action. ``1`` is the ordinary case. A policy that imposes the
+    # ``second-approver`` obligation opens the request with ``2`` so the
+    # requirement is a property of the request itself rather than something the
+    # gateway re-derives at spend time — a gateway that forgot to pass the number
+    # would otherwise silently accept one signature for a two-person control.
+    required_approvals: int = 1
+    # The second signatory. Kept as its own field rather than a list because the
+    # platform's maximum is two: one approver, and one distinct approver. A list
+    # would imply a variable threshold this aggregate does not model, and a
+    # variable threshold a caller can widen is not a control.
+    second_approver_user_id: UserId | None = None
+    second_decided_at: datetime | None = None
+    second_reason: str | None = None
+    # Who refused a request that already carried one approval. Kept apart from
+    # ``decided_by_user_id`` so a denial after a partial approval does not erase
+    # the record of who said yes: an auditor needs both the grant and the refusal
+    # to understand how a two-person control actually behaved.
+    denied_by_user_id: UserId | None = None
     consumed_at: datetime | None = None
     revoked_at: datetime | None = None
     revoked_by_user_id: UserId | None = None
@@ -252,6 +271,7 @@ class ApprovalRequest:
         approval_id: ApprovalRequestId | None = None,
         ttl: timedelta = DEFAULT_APPROVAL_TTL,
         now: datetime | None = None,
+        required_approvals: int = 1,
     ) -> ApprovalRequest:
         if capability not in SENSITIVE_CAPABILITIES:
             raise InvariantViolation(
@@ -265,6 +285,12 @@ class ApprovalRequest:
             raise ValidationError("approval request must name a resource")
         if ttl <= timedelta(0):
             raise ValidationError("approval validity must be positive")
+        if required_approvals not in (1, 2):
+            # Two is the platform maximum. A larger number would need a list of
+            # signatories and a threshold check this aggregate does not model,
+            # and silently accepting it would record a requirement it cannot
+            # enforce — the exact failure mode obligations exist to prevent.
+            raise ValidationError("an approval requires one or two distinct approvers")
         opened_at = now or _utcnow()
         return cls(
             id=approval_id or ApprovalRequestId.new(),
@@ -273,11 +299,37 @@ class ApprovalRequest:
             resource_ref=resource_ref.strip(),
             requested_at=opened_at,
             expires_at=opened_at + ttl,
+            required_approvals=required_approvals,
         )
 
     @property
     def is_pending(self) -> bool:
         return self.status is ApprovalStatus.PENDING
+
+    @property
+    def approvals_recorded(self) -> int:
+        """How many distinct humans have signed, saturating at the requirement."""
+        recorded = 0
+        if self.decided_by_user_id is not None:
+            recorded += 1
+        if self.second_approver_user_id is not None:
+            recorded += 1
+        return recorded
+
+    @property
+    def awaiting_second_approval(self) -> bool:
+        """One signature is in, the request needs another, and nobody has denied it.
+
+        This is a distinct state from "pending and untouched": an operator
+        looking at the queue must be able to tell a request nobody has picked up
+        from one that is half-approved and waiting on a second, different human.
+        """
+        return (
+            self.status is ApprovalStatus.PENDING
+            and self.required_approvals == 2
+            and self.decided_by_user_id is not None
+            and self.second_approver_user_id is None
+        )
 
     @property
     def is_expired(self) -> bool:
@@ -315,6 +367,14 @@ class ApprovalRequest:
         """
         if self.status is not ApprovalStatus.APPROVED:
             return False
+        # Belt to the status check's braces for the two-person control: a row
+        # whose status reads approved but that carries fewer distinct signatures
+        # than it requires must not authorise anything. `approve` never produces
+        # that state, but a contradictory row (a hand-written UPDATE, a partial
+        # migration, a future writer that sets status directly) must fail closed
+        # rather than spend a control it never satisfied.
+        if self.approvals_recorded < self.required_approvals:
+            return False
         if self.consumed_at is not None:
             return False
         # Belt to the status check's braces: a row that carries a revocation
@@ -349,13 +409,63 @@ class ApprovalRequest:
         now: datetime | None = None,
         reason: str | None = None,
     ) -> None:
+        """Record one human's approval, granting the action only when complete.
+
+        A request that needs two approvers is *not* approved by the first
+        signature. The first signature is recorded and the status stays
+        ``PENDING`` until a second, **distinct** human signs. Marking it
+        ``APPROVED`` on one signature would make the requirement advisory: the
+        gateway reads ``is_usable``, which reads ``status``, so a premature
+        ``APPROVED`` is a live grant of the two-person control's authority to one
+        person.
+
+        The distinctness check is here, in the aggregate, not in the use case:
+        every path that decides an approval goes through this method, and the
+        only defence that cannot be forgotten is the one at the data.
+        """
         approver = UserId.parse(approver_user_id) if approver_user_id is not None else None
         decided_at = now or _utcnow()
+        # A second signature is a *new* decision on a request that already has
+        # one, so the ordinary "only a pending request is decidable" guard does
+        # not apply to it. Route it before that guard runs.
+        if self.required_approvals == 2 and self.decided_by_user_id is not None:
+            self._approve_as_second(approver, now=decided_at, reason=reason)
+            return
         self._assert_decidable(approver, now=decided_at)
-        self.status = ApprovalStatus.APPROVED
+        assert approver is not None  # _assert_decidable guarantees it
         self.decided_by_user_id = approver
         self.decided_at = decided_at
         self.reason = reason
+        if self.required_approvals == 1:
+            self.status = ApprovalStatus.APPROVED
+        # With two required the status stays PENDING: one signature is a partial
+        # approval, not an approval.
+        self._bump()
+
+    def _approve_as_second(
+        self, approver: UserId | None, *, now: datetime, reason: str | None
+    ) -> None:
+        if approver is None:
+            raise InvariantViolation(
+                "an agent cannot approve its own action; a human approver is required"
+            )
+        if self.status is not ApprovalStatus.PENDING:
+            raise InvariantViolation(f"approval request is already {self.status.value}")
+        if self.expired_at(now=now):
+            raise InvariantViolation("approval request has expired and cannot be decided")
+        if self.second_approver_user_id is not None:
+            raise InvariantViolation("approval request already has its second approval")
+        if approver == self.decided_by_user_id:
+            # Separation of duties: a second click by the first approver is not a
+            # second approver. Reusing them would make the whole obligation a
+            # formality that reads as a control in the audit trail.
+            raise InvariantViolation(
+                "the second approval must come from a different human than the first"
+            )
+        self.second_approver_user_id = approver
+        self.second_decided_at = now
+        self.second_reason = reason
+        self.status = ApprovalStatus.APPROVED
         self._bump()
 
     def deny(
@@ -365,13 +475,66 @@ class ApprovalRequest:
         now: datetime | None = None,
         reason: str | None = None,
     ) -> None:
+        """Refuse the action. One refusal ends a two-person control.
+
+        A request half-approved by one human and then refused by a second must
+        not keep the first signature as though it were still live: the refusal
+        wins, the status becomes ``DENIED``, and the first approver's grant stays
+        visible in ``decided_by_user_id`` rather than being overwritten. Writing
+        the refuser over it would destroy the record of a grant that a second
+        person then blocked — the exact sequence an auditor needs to see.
+        """
         approver = UserId.parse(approver_user_id) if approver_user_id is not None else None
         decided_at = now or _utcnow()
+        if self.required_approvals == 2 and self.decided_by_user_id is not None:
+            if approver is None:
+                raise InvariantViolation(
+                    "an agent cannot deny its own action; a human approver is required"
+                )
+            if self.status is not ApprovalStatus.PENDING:
+                raise InvariantViolation(f"approval request is already {self.status.value}")
+            if self.expired_at(now=decided_at):
+                raise InvariantViolation("approval request has expired and cannot be decided")
+            self.denied_by_user_id = approver
+            self.second_decided_at = decided_at
+            self.second_reason = reason
+            self.status = ApprovalStatus.DENIED
+            self._bump()
+            return
         self._assert_decidable(approver, now=decided_at)
+        assert approver is not None  # _assert_decidable guarantees it
         self.status = ApprovalStatus.DENIED
         self.decided_by_user_id = approver
         self.decided_at = decided_at
         self.reason = reason
+        self._bump()
+
+    def raise_required_approvals(self, required: int) -> None:
+        """Raise the number of distinct signatures this request needs, never lower it.
+
+        A published policy can tighten while a request is still open. Reusing the
+        open request is an efficiency, and it must not become a way to spend
+        authority under a rule that no longer applies: an approved-by-one request
+        that a stricter policy now demands two signatures for must drop back to
+        pending. Only a request nobody has signed is raised — one already carrying
+        a signature cannot be un-approved silently, so it is refused and the
+        caller opens a fresh request under the current policy.
+
+        Lowering is refused outright: a policy that relaxed is a reason to open a
+        new request, not to rewrite a decision already recorded at the stricter
+        threshold.
+        """
+        if required not in (1, 2):
+            raise ValidationError("an approval requires one or two distinct approvers")
+        if required < self.required_approvals:
+            raise InvariantViolation("an approval requirement may only be raised, never lowered")
+        if required == self.required_approvals:
+            return
+        if self.decided_by_user_id is not None or self.second_approver_user_id is not None:
+            raise InvariantViolation(
+                "cannot raise the requirement of a request that already carries a signature"
+            )
+        self.required_approvals = required
         self._bump()
 
     def revoke(

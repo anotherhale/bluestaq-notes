@@ -121,8 +121,33 @@ class OrganizationMembershipRepository(Protocol):
     def save(self, membership: OrganizationMembership) -> None: ...
 
     def list_for_organization(
-        self, organization_id: OrganizationId
-    ) -> list[OrganizationMembership]: ...
+        self, organization_id: OrganizationId, *, limit: int | None = None, offset: int = 0
+    ) -> list[OrganizationMembership]:
+        """A page of the organization's roster, oldest first.
+
+        Excludes ``DEPROVISIONED`` memberships: offboarding is a soft delete, so
+        the row outlives the person's standing and would otherwise be listed as
+        a current member. Keeps ``SUSPENDED`` ones, because reactivation is a
+        legitimate next action and it needs the membership id.
+
+        ``limit=None`` means the whole roster, which is why the caller that faces
+        a client must pass one: there is no per-organization member cap, so an
+        unpaged read grows without bound with the tenant. The order is
+        ``(created_at, id)`` — an ``OFFSET`` window needs a **total** order, or a
+        row can repeat while another is skipped as the window shifts, and
+        memberships invited in one burst share ``created_at``.
+        """
+        ...
+
+    def count_for_organization(self, organization_id: OrganizationId) -> int:
+        """The roster's exact size, under the same predicate as the listing.
+
+        Separate from :meth:`list_for_organization` so a page can report the
+        set's real size. A total derived from ``len(page)`` cannot distinguish a
+        complete roster from the first page of a larger one, which is exactly
+        the judgement a paged consumer has to make.
+        """
+        ...
 
     def list_for_user(self, user_id: UserId) -> list[OrganizationMembership]: ...
 

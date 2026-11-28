@@ -19,7 +19,9 @@ from notes_service.domain.agent.tools import ToolInvocation, ToolInvocationId
 from notes_service.domain.agent.value_objects import (
     AgentId,
     ApprovalRequestId,
+    ApprovalStatus,
     DelegatedAuthorizationId,
+    DelegationStatus,
 )
 from notes_service.domain.identity.value_objects import UserId
 
@@ -34,16 +36,34 @@ class AgentRepository(Protocol):
 
     def get_by_runtime_identity(self, runtime_identity: str) -> AgentIdentity | None: ...
 
-    def list_for_owner(self, owner_user_id: UserId) -> list[AgentIdentity]:
-        """Agents owned by one user.
+    def list_for_owner(
+        self, owner_user_id: UserId, *, limit: int | None = None, offset: int = 0
+    ) -> list[AgentIdentity]:
+        """A page of the agents owned by one user, oldest first.
 
         There is deliberately no unscoped ``list_all``: a caller must always
         name the owner, so one user cannot enumerate another's agents.
+
+        ``limit=None`` means every agent, which is why the caller that faces a
+        client must pass one. The order is ``(created_at, id)``: an ``OFFSET``
+        window needs a **total** order, or a row can repeat while another is
+        skipped as the window shifts, and agents registered in one burst share
+        ``created_at``.
         """
         ...
 
-    def list_all_for_integrity_sweep(self, *, limit: int) -> list[AgentIdentity]:
-        """Every agent in the deployment, oldest first, capped at ``limit``.
+    def count_for_owner(self, owner_user_id: UserId) -> int:
+        """How many agents one user owns.
+
+        Separate from :meth:`list_for_owner` so a page can report the set's real
+        size. A total derived from ``len(page)`` cannot distinguish a complete
+        listing from the first page of a larger one, which is exactly the
+        judgement a paged consumer has to make.
+        """
+        ...
+
+    def list_all_for_integrity_sweep(self, *, limit: int, offset: int = 0) -> list[AgentIdentity]:
+        """A page of the deployment's agents, oldest first, capped at ``limit``.
 
         The one unscoped enumeration, and it exists for exactly one caller: the
         operator-gated platform-wide audit sweep. ``list_for_owner`` refuses to
@@ -57,6 +77,14 @@ class AgentRepository(Protocol):
         caller compares the rows returned against :meth:`count_all_for_integrity_sweep`
         to report ``truncated``, so a partial sweep cannot be mistaken for a
         complete one.
+
+        ``offset`` is what lets a capped sweep *finish*. A limit with no way to
+        advance past it does not bound one request — it permanently excludes
+        every agent after the first page, and because the order is oldest-first
+        that is exactly the newest trails, which are the most likely to have
+        been tampered with. The order must stay deterministic across pages
+        (``created_at``, then ``id``) or paging could skip a row and still look
+        complete; see the adapter, where both are in the ``ORDER BY``.
         """
         ...
 
@@ -81,7 +109,44 @@ class DelegationRepository(Protocol):
 
     def get(self, delegation_id: DelegatedAuthorizationId) -> DelegatedAuthorization | None: ...
 
-    def list_for_agent(self, agent_id: AgentId) -> list[DelegatedAuthorization]: ...
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: DelegationStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[DelegatedAuthorization]:
+        """An agent's consent records, optionally one status, optionally paged.
+
+        Delegations are never pruned — revocation is recorded, not deleted — so
+        this set only grows. ``status`` is a stored column
+        (:class:`DelegationRow.status`), never derived, so selecting it in SQL
+        cannot disagree with filtering the same value in Python.
+
+        ``limit=None`` reads every delegation. ``RevokeAgent`` does not walk the
+        list (it calls :meth:`revoke_all_for_agent`), so nothing in production
+        depends on that behaviour today; it is kept so a future whole-set reader
+        cannot be silently truncated, and a serving path always passes a limit.
+        A total comes from :meth:`count_for_agent`, because a page-derived total
+        equals the page size and cannot tell a complete grant list from a
+        truncated one.
+
+        ``id`` breaks ``created_at`` ties. The window is an ``OFFSET``, so an
+        order that is not total lets one row appear twice while another is
+        skipped as the window shifts; grants made in the same instant are
+        exactly that case.
+        """
+        ...
+
+    def count_for_agent(self, agent_id: AgentId, *, status: DelegationStatus | None = None) -> int:
+        """Count an agent's delegations with a ``COUNT`` aggregate, not a page.
+
+        Scoped by ``agent_id`` for the same reason as the listing: an unscoped
+        count would disclose how many delegations another agent holds, and a
+        delegation names what a human consented to.
+        """
+        ...
 
     def list_active_for_delegator(self, user_id: UserId) -> list[DelegatedAuthorization]: ...
 
@@ -127,11 +192,57 @@ class ApprovalRequestRepository(Protocol):
 
     def list_pending_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]: ...
 
-    def list_for_agent(self, agent_id: AgentId) -> list[ApprovalRequest]:
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: ApprovalStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[ApprovalRequest]:
         """Every approval request for an agent, newest state included.
 
         The tool gateway needs *approved* requests, not only pending ones, so
         this is broader than :meth:`list_pending_for_agent`.
+
+        Bounded reads and server-side status selection (NEX-089)
+        -------------------------------------------------------
+
+        This list grows without bound: an agent's approval history is never
+        pruned, and every gateway invocation appends nothing but every *opening*
+        of a sensitive action does. The original signature returned the whole
+        history, and the reporting use case then filtered it in Python — so one
+        ``GET`` loaded every approval an agent had ever opened, in order to
+        return the ones with a particular status. That is the same unbounded
+        read NEX-086 fixed for the revocation history.
+
+        ``status`` selects in the store, not in the caller. ``ApprovalStatus``
+        is a stored column (:class:`ApprovalRequestRow.status`), never derived,
+        so filtering on it in SQL cannot disagree with filtering the same value
+        in Python — the consistency worry that keeps ``revoked_grants`` in Python
+        does not apply here.
+
+        ``limit=None`` keeps the whole-history behaviour that the tool gateway
+        depends on: it needs every live approval to decide whether an action is
+        authorised, so bounding it would break enforcement, not just reporting.
+        A serving path always passes a limit.
+        """
+        ...
+
+    def count_for_agent(self, agent_id: AgentId, *, status: ApprovalStatus | None = None) -> int:
+        """The exact number of an agent's approval requests, without loading them.
+
+        A paged report must state the size of the *set*, not of the page it
+        happened to return. Without this, ``meta.total`` came from ``len(items)``,
+        which for a bounded page equals the page size — so "this agent has 3
+        denied approvals" was indistinguishable from "the first 3 of many", and
+        an auditor reading a window could not tell a complete answer from a
+        truncated one. That is the reassuring-direction error NEX-086 removed from
+        the revocation history.
+
+        ``status`` must match the filter the page used, or the total bounds a
+        different set than the page and ``offset + len(page) < total`` decides
+        "there is another page" from two inconsistent numbers.
         """
         ...
 
@@ -192,6 +303,20 @@ class ToolInvocationRepository(Protocol):
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[ToolInvocation]: ...
 
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """How many entries this agent's trail holds, for the page's metadata.
+
+        Exists so a paginated listing can say "showing 50 of 3,412" instead of
+        "showing 50". Deriving the total from ``len(rows)`` cannot work: a page
+        is capped, so the count would equal the page size on every page and a
+        reader could not tell a complete trail from a window over a larger one.
+        One indexed aggregate answers the question the page cannot.
+
+        Scoped by agent for the same reason as :meth:`list_for_agent`: a count
+        is a fact about another user's trail too, so it is never global.
+        """
+        ...
+
     def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
         """The position and predecessor hash for this agent's next entry.
 
@@ -244,6 +369,20 @@ class AgentRunRepository(Protocol):
     def list_for_agent(
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[AgentRun]: ...
+
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """How many runs this agent has, for the page's metadata.
+
+        Exists so a paginated listing can say "showing 50 of 1,208" instead of
+        "showing 50". Deriving the total from ``len(rows)`` cannot work: the
+        listing is capped, so a page-derived total equals the page size on every
+        page and a reader cannot tell a complete history from a window over a
+        larger one.
+
+        Scoped by agent for the same reason as :meth:`list_for_agent`: a count is
+        a fact about another agent's activity too, so it is never global.
+        """
+        ...
 
     def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
         """Runs for this agent that stopped without reaching a terminal state."""

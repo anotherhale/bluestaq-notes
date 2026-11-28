@@ -28,6 +28,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 from notes_service.domain.errors import InvariantViolation, ValidationError
+from notes_service.domain.identity.assurance import AuthenticationAssurance
 from notes_service.domain.identity.value_objects import (
     LoginTransactionId,
     SessionId,
@@ -176,6 +177,10 @@ class UserSession:
     provider: str
     subject: str
     token_hash: str
+    #: How strongly the human authenticated when this session was established
+    #: (ADR-015). Fixed at login: a session cannot raise its own assurance, so a
+    #: step-up requirement must be met by a fresh login, not by a later call.
+    assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR
     created_at: datetime = field(default_factory=_utcnow)
     last_seen_at: datetime = field(default_factory=_utcnow)
     idle_expires_at: datetime = field(default_factory=_utcnow)
@@ -201,6 +206,7 @@ class UserSession:
         idle_ttl: timedelta,
         absolute_ttl: timedelta,
         now: datetime | None = None,
+        assurance: AuthenticationAssurance = AuthenticationAssurance.SINGLE_FACTOR,
     ) -> UserSession:
         """Create a session for a freshly authenticated user.
 
@@ -218,6 +224,7 @@ class UserSession:
             provider=provider,
             subject=subject,
             token_hash=hash_session_token(token),
+            assurance=assurance,
             created_at=moment,
             last_seen_at=moment,
             idle_expires_at=moment + idle_ttl,

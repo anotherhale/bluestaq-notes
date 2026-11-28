@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
-from notes_service.application.errors import ResourceNotFound
+from notes_service.application.errors import InvalidInput, ResourceNotFound
 from notes_service.application.use_cases.audit_sweep import SweepAuditIntegrity
 from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.domain.identity.principal import Principal
@@ -124,9 +124,9 @@ def _note(client: TestClient, *, owner: str = ALICE) -> str:
     return response.json()["id"]
 
 
-def _agent_with_one_denial(client: TestClient, *, owner: str = ALICE) -> str:
+def _agent_with_one_denial(client: TestClient, *, owner: str = ALICE, name: str = "Auditor") -> str:
     """An agent whose single trail entry is a *denied* attempt — the cheapest forgery target."""
-    agent_id = _register_agent(client, owner=owner)
+    agent_id = _register_agent(client, owner=owner, name=name)
     secret = _secret(client, agent_id, owner=owner)
     _invoke(client, secret, "k-denied", tool=CREATE, arguments={"title": "x", "content": "y"})
     return agent_id
@@ -210,3 +210,88 @@ class TestTheSweepReportsWhatItFinds:
         assert report.broken == ()
         # The unexamined agent could be broken; a partial pass is not a pass.
         assert report.verified is False
+
+
+class TestACappedSweepCanBeFinished:
+    """NEX-081: a cap with no cursor excluded every agent past it, permanently.
+
+    The sweep walks oldest-first, so the excluded agents were the newest ones —
+    exactly the trails written most recently, and so the likeliest to have been
+    tampered with. The cap bounded one response; it should never have bounded
+    the check.
+    """
+
+    def test_the_cap_offers_a_cursor_and_the_cursor_reaches_the_rest(
+        self, client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        _register_agent(client, name="First")
+        _register_agent(client, name="Second")
+
+        first_page = _use_case(session_factory, max_agents=1).run(_principal(ALICE))
+        assert first_page.agents_checked == 1
+        assert first_page.truncated is True
+        assert first_page.offset == 0
+        assert first_page.next_offset == 1
+
+        second_page = _use_case(session_factory, max_agents=1).run(
+            _principal(ALICE), offset=first_page.next_offset
+        )
+        assert second_page.agents_checked == 1
+        assert second_page.offset == 1
+        assert second_page.truncated is False
+        assert second_page.next_offset is None
+        # The whole point: the agent page 1 could not reach is on page 2.
+        assert [finding.agent_id for finding in second_page.broken] == []
+
+    def test_a_break_only_on_the_second_page_is_found_by_continuing(
+        self, client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        """The newest agent is tampered with — invisible to a first-page-only sweep."""
+        _register_agent(client, name="First")
+        newest = _agent_with_one_denial(client, owner=BOB, name="Newest")
+
+        with session_factory() as session:
+            session.execute(
+                update(ToolInvocationRow)
+                .where(ToolInvocationRow.idempotency_key == "k-denied")
+                .values(status="succeeded")
+            )
+            session.commit()
+
+        first_page = _use_case(session_factory, max_agents=1).run(_principal(ALICE))
+        assert first_page.broken == ()
+        assert first_page.next_offset == 1
+
+        second_page = _use_case(session_factory, max_agents=1).run(
+            _principal(ALICE), offset=first_page.next_offset
+        )
+        (finding,) = second_page.broken
+        assert finding.agent_id == newest
+
+    def test_a_clean_second_page_is_not_an_all_clear(
+        self, client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        """Reaching the end of the deployment on page 2 says nothing about page 1."""
+        _register_agent(client, name="First")
+        _register_agent(client, name="Second")
+
+        second_page = _use_case(session_factory, max_agents=1).run(_principal(ALICE), offset=1)
+
+        assert second_page.broken == ()
+        assert second_page.truncated is False
+        assert second_page.verified is False
+
+    def test_a_negative_offset_is_refused(
+        self, client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        _register_agent(client, name="First")
+
+        with pytest.raises(InvalidInput):
+            _use_case(session_factory).run(_principal(ALICE), offset=-1)
+
+    def test_the_negative_offset_gate_runs_after_authorisation(
+        self, client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        """A non-operator must not learn that ``offset`` is validated at all."""
+        with pytest.raises(ResourceNotFound):
+            _use_case(session_factory).run(_principal(BOB), offset=-1)

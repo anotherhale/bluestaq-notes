@@ -521,12 +521,37 @@ class InviteOrganizationMember(OrganizationUseCase):
             raise AccessDenied("cannot assign a role more privileged than your own")
 
 
+@dataclass(frozen=True, slots=True)
+class OrganizationMemberPage:
+    """One page of an organization's roster plus the set's exact size.
+
+    ``total`` is counted, never ``len(items)``. There is no per-organization
+    member cap, so an unpaged read grows with the tenant; and a page-derived
+    total cannot tell a complete roster from the first 50 of 300, which is
+    exactly the judgement a paged consumer has to make.
+    """
+
+    items: list[OrganizationMembership]
+    total: int
+
+
 class ListOrganizationMembers(OrganizationUseCase):
-    """List the members of an organization."""
+    """List a page of the members of an organization.
+
+    Bounded and paged for the same reason the agent listing is: an owner can
+    invite members in a loop, so an unpaged read is a database read and a
+    response body that any authenticated member can grow without bound. The
+    window is ``(created_at, id)`` so pages are disjoint.
+    """
 
     def run(
-        self, principal: Principal, *, organization_id: OrganizationId
-    ) -> list[OrganizationMembership]:
+        self,
+        principal: Principal,
+        *,
+        organization_id: OrganizationId,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> OrganizationMemberPage:
         with self._uow_factory() as uow:
             organization, membership = self._load_organization(
                 uow, organization_id=organization_id, principal=principal
@@ -536,7 +561,11 @@ class ListOrganizationMembers(OrganizationUseCase):
                 membership=membership,
                 permission=OrgPermission.VIEW_ORGANIZATION,
             )
-            return uow.organization_memberships.list_for_organization(organization.id)
+            items = uow.organization_memberships.list_for_organization(
+                organization.id, limit=limit, offset=offset
+            )
+            total = uow.organization_memberships.count_for_organization(organization.id)
+            return OrganizationMemberPage(items=items, total=total)
 
 
 class ChangeMemberRole(OrganizationUseCase):

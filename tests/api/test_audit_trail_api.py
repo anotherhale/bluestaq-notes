@@ -24,13 +24,15 @@ CREATE = "create_note"
 TOOL_GATEWAY = "tool-gateway"
 
 
-def _register_agent(client: TestClient, *capabilities: str) -> str:
+def _register_agent(
+    client: TestClient, *capabilities: str, runtime_identity: str = "svc-auditor"
+) -> str:
     response = client.post(
         "/api/v1/agents",
         headers=auth_headers(ALICE),
         json={
             "display_name": "Auditor",
-            "runtime_identity": "svc-auditor",
+            "runtime_identity": runtime_identity,
             "capabilities": list(capabilities),
         },
     )
@@ -170,6 +172,73 @@ class TestAuditTrailHttp:
         assert len(first.json()["items"]) == 2
         assert first.json()["meta"]["limit"] == 2
         assert len(second.json()["items"]) == 1
+
+    def test_meta_total_is_the_whole_trail_not_the_window(self, client: TestClient) -> None:
+        # meta.total answers "how many attempts does this trail hold", which is
+        # what an auditor needs to know a page is a page. Reporting len(items)
+        # made a bounded window claim to be the whole trail: the first page of
+        # three said 2, the second said 1, and neither number survived turning a
+        # page. The count is the trail's, so it stays 3 on every page.
+        note_id = _create_note(client)
+        agent_id = _register_agent(client, READ)
+        secret = _token_for(client, agent_id, READ)
+        for index in range(3):
+            _invoke(client, secret, f"k-total-{index}", tool=READ, arguments={"note_id": note_id})
+
+        first = client.get(
+            f"/api/v1/agents/{agent_id}/tool-invocations?limit=2&offset=0",
+            headers=auth_headers(ALICE),
+        )
+        second = client.get(
+            f"/api/v1/agents/{agent_id}/tool-invocations?limit=2&offset=2",
+            headers=auth_headers(ALICE),
+        )
+
+        assert first.status_code == 200, first.text
+        assert len(first.json()["items"]) == 2
+        assert first.json()["meta"]["total"] == 3
+        assert len(second.json()["items"]) == 1
+        assert second.json()["meta"]["total"] == 3
+
+    def test_meta_total_counts_only_this_agents_trail(self, client: TestClient) -> None:
+        # Both agents belong to Alice, so ownership cannot distinguish them; only
+        # the count's agent scope can. A count without that scope is a fact about
+        # every trail in the database, and it would answer "how much has anyone
+        # done" to a caller who asked about one agent. It would also inflate this
+        # page's total past the entries the caller is entitled to see.
+        note_id = _create_note(client)
+        busy_agent = _register_agent(client, READ, runtime_identity="svc-busy")
+        busy_secret = _token_for(client, busy_agent, READ)
+        for index in range(3):
+            _invoke(
+                client, busy_secret, f"k-busy-{index}", tool=READ, arguments={"note_id": note_id}
+            )
+        quiet_agent = _register_agent(client, READ, runtime_identity="svc-quiet")
+        quiet_secret = _token_for(client, quiet_agent, READ)
+        _invoke(client, quiet_secret, "k-quiet-0", tool=READ, arguments={"note_id": note_id})
+
+        busy = client.get(
+            f"/api/v1/agents/{busy_agent}/tool-invocations", headers=auth_headers(ALICE)
+        )
+        quiet = client.get(
+            f"/api/v1/agents/{quiet_agent}/tool-invocations", headers=auth_headers(ALICE)
+        )
+
+        assert busy.json()["meta"]["total"] == 3
+        assert quiet.json()["meta"]["total"] == 1
+
+    def test_meta_total_is_zero_for_an_untouched_trail(self, client: TestClient) -> None:
+        # A count that only exists because a page was fetched would be at least
+        # as honest here as anywhere else; pin it so the empty case cannot drift.
+        agent_id = _register_agent(client, READ)
+
+        response = client.get(
+            f"/api/v1/agents/{agent_id}/tool-invocations", headers=auth_headers(ALICE)
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == []
+        assert response.json()["meta"]["total"] == 0
 
     def test_an_out_of_range_limit_is_rejected(self, client: TestClient) -> None:
         agent_id = _register_agent(client, READ)
