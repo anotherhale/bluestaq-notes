@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-96-closeout",
-  "timestamp": "2026-11-28T12:52Z",
+  "timestamp": "2026-11-28T13:06Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "87936d4fbfd223524cde2101b54cfc4848117bdf",
+  "commit": "bedc235e25d3569031db4a0e45e70a74557292ea",
   "product_commit": "87936d4fbfd223524cde2101b54cfc4848117bdf",
-  "commit_note": "`commit` is the last product commit, 87936d4, which is what the CI verdict is about. This close-out run changed docs only: the commit recording this checkpoint follows 87936d4, so the true branch head is that docs commit. A file cannot contain the hash of the commit that contains it: a one-commit lag is expected and correct, do not chase it.",
+  "commit_note": "`commit` is the docs head this checkpoint was written at, bedc235. The CI verdict of record is about the PRODUCT commit 87936d4 (4/4 on itself); every docs commit after it, including bedc235, was also confirmed 4/4. A file cannot contain the hash of the commit that contains it: the commit recording this checkpoint follows bedc235, a one-commit lag that is expected and correct. Do not chase it.",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-096 VERIFIED. NEX-096 is VERIFIED on the product commit 87936d4 itself.",
   "active_task": null,
   "task_statuses": {
@@ -61,12 +61,14 @@
   ],
   "next_task": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md and ROADMAP.md. The NEX-082..NEX-096 exact-total paging family is closed, nothing is in flight, and no verification debt remains: start a fresh vertical slice test-first.",
   "next_action": "Nothing is in flight. 1) Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md and start it test-first. 2) Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` (NOT `git rev-parse origin/<branch>`, a frozen snapshot in this clone). 3) Before any docs push, confirm the product commit's own CI has concluded: a docs push supersedes it in the concurrency group and a cancelled run is never evidence.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. On entry the live remote head is the docs commit recording this checkpoint, which follows cf51518 (resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, NOT `git rev-parse origin/<branch>`: this clone's remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot). The chain: 87936d4 (NEX-096 product) -> cf51518 (docs close-out) -> this checkpoint's commit. NEX-096 is VERIFIED: CI 4/4 completed/success on 87936d4 itself (runs 46145902373, 46145897805), and cf51518 is 4/4 too (runs 46146365871, 46146370519). Nothing is in flight. Never force-push, never merge, never touch main directly.",
-  "ci_status": "cf51518 (run-96 close-out docs head): 4/4 completed/success (runs 46146365871 push, 46146370519 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = cf51518). The docs commit is itself verified, not merely the product commit it describes. Prior: 87936d4 (NEX-096 product): 4/4 completed/success on the product commit itself (runs 46145902373 pull_request, 46145897805 push). Prior: c0e8628 4/4 (NEX-095 docs close-out, runs 46144188707, 46144183186); fb027ee 4/4 on itself (NEX-095 product, runs 46143797699, 46143793292).",
+  "recovery_instructions": "Branch feature/agentic-enterprise-platform. On entry the live remote head is the docs commit recording this checkpoint, which follows bedc235 (resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, NOT `git rev-parse origin/<branch>`: this clone's remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot). Chain: 87936d4 (NEX-096 product) -> cf51518 -> 5e0c926 -> bedc235 -> this checkpoint's commit; every commit after 87936d4 touched docs/NEXUS/ only. NEX-096 is VERIFIED: CI 4/4 completed/success on 87936d4 itself (runs 46145902373, 46145897805), and each docs head (cf51518, 5e0c926, bedc235) was also confirmed 4/4. Nothing is in flight. Never force-push, never merge, never touch main directly.",
+  "ci_status": "bedc235 (final run-96 close-out docs head): 4/4 completed/success (runs 46146653323 push, 46146658116 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = bedc235), verified per run and per job. Prior docs heads: cf51518 4/4 (46146365871, 46146370519); 5e0c926 4/4 (46146618423, 46146623296). The verdict of record: 87936d4 (NEX-096 product) 4/4 completed/success on the product commit itself (runs 46145902373 pull_request, 46145897805 push). Prior: c0e8628 4/4 (NEX-095 docs close-out); fb027ee 4/4 on itself (NEX-095 product).",
   "commits_this_run": [
     "87936d4 - feat(agents): bound and page the owner agent listing, with an exact total (product, run 96)",
     "cf51518 - docs(nexus): promote NEX-096 to VERIFIED on its own green CI (this close-out run; docs only)",
-    "(the commit recording this checkpoint follows cf51518: a file cannot contain the hash of the commit that contains it)"
+    "5e0c926 - docs(nexus): record the close-out docs-head CI verdict (docs only)",
+    "bedc235 - docs(nexus): annotate the run-96 PENDING sections as superseded (docs only; CI 4/4 verified and reported)",
+    "(the commit recording this checkpoint follows bedc235: a file cannot contain the hash of the commit that contains it)"
   ],
   "decisions_this_run": [
     "Paging and an exact total had to land together. Adding limit/offset alone would have turned an honest unpaginated len(items) total into a lying paginated one, which is the exact defect NEX-088 fixed in four sibling routes.",
