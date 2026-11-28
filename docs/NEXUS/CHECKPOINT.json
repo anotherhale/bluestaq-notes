@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-99",
-  "timestamp": "2026-11-28T15:00Z",
+  "run_id": "NEX-2026-11-28-99b",
+  "timestamp": "2026-11-28T14:52Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "20bd26730a80565f82298058c8edaf5aed9dd1f4",
+  "commit": "a4e1880 (docs record commit; parent 20bd267 carries the NEX-099 implementation). Remote head confirmed via git ls-remote, not via a cached ref.",
   "product_commit": "PENDING_ON_PUSH",
   "commit_note": "This run's product change and its docs ship in one commit, so there is no separate product/docs split as in run 98. `commit` is filled at close-out after the push; a file cannot contain the hash of the commit that contains it, so a one-commit lag here would be structural anyway. Resolve the live head with `git ls-remote`, never `git rev-parse origin/<branch>`, because this clone maps only refs/heads/main.",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-098 VERIFIED. NEX-099 (identity, tenant access on the demo path): VERIFIED at 20bd267 \u2014 implemented, tested, committed, pushed, CI 4/4 on both runs per job.",
@@ -26,7 +26,7 @@
     "load_bearing_probe": "git stash push on src/notes_service/infrastructure/identity/demo_provider.py only, then pytest on test_tenant_access_demo.py + test_organizations_api.py -> exactly 4 FAILED (all refusals), the 2 positive controls green. git stash pop, restored, green. Measured, not assumed.",
     "tests_reconciled_not_weakened": "The two org tests previously asserted 404 for a caller who had just lost their only membership, and passed only because the demo path let that caller stay authenticated. Expected statuses were NOT changed to 401; instead Bob was given a second active membership so the original 404/422 assertions now measure org invisibility and terminal offboarding. Changing the status would have silently redefined both tests to a weaker property."
   },
-  "uncommitted_work": true,
+  "uncommitted_work": "none - working tree clean at a4e1880",
   "ci_status": "PASSED for NEX-099 at head 20bd267. BOTH runs 4/4 completed/success, verified PER JOB: 46155922886 (push) and 46155928352 (pull_request), Backend 12/12 steps green, Frontend 11/11 steps green, zero failed, zero skipped in each. Prior: f4a2845 (NEX-098 product) and e9ccba4 (run-98 docs+test) were each 4/4 at their OWN head_sha.",
   "pr_state": {
     "number": 5,
@@ -36,7 +36,9 @@
     "head_ref_oid_now": "20bd26730a80565f82298058c8edaf5aed9dd1f4",
     "body_covers": "NEX-052..NEX-099. Two gh pr edit --body-file updates this run; each landed body was fetched back via the API and compared to the sent file (IDENTICAL after trailing-newline normalisation). The NEX-099 section now carries the per-job CI verdict. Head is 20bd267.",
     "merged": false,
-    "note": "Never merged by automation. Remains open for human review."
+    "note": "Never merged by automation. Remains open for human review.",
+    "head": "a4e1880",
+    "ci": "GREEN at a4e1880 for both events, per job. Prior head 20bd267 was also green (46155922886 push / 46155928352 pull_request)."
   },
   "tracking_issue": "Issue #2 open. NEX-099 was delivered as comment 7240863239 (status) and the VERIFIED verdict with CI evidence as comment 7240892866; both landed bodies were fetched back and compared to what was sent. Issue is NOT closed: its acceptance criteria are program-level.",
   "blockers": [],
@@ -48,9 +50,9 @@
     "A docs push supersedes a product run in the CI concurrency group; read the product commit's runs before pushing docs, or the verdict may be cancelled and unusable.",
     "The exact-total paging family (NEX-082..NEX-098) is CLOSED. Do not invent another paging slice. FoldersRepository.list_for_owner is deliberately unpaged; leave it alone."
   ],
-  "next_task": "Identity-path audit (standing P1). The tenant-access seam's enumeration of identity-establishing paths has now been wrong twice, so enumerate providers by grep over src/notes_service/infrastructure/identity/ rather than trusting the docstring list. Confirm each path calls ensure_tenant_access, and add a test that fails if a new provider is added without it.",
+  "next_task": "Identity-path audit, concretely: a structural test over src/notes_service/infrastructure/identity/ that fails when a provider is added without routing through ensure_tenant_access. The prose enumeration has been wrong twice; make it executable. Do not start with under 10 minutes left before DEADLINE.",
   "next_action": "1) `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the live head. 2) Observe CI on the commit this run pushes; promote NEX-099 to VERIFIED only on 4/4 completed/success at its OWN head_sha, read per run AND per job. 3) Append NEX-099 to PR #5 body with --body-file and read the landed body back. 4) Post the NEX-099 verdict to issue #2 and read it back. 5) Then select the next dependency-ready task; audit the identity-provider list by grep, not by docstring.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. This run ships NEX-099 (demo provider tenant access) as a single commit touching src/infrastructure/identity/demo_provider.py, src/application/use_cases/tenant_access.py (docstring), tests/authentication/test_tenant_access_demo.py (new), tests/api/test_organizations_api.py (two tests reconciled), and docs/NEXUS/. Nothing is in flight beyond this push. If the tree is dirty on entry, inspect before discarding: a prior run may have been killed at the 30-minute boundary with a coherent half-slice. Verify `git branch --show-current`; a fresh clone starts on main. Never force-push, never merge, never touch main directly.",
+  "recovery_instructions": "Read CHECKPOINT.json and STATE.md first; Git wins any disagreement. NEX-099 is VERIFIED and delivered (PR #5 body + issue #2 comment 7240892866). Next: implement the structural identity-provider test. Never merge PRs. Never push to main.",
   "decisions_this_run": [
     "The demo identity provider must obey the tenant-access seam. It is a live authentication path in dev and test, and tests/conftest.py's client runs against it; skipping the rule there teaches the suite a model production rejects.",
     "Reuse ensure_tenant_access rather than reading memberships in the provider. A second copy of the rule is how the five paths drifted apart.",
@@ -59,5 +61,5 @@
   ],
   "run_summary": "Run 99. Selected NEX-099 by dependency readiness, not pattern continuation: the checkpoint closed the paging family at NEX-098 and said to pick the next dependency-ready task. Auditing the tenant-access seam found the demo identity provider as an uncounted fifth identity path -- NEX-006 covered three human paths, NEX-017 added agent tokens as a fourth, and the demo provider checked only is_active. A suspended or deprovisioned membership therefore still authenticated in development, which is the same offboarding gap the earlier slices closed everywhere else. Fixed by routing the demo provider through ensure_tenant_access, corrected the docstring to five paths, added 6 tests (2 positive controls, 4 refusals), and proved the guard load-bearing by reverting the one source file (exactly 4 red, controls green). The subtler finding: two existing organization tests were green ONLY because of this defect -- they asserted a 404 for a caller who had lost their only membership, which passed only because the demo path let that caller stay authenticated past the boundary. Rather than change their expected status (which would have quietly weakened what they assert), each now gives Bob a second active membership so the original assertions test org invisibility and terminal offboarding as named. Gates run bare: ruff format 327 unchanged, ruff check clean, mypy 144 clean, pytest 1784 passed / 4 skipped.",
   "push_status": "PUSHED. git push 6e95ae2..20bd267 to origin/feature/agentic-enterprise-platform; remote head confirmed with `git ls-remote` (20bd26730a80565f82298058c8edaf5aed9dd1f4), not with rev-parse, because this clone's fetch refspec maps only refs/heads/main.",
-  "validation_status": "VERIFIED for NEX-099: implemented, tested, committed (20bd267), pushed (remote head confirmed by git ls-remote), CI 4/4 completed/success on BOTH runs (46155922886 push and 46155928352 pull_request) at that head, verified per job with zero failed and zero skipped."
+  "validation_status": "CI GREEN at a4e1880, verified per run AND per job. push 46156228708 conclusion=success (Frontend 11 steps, Backend 12 steps, 0 failed, 0 skipped); pull_request 46156232906 conclusion=success (same step counts, 0 failed, 0 skipped). Local: ruff format --check 327 files formatted, ruff check clean. pytest NOT re-run this run because no production file changed; the 1784 passed / 4 skipped verdict belongs to 20bd267."
 }

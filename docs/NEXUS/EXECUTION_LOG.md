@@ -12108,3 +12108,78 @@ Select the next dependency-ready task from `docs/NEXUS/BACKLOG.md`. The standing
 identity-path audit: the tenant-access seam's enumeration has now been wrong twice, so grep for
 identity providers rather than trusting the docstring list. Confirm the `pull_request` run
 `46155928352` concluded green before quoting CI for the PR.
+
+## Run NEX-2026-11-28-99b — delivery close-out for NEX-099
+
+| Field | Value |
+| --- | --- |
+| Started | 2026-11-28T14:31Z (`RUN_START` 1795876264) |
+| Ended | 2026-11-28T14:52Z (elapsed 969s of a 1500s window) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `20bd267` |
+| Ending commit | `a4e1880` |
+| Phase | P1 Foundational — identity and tenant access |
+
+### Tasks
+
+- **NEX-099 — delivery close-out only.** The implementation landed in the previous run at `20bd267`
+  with CI green. This run corrected the coordinator record, published the CI verdict to PR #5 and
+  issue #2, and re-verified CI at the new head. No production code changed this run.
+- No new slice started. Elapsed was 969s at the point the previous slice's integration finished,
+  leaving 531s — below the 10-minute floor for starting a second slice.
+
+### What was corrected (and why it mattered)
+
+The checkpoint `project_phase` string still described NEX-099 as pending and CI-unverified *after*
+the code had shipped and CI had gone green. That is the failure mode where a coordination file
+asserts a present status that repository evidence contradicts; a later run reading only the
+checkpoint would have redone work that was already done. Found by grepping for stale present-status
+words rather than by reading the file for correctness.
+
+### Delivery artifacts
+
+| Artifact | Detail |
+| --- | --- |
+| PR #5 body | Added a per-run **and per-job** CI table for `20bd267`; footer corrected from "comment" to "pull request description". Landed body fetched back and compared to the sent file — identical after trailing-newline normalisation. |
+| Issue #2 comment | `7240892866` — the VERIFIED verdict with per-status evidence and the load-bearing-test proof. Landed body fetched back and compared — identical. |
+
+### Validation
+
+- `ruff format --check`: 327 files already formatted (repo-wide, includes Python in Markdown fences).
+- `ruff check`: all checks passed.
+- No pytest re-run: no production file changed this run. The suite verdict for `20bd267` stands as
+  recorded, and CI re-ran the full suite anyway (see below).
+
+### CI at the ending commit `a4e1880`
+
+Both runs verified per run **and per job**:
+
+| Run | Event | Conclusion | Frontend job | Backend job |
+| --- | --- | --- | --- | --- |
+| `46156228708` | push | success | 11 steps, 0 failed, 0 skipped | 12 steps, 0 failed, 0 skipped |
+| `46156232906` | pull_request | success | 11 steps, 0 failed, 0 skipped | 12 steps, 0 failed, 0 skipped |
+
+### Decisions
+
+- **D-099b:** Treated the docs commit as invalidating the `20bd267` CI verdict for the head. Rather
+  than argue that a docs-only commit cannot break the build — it can, because CI formats Python
+  inside Markdown fences — CI was re-read at `a4e1880` and only then quoted.
+
+### Risks
+
+- The identity path enumeration is still a hand-maintained list. NEX-099 found a fifth path by
+  accident. Until a test asserts *every* provider in `infrastructure/identity/` calls
+  `ensure_tenant_access`, a sixth path can be added silently. This is the next unit of work.
+
+### Next action
+
+Select the next dependency-ready task from `docs/NEXUS/BACKLOG.md`. The standing P1 is the
+identity-path audit, and the concrete shape it should take is a structural test over
+`src/notes_service/infrastructure/identity/` that fails when a provider is added without routing
+through `ensure_tenant_access` — an executable assertion instead of a prose enumeration that has now
+been wrong twice. Do not start it with less than 10 minutes on the clock.
+
+### Checkpoint status
+
+`docs/NEXUS/CHECKPOINT.json` valid JSON, updated atomically via temp file + `os.replace`. Working
+tree clean after `a4e1880`; remote head confirmed by `git ls-remote`.
