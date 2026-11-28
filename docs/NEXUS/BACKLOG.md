@@ -4742,3 +4742,74 @@ skipped).
 **Residual limit:** a static proof, not a runtime one. A use case could call `authorize` and then
 read data belonging to a different operation; the ordering test catches the realistic shape, not
 every possible one. The use-case tests remain the behavioural evidence.
+
+---
+
+## NEX-102 — Pin that caller identity never arrives in a request body (run `NEX-2026-11-28-104`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | **P1** (authorization / trust boundary) |
+| Status | **PUSHED** at product `14b2a67`; CI verdict pending at time of writing (promote to VERIFIED only after reading CI per run/per job/per step) |
+| Dependencies | none (independent of NEX-099b/100/101; a fourth, distinct control) |
+| Complexity | Low-medium (test-only; 610 lines, no product source) |
+
+**Objective:** convert "no `owner_id` or caller identity is ever taken from a request body"
+from a documented convention into a derived, fail-loud guarantee.
+
+**Architecture refs:** `ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (trusted actor context),
+`ADR-008` (404 vs 403), repo `AGENTS.md` security invariants.
+
+**Why it was open.** The invariant held, but only by prose in the routers and two spot-check
+tests that each named one rejected field (`published_by` on a note, `owner_id` on an agent).
+Three concrete defects would have survived review:
+1. The next request model written on a base without `extra="forbid"` — an undeclared `owner_id`
+   in the body would then be silently dropped *or*, worse, accepted by a model that declared it.
+2. A new model declaring an actor field itself.
+3. A route copying the caller out of its payload into a use case.
+
+**The guard** (`tests/architecture/test_request_body_identity.py`, 11 tests, 44 cases):
+
+- **Discovery by annotation, not by name.** Body models are found by what the route *binds*,
+  not by a `*Request` suffix, so a deliberately misnamed body model is still found. The
+  `PrincipalDep` alias is resolved from `dependencies.py`'s module-level names, so precedence is
+  semantic rather than name-based.
+- **Guarantee 1 — unknown fields rejected.** Every wire-bound model forbids extra fields,
+  resolved through its base *by name* so a model cannot hide behind a subclass; plus a test that
+  the base itself still forbids them.
+- **Guarantee 2 — no actor field.** No wire-bound model declares an actor-shaped field.
+  `user_id` is deliberately not in the actor pattern: on this platform it is always the *target*
+  of a share/admin action, and the behavioural suites already pin that a caller may grant to
+  another user without acting as them.
+- **Guarantee 3 — identity from a dependency.** All 73 positional use-case invocations take their
+  identity from a `PrincipalDep`-annotated parameter, and no use-case argument is an actor-shaped
+  attribute read from a body (`payload.owner_id`).
+- **Anti-vacuity, explicitly:**
+  - `test_every_body_payload_resolves_to_a_known_schema_model` fails if a route binds a model not
+    declared in `schemas.py`, so a blind spot cannot open silently. *This caught real helpers*
+    (`_page`, `_set_session_cookie`) during development, which is why the scan is now scoped to
+    decorated route handlers.
+  - `test_no_use_case_invocation_escapes_the_route_scan` forbids a module-level helper from
+    invoking a use case where the identity scan cannot see it.
+  - The one body-credential exemption (token introspection: the presented `secret` is the
+    *subject* of the call, not authority over it) is a named entry in
+    `BODY_CREDENTIAL_INTROSPECTION`, and `test_body_credential_exemptions_are_still_real` fails
+    once it stops matching a real call.
+
+**Load-bearing, measured:** (1) `owner_id` added to `NoteCreateRequest` → red; (2)
+`extra="forbid"` removed from `StrictModel` → red; (3) `principal` replaced by `payload` in
+`create_note` → red. Tree restored (`git checkout`) after each; empty diff confirmed before the
+real commit.
+
+**Tests:** full suite **1941 passed / 0 failed / 0 errors / 4 skipped**; `ruff format --check`
+331 files, `ruff check` clean, `mypy` 144 files clean — all bare, as CI runs them.
+
+**Residual limit:** a static proof. It cannot see a body model evaluated at runtime, and it
+believes the annotation: a route that type-hints a dependency it does not actually receive would
+satisfy the scan. The behavioural authorization suites remain the runtime evidence.
+
+**Note for later runs.** `resolve_agent_token` calls `run(secret=payload.secret, ...)` with no
+positional identity. That is correct — it is introspection — and is the single audited exemption.
+Do not "fix" it by routing a principal into it, and do not widen the rule to cover it.
+

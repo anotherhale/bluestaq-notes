@@ -12741,3 +12741,77 @@ NEX-101). Preferred shape: extend the structural-guard approach to a control tha
 convention, or close a P2 agent-platform gap. Prove the guard load-bearing by mutation, run the gates
 bare, commit, push, read CI at the product commit per run/per job/per step, then deliver to PR #5 and
 issue #2 and read both back.
+
+---
+
+## Run `NEXUS-2026-11-28-104` — NEX-102: caller identity is never built from a body
+
+**Run ID:** `NEXUS-2026-11-28-104`
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `047d730` (live remote head, `git ls-remote`)
+**Ending product commit:** `14b2a67` (`tests/architecture/test_request_body_identity.py`)
+**Phase:** 3 (governance) — P1 authorization trust boundary
+
+**Task selected.** The checkpoint's `next_action` named the exact shape to pick: extend the
+structural-guard approach to a control that still relies on convention. The invariant "no
+`owner_id` or caller identity is ever taken from a request body" is written in the repo's
+`AGENTS.md` invariants and in three router docstrings, and is spot-checked by two tests that each
+name one rejected field. Nothing structurally prevented the next model or route from violating it.
+This is a *fourth*, distinct control — not route authentication (NEX-100), not identity providers
+(NEX-099b), not the operator gate (NEX-101). The distinction is recorded here, in the backlog row,
+and in `DECISIONS.md`.
+
+**Ground truth established before writing the guard**, via throwaway probes (deleted, never
+committed): 36 request models all inherit `StrictModel` with `extra="forbid"`; 73 positional
+use-case invocations in routers, 73/73 taking `principal` first; 73/73 of those annotations are
+`PrincipalDep` — so `PrincipalDep` is a semantic alias, not a naming convention, and discovery on
+it is precise. `PrincipalDep = Annotated[Principal, Depends(get_principal)]`
+(`presentation/dependencies.py:47`).
+
+**The guard** (`tests/architecture/test_request_body_identity.py`, 610 lines, 11 tests, 44 cases)
+derives three guarantees from the source tree: every wire-bound model forbids unknown fields
+(resolved through its base by name); no such model declares an actor-shaped field; every use-case
+invocation takes its identity from a `PrincipalDep`-annotated parameter (or, for the agent
+gateway, a trusted keyword dependency) and never from a body attribute.
+
+**Two genuine ambiguities surfaced, and both were closed by narrowing the rule rather than
+widening it.**
+1. A first version of discovery used a `*Request`/`Request` name heuristic, which would have
+   passed for the wrong reason. Replaced with route-annotation discovery plus
+   `test_every_body_payload_resolves_to_a_known_schema_model`, which fails if any route binds a
+   model not declared in `schemas.py`. That new test immediately caught four non-model bindings
+   in real *helpers* (`_page`, `_set_session_cookie`, `_require_login_enabled`), proving the scan
+   had been about to include functions FastAPI never serves. Fixed by scoping the scan to
+   decorated route handlers, and added
+   `test_no_use_case_invocation_escapes_the_route_scan` so a helper cannot silently take a
+   use-case call out of the scan's view.
+2. `resolve_agent_token` passes `secret=payload.secret` with no positional identity. That is
+   token introspection, where the body's secret is the *subject* of the call, not a claim of
+   authority. Rather than widen the rule ("a body may carry a credential") — which is exactly the
+   hole the module exists to close — it is one named entry in `BODY_CREDENTIAL_INTROSPECTION`,
+   and `test_body_credential_exemptions_are_still_real` fails once the entry stops matching a
+   real call.
+
+**Load-bearing, measured — not asserted.** Three mutations, each turning the suite red, each
+reverted with `git checkout` and an empty diff confirmed before the real commit:
+`owner_id` added to `NoteCreateRequest` → red on the actor-field test;
+`extra="forbid"` removed from `StrictModel` → red on both strictness tests;
+`principal` replaced by `payload` in `create_note` → red on the identity test.
+
+**Gates, bare, exactly as CI runs them.** `ruff format` (reformatted the new file; then
+`ruff format --check` clean at 331 files), `ruff check` clean, `mypy` 144 source files clean,
+full `pytest` **1941 passed / 0 failed / 0 errors / 4 skipped** (exit 0).
+
+**Incidents.** Prose was routed through a shell heredoc twice this run — the commit message
+first, then this log entry — and self-interleaved both times, exactly as the incoming checkpoint's
+risk list warned. Each was interrupted, the affected file restored (`git checkout --`, no product
+change was at risk), and the text rewritten through the file editor. The log file was restored to
+its exact prior length (12743 lines) before the clean append. No prose goes through a heredoc on
+this host.
+
+**Push.** `14b2a67` pushed and confirmed with `git ls-remote` (remote head equals local HEAD).
+
+**Next exact action.** Poll CI at `14b2a67` per run, per job, per step (`gh run view <id> --json
+jobs`), promote NEX-102 from PUSHED to VERIFIED only on `completed/success`, then deliver to
+PR #5 and issue #2 and read both back from the API.
+

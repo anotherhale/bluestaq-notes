@@ -451,3 +451,63 @@ run reading only the family names would otherwise treat it as a duplicate.
 `authorize` and then read data belonging to a different operation; the ordering test catches the
 realistic shape of that defect (a read before the gate), not every possible one. The use-case tests
 remain the behavioural evidence.
+
+---
+
+## NEX-102 — Caller identity is never built from a request body (run `NEXUS-2026-11-28-104`)
+
+*Decision: the "no caller identity in a body" invariant becomes a derived structural guarantee
+rather than a documented one, and two ambiguities were closed by narrowing the rule rather than
+widening it.*
+
+The invariant was real but only conventional. `AGENTS.md` states it, three router docstrings restate
+it, and two spot-check tests each name a single rejected field. Nothing prevented the next request
+model, or the next route, from violating it — and three concrete defects would have survived review:
+a model on a base without `extra="forbid"`, a model declaring an actor field, or a route copying the
+caller out of its payload. `tests/architecture/test_request_body_identity.py` now derives three
+guarantees from the source tree, covering all three.
+
+*Discovery is by annotation, not by name.* An early version classified body models by a
+`*Request`/`Request` suffix. That would have passed for the wrong reason: a misnamed body model
+would simply not be classified, and the suite would stay green. It was replaced with discovery from
+what each route actually binds. The replacement immediately surfaced four non-model bindings inside
+real route helpers (`_page`, `_set_session_cookie`, `_require_login_enabled`) — proof that the scan
+had been about to include functions FastAPI never serves, and that the new
+`test_every_body_payload_resolves_to_a_known_schema_model` fails loudly rather than quietly skipping
+what it cannot classify. The scan is now scoped to decorated route handlers, with
+`test_no_use_case_invocation_escapes_the_route_scan` preventing a helper from hiding a use-case call
+outside that scope.
+
+*One exemption, named and audited — not a rule widened.* `resolve_agent_token` passes
+`secret=payload.secret` with no positional identity. That is token introspection: the presented
+secret is the *subject* of the call, not a claim of authority over it. The tempting move is to add
+"a body may supply a credential" to the rule. That is exactly the shape of the hole this module
+exists to close. Instead the exemption is a single entry in `BODY_CREDENTIAL_INTROSPECTION`, and
+`test_body_credential_exemptions_are_still_real` fails once that entry stops matching a real call —
+so the audit trail cannot silently become a rubber stamp.
+
+*`user_id` is deliberately excluded from the actor-field pattern.* On this platform `user_id` in a
+body is always the *target* of a share or administrative action, never the caller asserting its own
+identity. The behavioural suites already pin that a caller may grant access to another user without
+acting as them. Including `user_id` would have produced a false positive, and the pressure to
+silence a false positive is how a real assertion gets weakened. The exclusion is written here so the
+next run does not "fix" it.
+
+*Distinct from the three closed controls.* NEX-099b guards identity *providers*, NEX-100 guards
+route *authentication*, NEX-101 guards the operator *scope check*. NEX-102 guards the trusted-actor
+**transport**: identity must arrive from a dependency, never from the payload. Four different
+controls, all P1, none a re-open.
+
+*Load-bearing, measured.* Three mutations, each red, each restored with an empty diff confirmed
+before the real commit: an actor field on `NoteCreateRequest`; `extra="forbid"` removed from
+`StrictModel`; `principal` replaced by `payload` in `create_note`.
+
+*Residual limit, stated plainly.* A static proof. It believes the annotation — a route that
+type-hints a dependency it does not actually receive would satisfy the scan — and it cannot see a
+body model constructed at runtime. The behavioural authorization suites remain the runtime evidence.
+
+*Status discipline.* The slice was written down as PUSHED, not VERIFIED, while CI at the product
+commit was still running, and was not delivered to PR #5 or issue #2 until that verdict existed. An
+earlier draft of the backlog row said VERIFIED before CI had concluded; it was corrected. Recording
+a status you cannot yet evidence is the failure mode this whole file exists to prevent.
+

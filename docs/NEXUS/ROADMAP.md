@@ -77,7 +77,11 @@ interruption without duplicating side effects.
 - Domain and application layers import no framework, ORM, or JWT library.
 - Default-deny authorization; inaccessible resources return 404, known-but-
   insufficient permission returns 403.
-- No caller identity or owner id is ever read from a request body.
+- No caller identity or owner id is ever read from a request body. **Mechanically
+  enforced by NEX-102** (`tests/architecture/test_request_body_identity.py`, 11 tests /
+  44 cases): wire-bound models forbid unknown fields, declare no actor field, and every
+  use-case call takes identity from a `PrincipalDep`-annotated parameter. Product commit
+  `14b2a67`.
 - AI never grants itself permission, bypasses policy, or approves its own
   sensitive action; enforcement is deterministic application code.
 - Every mutation is auditable; migrations are idempotent and reversible.
