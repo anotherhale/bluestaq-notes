@@ -221,7 +221,10 @@ user is the one refused.
 
 Local gates green: ruff format/check clean, mypy clean over 143 files, full pytest exit 0,
 66 targeted tests. **CI on `c16dd9b` was still `in_progress` at the stop boundary** —
-NEX-083 is COMMITTED + PUSHED, not VERIFIED. Polling it is the next run's first action.
+NEX-083 is COMMITTED + PUSHED, **not VERIFIED at the time this section was written**.
+Polling it was run 84's first action, and it **succeeded**: `453e134` concluded 2/2
+`completed/success` over NEX-083's exact product tree, so **NEX-083 is VERIFIED** (see the
+run-84 reconciliation below). Kept as written for the record, with the outcome appended.
 
 ## NEX-082 (run `NEX-2026-11-28-82`) — the access trail was capped, so most of it was unreadable
 
