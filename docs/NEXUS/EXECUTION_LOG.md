@@ -9562,3 +9562,79 @@ file *untouched* (verified: 82 lines, zero corruption markers, the intended edit
 repo was never damaged, but a run that had trusted the exit status would have believed it fixed
 something it had not. `file_editor` did the same edit in one call. Third recorded occurrence of
 this exact failure; it is now the standing rule.
+
+---
+
+## Run `NEX-2026-11-27-80` — 2026-11-28T04:31Z
+
+**Branch** `feature/agentic-enterprise-platform` · **Start** `3d0fb3d` · **Product**
+`9336ba3` · **Run ID** `NEX-2026-11-27-80`
+
+### Task: NEX-080 — make revocation provenance readable
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED. CI UNVERIFIED at run end.**
+
+**The gap.** NEX-079 wrote a revocation as an attributable fact on the grant —
+`revoked_at`, `revoked_by`, kept on the row rather than deleted — so that "who removed
+whose authority, and when" could be answered. Nothing read it. The write was durable and the
+read did not exist: the same half-built loop NEX-076/NEX-077 closed for `rationale`. An
+operator could see a grant was gone without learning who ended it.
+
+**Delivered — the read side, no new authority.**
+
+- `OperatorGrantRepository.revoked_grants()` on the port, implemented by both adapters
+  (in-memory and SQLAlchemy), filtered by the domain's own `is_revoked` predicate so "this row
+  records a revocation" is defined in one place, exactly as `is_active` already is.
+- `ListRevokedOperatorGrants`, gated by the existing `operator-access-report` scope. Reading the
+  platform's removal history is the authority the holder report already needs; minting a fifth
+  token for one question would force every auditor to be granted twice.
+- `GET /api/v1/ops/operator-grants/revoked`. Non-operators get `404`, as everywhere in `/ops`.
+- `revoked_at`/`revoked_by` added to `OperatorGrantDetail`, so the holdings view can show a
+  grant's whole life, not only its live state.
+
+**Why a separate endpoint and not a filter.** The holdings report answers "who holds what now";
+a revocation is history. Folding them into one shape forces a reader to distinguish "live",
+"expired" and "revoked" out of nullable fields. Two questions, two answers. A grant that merely
+lapsed on its own is in neither list: expiring and being taken away are different facts.
+
+**Two NEX-079 defects, found by running the full suite and fixed here.** Both are the same
+mistake — `revoked_by` and `granted_by` are `ON DELETE SET NULL`, and the surrounding validation
+assumed those columns only ever hold what a writer supplies.
+
+1. The revocation `CHECK` required both columns together. Deleting an account that had revoked a
+   grant made `SET NULL` write `revoked_by = NULL` onto a row keeping `revoked_at`, which the
+   CHECK refused — so **no account holding revocation history could be deleted at all**, and it
+   surfaced as a raw `IntegrityError`. Migration `a91c6f0d4b27` keeps only the incoherent half
+   (a named revoker with no instant). An instant outliving its actor is the correct
+   post-deletion state and the entire reason the FK is `SET NULL` rather than `CASCADE`.
+2. The domain refused `granted_by=None` beside a non-NULL `rationale`, reading it as a
+   configuration grant inventing a reason. That shape is also what deleting an *issuer*
+   produces, and refusing it made every read of the store — the operator gate lookup included —
+   raise `ValidationError`. One account deletion was an outage of the whole `/ops` surface. The
+   write-time rule is not lost; it lives where a human supplies the pair, in
+   `IssueOperatorGrant` (rationale required) and the configuration seed (rationale forbidden).
+
+Neither defect was reachable by the new tests; both were found by the neighbouring suites. Same
+lesson as NEX-079, one run later: a slice's own tests say nothing about what it does to code it
+does not touch.
+
+**Migration.** `a91c6f0d4b27` drops `revocation_is_attributable`, creates
+`revocation_actor_requires_instant` (`revoked_by IS NULL OR revoked_at IS NOT NULL`). Downgrade
+restores the strict CHECK after clearing `revoked_at` on rows whose actor is already NULL —
+exactly the rows the old constraint could not hold. That is the **fail-open** direction (the
+grant becomes live again), so it is explicit and commented, not silent. Up, down, up verified
+against a fresh SQLite database with the new constraint confirmed in `sqlite_master`.
+
+**Validation on the committed tree.** `ruff format --check` clean (319 files); `ruff check`
+clean; `mypy` clean on 143 source files; `pytest` full suite **1619 passed, 4 skipped**.
+One pre-existing test updated rather than deleted:
+`test_a_configuration_grant_must_not_invent_a_reason` pinned the exact rule that was relaxed. It
+is now `test_a_rationale_without_an_issuer_is_the_post_deletion_shape`, which asserts the shape
+is *accepted and must be*, and states where the write-time rule moved. Relaxing an invariant
+without saying so in the test that guarded it is how an invariant quietly disappears.
+
+**CI is UNVERIFIED at run end** — the commit was pushed at the close of the window; no check-run
+was read. `CHECKPOINT.json` says so and names polling as the next run's first action.
+
+**Delivery debt.** PR #5's body ends at NEX-077; NEX-078, NEX-079 and NEX-080 are absent from
+it. Issue #2's last comment covers NEX-079. This is the only thing making GitHub lag the branch.

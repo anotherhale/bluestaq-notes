@@ -10,14 +10,77 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. **NEX-079** (run 79): an operator grant can now be **revoked** — the last live authority in the system that had no way to end early. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 77) | `9f9a70f` was this run's product head; the docs tip moves constantly. |
-| Head commit (measured) | Product head `a0c8ee0` (**NEX-079, PUSHED, VERIFIED — CI 4/4**), over `6637c50` (NEX-078, VERIFIED 4/4) and `9f9a70f` (NEX-077, VERIFIED 4/4). Docs checkpoint `b3b2c3b`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Head commit (measured) | Product head `9336ba3` (**NEX-080, PUSHED, CI UNVERIFIED**), over `a0c8ee0` (NEX-079, VERIFIED 4/4), `6637c50` (NEX-078, VERIFIED 4/4) and `9f9a70f` (NEX-077, VERIFIED 4/4). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
 | Last CI result | **`a0c8ee0` (NEX-079): 4/4 `completed/success` (Backend ×2, Frontend ×2, every conclusion `success`), polled 2026-11-27T21:20Z — VERIFIED.** The earlier `queued`/`in_progress` reading in this row was the state at run end, corrected on the evidence rather than left standing. Prior verified: `6637c50` (NEX-078) 4/4 2026-11-27T20:43Z; `9f9a70f` (NEX-077) 4/4 2026-11-28T03:44Z Prior: `4fa0463` (NEX-076) 4/4 2026-11-28T03:22Z; `319a3dd` (NEX-075) 4/4 2026-11-28T02:45Z; `e375a1f` (NEX-074) 4/4 2026-11-28T02:20Z; `09888ac` (NEX-073) 4/4 2026-11-28T01:56Z. |
 | Tracking issue | #2 (open) — `7234071012` covers **NEX-079** (VERIFIED, CI 4/4); `7233539283` covers NEX-078. The "no comment yet" note that stood here was stale: this run read the issue's own comments instead of trusting the row, and found NEX-078 already reported. **PR #5's body still ends at NEX-077** — that debt is real; `7232583113` covers NEX-075 (VERIFIED, CI 4/4); `7231968445` covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-077**; **NEX-079 is not yet appended** (delivery debt). Twenty-three slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | **NEX-080** — revocation provenance is stored but not readable. `revoked_at`/`revoked_by` exist, are paired by a CHECK, and survive their revoker, but the operator-grant detail view does not surface them, so an operator can see a grant is gone without learning who ended it or when. Audit fact no interface reads = half a control. Everything before this is closed: Run 77 (NEX-077) closed the follow-up run 76 recorded: the issuer and reason of every active operator grant are now readable on the ops listing, so the stored justification is an audit trail rather than a write-only field. Run 76 (NEX-076) made a human-issued grant state *why*. Run 75 (NEX-075) gave the operator access log a bounded retention window. Run 74 (NEX-074) made the operator-grant record writable. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-077**; **NEX-078, NEX-079 and NEX-080 are not yet appended** (delivery debt, now three slices deep). Twenty-three slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **None.** **NEX-080** (run 80) closed the last one: `revoked_at`/`revoked_by` were stored, CHECK-paired and survived their revoker, but nothing read them — an operator could see a grant was gone without learning who ended it. `GET /api/v1/ops/operator-grants/revoked` now returns the removal history under the existing `operator-access-report` scope, and the holdings report carries both fields. **CI UNVERIFIED at run end — not VERIFIED.** Product `9336ba3`. Everything before this is closed: NEX-079 gave a grant a way to end early; NEX-077 made the issuer and reason of every active grant readable; NEX-076 made a human-issued grant state *why*; NEX-075 gave the operator access log a bounded retention window; NEX-074 made the operator-grant record writable.
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-080 (run `NEX-2026-11-27-80`) — the revocation was recorded, nothing read it
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED (`9336ba3`). CI UNVERIFIED at run end.**
+
+**The gap.** NEX-079 made revocation durable and attributable: `revoked_at`/`revoked_by` are
+written onto the grant row, paired by a `CHECK`, and survive their revoker via `ON DELETE SET
+NULL`. Nothing read them back. The operator-grant detail view described holder, issuer, reason
+and expiry — but not who ended a grant or when. An operator could see authority had been removed
+without learning who removed it. An audit fact no interface surfaces is half a control, and the
+same half-built loop NEX-076/NEX-077 closed for `rationale`.
+
+**Delivered — the read side only, and no new authority.**
+
+- `OperatorGrantRepository.revoked_grants()` on the port, implemented by both adapters (in-memory
+  and SQLAlchemy), selected by the domain's own `is_revoked` predicate so "this row records a
+  revocation" is defined once — the way `is_active` already defines "this row is live".
+- `ListRevokedOperatorGrants` behind the **existing** `operator-access-report` scope. Reading the
+  platform's removal history needs exactly the authority the holder report already requires;
+  minting a fifth token would make every auditor be granted twice to answer one question.
+- `GET /api/v1/ops/operator-grants/revoked`, each entry carrying `revoked_at` and `revoked_by`.
+  Non-operators get `404`, as everywhere in `/ops`.
+- `revoked_at`/`revoked_by` on `OperatorGrantDetail`, so the holdings view can render a grant's
+  whole life rather than only its live state.
+
+**Why a separate endpoint, not a filter.** The holdings report answers "who holds what now"; a
+revocation is history. One shape covering both forces every reader to tell "live", "expired" and
+"revoked" apart out of nullable fields. Grants that merely reached `expires_at` appear in neither
+list: lapsing on its own and being taken away are different facts, and the audit needs both.
+
+**Two NEX-079 defects, found by the neighbouring suites and fixed here.** Same root cause —
+`revoked_by` and `granted_by` are `ON DELETE SET NULL`, and validation written as if those
+columns only ever hold writer-supplied values.
+
+1. The revocation `CHECK` required the pair together. Deleting an account that had revoked a
+   grant made `SET NULL` write `revoked_by = NULL` onto a row keeping `revoked_at`, which the
+   CHECK refused — **no account holding revocation history could be deleted**, surfacing as a
+   raw `IntegrityError`. Migration `a91c6f0d4b27` enforces only the incoherent half: a named
+   revoker with no instant. A revocation instant outliving its actor is the correct post-deletion
+   state, and the whole reason the FK is `SET NULL` rather than `CASCADE`.
+2. The domain refused `granted_by=None` beside a non-NULL `rationale`. That shape is also what
+   deleting an *issuer* produces, so every read of the store — the operator gate lookup included
+   — raised `ValidationError`. One account deletion was an outage of the entire `/ops` surface.
+   The write-time rule is not lost, only relocated to where a human supplies the pair:
+   `IssueOperatorGrant` requires a rationale, the configuration seed forbids one.
+
+**Migration.** `a91c6f0d4b27` drops `revocation_is_attributable`, creates
+`revocation_actor_requires_instant`. Downgrade restores the strict CHECK after clearing
+`revoked_at` on rows whose actor is already NULL. That makes those grants live again — the
+fail-open direction — so it is explicit and commented rather than silent. Upgrade, downgrade and
+re-upgrade verified clean on SQLite with the new constraint confirmed in `sqlite_master`.
+
+**Validation on the committed tree.** ruff format+check clean (319 files); mypy clean on 143
+source files; full suite **1619 passed, 4 skipped**. One pre-existing test updated, not deleted:
+`test_a_configuration_grant_must_not_invent_a_reason` pinned the exact rule relaxed here, and is
+now `test_a_rationale_without_an_issuer_is_the_post_deletion_shape`, asserting the shape is
+accepted and stating where the rule moved. Relaxing an invariant silently in its own guard test
+is how an invariant disappears.
+
+**Delivery debt.** PR #5's body ends at NEX-077; NEX-078, NEX-079 and NEX-080 are all absent
+from it, and issue #2's last comment covers NEX-079 only. GitHub lags the branch by three
+slices. That is the next run's first two minutes.
+
 
 ## NEX-079 (run `NEX-2026-11-27-79`) — an authority with no way to end early
 

@@ -3401,7 +3401,7 @@ for operators (the listing is operator-gated); non-operator callers still see no
 
 - **Phase:** 3 (governance)
 - **Priority:** P0 (security)
-- **Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (`6637c50`); **CI pending — not VERIFIED**
+- **Status:** VERIFIED — CI 4/4 `completed/success` at `6637c50` (Backend ×2, Frontend ×2; polled 2026-11-27T20:43Z by run 78). This row said "CI pending" long after CI had passed; corrected here.
 - **Source:** the two security findings in PR #5's discussion
 - **Dependencies:** NEX-065 (approval columns), NEX-077 (rationale) — both met
 - **Objective:** close two controls that were documented but not enforced at every boundary.
@@ -3419,3 +3419,37 @@ for operators (the listing is operator-gated); non-operator callers still see no
 - **Security:** removes a one-person governance boundary wearing three names, and an
   ambiguous-expiry grant that could silently extend access by the deployment's UTC offset.
 - **Next action:** poll CI on `6637c50`; mark VERIFIED only when all check-runs succeed.
+
+### NEX-080 — Revocation provenance is recorded but not readable
+
+- **Phase:** 3 (governance / audit)
+- **Priority:** P1
+- **Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (`9336ba3`); **CI UNVERIFIED — not VERIFIED**
+- **Dependencies:** NEX-079 (the write side), NEX-077 (the detail view) — both met
+- **Objective:** surface the revocation facts NEX-079 stores. `revoked_at`/`revoked_by` existed,
+  were paired by a CHECK, and survived their revoker, but nothing read them: an operator could see
+  a grant was gone without learning who ended it, when, or whether it was revoked at all rather
+  than merely expired. An audit fact no interface reads is half a control.
+- **Acceptance criteria:**
+  - `GET /api/v1/ops/operator-grants/revoked` returns each revoked grant with its instant and
+    revoker, under the existing `operator-access-report` scope.
+  - A live grant and a grant that merely expired are absent from that list.
+  - A revoked grant whose revoker's account was deleted still appears, with `revoked_by: null`.
+  - The holdings report (`OperatorGrantDetail`) carries `revoked_at`/`revoked_by`.
+  - A non-operator gets `404`.
+  - The migration round-trips and the CHECK still refuses an actor with no instant.
+- **Tests:** `tests/api/test_ops_operator_grant_revoked_read_api.py` (new, 5), plus widened field
+  set in `tests/api/test_ops_operator_grants_api.py`, use-case cases in
+  `tests/application/test_operator_grants.py`, and store cases in
+  `tests/persistence/test_operator_grants.py`.
+- **Security:** read-only and gated. No new scope — reading the removal history is the authority
+  the holder report already requires, and a fifth token would make an auditor be granted twice to
+  answer one question. The gate runs before the read, so a refused caller learns nothing about
+  how much authority has been removed.
+- **Defects fixed in passing:** the NEX-079 revocation CHECK made any account holding revocation
+  history undeletable; the domain refused the `SET NULL` post-deletion shape for `granted_by`,
+  which turned one account deletion into an outage of the whole `/ops` surface. Both are
+  consequences of `ON DELETE SET NULL` being ignored by validation written as if those columns
+  only ever hold writer-supplied values.
+- **Next action:** poll CI on `9336ba3`. Then append NEX-078…NEX-080 to PR #5's body and post the
+  issue #2 comment — the standing delivery debt.
