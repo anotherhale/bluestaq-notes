@@ -137,6 +137,9 @@ from notes_service.bootstrap.config import Settings
 from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
+from notes_service.infrastructure.db.operator_access_log import (
+    SqlAlchemyOperatorAccessLog,
+)
 from notes_service.infrastructure.db.operator_grants import (
     SqlAlchemyOperatorGrantRepository,
 )
@@ -152,9 +155,6 @@ from notes_service.infrastructure.identity.oidc_relying_party import HttpOidcRel
 from notes_service.infrastructure.identity.routing_provider import RoutingIdentityProvider
 from notes_service.infrastructure.identity.session_provider import SessionIdentityProvider
 from notes_service.infrastructure.security.clock import SystemClock
-from notes_service.infrastructure.security.operator_access_log import (
-    InMemoryOperatorAccessLog,
-)
 from notes_service.infrastructure.security.rate_limiter import InMemoryRateLimiter
 from notes_service.infrastructure.security.withholding_recorder import (
     InMemoryWithholdingRecorder,
@@ -442,7 +442,11 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         window_seconds=settings.rate_limit_window_seconds,
     )
     withholding_recorder = InMemoryWithholdingRecorder()
-    operator_access_log = InMemoryOperatorAccessLog()
+    # The record of *who read a platform-wide view* is durable for the same reason
+    # the grants below are (R42, mirroring R40): an in-memory ring is per-worker and
+    # cleared on restart, so the trail an operator audits described only the worker
+    # that answered and vanished with a deploy. Append-only by construction.
+    operator_access_log: OperatorAccessLog = SqlAlchemyOperatorAccessLog(session_factory)
     # Stored grants (NEX-045), durable since NEX-046. The environment variable is
     # a *seed path* into this store, not the allowlist itself: seeding at startup
     # produces one unbounded grant per configured scope, and the gate then

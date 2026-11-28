@@ -854,6 +854,42 @@ class PolicyVersionRow(Base):
     )
 
 
+class OperatorAccessRow(Base):
+    """One granted read of a platform-wide operational view, durably stored (NEX-072).
+
+    ``InMemoryOperatorAccessLog`` proved the port but kept the record in the
+    process: it was per-worker and cleared on restart, so the answer to "who read
+    this" was lost the moment the deployment restarted — and in a multi-worker
+    deployment the log an operator could read described only the worker that
+    answered the read. That is the same defect R40 recorded for grants, on the
+    record that exists *because* a privileged read must be auditable.
+
+    The table is append-only by construction: there is no update path in the
+    adapter and ``record`` only ever inserts. ``id`` is a surrogate autoincrement
+    key because the port promises ``recent`` newest-first, and ordering by a
+    monotonic integer is the only portable way to recover insertion order — two
+    reads can share a timestamp, and sorting by ``at`` would make the order
+    implementation-defined.
+
+    ``user_id`` is **not** a foreign key to ``users`` and does not cascade. An
+    access record must outlive the deletion of the account that made it: cascading
+    would let deleting a user erase the evidence of what that user read, which is
+    exactly what an audit trail must not permit. The id is stored as a value.
+    """
+
+    __tablename__ = "operator_access_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUIDType, nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("length(operation) > 0", name="operation_not_empty"),
+        Index("ix_operator_access_log_at_id", "at", "id"),
+    )
+
+
 __all__ = [
     "AgentRow",
     "AgentRunRow",
@@ -867,6 +903,7 @@ __all__ = [
     "NotePermissionRow",
     "NoteRow",
     "NoteStarRow",
+    "OperatorAccessRow",
     "OperatorGrantRow",
     "OrganizationMembershipRow",
     "OrganizationRow",
