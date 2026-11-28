@@ -323,3 +323,51 @@ with `== ACTIVE` and the test went red (`1 failed, 2 passed`), then restored it 
 fix, and a test that also fails for the right fix cannot do that job. Equally, do not weaken it
 into "suspended rows are absent", which would agree with the wrong fix instead of contradicting
 it.
+
+## D-098 — The roster's total is counted by a separate query, not carried on the list (NEX-098)
+
+*Context.* `GET /organizations/{id}/members` returned the whole roster and built `PageMeta(total=len(items))`.
+`PageMeta` already had `limit` and `offset` fields; nothing populated them. There is no
+per-organization member cap.
+
+*Decision.* Page the roster and make the total a **separate `count_for_organization` call**, not a
+property of the listing result.
+
+*Why not the cheaper shape.* The cheapest change is to return a page plus the count computed in the same
+statement — which is what most ORMs push you toward. Two reasons rejected it:
+
+- A total carried **on** the list can be reconstructed from the list by a careless caller, and once one
+  caller writes `total=len(items)` the defect is indistinguishable from correct code at the call site.
+  A separate method makes `len()` structurally unavailable where a count is required.
+- The total must survive a page that is **empty because it is past the end**. `len(items)` is `0` there
+  and a client's pager would conclude the roster is empty and stop. The API test
+  `test_a_page_beyond_the_roster_is_empty_not_an_error` pins this: on a one-member roster,
+  `limit=10&offset=5` returns `items: []` with `meta.total == 1`.
+
+*Why the count and the listing share `_roster_predicate`.* A count selecting a different set from the
+listing reports a total no page can reach. That is the *same* defect as `len(items)` one layer down, and
+it is the defect NEX-097 was opened to fix — so it must not be reintroduced while closing the bound.
+
+*Why the count is an aggregate.* It reads no rows, so it costs the same at any tenant size. A `len()`
+over a second full read would double the very cost the page exists to bound.
+
+*Why `limit=None` still means the whole roster.* Internal callers (authorization checks, team membership
+validation) legitimately need the set and never serialize it to a client. Only the client-facing read
+bounds itself. `test_no_limit_still_returns_the_whole_roster` stops a later "bound everything" sweep from
+breaking them.
+
+*Why the order is `(created_at, id)`, not just `created_at`.* `OFFSET` paging over a non-total order is
+not merely unstable: it can show one row twice **and** never show another. Memberships invited in one
+request burst share `created_at` down to the timestamp, so the tie is not hypothetical. The persistence
+test seeds every row at a single `TIED_AT` and inserts them in **reverse id order**, then asserts the
+whole listing equals its id-sorted sequence — the ordering claim is pinned directly, not inferred from a
+walk that a lucky engine would pass either way. Verified by dropping the `id` key: the test goes red.
+Rejected: keyset paging on `(created_at, id)`. It is the better long-term answer, but it changes the wire
+contract to a cursor, and this response already shipped `limit`/`offset` inside `PageMeta`. The trade is
+recorded deliberately: `OFFSET` degrades on a very large roster, and a cursor is the upgrade to make if a
+tenant ever gets there.
+
+*Scope line.* `FoldersRepository.list_for_owner` stays unpaged. It is user-authored, small, and on no
+paged route, so its page size *is* its total and the number is honest. Bounding it now would add a `Query`
+surface and migration risk for no consumer. The rule is that a read gets a window when a **client** can
+grow it, not when a docstring says it is large.

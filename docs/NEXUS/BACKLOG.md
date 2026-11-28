@@ -4514,3 +4514,92 @@ could grow without bound — the exact-total paging family (NEX-082…NEX-096) d
 lives under `organizations/`, not the agent surface. That is the natural next slice. Authorization on
 the reactivate path for a suspended-then-deprovisioned membership is already covered by the third test.
 
+## NEX-098 — Bound and page the organization roster with an exact total (run `NEX-2026-11-28-98`)
+
+**Phase.** 1 (organization & identity foundation). **Priority.** P1 — the last organization list a
+large tenant can grow without bound, and the one that was reporting a total it could not stand behind.
+**Status.** **IMPLEMENTED / TESTED / COMMITTED / PUSHED** on product commit `f4a2845`; **VERIFIED is
+withheld pending CI on that commit itself.** Local gates on this tree: `ruff format` 326 unchanged,
+`ruff check` all passed, `mypy` clean on 144 files, full suite **1778 passed, 4 skipped**.
+**Depends on.** NEX-097 (the roster's row set and its honesty about `total`) and NEX-096 (`AgentPage`,
+the `items` + counted `total` shape this mirrors).
+
+### The defect
+
+`GET /organizations/{id}/members` returned every member in one array and built
+`PageMeta(total=len(items))`. There is **no per-organization member cap**, so an owner inviting members
+in a loop grows both the database read and the response body without bound. Worse, `len(items)` cannot
+distinguish a complete roster from the first 50 of 300 — so even a truncated read would have reported
+itself as complete. NEX-097 fixed *which* rows the read returned and made the count agree with them; it
+left both the read and the count unbounded.
+
+`PageMeta` already carried `limit` and `offset`, and the response was already shaped as
+`items` + `meta`, so the wire contract did not change — only the meaning of `total` and the addition of
+two query parameters.
+
+### The fix
+
+- **Port** (`application/ports/organization_repositories.py`):
+  `list_for_organization(organization_id, *, limit=None, offset=0)` plus a separate
+  `count_for_organization(organization_id) -> int`. `limit=None` preserves the whole-set form that
+  internal callers (authorization checks, team membership validation) rely on; only the client-facing
+  read bounds itself. The count is a **separate method, not a field on the list**, so a page cannot
+  report a total it derived from its own length.
+- **Adapter** (`infrastructure/db/organization_repositories.py`): a shared `_roster_predicate()`
+  feeding both the listing and the `COUNT` aggregate. A count selecting a different set than the
+  listing reports a total no page can ever reach — the same class of defect as `len(items)`, one layer
+  down. The count is an aggregate, so it reads no rows and costs the same at any tenant size.
+- **Ordering** is `(created_at, id)`. An `OFFSET` window needs a **total** order: memberships invited in
+  one burst share `created_at`, and a non-total order lets a shifting window show one member twice and
+  hide another. The persistence test seeds every row at one `TIED_AT` to make this bite.
+- **Use case** (`application/use_cases/organization.py`): `OrganizationMemberPage(items, total)`,
+  mirroring NEX-096's `AgentPage`. `ListOrganizationMembers.run(..., limit=50, offset=0)`.
+- **Router**: `limit: int = Query(default=50, ge=1, le=200)`, `offset: int = Query(default=0, ge=0)`;
+  `meta.total` now comes from the count.
+
+### Tests
+
+Persistence (`tests/persistence/test_organization_roster_paging.py`, new, 4 cases): the total is the
+roster size at every page size; walking the window with tied `created_at` neither repeats nor skips a
+member; a deprovisioned member is absent from **both** the page and the total; the unpaged form still
+returns the whole roster.
+
+API (`tests/api/test_organizations_api.py`, 5 new cases): `limit=1` on a four-member roster reports
+`meta.total == 4` — the assertion that directly refutes `len(items)`; the offset window walks without
+repeating a row; a page past the end is empty with the total still describing the set; `limit=201` is
+rejected `422`; and the authorization check is not widened by the window — a non-member asking for
+`limit=1` still gets `404`.
+
+Load-bearing proved by reverting each half of the fix on this tree, not assumed:
+
+- `meta.total` back to `len(items)` → 2 red:
+  `TestOrganizationRosterPaging::test_total_is_the_roster_size_not_the_page_size` and
+  `::test_a_page_beyond_the_roster_is_empty_not_an_error` (`2 failed`), restored green.
+- the `id` tiebreaker dropped from the adapter's `order_by` → `test_walking_the_window_neither_repeats_nor_skips_a_member`
+  red, restored green.
+
+**The second experiment first came back green, and that mattered.** The test was written with
+`for spec in DEMO_USERS[:ROSTER_SIZE]` while its own docstring claimed insertion order was reversed
+"so a database that happened to return rows in insertion order would fail". It did not: the fixture
+inserted in forward order, SQLite returned tied rows in that order, and the test passed with the
+tiebreaker *and* without it — a guard that encoded the defect it was meant to catch. Fixed by inserting
+`reversed(DEMO_USERS[:ROSTER_SIZE])` and by asserting the whole listing's sequence equals its `id`-sorted
+sequence, so the test fails on any engine that returns tied rows in insertion order instead of the
+declared order. Only then did the drop-the-tiebreaker run go red. Do not "simplify" either defence back:
+the reversal makes the ids' natural order differ from insertion order, and the sequence assertion is what
+turns a stable-but-arbitrary order into a failure.
+
+### Consumers updated
+
+The return type change broke exactly the call sites the repository had: `tests/application/test_organization.py`
+(3) and `tests/security/test_org_admin_scope.py` (2, plus one `assert harness.list_members(...)` that
+would otherwise have become a vacuous truthiness check on a dataclass — changed to `.items`). Production
+had a **single** consumer (`application/use_cases/organization.py`), already updated in the slice.
+
+### Remaining / next
+
+`FoldersRepository.list_for_owner` is still a whole-set read, but it is user-authored, small, and
+exposed on no paged route, so its page size *is* its total and the number is honest. Do not "fix" it
+without a consumer that needs a window.
+
+

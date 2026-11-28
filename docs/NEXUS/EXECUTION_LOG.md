@@ -11855,3 +11855,86 @@ Diff scope of this close-out: `docs/NEXUS/` only — `BACKLOG.md`, `ROADMAP.md`,
 `febb810` verdict is untouched and this docs commit is licensed to land on it.
 
 PR #5 body and tracking issue #2 carry the NEX-097 section appended after this close-out's CI.
+
+---
+
+## Run `NEX-2026-11-28-98` — NEX-098: page the organization roster with a counted total
+
+- **Run ID**: `NEX-2026-11-28-98`
+- **Branch**: `feature/agentic-enterprise-platform`
+- **Starting commit**: `997a6ac` (observed on entry — see the reconciliation note below)
+- **Product commit**: `f4a2845` `feat(organizations): page the roster with a counted total`
+- **Tasks completed**: NEX-098 (implementation), plus a test-strength correction to it
+- **Tasks still open**: CI verdict + docs delivery for this run
+
+### Reconciliation on entry
+
+The clone reported `HEAD -> main` at `997a6ac` (a grafted shallow clone). The checkpoint named head
+`fd114cd` on `feature/agentic-enterprise-platform`. Neither is "wrong": the automation framework
+re-clones into a fresh workspace, so the branch was not checked out locally. Resolved by creating the
+local branch at the live remote head before any edit, and re-reading the live head with `git ls-remote`
+rather than `git rev-parse origin/<branch>` — this clone's `remote.origin.fetch` maps only
+`refs/heads/main`, so `origin/feature/...` is a frozen snapshot that reads plausibly and is stale.
+
+### What was wrong
+
+`list_for_organization` returned the whole roster and the router derived `PageMeta(total=len(items))`
+from that list. There is no per-organization member cap, so one read and one response grew without
+bound — the same unbounded-listing shape NEX-096 removed from the agent listing, and NEX-097's own
+"next" note named this exact slice.
+
+### The fix
+
+`limit`/`offset` on the port and the adapter, a `count_for_organization` aggregate sharing the roster
+predicate, and the router rendering `PageMeta(total=page.total, limit=limit, offset=offset)`. The order
+is `(created_at, id)`: tied `created_at` is not hypothetical (a burst invite shares a timestamp), and
+`OFFSET` over a non-total order can show one row twice and never show another. The window never widens
+authorization — the predicate is applied before the limit, so a non-member asking for `limit=1` still
+gets `404` rather than a one-row peek.
+
+### The correction that matters
+
+The first draft of the persistence test claimed, in its own docstring, that insertion order was reversed
+"so a database that happened to return rows in insertion order would fail". It was not reversed: the
+fixture iterated `DEMO_USERS[:ROSTER_SIZE]` forward. SQLite returned tied rows in insertion order, so the
+tiebreaker test passed **with and without** the `id` key — a guard that encoded the defect it was meant
+to catch. Proved by dropping `.order_by(..., OrganizationMembershipRow.id)`: 4 passed. Fixed by inserting
+`reversed(DEMO_USERS[:ROSTER_SIZE])` and asserting the whole listing's sequence equals its `id`-sorted
+sequence. Re-probed: dropping the `id` key now fails `test_walking_the_window_neither_repeats_nor_skips_a_member`;
+restoring it passes. Both doc files that asserted the untested claim were rewritten to the measured
+result.
+
+The other half of the fix was probed separately: `total=len(items)` restored → **2 failed**
+(`test_total_is_the_roster_size_not_the_page_size`, `test_a_page_beyond_the_roster_is_empty_not_an_error`),
+restored green.
+
+### Validation (bare, exactly as CI runs them, on this tree)
+
+- `.venv/bin/ruff format --check` → `326 files already formatted`
+- `.venv/bin/ruff check` → `All checks passed!`
+- `.venv/bin/mypy` → `Success: no issues found in 144 source files`
+- `.venv/bin/python -m pytest -o addopts=--strict-markers` → **1778 passed, 4 skipped** (baseline 1769 + 9 new)
+
+Import path asserted first, per the standing hazard: `notes_service.__file__` resolves to **this**
+workspace's `src`, and `.venv/.../site-packages/*.pth` points only here. Without that assertion a
+borrowed venv silently imports another run's tree and a correct fix reads as a regression.
+
+### Status
+
+**VERIFIED at `f4a2845`**, read per run *and* per job, not from an exit code:
+
+| | run | head | Backend (12 steps) | Frontend (11 steps) |
+| --- | --- | --- | --- | --- |
+| push | `46153368050` | `f4a2845` | success, 0 failed / 0 skipped | success, 0 failed / 0 skipped |
+| pull_request | `46153373346` | `f4a2845` | success, 0 failed / 0 skipped | success, 0 failed / 0 skipped |
+
+Both `head_sha` are `f4a28459a82fdd853bba5134c9cef89b66ab7d73`, so no descendant-CI anchor is needed:
+the product commit carries its own green run.
+
+One thing this verdict does **not** cover, stated so a later reader does not over-read it: the
+strengthened persistence test (`reversed(...)` + the sequence assertion) was written *after* `f4a2845`
+and is therefore **not** in the commit CI validated. It rides on the docs+test commit that follows. That
+commit is test-and-docs only — no product file changes, and the nine tests it affects were already green
+locally on this tree (1778 passed). Treat its own CI as a separate, later verdict rather than folding it
+into the table above.
+

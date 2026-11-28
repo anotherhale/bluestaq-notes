@@ -7,17 +7,76 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | **NEX-097** (run 97, product `febb810`, CI verdict pending at write time — see `Last CI result`): the **organization roster** listed offboarded people as current members. `GET /organizations/{id}/members` ran `list_for_organization` with no status predicate, and `meta.total` was the length of that list. Offboarding is a soft delete (status → `DEPROVISIONED`, row kept for audit), so the listing had to exclude it and did not; the sibling team roster already did. The fix filters **only** the terminal `DEPROVISIONED` state, not every non-active one: suspension is a reversible pause and `reactivate` addresses the membership by id, so a suspended member must stay on the roster or an administrator loses the only handle on an account they mean to restore. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-096 VERIFIED**. Prior: **NEX-096** (run 96, product `87936d4`, **CI 4/4 `completed/success` on the product commit itself**): `GET /agents` was the one listing route in the exact-total paging family still reading a whole set — `list_for_owner` selected every agent the owner had ever registered, with no window, and the router answered `PageMeta(total=len(items))`. There is no per-user cap on agent registration, so an owner could grow that read without bound. The route now takes `limit` (1..200, default 50) / `offset`, orders by `(created_at, id)` — a total order, because agents registered in one burst share `created_at` to the microsecond and a shifting `OFFSET` window could repeat a row while skipping another — and fills `meta.total` from `count_for_owner`, a scoped `COUNT` that reads no rows and cannot disclose another user's agent volume. Prior: **NEX-095** (run 95, product `fb027ee`, **CI 4/4 `completed/success` on the product commit itself**) gave a delegator a way to see the grants it can withdraw one at a time: `GET /agents/{id}/delegations`. Prior: **NEX-094** (run 93, product `d8353ff`, **CI 4/4 `completed/success` via docs head `d4abd07`**) bounded the two `active` operator-grant reads, each of which ran `select(OperatorGrantRow)` with **no `WHERE`**. |
+| Project phase | **NEX-098** (run 98, product `f4a2845`, **CI 4/4 `completed/success` on the product commit itself**): the **organization roster** was the last organization list a tenant could grow without bound. `GET /organizations/{id}/members` called `list_for_organization` with no window and the router filled `meta.total` from the length of that list, so one read and one response grew with the tenant. The route now takes `limit` (1..200) / `offset`, orders by `(created_at, id)`, and fills `meta.total` from `count_for_organization`, a scoped `COUNT` that reads no rows. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-098 VERIFIED**. Prior: **NEX-097** (run 97, product `febb810`, **CI 4/4 on the product commit itself**): the roster listed and counted offboarded (`DEPROVISIONED`) people; the filter excludes only that terminal state, deliberately not `!= ACTIVE`, so suspended members stay restorable. Prior: **NEX-096** (run 96, product `87936d4`, **CI 4/4 on the product commit itself**): `GET /agents` bounded with `count_for_owner`. Prior: **NEX-095** (run 95, product `fb027ee`, 4/4 on itself) `GET /agents/{id}/delegations`. Prior: **NEX-094** (run 93, product `d8353ff`, 4/4 via docs head `d4abd07`) bounded the two unbounded `active` operator-grant reads. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 97) | `6b15aeb` — the run-96 close-out docs head, confirmed as the live remote head at run start with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. The run began on `main` with the slice uncommitted; the change was stashed, `feature/agentic-enterprise-platform` checked out, and the stash restored, so nothing was discarded and nothing landed on `main`. |
-| Head commit (measured) | Product for **NEX-097** — resolve with `git log --oneline -1 -- src/notes_service/infrastructure/db/organization_repositories.py`. Product `febb810`, **COMMITTED / PUSHED**; CI for it recorded in `Last CI result`. Prior product `87936d4` (NEX-096, VERIFIED 4/4 on the product commit itself); `fb027ee` (NEX-095, VERIFIED 4/4 on the product commit itself); `d8353ff` (NEX-094, VERIFIED via docs head `d4abd07`); `48ad062` (NEX-093); `3159555` (NEX-092); `aa4b2c8` (NEX-090, via docs head `ea0a696`); `b3130ce` (NEX-089); `06b5b32` (NEX-088); `82d8a64` (NEX-087). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file. |
-| Last CI result | **`febb810` (NEX-097 product) — 4/4 `completed/success` on the product commit itself**, runs `46148603437` (push) and `46148607713` (pull_request), Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both `head_sha` = `febb8108bc0569c38b0aa04802e2b6f612ddb27d`, verified per run **and per job** (the exit code alone is not the verdict: `gh run watch --exit-status` also exits 0 for a `cancelled` run). **NEX-097 is therefore VERIFIED at the product commit**, needing no docs-head anchor. Prior: **`bedc235` (run-96 close-out docs head) — 4/4**, runs `46146653323` (push) and `46146658116` (pull_request); `cf51518` 4/4 (`46146365871`, `46146370519`); `5e0c926` 4/4 (`46146618423`, `46146623296`). Prior product verdicts: `87936d4` (NEX-096) 4/4 on the product commit itself, runs `46145902373`/`46145897805`; `fb027ee` (NEX-095) 4/4 on the product commit itself, runs `46143797699`/`46143793292`; `d4abd07` (run-94 docs head) 4/4; `d8353ff` (NEX-094 product) carried **zero check-runs** — superseded in the concurrency group — so that verdict was **descendant-CI**; `48ad062` (NEX-093) 4/4 on the product commit itself. |
-| Tracking issue | #2 (open) — NEX-097 delivery recorded once this run's docs landed (see `Docs delivery` in `CHECKPOINT.json`). NEX-096 verdict was delivered in run 96 as `7239449984`; NEX-095 in run 95; NEX-094 in run 94. NEX-092 through NEX-096 are delivered. |
-| PR #5 | **#5 (open, `draft=false`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-096**; the NEX-097 section is appended once this run's CI concluded, then read back to confirm it landed. **Never merged by automation.** |
-| **Open P1** | **None of the NEX-082…NEX-096 family is open — that family is closed.** The next structural gap this run exposed is in `organizations/`, not the agent surface: `GET /organizations/{id}/members` is still a whole-set read with no `limit`/`offset`, so it is the one organization list a large tenant can grow without bound. **NEX-098 candidate.** Prior fixes: NEX-097 stopped the roster listing and counting offboarded people; NEX-096 bounded the agent listing and made its total exact; NEX-095 exposed the delegation list so narrow revocation is reachable; NEX-094 bounded the active operator-grant reads. |
+| Starting commit (run 98) | `997a6ac` on `main` — the run began in a fresh clone where the branch was not checked out (the automation framework re-clones per workspace). The local branch was created at the live remote head before any edit, so nothing landed on `main`. Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; this clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot. |
+| Head commit (measured) | Product for **NEX-098** — resolve with `git log --oneline -1 -- src/notes_service/infrastructure/db/organization_repositories.py`. Product `f4a2845`, **COMMITTED / PUSHED / CI 4/4**. Prior product `febb810` (NEX-097, VERIFIED 4/4 on itself); `87936d4` (NEX-096, 4/4 on itself); `fb027ee` (NEX-095, 4/4 on itself); `d8353ff` (NEX-094, via docs head `d4abd07`); `48ad062` (NEX-093); `3159555` (NEX-092); `aa4b2c8` (NEX-090, via docs head `ea0a696^{-\|}`); `b3130ce` (NEX-089); `06b5b32` (NEX-088); `82d8a64` (NEX-087). Never trust a SHA recorded in this file. |
+| Last CI result | **`f4a2845` (NEX-098 product) — 4/4 `completed/success` on the product commit itself**, runs `46153368050` (push) and `46153373346` (pull_request), Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both `head_sha` = `f4a28459a82fdd853bba5134c9cef89b66ab7d73`, verified per run **and per job**. **NEX-098 is therefore VERIFIED at the product commit**, needing no docs-head anchor. Prior: `febb810` (NEX-097) 4/4 on itself (`46148603437`, `46148607713`); `bedc235` (run-96 docs head) 4/4 (`46146653323`, `46146658116`); `cf51518` 4/4 (`46146365871`, `46146370519`); `5e0c926` 4/4 (`46146618423`, `46146623296`); `87936d4` (NEX-096) 4/4 on itself; `fb027ee` (NEX-095) 4/4 on itself; `d4abd07` (run-94 docs head) 4/4; `d8353ff` (NEX-094 product) carried **zero check-runs** — superseded in the concurrency group — so that verdict was **descendant-CI**; `48ad062` (NEX-093) 4/4 on itself. |
+| Tracking issue | #2 (open) — NEX-098 delivery recorded once this run's docs landed (see `Docs delivery` in `CHECKPOINT.json`). NEX-097 in run 97; NEX-096 as `7239449984`; NEX-092 through NEX-097 delivered. |
+| PR #5 | **#5 (open, `draft=false`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-097**; the NEX-098 section is appended once this run's CI concluded, then read back to confirm it landed. **Never merged by automation.** |
+| **Open P1** | **No unbounded organization list remains.** NEX-098 closed the last one: `GET /organizations/{id}/members` is now windowed with an exact `COUNT`. The paging family (NEX-082…NEX-098) is closed. Remaining known whole-set read: `FoldersRepository.list_for_owner`, which is user-authored, small, and exposed on no paged route — documented as deliberately not fixed (DECISIONS). |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-098 (run `NEX-2026-11-28-98`) — the organization roster was a whole-set read whose total was its own length
+
+`GET /organizations/{id}/members` called
+`SqlAlchemyOrganizationMembershipRepository.list_for_organization(organization_id)` with no window and
+filled `PageMeta(total=len(items))` from that list. There is no per-organization member cap, so one
+read and one response grew with the tenant — the same unbounded-listing shape NEX-096 removed from
+`GET /agents`.
+
+Shipped:
+
+- `limit` (1..200) / `offset` on the route and the port, windowed in SQL, not in Python.
+- `count_for_organization`, a scoped `COUNT` sharing the **same** `_roster_predicate` as the listing.
+  A count with a different predicate would report a total no page can reach; the persistence test
+  deprovisions a member and asserts the row leaves both.
+- Order `(created_at, id)`. Tied `created_at` is not hypothetical — a burst invite shares a timestamp —
+  and `OFFSET` over a non-total order can repeat one row while skipping another.
+- The predicate is applied *before* the window, so `limit=1` never becomes a one-row peek: a non-member
+  still gets `404`, not a truncated roster.
+
+### The test that had to be fixed before it counted
+
+The first draft's docstring claimed insertion order was reversed so an engine returning insertion order
+would fail. It was **not** reversed — the fixture iterated forward, SQLite returned tied rows in that
+order, and the test passed with *and without* the `id` tiebreaker. Dropping the tiebreaker left 4
+passed. That is a guard encoding the defect it exists to catch.
+
+Corrected to insert `reversed(DEMO_USERS[:ROSTER_SIZE])` and to assert the whole listing's sequence
+equals its `id`-sorted sequence. Re-probed: without the tiebreaker
+`test_walking_the_window_neither_repeats_nor_skips_a_member` fails; with it, passes. The other half of
+the fix was probed separately — `total=len(items)` restored → 2 failed. Both doc statements that
+asserted the untested claim were rewritten to the measured result rather than left standing.
+
+### Gates (bare, as CI runs them, on this tree)
+
+`ruff format --check` 326 files · `ruff check` clean · `mypy` 144 files clean ·
+`pytest -o addopts=--strict-markers` **1778 passed, 4 skipped** (baseline 1769 + 9).
+
+CI: `f4a2845` **4/4 `completed/success` on the product commit itself** — runs `46153368050` (push) and
+`46153373346` (pull_request), both `head_sha = f4a2845`, per job. Caveat recorded in the execution log:
+the strengthened test postdates `f4a2845` and is not in the commit CI validated.
+
+## Next best actions (run `NEX-2026-11-28-98`, superseding every list above)
+
+The exact-total paging family (NEX-082…NEX-098) is **closed**. No unbounded organization or agent list
+remains. The next run starts clean:
+
+1. **Do not start another paging slice to keep the streak going.** Every remaining `list_*` that reads a
+   whole set is either user-authored and small (`FoldersRepository.list_for_owner`, exposed on no paged
+   route) or already windowed. Adding a window with no consumer that needs one is churn, and DECISIONS
+   records why folders are deliberately left alone.
+2. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`, not from this list.
+3. **Carry the shape forward**: a test that fails without the fix, a probe that proves the test bites,
+   and a CI verdict read per run *and* per job. This run's own lesson is that a guard can pass without
+   the fix — probe the guard, not just the code.
+4. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+
+**Do not redo** NEX-098 or anything before it. **Do not** re-append NEX-079…NEX-098 to PR #5's body —
+everything through NEX-097 is already in it and NEX-098 is appended in this run's close-out.
 
 ## NEX-097 (run `NEX-2026-11-28-97`) — the organization roster listed offboarded people, and counted them
 

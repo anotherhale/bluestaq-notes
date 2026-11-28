@@ -48,9 +48,13 @@ def uow(session_factory: sessionmaker[Session]) -> SqlAlchemyUnitOfWork:
 @pytest.fixture
 def org_id(uow: SqlAlchemyUnitOfWork) -> OrganizationId:
     organization = Organization.create(slug="acme", name="Acme")
+    # Insertion order is the reverse of id order, so the database's natural
+    # (insertion) order is the opposite of the order the listing must return.
+    # Without this the walk test passes on any engine whose tied rows come back
+    # in insertion order, which is not a property the contract promises.
     with uow:
         uow.organizations.add(organization)
-        for spec in DEMO_USERS[:ROSTER_SIZE]:
+        for spec in reversed(DEMO_USERS[:ROSTER_SIZE]):
             membership = replace(
                 OrganizationMembership.grant(
                     organization_id=organization.id,
@@ -79,6 +83,7 @@ def test_walking_the_window_neither_repeats_nor_skips_a_member(
 ) -> None:
     seen: list[str] = []
     with uow:
+        whole = uow.organization_memberships.list_for_organization(org_id)
         for offset in range(0, ROSTER_SIZE, 2):
             page = uow.organization_memberships.list_for_organization(
                 org_id, limit=2, offset=offset
@@ -89,6 +94,16 @@ def test_walking_the_window_neither_repeats_nor_skips_a_member(
     # a shifting OFFSET window can show one member twice and hide another.
     assert len(seen) == ROSTER_SIZE
     assert len(set(seen)) == ROSTER_SIZE
+
+    # The window must also agree with the unpaged read, position by position.
+    # Row-set equality alone would pass for a stable-but-arbitrary order that
+    # disagrees with the unwindowed listing; this pins the sequence itself.
+    assert seen == [str(member.id) for member in whole]
+
+    # And that sequence is the contract's order: created_at ties, so it is id
+    # order. Asserting it here fails on any engine that returns tied rows in
+    # insertion order rather than the declared order.
+    assert [str(member.id) for member in whole] == sorted(str(member.id) for member in whole)
 
 
 def test_a_deprovisioned_member_is_absent_from_both_the_page_and_the_total(

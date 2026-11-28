@@ -24,6 +24,7 @@ authorization model that every later phase depends on.
 | M1.2 Organization/team/member use cases + policy | COMPLETE | Last-admin and escalation guards |
 | M1.3 Organization REST API | COMPLETE | `routers/organizations.py` |
 | M1.3a Organization roster excludes offboarded people | **VERIFIED** (NEX-097, `febb810`; CI 4/4 on the product commit itself) | Roster filters only the terminal `DEPROVISIONED` state so suspended members stay reactivatable |
+| M1.3b Organization roster paged with a counted total | **IMPLEMENTED/TESTED/PUSHED** (NEX-098, `f4a2845`; VERIFIED withheld pending CI on that commit itself) | `limit`/`offset` window, `(created_at, id)` total order, separate `COUNT` under the same predicate |
 | M1.4 Organization security tests | COMPLETE | `tests/security/test_org_admin_scope.py` |
 | M1.5 OIDC authentication | NOT STARTED | NEX-002 |
 | M1.6 Identity linkage to memberships | NOT STARTED | Depends on M1.5 |
