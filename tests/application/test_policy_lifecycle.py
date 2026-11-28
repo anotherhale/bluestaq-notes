@@ -79,6 +79,18 @@ AUTHOR = Principal(
 )
 
 
+# A third principal is required to publish (NEX-078): the author drafts, a second
+# operator approves, and only a third may put the version in force. Kept distinct
+# from OPERATOR so the fixture mirrors that three-way rule rather than hiding it.
+PUBLISHER = Principal(
+    user_id=UserId("33333333-3333-3333-3333-333333333333"),
+    email=Email("publisher@example.com"),
+    display_name="Publisher",
+    provider="demo",
+    subject="33333333-3333-3333-3333-333333333333",
+)
+
+
 class FixedClock:
     def __init__(self, now: datetime = NOW) -> None:
         self._now = now
@@ -122,7 +134,11 @@ def gate() -> OperatorGate:
     """
     return OperatorGate(
         grants=grants_from_scopes(
-            {OPERATOR.user_id: frozenset({"*"}), AUTHOR.user_id: frozenset({"*"})}
+            {
+                OPERATOR.user_id: frozenset({"*"}),
+                AUTHOR.user_id: frozenset({"*"}),
+                PUBLISHER.user_id: frozenset({"*"}),
+            }
         ),
         access_log=InMemoryOperatorAccessLog(),
         clock=FixedClock(),
@@ -136,17 +152,19 @@ def _approve_then_publish(
     policy_id: str,
     version: int,
 ) -> PolicyVersion:
-    """Drive the NEX-065 two-step lifecycle: a second principal approves, then publishes.
+    """Drive the lifecycle: a second principal approves, a third publishes.
 
-    Kept as one helper because every lifecycle test needs the same pair, and a
-    test that published without approving would now be asserting on a state the
-    domain refuses to produce.
+    Three distinct identities are required (NEX-078): ``AUTHOR`` drafts,
+    ``OPERATOR`` approves, ``PUBLISHER`` puts it in force. Kept as one helper
+    because every lifecycle test needs the same trio, and a test that published
+    without approving — or reused one identity for two roles — would now be
+    asserting on a state the domain refuses to produce.
     """
     ApproveDraft(store=store, clock=clock, operator_gate=gate).execute(
         OPERATOR, ApprovePolicyVersion(policy_id=policy_id, version=version)
     )
     return PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR, PublishPolicyVersion(policy_id=policy_id, version=version)
+        PUBLISHER, PublishPolicyVersion(policy_id=policy_id, version=version)
     )
 
 
@@ -435,14 +453,16 @@ def test_rollback_creates_a_new_version_with_the_old_rules(
     _approve_then_publish(store, clock, gate, "p", v2.version)
 
     rolled_back = RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR,
+        PUBLISHER,
         RollbackPolicyVersion(policy_id="p", to_version=1, rationale="restore v1 behaviour"),
     )
 
     assert rolled_back.version == 3
     assert rolled_back.status is PolicyStatus.PUBLISHED
     assert rolled_back.rules == v1.rules
-    assert rolled_back.published_by == actor_label(OPERATOR)
+    # The caller is the publisher, and it is a third identity: the restored rules
+    # were authored by AUTHOR and approved by OPERATOR.
+    assert rolled_back.published_by == actor_label(PUBLISHER)
 
 
 def test_rollback_does_not_delete_history(
@@ -462,7 +482,7 @@ def test_rollback_does_not_delete_history(
     _approve_then_publish(store, clock, gate, "p", v2.version)
 
     RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR,
+        PUBLISHER,
         RollbackPolicyVersion(policy_id="p", to_version=1, rationale="restore"),
     )
 
@@ -618,7 +638,7 @@ def test_publishing_a_superseded_version_is_refused(
 
     with pytest.raises(Conflict, match="is already in force and is newer"):
         PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+            PUBLISHER, PublishPolicyVersion(policy_id="p", version=stale.version)
         )
 
     assert store.published_for("p") == store.get("p", in_force.version)
@@ -638,9 +658,9 @@ def test_a_refused_downgrade_leaves_the_decision_denying(
     stale, _ = _permissive_v1_denying_v2(store, clock, gate)
     assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.DENY
 
-    with pytest.raises(Conflict):
+    with pytest.raises(Conflict, match="is already in force and is newer"):
         PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+            PUBLISHER, PublishPolicyVersion(policy_id="p", version=stale.version)
         )
 
     assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.DENY
@@ -655,9 +675,9 @@ def test_a_refused_downgrade_leaves_history_untouched(
     """v2 must not be retired by an attempt that was refused."""
     stale, _ = _permissive_v1_denying_v2(store, clock, gate)
 
-    with pytest.raises(Conflict):
+    with pytest.raises(Conflict, match="is already in force and is newer"):
         PublishDraft(store=store, clock=clock, operator_gate=gate).execute(
-            OPERATOR, PublishPolicyVersion(policy_id="p", version=stale.version)
+            PUBLISHER, PublishPolicyVersion(policy_id="p", version=stale.version)
         )
 
     assert [(v.ref, v.status) for v in store.history("p")] == [
@@ -680,7 +700,7 @@ def test_rollback_remains_the_supported_way_to_restore_old_rules(
     _permissive_v1_denying_v2(store, clock, gate)
 
     rolled_back = RollbackPolicy(store=store, clock=clock, operator_gate=gate).execute(
-        OPERATOR, RollbackPolicyVersion(policy_id="p", to_version=1, rationale="restore")
+        PUBLISHER, RollbackPolicyVersion(policy_id="p", to_version=1, rationale="restore")
     )
 
     assert rolled_back.version == 3

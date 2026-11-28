@@ -19,7 +19,7 @@ a validity window that is empty because ``not_before`` is past ``expires_at``.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 
 import pytest
 
@@ -219,3 +219,46 @@ def test_the_rationale_is_part_of_grant_identity() -> None:
     """Two grants that differ only by stated reason are not the same record."""
     other = OperatorGrantRationale("a different reason")
     assert _grant(granted_by=BOB, rationale=REASON) != _grant(granted_by=BOB, rationale=other)
+
+
+# -- timezone awareness ------------------------------------------------------
+def test_a_naive_expiry_is_refused() -> None:
+    """A naive deadline names a wall-clock reading, not an instant (NEX-078).
+
+    Two deployments in different zones would read the same stored grant as
+    expiring at different moments. The old code accepted it and then compared it
+    to an aware clock, which raised ``TypeError`` — a 500 on the issue path — so
+    the failure surfaced far from the value that caused it.
+    """
+    naive = datetime(2026, 11, 28, 10, 0)
+    with pytest.raises(ValidationError, match="expires_at must be timezone-aware"):
+        _grant(expires_at=naive)
+
+
+def test_a_naive_grant_time_is_refused() -> None:
+    with pytest.raises(ValidationError, match="granted_at must be timezone-aware"):
+        _grant(granted_at=datetime(2026, 11, 27, 10, 0))
+
+
+def test_a_naive_not_before_is_refused() -> None:
+    with pytest.raises(ValidationError, match="not_before must be timezone-aware"):
+        _grant(not_before=datetime(2026, 11, 27, 11, 0))
+
+
+def test_a_tzinfo_without_an_offset_is_still_naive() -> None:
+    """``tzinfo`` being set is not enough: the stdlib calls a zero-offset-less
+    tzinfo naive too, and this guard must use the same rule or it will let a
+    misconfigured zone through and raise ``TypeError`` at the first comparison."""
+
+    class _NoOffset(tzinfo):  # type: ignore[misc]
+        def utcoffset(self, dt: object) -> None:
+            return None
+
+    with pytest.raises(ValidationError, match="must be timezone-aware"):
+        _grant(expires_at=datetime(2026, 11, 28, 10, 0, tzinfo=_NoOffset()))
+
+
+def test_an_aware_expiry_is_accepted() -> None:
+    """The requirement is awareness, not a particular zone."""
+    grant = _grant(expires_at=datetime(2026, 11, 28, 10, 0, tzinfo=UTC))
+    assert grant.expires_at == datetime(2026, 11, 28, 10, 0, tzinfo=UTC)

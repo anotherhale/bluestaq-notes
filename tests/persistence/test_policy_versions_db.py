@@ -357,6 +357,48 @@ def test_schema_refuses_a_second_published_version_of_one_policy(
         session.commit()
 
 
+def test_schema_refuses_an_approver_who_also_publishes(
+    store: SqlAlchemyPolicyVersionRepository,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The third pair, in the schema (NEX-078).
+
+    The domain refuses this, but a rule held only in the domain is one an
+    alternative writer — a migration, a script, a future adapter — can walk
+    around. This pins the constraint itself, so the check survives any caller
+    that skips ``PublishDraft``.
+    """
+    draft = _draft(version=1)
+    store.add_draft(draft)
+    store.approve(draft.approve(now=NOW, approved_by="reviewer-1"))
+
+    with pytest.raises(IntegrityError), session_factory() as session:
+        session.execute(
+            text(
+                "UPDATE policy_versions SET status = 'published',"
+                " published_at = :at, published_by = :by"
+                " WHERE policy_id = :pid AND version_number = 1"
+            ),
+            # Same principal as the recorded approver: both halves of the
+            # two-person control performed alone.
+            {"at": NOW, "by": "reviewer-1", "pid": "content.access"},
+        )
+        session.commit()
+
+
+def test_schema_accepts_three_distinct_principals(
+    store: SqlAlchemyPolicyVersionRepository,
+) -> None:
+    """The constraint refuses the collapse, not publication itself."""
+    draft = _draft(version=1)
+    store.add_draft(draft)
+    approved = draft.approve(now=NOW, approved_by="reviewer-1")
+    store.approve(approved)
+    published = approved.publish(now=NOW, published_by="carol")
+    store.publish(published)
+    assert published.status is PolicyStatus.PUBLISHED
+
+
 def test_schema_refuses_reusing_a_version_number(
     session_factory: sessionmaker[Session],
 ) -> None:

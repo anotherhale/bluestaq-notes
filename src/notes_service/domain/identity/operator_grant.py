@@ -38,6 +38,13 @@ Fail-closed decisions, stated
   defect where one clock wrote a bound and another read it. ``is_active`` takes
   the caller's ``now`` so the gate's clock and the bound's clock are provably the
   same one.
+* **Every timestamp must be timezone-aware.** A naive datetime does not name an
+  instant, it names a wall-clock reading in an unstated zone, so two deployments
+  reading the same grant would disagree about when it expires. The old code
+  accepted one and then compared it to an aware clock, which raised ``TypeError`` —
+  a 500 on the grant-issue path, and a bound whose meaning depended on which side
+  happened to be naive. Refusing it at construction makes the requirement
+  checkable once, for every writer, instead of at each comparison.
 """
 
 from __future__ import annotations
@@ -163,6 +170,19 @@ class OperatorGrant:
             # The reverse would attribute a reason to a deployment that never gave
             # one, which is a fabricated audit fact rather than a missing one.
             raise ValidationError("a configuration operator grant must not carry a rationale")
+        # Awareness is checked before any comparison, because comparing a naive to
+        # an aware datetime raises TypeError rather than returning False - an
+        # unhandled 500 rather than the fail-closed refusal this type promises.
+        # ``utcoffset() is None`` is checked as well as ``tzinfo is None`` because a
+        # tzinfo that yields no offset (a misconfigured zone) is naive too, by the
+        # same rule the stdlib uses.
+        for field_name in ("granted_at", "not_before", "expires_at"):
+            value = getattr(self, field_name)
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise ValidationError(
+                    f"operator grant {field_name} must be timezone-aware; "
+                    "a naive datetime names a wall-clock reading, not an instant"
+                )
         if self.expires_at is not None and self.expires_at <= self.granted_at:
             # A grant that expires at or before it was issued is a mistake that
             # would otherwise look like a working grant until the first check.

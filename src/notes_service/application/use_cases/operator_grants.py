@@ -341,6 +341,15 @@ class IssueOperatorGrant:
         self._require_attenuation(principal, request.scope)
 
         now = self._clock.now()
+        # Awareness is checked before the comparison for the same reason the domain
+        # checks it before its own: comparing a naive deadline to the aware clock
+        # raises TypeError, so a caller that bypassed the request schema would get a
+        # 500 instead of the fail-closed refusal a bad deadline deserves (NEX-078).
+        if request.expires_at.tzinfo is None or request.expires_at.utcoffset() is None:
+            raise ValidationError(
+                "an operator grant must expire at a timezone-aware instant; "
+                "a naive datetime does not identify when access ends"
+            )
         if request.expires_at <= now:
             raise ValidationError("an operator grant must expire in the future")
         grant = OperatorGrant(

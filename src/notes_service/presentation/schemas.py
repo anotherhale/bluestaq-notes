@@ -1041,12 +1041,30 @@ class OperatorGrantIssueRequest(StrictModel):
     widening this user's authority, and it is now stored (the grant row has a
     column for it). Requiring it at the boundary means a privileged hand-out can
     never be recorded without a reason an auditor can read back.
+
+    ``expires_at`` must carry a UTC offset (NEX-078). Without one, "2026-12-01"
+    is a wall-clock reading in a zone the request never named: the store would
+    relabel it as UTC, so an operator in a UTC+10 deployment who meant local
+    midnight would grant ten hours more access than they wrote. The deadline is
+    the whole safety property of a bounded grant, so an ambiguous one is refused
+    at the boundary rather than guessed at, with a message that says how to fix it.
     """
 
     user_id: str
     scope: str = Field(min_length=1, max_length=64)
     expires_at: datetime
     rationale: str = Field(min_length=1, max_length=MAX_RATIONALE_LENGTH)
+
+    @field_validator("expires_at")
+    @classmethod
+    def _require_utc_offset(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(
+                "expires_at must include a UTC offset (for example "
+                "'2026-12-01T00:00:00Z' or '2026-12-01T10:00:00+10:00'); "
+                "a naive timestamp does not identify an instant"
+            )
+        return value
 
 
 class OperatorGrantResponse(ResponseModel):

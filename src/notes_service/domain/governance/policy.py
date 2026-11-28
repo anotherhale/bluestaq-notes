@@ -426,26 +426,38 @@ class PolicyRule:
             )
 
 
-def separation_of_duties(*, author: str | None, publisher: str, ref: str) -> None:
-    """Refuse to let the principal that drafted a version publish it (M3.3).
+def separation_of_duties(
+    *, author: str | None, approver: str | None, publisher: str, ref: str
+) -> None:
+    """Refuse publication unless the three principals are pairwise distinct (M3.3).
 
     The security architecture is explicit that sensitive actions need separation
     of duties, and the authorization model says the actor requesting a sensitive
     action cannot approve their own. A policy version is the most sensitive object
-    in the platform — publishing one puts rules in force for every agent — so the
-    author and the publisher must be two principals.
+    in the platform — publishing one puts rules in force for every agent — so
+    authoring, approving and publishing must be three different principals.
+
+    Enforcing only ``author != publisher`` (the pre-NEX-078 rule) left a real gap:
+    an operator who approved a colleague's draft could then publish it too, so one
+    person performed both halves of the two-person control after a third wrote the
+    rules. That is a one-person governance boundary wearing three names in the
+    audit trail. All three pairs are therefore checked here, in one place:
+
+    * ``author != approver`` — a review by the author is not a review.
+    * ``author != publisher`` — the writer of the rules must not put them in force.
+    * ``approver != publisher`` — the reviewer must not also enact the review.
 
     Two things are deliberate:
 
-    * **An unknown author fails closed.** A version whose author is not recorded
-      cannot be checked, and "cannot be checked" must not mean "allowed", or the
-      control is bypassed by omitting a field. ``None`` is therefore a refusal,
-      not a pass. The message says so, because the fix (re-draft under an
-      identified author) is different from the fix for a self-publish.
+    * **An unknown author or approver fails closed.** A version whose author or
+      approver is not recorded cannot be checked, and "cannot be checked" must not
+      mean "allowed", or the control is bypassed by omitting a field. ``None`` is
+      therefore a refusal, not a pass. The messages say so, because the fix
+      (re-draft, or approve under a named principal) differs from a self-publish.
     * **The comparison is on the recorded identifiers**, not on a session, an
-      email or a provider subject. ``published_by`` and ``drafted_by`` are both
-      stamped from the authenticated principal at the boundary, so comparing them
-      is comparing two authoritative identities rather than two claims.
+      email or a provider subject. All three are stamped from the authenticated
+      principal at the boundary, so comparing them is comparing authoritative
+      identities rather than claims.
 
     This is a *domain* rule because it must hold for every caller. It is checked
     again in :class:`~notes_service.application.use_cases.policy_lifecycle.
@@ -458,10 +470,25 @@ def separation_of_duties(*, author: str | None, publisher: str, ref: str) -> Non
             f"cannot publish {ref}: the drafting principal is not recorded, so "
             "separation of duties cannot be satisfied"
         )
+    if approver is None:
+        raise InvariantViolation(
+            f"cannot publish {ref}: no approving principal is recorded, so "
+            "separation of duties cannot be satisfied"
+        )
     if author == publisher:
         raise InvariantViolation(
             f"cannot publish {ref}: {publisher} drafted it, and separation of duties "
             "requires a different principal to publish"
+        )
+    if approver == publisher:
+        raise InvariantViolation(
+            f"cannot publish {ref}: {publisher} approved it, and separation of duties "
+            "requires a different principal to publish"
+        )
+    if author == approver:
+        raise InvariantViolation(
+            f"cannot publish {ref}: {approver} both drafted and approved it, and "
+            "separation of duties requires a different principal to approve"
         )
 
 
@@ -546,18 +573,22 @@ class PolicyVersion:
     separation of duties (M3.3) is only checkable if the author is trustworthy.
     It is ``None`` only for a version that predates the field; a version that has
     been published always names both its author and its publisher, and
-    :func:`separation_of_duties` refuses the pair being the same principal.
+    :func:`separation_of_duties` refuses the three roles collapsing into fewer
+    than three principals.
 
     ``approved_at``/``approved_by`` are the approval record (NEX-065). They are
     stamped only by :meth:`approve`, and :meth:`publish` refuses a version that
     lacks them, so a policy *published under these rules* was approved by a named
     second principal at a known time — a property the type enforces rather than a
-    convention a caller is trusted to follow. ``approved_by`` must differ from
-    ``drafted_by`` for the same reason the publisher must: an author approving their
-    own policy is not a review. The publisher need not be the approver — publishing
-    is the mechanical act of putting an already-approved version in force, and
-    requiring the approver to also be the publisher would make a two-person control
-    impossible with only two operators.
+    convention a caller is trusted to follow.
+
+    The three roles are pairwise distinct (NEX-078). ``approved_by`` must differ
+    from ``drafted_by`` for the same reason the publisher must: an author approving
+    their own policy is not a review. The publisher must also differ from *both* —
+    from the author (they must not force their own rules) and from the approver (a
+    single operator must not complete both halves of the two-person control). So a
+    version in force names three different principals, and
+    :func:`separation_of_duties` refuses any pair that collapses.
 
     The one exception is a version that was already in force before NEX-065: it has
     no approval to record and inventing one would forge the very audit trail this
@@ -731,7 +762,12 @@ class PolicyVersion:
                 f"policy version {self.policy_id}@v{self.version} is already {self.status.value}"
             )
         publisher = _validate_identifier(published_by, what="published_by")
-        separation_of_duties(author=self.drafted_by, publisher=publisher, ref=self.ref)
+        separation_of_duties(
+            author=self.drafted_by,
+            approver=self.approved_by,
+            publisher=publisher,
+            ref=self.ref,
+        )
         return PolicyVersion(
             policy_id=self.policy_id,
             version=self.version,

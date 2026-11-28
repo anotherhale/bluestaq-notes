@@ -41,6 +41,7 @@ from notes_service.domain.governance.policy import (
     PolicyVersion,
     evaluate,
     new_policy_version,
+    separation_of_duties,
     supersedes,
 )
 
@@ -494,3 +495,55 @@ def test_supersedes_does_not_refuse_an_equal_version() -> None:
     answers "is it newer?", the store answers "was it approved?".
     """
     supersedes(_release(2), _release(2))
+
+
+# -- separation of duties (three-way) ---------------------------------------
+def test_separation_of_duties_accepts_three_distinct_principals() -> None:
+    """Author, approver and publisher as three different principals is the goal."""
+    separation_of_duties(author="dana", approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_approver_who_also_publishes() -> None:
+    """The gap NEX-078 closes: one operator performs both halves of the control.
+
+    Before this rule only ``author != publisher`` was checked, so an approver
+    could then publish the very draft they reviewed and the two-person control
+    collapsed into one person after a third wrote the rules.
+    """
+    with pytest.raises(InvariantViolation, match="bob approved it"):
+        separation_of_duties(author="dana", approver="bob", publisher="bob", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_author_who_publishes() -> None:
+    with pytest.raises(InvariantViolation, match="alice drafted it"):
+        separation_of_duties(author="alice", approver="bob", publisher="alice", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_author_who_approves() -> None:
+    with pytest.raises(InvariantViolation, match="both drafted and approved"):
+        separation_of_duties(author="bob", approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_unrecorded_author() -> None:
+    """Fail closed: a version with no recorded author cannot be checked, so it
+    must not be published — otherwise the control is bypassed by omitting a
+    field."""
+    with pytest.raises(InvariantViolation, match="drafting principal is not recorded"):
+        separation_of_duties(author=None, approver="bob", publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_refuses_an_unrecorded_approver() -> None:
+    with pytest.raises(InvariantViolation, match="no approving principal is recorded"):
+        separation_of_duties(author="dana", approver=None, publisher="carol", ref="p v1")
+
+
+def test_separation_of_duties_checks_every_pair_not_just_one() -> None:
+    """All three pairs are refused, so the rule cannot be satisfied by fixing one."""
+    refusals = (
+        {"author": "a", "approver": "b", "publisher": "a"},
+        {"author": "a", "approver": "a", "publisher": "b"},
+        {"author": "a", "approver": "b", "publisher": "b"},
+    )
+    for principals in refusals:
+        with pytest.raises(InvariantViolation):
+            separation_of_duties(ref="p v1", **principals)  # type: ignore[arg-type]

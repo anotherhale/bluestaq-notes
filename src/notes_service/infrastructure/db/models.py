@@ -842,15 +842,20 @@ class PolicyVersionRow(Base):
             " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
             name="policy_versions_publication_data_consistent",
         ),
-        # Separation of duties (NEX-050, extended by NEX-065): anything past draft
-        # names an author, and that author is neither the principal that approved it
-        # nor the one that published it. An author approving their own rules is not a
-        # review, so the approval step is checked as well as the publication step.
+        # Separation of duties (NEX-050, extended by NEX-065 and NEX-078): anything
+        # past draft names an author, and the author, approver and publisher are
+        # pairwise distinct. An author approving their own rules is not a review, and
+        # an approver who also publishes has performed both halves of the two-person
+        # control alone, so the third pair is checked as well. A legacy in-force row
+        # carries a NULL approver, and a NULL comparison is NULL, which a CHECK
+        # constraint treats as passing rather than failing - so widening the rule
+        # does not invalidate data written before approvals were recorded.
         CheckConstraint(
             "status = 'draft'"
             " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
             " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
-            " AND drafted_by <> published_by AND drafted_by <> approved_by)",
+            " AND drafted_by <> published_by AND drafted_by <> approved_by"
+            " AND approved_by <> published_by)",
             name="policy_versions_separation_of_duties",
         ),
         Index("ix_policy_versions_policy_status", "policy_id", "status"),

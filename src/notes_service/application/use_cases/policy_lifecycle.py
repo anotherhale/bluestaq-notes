@@ -22,8 +22,10 @@ Monitor``. NEX-050 built the control approval depends on — **separation of dut
 enforced in the domain and again here — but a control is not a record. This module
 now also ships the missing ``Approve`` verb: :class:`ApproveDraft` transitions a
 draft to ``APPROVED`` with its own operator scope, and :class:`PublishDraft` refuses
-anything that has not been approved. Putting a policy in force is therefore two
-recorded decisions by two different principals rather than one.
+anything that has not been approved. Putting a policy in force is therefore three
+recorded decisions by three different principals rather than one: author, approver
+and publisher are pairwise distinct (NEX-078), so no single operator can perform
+two of the three roles.
 
 The approval record is deliberately part of the *version*, not a separate table,
 because it describes that version's own history: who approved v3, and when, must
@@ -219,7 +221,7 @@ def _require_enforceable_obligations(
     )
 
 
-def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:
+def _require_distinct_roles(draft: PolicyVersion, *, publisher: str) -> None:
     """Turn the domain separation-of-duties rule into an application ``Conflict``.
 
     The domain raises :class:`InvariantViolation`, which the transport maps to a
@@ -229,12 +231,22 @@ def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:
     callers that bypass this use case; this function only re-expresses the same rule
     with a more useful status.
 
-    A ``None`` author is a conflict too, not a pass: the domain refuses it, and
-    translating that into "go ahead" here would undo the control for exactly the
-    drafts that never recorded an author.
+    Three identities must be distinct (NEX-078), not two: the author, the approver
+    and the publisher. Passing ``draft.approved_by`` through to the domain is what
+    closes the gap where an approver could also publish, completing both halves of
+    the control alone.
+
+    A ``None`` author or approver is a conflict too, not a pass: the domain refuses
+    it, and translating that into "go ahead" here would undo the control for exactly
+    the drafts that never recorded who wrote or reviewed them.
     """
     try:
-        separation_of_duties(author=draft.drafted_by, publisher=publisher, ref=draft.ref)
+        separation_of_duties(
+            author=draft.drafted_by,
+            approver=draft.approved_by,
+            publisher=publisher,
+            ref=draft.ref,
+        )
     except InvariantViolation as exc:
         raise Conflict(str(exc)) from exc
 
@@ -242,7 +254,7 @@ def _require_two_principals(draft: PolicyVersion, *, publisher: str) -> None:
 def _require_distinct_approver(draft: PolicyVersion, *, approver: str) -> None:
     """The same two-person rule for the approval step (NEX-065).
 
-    Kept separate from :func:`_require_two_principals` rather than folded into it
+    Kept separate from :func:`_require_distinct_roles` rather than folded into it
     because the two check different pairs. An author who approves their own draft
     and has it published by a third operator satisfies the publish-time check
     perfectly while still never having had their rules reviewed, so the approval
@@ -344,7 +356,7 @@ class PublishDraft:
                 f"policy version {draft.ref} is {draft.status.value} and cannot be published"
             )
         publisher = actor_label(principal)
-        _require_two_principals(draft, publisher=publisher)
+        _require_distinct_roles(draft, publisher=publisher)
         current = self._store.published_for(request.policy_id)
         _require_newer_release(draft, in_force=current)
         published = draft.publish(now=self._clock.now(), published_by=publisher)
@@ -400,9 +412,9 @@ class RollbackPolicy:
         # an author cannot silently re-force their own retired rules. Both
         # identities are still recorded, so the history names who restored what.
         publisher = actor_label(principal)
-        _require_two_principals(source, publisher=publisher)
+        _require_distinct_roles(source, publisher=publisher)
         author = source.drafted_by
-        assert author is not None  # guaranteed by _require_two_principals
+        assert author is not None  # guaranteed by _require_distinct_roles
         version_number = self._store.next_version_number(request.policy_id)
         draft = new_policy_version(
             policy_id=request.policy_id,
