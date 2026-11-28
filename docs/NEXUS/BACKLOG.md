@@ -4969,3 +4969,106 @@ The pair list is still finite: a credential compounded from two words on neither
 vocabulary, not a structural hole. The structural holes this closes are *position* and
 *spelling*; what remains is *vocabulary*, which fails loudly the moment a test names the
 missing word.
+
+## NEX-105 — Cookie-authenticated writes must come from our own origin
+
+Run `NEXUS-2026-11-28-106`. Phase 3 (security governance). **TESTED + COMMITTED + PUSHED.**
+
+### The defect
+
+Browser login shipped a session credential into a cookie, and a cookie is *ambient*
+authority: a browser attaches it to a request any origin initiated. A page on
+`evil.example` could therefore make the victim's browser issue an authenticated `POST`
+without ever reading a token — a plain CSRF write.
+
+`docs/SECURITY.md` still recorded CSRF under "Deliberately deferred" as *"not applicable:
+the API is token/header-based, not cookie-based"*. That statement was true before session
+cookies and false after, and nothing in code had replaced it. `SameSite=Lax` was the only
+defence, and it is not an enforcement point: a split frontend/backend deployment requires
+`SameSite=None`, at which point no server-side check remained at all.
+
+### The fix
+
+`CookieAuthOriginGuardMiddleware` in `presentation/csrf.py`, plus `CSRF_TRUSTED_ORIGINS`
+in `Settings`. It is registered in `bootstrap/app.py` after CORS so that it runs *before*
+it (Starlette runs last-added first): a forged write must be refused by us, never answered
+by the CORS layer.
+
+The rule, and only the rule:
+
+- A safe method (`GET`/`HEAD`/`OPTIONS`/`TRACE`) is never blocked. Any other method —
+  including one this build has never seen — is treated as unsafe, so an unrecognised verb
+  is guarded rather than assumed harmless.
+- A request presenting **no** session cookie is never blocked. A bearer or demo caller
+  rides no ambient authority and has nothing to forge.
+- Every other request must carry an `Origin` naming either the scheme, host and port the
+  request was addressed to, or an entry in `CSRF_TRUSTED_ORIGINS`. Missing, empty, opaque
+  `null`, lookalike-suffix, scheme-downgrade, port-mismatch and path-bearing origins are
+  all refused with `403 csrf_rejected`.
+
+The decision logic is a pure function (`evaluate`) over plain values, so the security
+rule is unit-testable without an app; the middleware is a thin adapter that parses the
+cookie, the `Origin` and the `Host`/forwarded-scheme headers and hands them over.
+
+### Why the middleware layer, not a route dependency
+
+`POST /auth/logout` reads the session cookie directly and never resolves a `Principal`
+through `PrincipalDep`. A guard living in the authentication dependency would have left
+the one route that most needs it exposed — and left it exposed *silently*, since a missing
+dependency is not an error. The middleware layer covers every route, including ones added
+later, which is what NEX-100 did for authentication and NEX-101 for operator gating.
+
+### Why this is separate from CORS
+
+`CORS_ALLOW_ORIGINS` configures a *read* barrier the browser enforces. Reusing it as a
+write permission would mean that any origin trusted to read a response — a permissive list
+in development, say — silently also gains the right to drive state changes. The two are
+configured independently so widening one cannot widen the other. An empty
+`CSRF_TRUSTED_ORIGINS` does **not** mean "allow everyone"; it means "same-origin only".
+
+### Load-bearing, measured
+
+Mutation control, run this session: unregistering `CookieAuthOriginGuardMiddleware` from
+the app turns **exactly the four wiring tests** red and leaves the pure-function cases
+green. That split is correct and is itself the evidence — the pure tests assert the rule,
+the wiring tests assert the rule is reachable from HTTP. Either alone would pass against a
+module nothing calls.
+
+### Tests
+
+`tests/authentication/test_csrf_origin_guard.py` holds **32 cases**, measured with a
+pytest collection run rather than counted from the source:
+
+- Safe methods allowed with a cookie and no `Origin`; an unknown verb treated as unsafe.
+- Non-cookie callers unaffected (parametrised across `POST`/`PUT`/`PATCH`/`DELETE`).
+- Same-origin allowed; default and explicit default ports compare equal; foreign origin,
+  lookalike suffix, missing, empty, opaque `null`, scheme downgrade, port mismatch and
+  path-bearing origins all rejected.
+- Trusted origins widen only to themselves — a sibling host on a trusted origin is not
+  thereby trusted.
+- Proxy handling: `X-Forwarded-Proto` is authoritative over the connection scheme; a
+  garbage `Host` yields no host/port rather than a guess.
+- Wired app: a foreign-origin cookie write is refused; a same-origin cookie write reaches
+  the application; a missing-origin cookie write is refused; a bearer caller is unaffected;
+  a safe read with a cookie and no `Origin` is served; a foreign-origin logout is refused;
+  and the refusal does not echo a CORS permission header.
+
+Two pre-existing logout tests failed after wiring the guard (403 instead of 204). The
+guard was right and the tests were unrealistic: `TestClient` sends no `Origin`. They were
+fixed by sending `Origin` — simulating a real browser — rather than by weakening the guard.
+That choice is the whole point of the slice.
+
+### Gates
+
+`ruff format --check` 335 clean, `ruff check` clean, `mypy` 145 source files clean,
+`pytest` **2045 passed / 4 skipped** (run measured with `--junit-xml`: 2045 tests, 0
+failures, 0 errors, 4 skipped).
+
+### Residual (stated, not hidden)
+
+The check is origin-based, not token-based. A browser that omits `Origin` on an unsafe
+request is refused rather than served — the intended direction of failure, but it is a
+behaviour change for a non-browser cookie client, which must now send `Origin`. A
+synchroniser-token scheme would add defence in depth for such clients at the cost of a
+token-issuance endpoint and a second cookie; there is no demonstrated need yet, so it
+stays recorded as deferred rather than built.

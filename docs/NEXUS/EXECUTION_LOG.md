@@ -13037,5 +13037,94 @@ comment this run.
 conclusion and read it per job and per step; promote to VERIFIED if green, fix it if red. Then
 select the next dependency-ready slice. Do not re-open the structural-guard family.
 
+---
+
+## Run `NEXUS-2026-11-28-106` — NEX-105: cookie-authenticated writes need our own origin
+
+**Starting commit.** `bcca6b9` (docs-only promotion of NEX-104). Live head resolved with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; this clone's fetch
+refspec maps only `main`, so `git rev-parse origin/<branch>` remains untrustworthy here.
+
+**Task completed.** NEX-105, one vertical slice: `CookieAuthOriginGuardMiddleware`
+(`presentation/csrf.py`, 264 lines), `CSRF_TRUSTED_ORIGINS` in `Settings`, registration in
+`bootstrap/app.py`, 32 cases in `tests/authentication/test_csrf_origin_guard.py`, two logout
+tests corrected to send `Origin`. The documentation half (`docs/SECURITY.md`,
+`.env.example`) lands in the docs commit after the product commit, not in it.
+
+**Why this slice.** `docs/SECURITY.md` recorded CSRF as "not applicable: the API is
+token/header-based, not cookie-based". Session cookies had already shipped, so that sentence
+had quietly become false while nothing in code replaced it. `SameSite=Lax` was the only
+defence, and a split frontend/backend deployment requires `SameSite=None` — at which point the
+platform had no server-side CSRF control at all. This is the P0 shape the priority tiers name
+(security vulnerability / authorization path), not a P4 nicety.
+
+**Design decisions, and the alternatives rejected.**
+
+- *Middleware, not a route dependency.* `POST /auth/logout` reads the session cookie and never
+  resolves a `Principal` through `PrincipalDep`. A dependency-level guard would have left that
+  route exposed and left it exposed silently. The middleware covers routes that do not exist
+  yet, which is the same reasoning that produced NEX-100 (route authentication) and NEX-101
+  (operator gating).
+- *A separate setting, not `CORS_ALLOW_ORIGINS`.* Reusing the CORS list would make "trusted to
+  read" silently imply "trusted to write". Widening one must not widen the other.
+- *Pure decision function behind a thin adapter.* `evaluate()` takes plain values and returns a
+  verdict plus a reason, so the rule is testable without an app and the middleware holds only
+  parsing. The reason string is also what makes a refusal auditable.
+
+**Load-bearing, measured — not assumed.** Unregistering the middleware turned **exactly the
+four wiring tests** red and left the pure-function cases green. That split is the evidence: the
+pure cases assert the rule, the wiring cases assert the rule is *reachable*. A module nothing
+calls would pass the first and fail the second.
+
+**A test failure that was the test's fault, handled as such.** Wiring the guard broke two
+existing logout tests (403 instead of 204). The guard was correct — `TestClient` sends no
+`Origin` — so the fix was to make the tests behave like a browser and send `Origin`, and the
+alternative (exempt `/auth/logout`) was rejected because it is the exact route that needs the
+check. Weakening a control to keep a test green is the failure mode the operating rules name
+explicitly.
+
+**Files changed.** `src/notes_service/presentation/csrf.py` (new),
+`src/notes_service/bootstrap/app.py`, `src/notes_service/bootstrap/config.py`,
+`tests/authentication/test_csrf_origin_guard.py` (new),
+`tests/authentication/test_login_router.py` — all in product commit `afd07e1`. The
+documentation half of this slice, `docs/SECURITY.md` and `.env.example`, is committed
+immediately after `afd07e1` with the NEXUS state records, not inside it. That split was
+noticed by comparing `git show --stat afd07e1` against `git status --porcelain` at the end
+of the run rather than assumed: the two documentation files were still unstaged.
+
+**Gates, all run bare exactly as CI does.** `ruff format` (first pass reformatted;
+`--check` then reported 335 files already formatted, which matters because CI also formats
+Python inside markdown fences), `ruff check` clean after one `RUF012` fix (a mutable class
+attribute became `ClassVar`), `mypy` clean over 145 source files, `pytest` **2045 passed /
+4 skipped**, 0 failures, 0 errors — counted from a `--junit-xml` run rather than from the
+summary line.
+
+**Commit incident, disclosed.** The commit body was passed as a multi-line `-m` through the
+shell and was corrupted (the known heredoc/multi-line trap on this host: text self-interleaved
+and repeated). It was caught by reading the stored message back with `git log -1 --format=%B`,
+noticed as repeated fragments, and repaired by writing the message with `file_editor` and
+amending with `git commit --amend -F`. The commit content was never affected — only the
+message — and the amended commit was pushed as `afd07e1`. **Lesson, again, for the next run:
+write commit messages with `file_editor` and pass `-F`; never a multi-line `-m`.**
+
+**Status, stated precisely.** NEX-105 is **TESTED + COMMITTED + PUSHED**. The product commit is
+`afd07e1` and `git ls-remote` confirms the remote head matches local `HEAD`. CI run
+`46174865205` for `afd07e1` was `in_progress` when this run's window closed, so **the verdict
+was not read and NEX-105 is not VERIFIED.** Recording it as VERIFIED because the local gates
+pass would be the falsification the status legend exists to prevent.
+
+**Push / PR / issue.** Pushed to the authorized branch; verified by `git ls-remote` returning
+the local `HEAD` rather than by trusting the push output. **No open PRs** — #3, #4 and #5 are
+merged by the repository owner; automated merging remains prohibited. A new PR was not opened
+this run: the slice is one coherent security control, but opening a PR with an unread CI
+verdict would be marking work ready for review while required validation is incomplete. Issue
+#2 remains open; no comment posted this run.
+
+**Next action.** Run 107: `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`,
+then poll the CI run for `afd07e1` to a conclusion and read it **per job and per step** — never
+a watch exit code, never run-level conclusion alone. If green, promote NEX-105 to VERIFIED in
+BACKLOG.md and STATE.md and post it to issue #2; if red, fix it rather than relabelling it. Then
+select the next dependency-ready slice.
+
 
 

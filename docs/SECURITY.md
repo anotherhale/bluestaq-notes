@@ -155,12 +155,52 @@ cannot exhaust another's budget. Limits are configurable
 - Transaction boundaries are owned by the Unit of Work; a failure rolls back.
 - Optimistic concurrency prevents lost updates (ADR-007).
 
+## Cross-site request forgery
+
+Browser login puts a session credential in a cookie, and a cookie is *ambient*
+authority: a browser attaches it to a request another origin initiated. `SameSite=Lax`
+is not an enforcement point — a deployment that needs a cross-origin frontend must set
+`SameSite=None`, at which point nothing server-side remained. This section previously
+claimed CSRF was "not applicable: the API is token/header-based"; that stopped being
+true when session cookies shipped.
+
+Enforced server-side in `presentation/csrf.py`, at the middleware layer rather than in
+a per-route dependency, because `POST /auth/logout` reads the cookie without going
+through `PrincipalDep` — a dependency-level guard would have left it exposed.
+
+The rule, and only the rule:
+
+- Safe methods (`GET`/`HEAD`/`OPTIONS`/`TRACE`) are never blocked. Any other method,
+  including one this build does not recognise, is treated as unsafe.
+- A request that presents **no session cookie** is never blocked: a bearer or demo
+  caller rides no ambient authority, and there is nothing to forge.
+- Any other request must carry an `Origin` naming either the host and scheme the
+  request was addressed to, or an entry in `CSRF_TRUSTED_ORIGINS`. A **missing**
+  `Origin`, an opaque `null`, a lookalike suffix, a scheme downgrade and a port
+  mismatch are all refused with `403 csrf_rejected`. Browsers send `Origin` on every
+  unsafe request — including same-origin ones — so a real browser client is unaffected;
+  a non-browser client that sends a cookie must send `Origin` too.
+
+The check is fail-closed and refuses rather than rewrites; it never inspects the body,
+so it composes with the body-size middleware. It is registered *after* CORS so it runs
+*before* it: a forged write is refused by the guard, never answered by the CORS layer.
+
+`CSRF_TRUSTED_ORIGINS` is deliberately separate from `CORS_ALLOW_ORIGINS`. CORS is a
+*read* barrier the browser enforces; a permissive CORS list must not silently become a
+write permission, so widening one does not widen the other.
+
+Residual: this defends the cookie path only, and it is origin-based rather than
+token-based, so a browser that omits `Origin` on an unsafe request would be refused
+rather than served. That is the intended direction of failure.
+
 ## Deliberately deferred
 
 - Full end-to-end OIDC handshake against a live IdP (the validator is
   implemented and unit-tested with locally generated keys).
 - Distributed rate limiting.
-- CSRF tokens (not applicable: the API is token/header-based, not cookie-based).
+- Per-request CSRF *tokens* (origin validation is enforced; a synchroniser-token
+  scheme would add defence in depth for non-browser cookie clients, at the cost of a
+  token-issuance endpoint and a second cookie — no demonstrated need yet).
 - Audit log persistence (permission `granted_by`/`created_at` are the only
   audit trail).
 
