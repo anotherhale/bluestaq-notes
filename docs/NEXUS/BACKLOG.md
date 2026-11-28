@@ -4180,7 +4180,7 @@ skipped**. **CI 4/4 `completed/success`** on `3159555` itself.
 
 ## NEX-094 — Bound the *active* operator-grant reads in the store (run `NEX-2026-11-28-93`)
 
-**Phase** 3 (governance) · **Priority** P1 · **Status** IMPLEMENTED + TESTED · **Complexity** S
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED — product `d8353ff`, CI 4/4 `completed/success` via docs head `d4abd07` (runs `46141744541`, `46141737990`) · **Complexity** S
 **Depends on** NEX-087 (the same defect class, closed elsewhere), NEX-079 (revocation as recorded fact), NEX-080 (`granted_by` provenance)
 **Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (audit integrity), ADR-008
 

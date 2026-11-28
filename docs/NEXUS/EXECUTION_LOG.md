@@ -11391,3 +11391,44 @@ different observable.
 IMPLEMENTED + TESTED. There is no CI verdict on a product commit yet, and per section 17 of the
 operating directive a green local suite is not a green CI. Verification (push → read CI per run and per
 job → `completed/success`) is the next run's first act if it does not complete here.
+
+## Run NEX-2026-11-28-94 — NEX-094 verified by descendant-CI, status promoted
+
+**Branch** `feature/agentic-enterprise-platform` · **Start** `d4abd07` · **End** docs commit on top of `d4abd07`
+**Tasks completed** NEX-094 (VERIFIED) · **Tasks in progress** none · **Blocked** none
+
+The only item outstanding on entry was NEX-094's CI verdict. NEX-093 was already VERIFIED at its own
+product commit. NEX-094's adapter change and tests were committed in run 93 as `d8353ff`, but that
+commit was left with **zero check-runs**: `ci.yml` declares `concurrency: ci-<workflow>-<ref>` with
+`cancel-in-progress: true`, so its own docs child cancelled the product runs. A verdict on `d8353ff`
+itself is therefore unobtainable, and claiming one would have been a fabrication.
+
+**Descendant-CI licence.** Substituted the verdict at docs head `d4abd07`, licensing the substitution
+three independent ways rather than by assumption:
+
+1. `d8353ff` is `d4abd07^` — a direct child, not a distant descendant.
+2. `git diff --stat d8353ff d4abd07` touches only `docs/NEXUS/*`.
+3. `git rev-parse <rev>:<path>` is equal for both product files across the two trees
+   (`src/notes_service/infrastructure/db/operator_grants.py`,
+   `tests/persistence/test_operator_grants.py`).
+
+**Verdict at `d4abd07`:** runs `46141744541` and `46141737990`, each 4/4 jobs `completed/success`;
+Backend 12/12 steps, Frontend 11/11 steps, `skipped=0`, all `head_sha=d4abd07`. → NEX-094 **VERIFIED**.
+
+**Delivery.** Issue #2 comment `7238846065`, read back at 19 lines and containing the run id. PR #5
+body 2337 → 2348 lines; the landed body was fetched back and diffed against the intended text and
+differs only by a trailing newline.
+
+**Status promotion.** STATE.md line 24, the BACKLOG.md NEX-094 header and the checkpoint now say
+VERIFIED. Every residual `NOT VERIFIED` string was classified rather than blanket-rewritten:
+STATE.md:24 was a *present-status* assertion and is corrected; the rest are historical sections
+(STATE.md:291, :2941, :3125; BACKLOG.md:528, :3901) whose negation is part of the record, and
+rewriting those would falsify history.
+
+**Tests** no product change this run, so the local gates were not re-run; the CI verdict is the
+evidence. **Migrations** none. **Security** no product change; the verification confirms NEX-094's
+bounding fix is green on a tree blob-identical to the product commit.
+
+**Checkpoint** updated in place, JSON validated after edit. **Next action** select the next
+dependency-ready slice from BACKLOG.md / ROADMAP.md and start a fresh vertical slice test-first.
+
