@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 
 from notes_service.domain.identity.value_objects import ExternalIdentityId, UserId
 from notes_service.domain.organization.value_objects import (
@@ -250,13 +250,30 @@ def create_team(
     dependencies=[RateLimitDep],
 )
 def list_organization_members(
-    organization_id: UUID, principal: PrincipalDep, container: ContainerDep
+    organization_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
 ) -> MembershipListResponse:
-    members = container.list_organization_members().run(
-        principal, organization_id=OrganizationId(str(organization_id))
+    """One page of the organization roster, with the set's exact size.
+
+    Paged rather than whole-set: there is no per-organization member cap, so an
+    unpaged read is a database read and a response body any member can grow
+    without bound. ``meta.total`` is the counted roster size, not ``len(items)``;
+    a page-derived total cannot distinguish a complete roster from a truncated
+    one.
+    """
+    page = container.list_organization_members().run(
+        principal,
+        organization_id=OrganizationId(str(organization_id)),
+        limit=limit,
+        offset=offset,
     )
-    items = [MembershipResponse.from_domain(member) for member in members]
-    return MembershipListResponse(items=items, meta=_page(items))
+    items = [MembershipResponse.from_domain(member) for member in page.items]
+    return MembershipListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(

@@ -153,7 +153,7 @@ def org_with_bob_as_admin(harness: Harness):  # type: ignore[no-untyped-def]
     org_id = created.organization.id
     harness.invite(alice, organization_id=org_id, user_id=BOB, role=OrganizationRole.ORG_MEMBER)
     members = harness.list_members(alice, organization_id=org_id)
-    bob_membership = next(m for m in members if m.user_id == str(BOB))
+    bob_membership = next(m for m in members.items if m.user_id == str(BOB))
     harness.change_role(
         alice,
         organization_id=org_id,
@@ -175,7 +175,7 @@ class TestOrgAdminHasNoContentAccess:
         # Bob really is an admin — he can administer the organization ...
         assert harness.list_members(
             principal_for(BOB), organization_id=org_with_bob_as_admin.organization.id
-        )
+        ).items
 
         # ... but the note is invisible to him, indistinguishable from absent.
         with pytest.raises(ResourceNotFound):
@@ -288,7 +288,7 @@ class TestExplicitSharingIsTheOnlyPath:
         members = harness.list_members(
             principal_for(ALICE), organization_id=org_with_bob_as_admin.organization.id
         )
-        bob_membership = next(m for m in members if m.user_id == str(BOB))
+        bob_membership = next(m for m in members.items if m.user_id == str(BOB))
         harness.change_role(
             principal_for(ALICE),
             organization_id=org_with_bob_as_admin.organization.id,

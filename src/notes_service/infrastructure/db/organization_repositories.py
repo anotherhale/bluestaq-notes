@@ -14,8 +14,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, cast
 
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
@@ -500,28 +500,50 @@ class SqlAlchemyOrganizationMembershipRepository:
             )
         )
 
-    def list_for_organization(
-        self, organization_id: OrganizationId
-    ) -> list[OrganizationMembership]:
+    @staticmethod
+    def _roster_predicate(organization_id: OrganizationId) -> list[ColumnElement[bool]]:
         # Offboarding is a soft delete (status -> DEPROVISIONED): the row is kept
         # for audit history, so the roster has to exclude it explicitly or an
         # offboarded person keeps appearing as a current member. Only the
         # terminal state is filtered out, not every non-active one: suspension is
         # a reversible pause and the reactivate endpoint needs the membership id,
         # so a suspended member must stay on the roster to be actionable.
-        rows = (
-            self._session.execute(
-                select(OrganizationMembershipRow)
-                .where(
-                    OrganizationMembershipRow.organization_id == _as_uuid(organization_id),
-                    OrganizationMembershipRow.status != MembershipStatus.DEPROVISIONED.value,
-                )
-                .order_by(OrganizationMembershipRow.created_at, OrganizationMembershipRow.id)
-            )
-            .scalars()
-            .all()
+        #
+        # The listing and the count share this predicate deliberately: a count
+        # that selected a different set would report a total no page can reach,
+        # which is the same class of defect as a total derived from len(page).
+        return [
+            OrganizationMembershipRow.organization_id == _as_uuid(organization_id),
+            OrganizationMembershipRow.status != MembershipStatus.DEPROVISIONED.value,
+        ]
+
+    def list_for_organization(
+        self, organization_id: OrganizationId, *, limit: int | None = None, offset: int = 0
+    ) -> list[OrganizationMembership]:
+        # ``id`` breaks ties so the OFFSET window is stable: memberships invited
+        # in one request burst share ``created_at``, and an order that is not
+        # total can repeat a row while skipping another as the window shifts.
+        statement = (
+            select(OrganizationMembershipRow)
+            .where(*self._roster_predicate(organization_id))
+            .order_by(OrganizationMembershipRow.created_at, OrganizationMembershipRow.id)
         )
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_org_membership_to_domain(row) for row in rows]
+
+    def count_for_organization(self, organization_id: OrganizationId) -> int:
+        # An aggregate reads no rows, so the total costs the same at any tenant
+        # size, and it is scoped by organization for the same reason the listing
+        # is: an unscoped count would disclose another tenant's member volume.
+        return int(
+            self._session.execute(
+                select(func.count())
+                .select_from(OrganizationMembershipRow)
+                .where(*self._roster_predicate(organization_id))
+            ).scalar_one()
+        )
 
     def list_for_user(self, user_id: UserId) -> list[OrganizationMembership]:
         rows = (

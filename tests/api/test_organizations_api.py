@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import ALICE, BOB, CAROL, auth_headers
+from tests.conftest import ALICE, BOB, CAROL, DEMO_USERS, auth_headers
 
 
 def create_org(client: TestClient, owner: str, slug: str, name: str | None = None) -> dict:
@@ -251,6 +251,102 @@ class TestOrganizationRoster:
 
         assert response.status_code == 422, response.text
         assert CAROL not in [m["user_id"] for m in self.roster(client, org["id"])["items"]]
+
+
+class TestOrganizationRosterPaging:
+    """The roster must be readable one window at a time (NEX-098).
+
+    The route answered with every member of the organization and derived ``total``
+    from that same list. There is no per-organization member cap, so a large
+    tenant made one read — and one response — grow without bound, and the caller
+    had no way to ask for a window. A page-derived total is also the NEX-082…
+    NEX-097 family's defect: it cannot distinguish a complete listing from a
+    truncated one.
+    """
+
+    def add_invitees(self, client: TestClient, org_id: str, count: int) -> list[str]:
+        # ALICE is the creating owner, so invitees are drawn from the remaining
+        # seeded identities; the roster total is one more than this count. Read
+        # them from the seed rather than inventing ids, so a seed change is not a
+        # silent divergence between the fixture and the generator.
+        invitees = [spec.id for spec in DEMO_USERS if spec.id != ALICE][:count]
+        assert len(invitees) == count, "not enough seeded identities to invite"
+        return [invite(client, ALICE, org_id, user, "org_member")["id"] for user in invitees]
+
+    def test_total_is_the_roster_size_not_the_page_size(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 3)  # owner + three invitees
+
+        page = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=1&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert len(page["items"]) == 1
+        # A page-derived total would read "1" and hide that three more exist.
+        assert page["meta"]["total"] == 4
+        assert page["meta"]["limit"] == 1
+        assert page["meta"]["offset"] == 0
+
+    def test_offset_walks_the_roster_without_repeating_a_row(self, client: TestClient) -> None:
+        # Memberships invited in one burst can share created_at, so the adapter's
+        # order must be total or an OFFSET window can repeat a row while skipping
+        # another. This pins the observable contract, not the tiebreaker.
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 3)
+
+        first = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=2&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+        second = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=2&offset=2",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+
+        first_ids = {item["id"] for item in first}
+        second_ids = {item["id"] for item in second}
+        assert first_ids.isdisjoint(second_ids)
+        assert len(first_ids | second_ids) == 4
+
+    def test_a_page_beyond_the_roster_is_empty_not_an_error(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+
+        page = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=10&offset=5",
+            headers=auth_headers(ALICE),
+        )
+
+        assert page.status_code == 200
+        assert page.json()["items"] == []
+        # The total still describes the set, so an empty page past the end is
+        # distinguishable from an empty organization.
+        assert page.json()["meta"]["total"] == 1
+
+    def test_a_page_size_beyond_the_cap_is_rejected(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+
+        response = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=201",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 422, response.text
+
+    def test_the_window_does_not_widen_the_authorization_check(self, client: TestClient) -> None:
+        # Paging must not become a way to read another tenant's roster: the
+        # caller still has to belong to the organization. The outsider is a
+        # seeded identity who was never invited, not one of the invitees.
+        org = create_org(client, ALICE, "acme")
+        self.add_invitees(client, org["id"], 2)
+        outsider = DEMO_USERS[-1].id
+
+        response = client.get(
+            f"/api/v1/organizations/{org['id']}/members?limit=1&offset=0",
+            headers=auth_headers(outsider),
+        )
+
+        assert response.status_code == 404, response.text
 
 
 class TestPrivilegeEscalation:
