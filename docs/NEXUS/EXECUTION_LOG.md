@@ -8856,3 +8856,23 @@ check-run pairs for one SHA is normal, and the verdict is taken from pairs whose
   honest way to describe the value is: the frontend gate now fails when the product is
   broken, where before it could pass regardless.
 - Nothing is left uncommitted and no task is left in a half-state.
+
+### Run 73 delivery catch-up
+
+- Starting commit `0b98fa7`, ending docs commit recorded by this entry's parent.
+- PR #5 was found **open, `draft=false`, `mergeable=true`**, with a body that stopped at
+  NEX-072. NEX-073's evidence existed only in the repo, so the PR a reviewer actually reads
+  did not mention it. Appended the NEX-073 section: 52843 → 54625 chars.
+- `STATE.md` described PR #5 as a "Draft". It is not. Corrected in place with the correction
+  visible rather than silent: a delivery row wrong in the direction of "not ready" could make
+  a later run skip work a reviewer is already reading.
+- Posted tracking-issue #2 comment `7231968445` (NEX-073 + this catch-up) and recorded its id
+  so the next run does not re-post.
+- Dropped the PR head SHA from the state files. It can never be current, and recording one
+  invites the next run to trust it. The files now say to read the head with `git ls-remote`.
+- Not verified: PR #5's CI was not re-polled after this docs push. The last polled evidence
+  is `09888ac` = 4/4 success. A docs-only commit cannot change that, but it is a statement
+  about the product commit, not about the tip.
+- No production files changed. No new slice started: the clock was under the 10-minute
+  threshold from the point NEX-073 was closed, and starting one would have risked an
+  uncommitted tree.
