@@ -1,9 +1,12 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-73",
-  "timestamp": "2026-11-28T02:04Z",
+  "timestamp": "2026-11-28T02:09Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "09888ac",
+  "commit": {
+    "product_head": "09888ac",
+    "note": "Product head, not the docs tip. This file's own commit can never be the tip; resolve with git ls-remote origin refs/heads/feature/agentic-enterprise-platform."
+  },
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049, NEX-058, NEX-065..NEX-072 verified. NEX-058's last open scope item (the claim-shape diagnostic that explains a fail-closed step-up) closed this run. Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
@@ -164,7 +167,7 @@
     "PR #5 body still lacks NEX-058..NEX-073 sections; the body is the outstanding delivery debt.",
     "NEX-073's fix is test-only and locally green, but CI has not been read for 09888ac. Treat CI as UNKNOWN until polled; do not report CI PASSED."
   ],
-  "next_task": "PR #5 body catch-up for NEX-058 and NEX-065..NEX-073 (body currently stops at NEX-070), then the operator_access_log retention policy (needs an ADR line before code). Do not re-implement NEX-058 or NEX-073.",
+  "next_task": "PR #5 body catch-up is DONE (NEX-073 appended at run 73; body 54625 chars, covers NEX-052..NEX-073). Do not repeat it. Next: decide the operator_access_log retention policy — it needs an ADR line before any code, because the retention window is a compliance decision, not an implementation detail. Do not re-implement NEX-058 or NEX-073.",
   "next_action": "1) gh run list --branch feature/agentic-enterprise-platform and read the check-runs on 09888ac; if all completed/success, mark NEX-073 VERIFIED-by-CI. 2) Named follow-up candidates: retention policy for operator_access_log (run 72's follow-up), PR #5 body catch-up for NEX-058..NEX-073. 3) Otherwise take whatever BACKLOG.md ranks highest among unblocked work.",
   "recovery_instructions": "HEAD should be the docs commit that carries this checkpoint, one commit after 09888ac (the NEX-073 product commit). The `commit` field can never name the commit that writes it, so resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-073 is test-only and IMPLEMENTED/TESTED/COMMITTED/PUSHED but NOT yet VERIFIED-by-CI: run 74 must read check-runs on 09888ac before promoting it.",
   "ci_status": {
@@ -237,5 +240,10 @@
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-073 VERIFIED-by-CI: check-runs on 09888ac are 4/4 completed/success (backend x2, frontend x2), read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed — CI evidence that the vacuous-assertion fix removed the flake."
+  "validation_status": "NEX-073 VERIFIED-by-CI: check-runs on 09888ac are 4/4 completed/success (backend x2, frontend x2), read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed — CI evidence that the vacuous-assertion fix removed the flake.",
+  "next_actions": [
+    "Write the ADR line for operator_access_log retention (window + who may purge), then the retention slice. This is the last open P1-adjacent item.",
+    "Consider asking the owner whether PR #5's 19 stacked slices should be split before review — it is a reviewer-experience risk, not a code risk.",
+    "Re-poll PR #5 CI on the docs tip if a green tip is needed; last evidence is 09888ac = 4/4 success."
+  ]
 }
