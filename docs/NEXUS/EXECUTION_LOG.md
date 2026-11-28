@@ -11432,3 +11432,66 @@ bounding fix is green on a tree blob-identical to the product commit.
 **Checkpoint** updated in place, JSON validated after edit. **Next action** select the next
 dependency-ready slice from BACKLOG.md / ROADMAP.md and start a fresh vertical slice test-first.
 
+---
+
+## Run `NEX-2026-11-28-95` — 2026-11-28T12:01Z → 2026-11-28T12:21Z
+
+**Starting commit** `c1a9eb6` (run-94 docs close-out head; matched by `git ls-remote`, local HEAD
+identical). **Ending commit** this docs commit, over product **`fb027ee`**. **Branch**
+`feature/agentic-enterprise-platform`. **Phase** 3 (governance).
+
+### What was in flight
+
+The previous run had implemented and committed the list-delegations slice end to end as `fb027ee` but
+had not located its backlog entry, recorded it, or read a CI verdict. So this run was a verification
+and bookkeeping close-out, not new product code — and it began by checking whether the product commit
+had CI of its own before writing anything that would supersede it.
+
+### Reconciled
+
+`CHECKPOINT.json` said `run_id NEX-2026-11-28-94`, product `d8353ff`. Git agreed the branch had moved
+two commits further (`8183099`, `fb027ee`), both present on the remote. `BACKLOG.md` ended at NEX-094,
+so the slice had no entry — it is **NEX-095**, continuing the paging family (NEX-086, 089, 090, 092).
+A heredoc append to `BACKLOG.md` self-interleaved and corrupted the file four times over; it was
+restored from a backup taken first (`/tmp/bl.bak`, `git status` clean afterwards) and rewritten with
+`file_editor`. That is the fifth variant of this failure on this host and the reason the rule exists.
+
+### Verified
+
+Both CI runs for `fb027ee` were still `in_progress` at entry. Rather than push the docs commit and
+cancel them in the concurrency group, the run waited and wrote docs locally. Both concluded
+`completed/success` — runs `46143797699` (pull_request) and `46143793292` (push), Backend 12/12 and
+Frontend 11/11 steps green, `skipped=0`, `failed=0`, both `head_sha=fb027ee`. The verdict is therefore
+**on the product commit itself**; no descendant-CI anchor or blob-identity licence was needed.
+
+### Files changed
+
+`docs/NEXUS/BACKLOG.md` (NEX-095 entry, ~84 lines) · `docs/NEXUS/STATE.md` (position table rows:
+phase, starting commit, head commit, last CI result, tracking issue, PR, open P1) ·
+`docs/NEXUS/CHECKPOINT.json` (rewritten for run 95, JSON re-validated before the atomic replace) ·
+`docs/NEXUS/EXECUTION_LOG.md` (this entry).
+
+### Tests
+
+No product change this run, so the local gates were not re-run; the CI verdict is the evidence.
+Recorded from the product run: full suite 1761 passed, 4 skipped; `ruff format` 325 unchanged;
+`ruff check` clean; `mypy` clean on 144 source files. **Migrations** none. **Security** no product
+change; the product commit's owner-only listing and 404-not-403 behaviour is covered by
+`TestDelegationListingHttp` and was green in CI.
+
+### Status promotion
+
+NEX-095 promoted to **VERIFIED** in `BACKLOG.md` and the checkpoint only after the CI read above.
+Residual `NOT VERIFIED` strings elsewhere in the docs are historical sections whose negation is part of
+the record and were deliberately left alone.
+
+### Delivery
+
+Verdict delivered to issue #2 and PR #5's body (NEX-095 section appended with `--body-file`, read back
+from the API). **Never merged.**
+
+### Next action
+
+Nothing is in flight. Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md` and start
+it test-first.
+

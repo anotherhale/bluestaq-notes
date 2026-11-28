@@ -4274,3 +4274,87 @@ the two delegation reads and `list_for_owner` use `created_at` alone but are unp
 so an unstable tie can only reorder presentation — not this defect class, and not to be opened without
 a consumer that depends on the order.
 
+## NEX-095 — Let a delegator see the grants it can withdraw one at a time (run `NEX-2026-11-28-95`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED — product `fb027ee`, CI 4/4 `completed/success` on the product commit itself (runs `46143797699` pull_request, `46143793292` push; Backend 12/12 and Frontend 11/11 steps green, zero skipped) · **Complexity** S
+**Depends on** NEX-053 (delegation model), NEX-085 (revocation as a recorded fact), NEX-089 (the page/total split this copies)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (delegation, revocation, audit), ADR-008 (404-not-403)
+
+### Objective
+
+A delegation is the only thing that lets an agent act *as* a human, and revocation is recorded rather
+than deleted (NEX-085), so the set only grows. But the delegation id existed in exactly one place: the
+`POST /agents/{id}/delegations` response that created it. A delegator who closed that response — or
+granted the delegation in an earlier session — could not name the grant to withdraw. The only reachable
+remedy was `RevokeAgent`, an emergency stop that also kills every other grant, every token, and the
+agent itself. Reading the grants is what makes *narrow* revocation usable.
+
+### The gap
+
+`DelegationRepository` had `get`, `list_for_agent`, `list_active_for_delegator` and
+`revoke_all_for_agent`. `list_for_agent` existed but was an unfiltered whole-set reader with no HTTP
+surface and no tiebreak, and `RevokeAgent` does not walk the list (it calls `revoke_all_for_agent`). So
+nothing in production read the set, and no client could.
+
+### The fix
+
+- Port: `list_for_agent(agent_id, *, status=None, limit=None, offset=0)` plus a new
+  `count_for_agent(agent_id, *, status=None)`. The total is a separate SQL `COUNT` aggregate, never
+  `len(page)`.
+- Adapter: filtering and windowing happen in the statement (`DelegationStatus` is a **stored** column,
+  `DelegationRow.status`, never derived, so SQL and a Python filter cannot disagree); order is
+  `(created_at, id)`. The `id` tiebreak matters here specifically because the window is an `OFFSET`:
+  an order that is not total lets a row repeat while another is skipped as the window shifts, and
+  grants made in the same request burst share `created_at` to the microsecond.
+- Use case: `ListDelegations` returns `DelegationPage(items, total)`; owner-only via `load_owned_agent`
+  (a non-owner gets 404, not 403 — an agent's existence is private).
+- API: `GET /agents/{id}/delegations` with `status`, `limit` (1..200), `offset`; response
+  `DelegationListResponse { items, meta: PageMeta }`. Omitted `status` means every delegation, so a
+  withdrawn grant stays visible rather than vanishing.
+
+This closes the "Remaining / next" note on NEX-094 that named the delegation reads as unpaged: a paging
+consumer now depends on the order, so the tiebreak is no longer cosmetic.
+
+### Acceptance criteria
+
+- [x] A delegator can list an agent's delegations and read each `id`
+- [x] The id read back is enough to `DELETE /agents/delegations/{id}` and withdraw exactly that grant
+- [x] A non-owner gets 404, never 403
+- [x] `meta.total` is the filtered set size, not the page length
+- [x] `status` filter narrows to `active` or `revoked`; omitted means both
+- [x] Paging windows are disjoint and together cover the set; replaying a window returns the same rows
+
+### Required tests
+
+- [x] `test_listing_recovers_the_id_needed_to_revoke_one_grant` — list, revoke one, the other survives
+- [x] `test_a_non_owner_gets_404_not_403`
+- [x] `test_an_unknown_agent_is_404`
+- [x] `test_the_status_filter_narrows_to_active_or_revoked`
+- [x] `test_an_unknown_status_is_rejected_as_a_client_error` (422, not a 500)
+- [x] `test_total_is_the_set_size_not_the_page_size`
+- [x] `test_offset_walks_the_set_without_repeating_a_row`
+- [x] Load-bearing proofs, each observed and restored: (a) `total = len(items)` fails only the total
+      test while the listing test still passes; (b) deleting `DelegationRow.status == status.value`
+      from the statement fails the status-filter test; (c) removing
+      `agent.owner_user_id != principal.user_id` from `load_owned_agent` turns the 404 into a 200
+      that discloses the delegations
+
+### Security considerations
+
+The set names *which capabilities a human handed to this agent*, so it is owner-only and 404s for
+everyone else, matching the approval listing. The count is scoped by `agent_id` for the same reason: an
+unscoped aggregate would disclose how many delegations another agent holds. No migration, no contract
+change, no new dependency.
+
+### Validation
+
+`ruff format` 325 unchanged · `ruff check` all passed · `mypy` no issues in 144 source files · full suite
+**1761 passed, 4 skipped** (the skips are `postgresql`-marked). Product commit **`fb027ee`**, pushed;
+remote head confirmed with `git ls-remote`, not `git rev-parse origin/<branch>`.
+
+### Remaining / next
+
+`list_active_for_delegator` remains an unpaged whole-set read ordered by `created_at` alone; it has no
+paging consumer, so an unstable tie can only reorder presentation. Do not add a tiebreak there until a
+consumer depends on the order.
+

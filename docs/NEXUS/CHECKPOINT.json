@@ -1,78 +1,78 @@
 {
-  "schema_version": 1,
-  "run_id": "NEX-2026-11-28-94",
-  "timestamp": "2026-11-28T12:40Z",
-  "branch": "feature/agentic-enterprise-platform",
-  "commit": "d8353ff819ba2d49131e241cf76108fdd1983e6a",
-  "product_commit": "d8353ff819ba2d49131e241cf76108fdd1983e6a",
-  "commit_note": "`commit` is the branch head at write time, which is the NEX-094 product commit (d8353ff). This checkpoint is committed by a docs commit that follows it, so the branch head one commit later is that docs commit. A file cannot contain the hash of the commit that contains it: a one-commit lag is expected and correct, do not chase it.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-094 VERIFIED. NEX-094 is VERIFIED via descendant-CI: its product commit d8353ff carried zero check-runs (superseded in the CI concurrency group by its own docs child), so the verdict anchors to d4abd07, which is 4/4 completed/success with both product files blob-identical to d8353ff.",
-  "active_task": null,
-  "task_statuses": {
-    "NEX-094": "VERIFIED (descendant-CI). Product d8353ff had zero check-runs, superseded in the concurrency group by its own docs child d4abd07, which is 4/4 completed/success (runs 46141744541, 46141737990; Backend 12/12 and Frontend 11/11 steps green, zero skipped). Licence: d8353ff == d4abd07^, diff touches only docs/NEXUS/*, both product files blob-identical. active_grants and active_for now carry the active-window predicate in the WHERE clause via a new module-level _active_predicate(now) helper, instead of selecting every grant row and filtering in Python. Tests: test_active_reads_filter_in_the_store_rather_than_in_python (before_cursor_execute statement capture) and test_active_predicate_agrees_with_the_domain (10 boundary cases x 3 instants). Mutation controls: changing granted_at <= now to < fails all three equivalence instants; reverting to the unfiltered select fails the statement capture. NOTE: the original work-count probe (counting _to_domain calls) was dropped because the fixed active_for reads row.scope directly and converts nothing, so the probe measured [] and asserted against the fix it was meant to defend.",
-    "NEX-093": "VERIFIED - CI 4/4 completed/success on the product commit 48ad062 itself (runs 46138734219 pull_request and 46138728671 push, Backend and Frontend green on each), so no docs-head anchor is required. 48ad062 adds deterministic tiebreakers to three listing queries plus tests/persistence/test_agent_listing_order.py (7 tests). Reverting the query changes fails 5 of 7.",
-    "NEX-092": "VERIFIED - CI 4/4 completed/success on the product commit 3159555 itself.",
-    "NEX-091": "VERIFIED - CI 4/4 completed/success on docs head 6f8ca19 (product tree identical to 977b21f).",
-    "NEX-090": "VERIFIED - CI 4/4 completed/success on docs head ea0a696 (product tree identical to aa4b2c8).",
-    "NEX-089": "VERIFIED - CI 4/4 completed/success on docs head c5a1250 (product tree identical to b3130ce).",
-    "NEX-088": "VERIFIED - CI 4/4 completed/success on docs head 592ba07 (product tree identical to 06b5b32).",
-    "NEX-087": "VERIFIED - CI 4/4 completed/success on docs head cf44c89 (product tree identical to 82d8a64)."
-  },
-  "completed_tasks": [
-    "NEX-093",
-    "NEX-092",
-    "NEX-091",
-    "NEX-090",
-    "NEX-089",
-    "NEX-088",
-    "NEX-087"
+ "schema_version": 1,
+ "run_id": "NEX-2026-11-28-95",
+ "timestamp": "2026-11-28T12:20Z",
+ "branch": "feature/agentic-enterprise-platform",
+ "commit": "fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d",
+ "product_commit": "fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d",
+ "commit_note": "`commit` is the branch head at write time, which is the NEX-095 product commit (fb027ee). This checkpoint is committed by a docs commit that follows it, so the branch head one commit later is that docs commit. A file cannot contain the hash of the commit that contains it: a one-commit lag is expected and correct, do not chase it.",
+ "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-095 VERIFIED. NEX-095 is VERIFIED on the product commit itself.",
+ "active_task": null,
+ "task_statuses": {
+  "NEX-095": "VERIFIED - CI 4/4 completed/success on the product commit fb027ee itself (runs 46143797699 pull_request and 46143793292 push; Backend 12/12 and Frontend 11/11 steps green, zero skipped, zero failed), so no docs-head anchor is required. fb027ee adds DelegationRepository.count_for_agent, an optional status filter plus limit/offset to list_for_agent (ordered (created_at, id)), the ListDelegations use case returning DelegationPage(items, total), and GET /agents/{id}/delegations. Owner-only via load_owned_agent: a non-owner gets 404, not 403. meta.total is a SQL COUNT, never len(page). Tests in TestDelegationListingHttp cover listing, pagination meta, status filter, unknown status (422), total vs page size, offset walk, and non-owner 404. Load-bearing proved three ways and restored: total=len(items) fails only the total test; dropping the status predicate fails the status-filter test; removing the owner_user_id check from load_owned_agent turns the 404 into a 200.",
+  "NEX-094": "VERIFIED (descendant-CI). Product d8353ff had zero check-runs, superseded in the concurrency group by its own docs child d4abd07, which is 4/4 completed/success (runs 46141744541, 46141737990; Backend 12/12 and Frontend 11/11 steps green, zero skipped). Licence: d8353ff == d4abd07^, diff touches only docs/NEXUS/*, both product files blob-identical. active_grants and active_for now carry the active-window predicate in the WHERE clause via a new module-level _active_predicate(now) helper, instead of selecting every grant row and filtering in Python. Tests: test_active_reads_filter_in_the_store_rather_than_in_python (before_cursor_execute statement capture) and test_active_predicate_agrees_with_the_domain (10 boundary cases x 3 instants). Mutation controls: changing granted_at <= now to < fails all three equivalence instants; reverting to the unfiltered select fails the statement capture. NOTE: the original work-count probe (counting _to_domain calls) was dropped because the fixed active_for reads row.scope directly and converts nothing, so the probe measured [] and asserted against the fix it was meant to defend.",
+  "NEX-093": "VERIFIED - CI 4/4 completed/success on the product commit 48ad062 itself (runs 46138734219 pull_request and 46138728671 push, Backend and Frontend green on each), so no docs-head anchor is required. 48ad062 adds deterministic tiebreakers to three listing queries plus tests/persistence/test_agent_listing_order.py (7 tests). Reverting the query changes fails 5 of 7.",
+  "NEX-092": "VERIFIED - CI 4/4 completed/success on the product commit 3159555 itself.",
+  "NEX-090": "VERIFIED - CI 4/4 completed/success on docs head ea0a696 (product tree identical to aa4b2c8).",
+  "NEX-089": "VERIFIED - CI 4/4 completed/success on docs head c5a1250 (product tree identical to b3130ce).",
+  "NEX-088": "VERIFIED - CI 4/4 completed/success on docs head 592ba07 (product tree identical to 06b5b32).",
+  "NEX-087": "VERIFIED - CI 4/4 completed/success on docs head cf44c89 (product tree identical to 82d8a64)."
+ },
+ "completed_tasks": [
+  "NEX-094",
+  "NEX-093",
+  "NEX-092",
+  "NEX-090",
+  "NEX-089",
+  "NEX-088",
+  "NEX-087"
+ ],
+ "validation": {
+  "commands_run_on_working_tree": [
+   "ruff format: 325 files already formatted (unchanged)",
+   "ruff check: All checks passed",
+   "mypy: Success, no issues found in 144 source files",
+   "pytest (full): exit 0, 1761 passed, 4 skipped (the skips are postgresql-marked)"
   ],
-  "validation": {
-    "commands_run_on_working_tree": [
-      "ruff format: 325 files already formatted (2 reformatted during the edits)",
-      "ruff check: All checks passed",
-      "mypy: Success, no issues found in 144 source files",
-      "pytest tests/persistence/test_operator_grants.py: 40 passed",
-      "pytest (full): exit 0, 1758 collected, 0 failures, 4 skipped (all postgresql-marked)"
-    ],
-    "load_bearing_proof": "Two controls, both observed and both restored. (a) `git stash push -- src/notes_service/infrastructure/db/operator_grants.py` then re-run: test_active_grants_does_not_read_the_whole_grant_table and test_active_reads_filter_in_the_store_rather_than_in_python both fail - the recorded SQL is a bare `select ... from operator_grants order by operator_grants.id` with no WHERE. git stash pop restored. (b) one-character drift `granted_at <= now` -> `granted_at < now` in _active_predicate: all three test_active_predicate_agrees_with_the_domain instants fail, proving the equivalence test catches a transcription error and not merely a missing fix. Restored from a backup; `grep -c 'granted_at <= now'` returns 1.",
-    "ci_on_product_commit": "NONE YET for NEX-094. The verdict for the previous slice (48ad062, NEX-093) was 4/4 completed/success."
-  },
-  "uncommitted_work": false,
-  "pr_state": {
-    "number": 5,
-    "state": "open",
-    "draft": false,
-    "head_ref_oid": "d8353ff819ba2d49131e241cf76108fdd1983e6a",
-    "body_covers": "NEX-052..NEX-093; NEX-094 section NOT yet added",
-    "nex_092_in_body": true,
-    "nex_093_in_body": true,
-    "nex_094_in_body": false
-  },
-  "tracking_issue": "Issue #2 open, not closed. NEX-094 is committed and pushed but NOT yet delivered: no comment for it on issue #2 and no NEX-094 section in PR #5's body.",
-  "blockers": [],
-  "risks": [
-    "A work-count probe only exists for a code path that does work. test_active_for_does_not_read_the_whole_grant_table counted _to_domain calls, but the FIXED active_for reads row.scope directly and converts nothing, so the probe measured [] and the assertion contradicted the fix it was defending. It passed only against unfixed code. When the fix removes the work, observe the statement (before_cursor_execute) instead of the calls.",
-    "An interpolation harness can silently split an existing entry. Appending a log section with file_editor insert at a line number that was itself computed from a stale read inserted the new section inside the previous run's paragraph, orphaning two continuation lines. Read the file tail before choosing an insertion point, or append plus reorder.",
-    "Reversing insertion order is not a load-bearing test for a tie. SQLite breaks an unordered tie by walking an index backwards, which reproduces reversed insertion - so a query with no tiebreaker looks correct. Use a fixed non-monotone permutation.",
-    "A docstring that asserts a performance property is not evidence of it. Suspect a docstring promising bounding above a select() with no where(...). NEX-086/087/088/092/094 were all this defect in different layers.",
-    "ci.yml declares concurrency group ci-<workflow>-<ref> with cancel-in-progress: true. A docs push while the product commit's runs are in flight cancels them, leaving the product commit with zero or cancelled check-runs. Read the product verdict before the docs push."
+  "load_bearing_proofs": [
+   "total = len(items) instead of the COUNT aggregate: only the total test fails, the listing test still passes.",
+   "Dropping `DelegationRow.status == status.value` from the statement: the status-filter test fails.",
+   "Removing `agent.owner_user_id != principal.user_id` from load_owned_agent (4 shared call sites): the non-owner test returns 200 instead of 404, disclosing the delegations."
   ],
-  "next_task": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md and ROADMAP.md. The NEX-082..NEX-094 defect family is closed and no verification debt remains; nothing is in flight, so start a fresh vertical slice test-first.",
-  "next_action": "Nothing is in flight. 1) Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md, test-first. 2) Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` (NOT `git rev-parse origin/<branch>`, which is a frozen snapshot in this clone). 3) Before any docs push, read the product commit's CI verdict per run AND per job: a docs push cancels the product commit's in-flight runs in the concurrency group and leaves it with zero check-runs, which is what happened to d8353ff and forced descendant-CI.",
-  "recovery_instructions": "Branch feature/agentic-enterprise-platform. On entry the live remote head matched 940b68b (verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, NOT `git rev-parse origin/<branch>`: this clone's remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot). Run 94 verified NEX-094 by descendant-CI on docs head d4abd07 and delivered the verdict to issue #2 and PR #5. Nothing is in flight. Read BACKLOG.md for the next task and start a fresh vertical slice test-first.",
-  "ci_status": "NEX-094 VERIFIED by descendant-CI. Product d8353ff had zero check-runs (cancelled in the concurrency group by its own docs child), so the verdict anchors to docs head d4abd07: runs 46141744541 and 46141737990, both 4/4 completed/success, Backend 12/12 and Frontend 11/11 steps green, zero skipped, all head_sha=d4abd07. Licence: d8353ff == d4abd07^, diff touches only docs/NEXUS/*, and both product files are blob-identical across the two trees. Previous slice: GREEN 4/4 on 48ad062 (runs 46138734219 pull_request, 46138728671 push).",
-  "commits_this_run": [
-    "940b68b - docs(nexus): state the checkpoint head-lag invariant so future runs stop chasing it (pre-existing on entry)",
-    "d8353ff - fix(operator-grants): bound the active grant reads in the store, not after it"
-  ],
-  "decisions_this_run": [
-    "The SQL predicate lives in one named helper (_active_predicate) beside the reads, not inlined twice: two copies of a four-clause predicate are two places to drift, and the boundary test pins one.",
-    "The domain keeps is_active as the definition of 'in force' and the SQL is pinned to it by test, rather than rewriting is_active to defer to SQL. The domain must not import SQLAlchemy (enforced by tests/architecture/test_layering.py), so the arrow points adapter -> domain only.",
-    "is_active filtering moved to SQL here, reversing the earlier comment in active_for. That comment was right in principle (do not duplicate a rule) and wrong in its premise (that is_active was too irregular to translate). Each clause is a bare single-column comparison, so the translation is exact and the equivalence is now a test rather than a claim.",
-    "revoked_grants' docstring claimed is_active 'carries real logic ... which is why that filter stays in Python'. Corrected in the same commit, because left alone it would contradict the new code and re-teach the wrong rule."
-  ],
-  "run_summary": "Run 94, close-out of the NEX-094 verification. NEX-093 was already VERIFIED; NEX-094's adapter change and tests were committed as d8353ff in run 93 but had no CI verdict. This run established the verdict honestly. The product commit d8353ff carried ZERO check-runs, cancelled in the ci.yml concurrency group by its own docs child, so a verdict on d8353ff itself is unobtainable. Rather than skip verification, I used descendant-CI with an explicit licence, checked three independent ways: d8353ff is d4abd07^, git diff --stat between them touches only docs/NEXUS/*, and git rev-parse <rev>:<path> is equal for both product files. At d4abd07 the result is 4/4 completed/success (runs 46141744541 and 46141737990, Backend 12/12 and Frontend 11/11 steps, zero skipped, all head_sha=d4abd07), so NEX-094 is VERIFIED. Delivered the verdict to issue #2 (comment 7238846065, read back at 19 lines containing the run id) and to PR #5 (body 2337 -> 2348 lines; the landed body was fetched back and diffed, differing only by a trailing newline). Promoted the status in STATE.md, BACKLOG.md and this checkpoint, and classified every residual NOT VERIFIED string: line 24 of STATE.md was a present-status assertion and is now corrected; the remaining hits are historical sections whose negation is part of the record and were left alone.",
-  "observed_remote_head": "At entry, `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` -> 940b68baaa957fd141cfa5846e62c4b74c607933. Do NOT use `git rev-parse origin/<branch>` in this clone: remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot.",
-  "head_semantics": "`commit`, `pr_state.head_ref_oid` name the branch head at the moment this checkpoint was written. A file cannot contain the hash of the commit that contains it, so once the commit writing this file lands, the true head is that commit (or a later docs commit). A one-commit lag is expected and correct: do not chase it with another commit. Verify with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, then `git log --oneline -3`."
+  "ci": "fb027ee: 4/4 completed/success on the product commit itself (runs 46143797699, 46143793292)."
+ },
+ "uncommitted_work": false,
+ "pr_state": {
+  "number": 5,
+  "state": "open",
+  "draft": false,
+  "head_ref_oid": "fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d",
+  "body_covers": "NEX-052..NEX-095 (NEX-095 section appended this run via --body-file)",
+  "nex_093_in_body": true,
+  "nex_094_in_body": true,
+  "nex_095_in_body": true
+ },
+ "tracking_issue": "Issue #2 open, not closed. NEX-095 is VERIFIED on the product commit fb027ee and delivered to issue #2 and PR #5 this run.",
+ "blockers": [],
+ "risks": [
+  "list_active_for_delegator remains an unpaged whole-set read ordered by created_at alone. It has no paging consumer, so an unstable tie can only reorder presentation. Do not add a tiebreak there until a consumer depends on the order.",
+  "`git rev-parse origin/<branch>` in this clone reads a frozen snapshot (remote.origin.fetch maps only refs/heads/main). Use `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the live head."
+ ],
+ "next_task": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md and ROADMAP.md. The NEX-082..NEX-095 defect family is closed and no verification debt remains; nothing is in flight, so start a fresh vertical slice test-first.",
+ "next_action": "Nothing is in flight. 1) Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md, test-first. 2) Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` (NOT `git rev-parse origin/<branch>`, which is a frozen snapshot in this clone). 3) Before any docs commit, confirm the product commit's own CI has concluded; a docs push supersedes it in the concurrency group and a cancelled run is never evidence.",
+ "recovery_instructions": "Branch feature/agentic-enterprise-platform. On entry the live remote head is the NEX-095 docs close-out commit that follows fb027ee (resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, NOT `git rev-parse origin/<branch>`: this clone's remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot). The NEX-095 product commit fb027ee is CI-verified 4/4 on itself. Nothing is in flight; begin the next slice. Never force-push, never merge, never touch main directly.",
+ "ci_status": "NEX-095 VERIFIED on the product commit itself: fb027ee, runs 46143797699 (pull_request) and 46143793292 (push), both 4/4 completed/success, Backend 12/12 and Frontend 11/11 steps green, zero skipped, both head_sha = fb027ee. Prior: NEX-094 VERIFIED by descendant-CI on docs head d4abd07 (46141744541, 46141737990); NEX-093 VERIFIED 4/4 on its product commit 48ad062.",
+ "commits_this_run": [
+  "fb027ee - feat(agents): list an agent's delegations so narrow revocation is reachable (product, pre-existing on entry, CI-verified this run)",
+  "8183099 - test(ops): replace hardcoded grant expiry with a relative deadline (pre-existing on entry)"
+ ],
+ "decisions_this_run": [
+  "The total is a separate SQL COUNT scoped by agent_id, not len(page): a page length answers a different question, and an unscoped count would disclose another agent's delegation volume.",
+  "`status` is filtered in SQL because DelegationRow.status is a stored column, never derived, so the SQL filter and any Python filter cannot disagree.",
+  "Order is (created_at, id) because the window is an OFFSET: a non-total order lets a row repeat while another is skipped as the window shifts, and delegations granted in one request burst share created_at to the microsecond.",
+  "Omitted `status` means every delegation, so a withdrawn grant stays visible rather than vanishing from the delegator's view."
+ ],
+ "run_summary": "Run 95, close-out of the NEX-095 verification. The list-delegations slice was implemented and committed as fb027ee in the previous run but had no CI verdict and no recorded backlog entry. This run located the entry point (NEX-095, following NEX-094 in the same paging family), recorded the full backlog entry, and read the product commit's own CI: both runs for fb027ee concluded 4/4 completed/success with zero skipped steps, so the verdict needs no descendant-CI anchor. Status promoted to VERIFIED only after that read. State files updated and the verdict delivered to issue #2 and PR #5.",
+ "observed_remote_head": "At entry, `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` -> fb027ee1b4501bbd63f68d591e3c0edfa51c5a0d (the NEX-095 product commit). Do NOT use `git rev-parse origin/<branch>` in this clone: remote.origin.fetch maps only refs/heads/main, so origin/feature/... is a frozen snapshot.",
+ "head_semantics": "`commit`, `pr_state.head_ref_oid` name the branch head at the moment this checkpoint was written. A file cannot contain the hash of the commit that contains it, so once the commit writing this file lands, the true head is that commit (or a later docs commit). A one-commit lag is expected and correct: do not chase it with another commit. Verify with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, then `git log --oneline -3`."
 }
