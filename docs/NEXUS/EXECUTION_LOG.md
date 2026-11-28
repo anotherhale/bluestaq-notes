@@ -8500,3 +8500,66 @@ holds — write the script to a file, or use `file_editor`, never an inline mult
 Read `docs/NEXUS/BACKLOG.md`, pick the highest-value dependency-ready slice, and implement it as
 one vertical slice. Do not re-verify NEX-070.
 
+
+---
+
+## Run NEX-2026-11-27-71 — NEX-071: the second signature gets an authorised source
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `a179b07` (matched the remote tip exactly; no race this run)
+- **Ending commit:** `a5d2710` (product), plus this docs commit
+- **Phase:** 3 (governance)
+
+### What was wrong
+
+`DecideApprovalRequest` admitted only the agent's owner. The approval aggregate
+correctly refuses the owner signing twice (separation of duties). Those two
+correct rules together made **every** `required_approvals == 2` request
+permanently undecidable — every `second-approver` policy (NEX-059) and every
+`HIGH`-risk capability (NEX-063). The obligation was recorded, reported as
+enforced, and could never be satisfied through the API. That is a fail-closed
+control that fails closed on the *business process* while the audit trail claims
+the control ran, which is the worst of both.
+
+### What changed
+
+- `OrgPermission.APPROVE_AGENT_ACTION` — a new, distinct capability. Granted to
+  `ORG_OWNER` (which holds all permissions) and `ORG_ADMIN`; **not** to
+  `ORG_SECURITY_ADMIN`, `ORG_AUDITOR` or `ORG_MEMBER`, so the read-only
+  separation that makes security review and audit independent survives by the
+  matrix itself, not by a role check at the call site.
+- `DecideApprovalRequest._may_second_sign()` admits a tenant approver for the
+  second signature, bounded four ways: half-approved request only (never the
+  first signature), a shared **active** organization with the agent's owner,
+  never the owner themselves, and an **operational** organization.
+- `_holds_agent_approval_in_shared_tenant()` computes that authority by
+  intersecting the approver's capable tenants with the owner's tenants.
+- A caller with neither authority still gets **404**, not 403 — an approval id
+  cannot be used to probe for another user's agent.
+
+### Tests
+
+`tests/agent/test_approval_second_signer.py` — 11 cases: the completable
+two-person flow, each of the four bounds, same-human double-signing refused,
+and the 404 rule for an unauthorised caller.
+
+### Validation (local, on the committed tree)
+
+- `ruff format` → clean after formatting the new test
+- `ruff check` → All checks passed
+- `mypy` → no issues in 140 source files (caught a real `str` vs `UserId`
+  mismatch in the new helper, now fixed)
+- `pytest` full suite → exit 0, zero failures
+- `pytest tests/agent/test_approval_second_signer.py` → 11 passed
+
+### Status
+
+- NEX-071: **IMPLEMENTED, TESTED, COMMITTED, PUSHED** (`a5d2710`).
+- **CI: not yet polled.** Do not call this CI-PASSED until a run polls it.
+- PR #5 remains open and unmerged, awaiting human review.
+
+### Next exact action
+
+Poll CI for `a5d2710` (check-runs until every one is `status=completed`), record
+the verdict here and in the checkpoint, then take the next dependency-ready
+backlog slice. Do not re-implement NEX-071.
