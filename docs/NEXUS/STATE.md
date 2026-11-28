@@ -9,15 +9,54 @@ truth; this file records intent and reconciliation.
 | --- | --- |
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 74) | `94f8ba1` (docs tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `e375a1f` (**NEX-074, VERIFIED** — CI 4/4 `completed/success`, polled 2026-11-28T02:20Z), over `09888ac` (NEX-073, VERIFIED) and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`e375a1f` (NEX-074): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T02:20Z — VERIFIED.** Prior: **`09888ac` (NEX-073): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T01:56Z.** Both frontend runs passed — on `38292d2` one of two had failed, so CI independently confirms the flake is gone. Prior: `38292d2` (NEX-058): backend 2/2 success, frontend 1/2 (the race). `3c26957` (NEX-072): 4/4 success. |
+| Starting commit (run 75) | `f307999` (docs tip; concurrent runs advance it constantly). |
+| Head commit (measured) | Product head `319a3dd` (**NEX-075, pushed — CI NOT yet read**), over `e375a1f` (NEX-074, VERIFIED), `09888ac` (NEX-073, VERIFIED) and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`e375a1f` (NEX-074): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T02:20Z — VERIFIED.** `319a3dd` (NEX-075) is pushed and green locally but **CI has not been read**, so NEX-075 is not VERIFIED. Prior: **`09888ac` (NEX-073): 4/4 `completed/success`, polled 2026-11-28T01:56Z.** Prior: `38292d2` (NEX-058): backend 2/2 success, frontend 1/2 (the race). `3c26957` (NEX-072): 4/4 success. |
 | Tracking issue | #2 (open) — **comment `7231968445`** covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-074** (56934 chars, updated 2026-11-28T02:23Z). Nineteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | None outstanding. Run 74 (NEX-074) made the operator-grant record writable for the first time: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. |
+| **Open P1** | None outstanding. Run 75 (NEX-075) gave the operator access log a bounded retention window, closing the last risk run 74 recorded. Run 74 (NEX-074) made the operator-grant record writable: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-075 (run `NEX-2026-11-27-75`) — the access log gets a bounded retention window
+
+**Status: IMPLEMENTED + TESTED + COMMITTED + PUSHED at `319a3dd`. NOT VERIFIED — CI has not been
+read.** Local gates: 1551 passed / 4 skipped, ruff format+check clean, mypy clean on 143 files.
+
+**The gap.** NEX-072 made the operator access log durable and NEX-074 made it the record of who may
+read and issue operator grants. Nothing ever removed a row, so the table grows by one row per
+granted `/ops` read, forever, each attributed to a named user. Run 74's checkpoint recorded this as
+a risk; no backlog task existed, so NEX-075 was created before any code was written.
+
+**The obvious fix is the wrong one, and that is the whole design.** Letting an operator delete rows
+destroys the property the log exists for: an audit trail an operator can silently shorten is not an
+audit trail, and the first thing a compromised operator would erase is the record of what they read.
+So deletion is bounded from every direction:
+
+- **The window is a domain policy, not a request field.** `OperatorAccessRetentionPolicy` (floor 90
+  days, ceiling 3650) is validated at construction, so a bad value fails the boot rather than the
+  first purge. No caller can express "delete everything" or "delete Bob's rows" because there is no
+  field for it. `36500` — a plausible extra-zero typo for `3650` — is rejected rather than pinning
+  every row while appearing to have retention; "keep everything" is expressed by *disabling* it.
+- **Erasing is its own authority.** `access-log-retention` is distinct from `operator-access-report`,
+  so the read can be granted widely and the erase narrowly. A caller holding only the report scope
+  is refused, and refused with **404** rather than 403 per ADR-008.
+- **The purge records itself before it deletes,** stamped `now` — inside the window it is about to
+  prune — so the record of the erasure survives the erasure by construction, not by ordering luck.
+- **Retention is off by default.** `OPERATOR_ACCESS_RETENTION_DAYS` unset ⇒ the endpoint answers
+  404, rather than offering a purge with no mandate.
+
+**The boundary is the whole feature, so it was mutation-tested.** A row stamped exactly `window`
+ago is kept, and the same rule drives both the adapter's `at < cutoff` and `covers()`. Widening the
+predicate to `at <= cutoff` fails two persistence tests; reverting restores 13 passed. A retention
+test never seen to fail would be a hypothesis, not a control.
+
+**Deliberately omitted: a scheduled purge.** An unattended purger changes who is accountable for an
+erasure — a separate decision with its own approval question, not a configuration flag. ADR-017
+records that, and records that the 90/3650 bounds are engineering bounds, not a legal opinion.
+
+No migration: the purge deletes rows, it does not alter the table.
 
 ## NEX-074 closed (run `NEX-2026-11-27-74`) — the operator grant finally has a writer
 
@@ -2699,3 +2738,31 @@ Do not re-implement NEX-058, NEX-073 or NEX-074. NEX-073 is test-only: if its CI
 read the failing assertion before assuming the product broke — the change cannot alter
 behaviour.
 
+
+## Next best actions (run `NEX-2026-11-27-75`, superseding the lists above)
+
+1. **Read CI for `319a3dd`** (NEX-075) and promote it to VERIFIED only if every check-run
+   concludes success. `gh run list --branch feature/agentic-enterprise-platform`, then judge on
+   check-runs whose `status` is `completed`. A docs commit descending from it reads
+   `completed/cancelled` once superseded in the concurrency group — that is not a failure, and a
+   concluded success is never retracted.
+2. **PR #5 body catch-up: NEX-075 only.** Verified against the GitHub API this run: the body is
+   56934 chars and **already carries NEX-074**; only NEX-075 is missing. Append one section, and
+   post one issue #2 comment covering it. (An earlier draft of this list said both were missing —
+   that was an unchecked assumption, corrected here before commit.)
+3. **Then take the next dependency-ready backlog slice** from `BACKLOG.md`. Do not start a new
+   slice with under 10 minutes left on the clock.
+
+**Do not redo** NEX-058, NEX-073, NEX-074 or NEX-075. NEX-075 is implemented, tested and pushed;
+only its CI read is outstanding. If NEX-075's CI turns red, the retention predicate
+(`at < cutoff`) and the `access-log-retention` scope are the two places to look first — they are
+the only new decision points in the slice.
+
+**Still open, and deliberately not taken this run:**
+
+- An operator-grant `rationale` is not persisted (the row has no column). Adding one needs a
+  migration; until then nothing may promise a rationale is recorded.
+- PR #5 stacks twenty slices. The reviewer's "consider a split" note stands and is a **human**
+  decision; NEXUS may not split or merge unilaterally.
+- No scheduled purge exists for the access log (ADR-017): an unattended purger changes who is
+  accountable for an erasure.

@@ -3240,3 +3240,48 @@ Full suite 1545 passed / 4 skipped; ruff format+check and mypy (141 files) clean
 **Acceptance criteria.** An operator can issue a bounded grant; the stored row names the issuer;
 a non-operator, a self-grant, an over-broad scope and an unknown scope are each refused; no
 request body can set the issuer.
+
+## NEX-075 — Retain the operator access log on a bounded window, and make erasing it its own authority
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `319a3dd` — CI not yet read, so **not VERIFIED** |
+| Priority | P1 — an audit log that grows without limit and never forgets is a compliance and storage liability |
+| Dependencies | NEX-072 (durable `operator_access_log`), NEX-074 (operator-grant issuance), the `OperatorAccessLog` port |
+| Architecture | `domain/governance/retention.py`, `application/use_cases/operator_access_retention.py`, ADR-017, ADR-008 (404-vs-403) |
+
+**Objective.** NEX-072 made the operator access log durable and NEX-074 made it the record of who
+may read and issue operator grants. Nothing ever removed a row: every granted `/ops` read appends
+one, forever, attributed to a named user. The table grows without limit, and a read by someone who
+has since left the organisation stays attributed to them indefinitely. Both are risks NEX-074's
+checkpoint recorded as follow-up work; no backlog task existed, so this one was created first.
+
+**Delivered.** `OperatorAccessRetentionPolicy` (window bounded 90–3650 days, validated at
+construction), `PurgeOperatorAccessLog` use case, `purge_before` on the `OperatorAccessLog` port,
+`POST /ops/operator-access-log/purge`, container wiring from `OPERATOR_ACCESS_RETENTION_DAYS`, and
+`tests/…` across four layers. ADR-017 records the decisions.
+
+**Design note — the obvious fix is the wrong one.** Letting an operator delete rows destroys the
+property the log exists for. So deletion is bounded from every direction: the window is a domain
+policy rather than a request field (no caller can express "delete everything" or "delete Bob's
+rows"); `access-log-retention` is a distinct authority from `operator-access-report`; the purge
+records itself through the gate, stamped `now` inside the window it prunes, so it cannot erase the
+record of its own action; and retention is off by default, with the endpoint answering 404 rather
+than offering a purge with no mandate.
+
+**Boundary.** The cutoff is inclusive at its near edge — a row stamped exactly `window` ago is kept
+— and the same rule drives both the adapter's `at < cutoff` and `covers()`, so they cannot disagree
+at the oldest surviving row. Proved by mutation: widening to `at <= cutoff` fails two tests.
+
+**Deliberately omitted: a scheduled purge.** An unattended purger changes who is accountable for an
+erasure. That is a separate decision with its own approval question, not a configuration flag.
+
+**Tests.** `tests/domain/test_operator_access_retention.py` (window bounds, fail-closed),
+`tests/application/test_operator_access_retention.py` (23), `tests/api/test_ops_access_retention_api.py`
+(19, incl. 404-when-unconfigured and fail-boot-on-short-window), and an extension to
+`tests/persistence/test_operator_access_log.py`. Full suite 1551 passed / 4 skipped; ruff
+format+check and mypy (143 files) clean locally.
+
+**Remaining.** Read CI on `319a3dd` and promote to VERIFIED. Append NEX-074 and NEX-075 to PR #5's
+body, which still stops at NEX-073.

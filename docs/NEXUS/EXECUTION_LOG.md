@@ -8952,3 +8952,84 @@ in this environment.
 
 NEX-074 is VERIFIED. Append the NEX-074 section to PR #5's body, which still stops at NEX-073, then
 write the `operator_access_log` retention ADR line — the last open P1-adjacent item.
+
+## Run `NEX-2026-11-27-75` — the access log gets a bounded retention window (NEX-075)
+
+- **Timestamp:** 2026-11-28T02:31Z–02:5xZ
+- **Starting commit:** `f307999` (docs tip); product base `e375a1f`
+- **Ending commit:** `319a3dd` (product); docs commit follows
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Run ID:** `NEX-2026-11-27-75`
+
+### Task completed
+
+**NEX-075 — purge the operator access log on a bounded retention window.** IMPLEMENTED + TESTED +
+COMMITTED + PUSHED at `319a3dd`. Not yet VERIFIED: CI has not been read.
+
+This closes the second risk NEX-074's checkpoint recorded: the durable log (NEX-072) is append-only
+and unbounded, so one row per granted `/ops` read accumulates forever and old reads are attributed to
+people indefinitely. No backlog task existed for it — the checkpoint named it only as a risk — so
+NEX-075 was created in `BACKLOG.md` before any code was written.
+
+The design decision worth recording is that the obvious fix is the wrong one. Letting an operator
+delete rows destroys the property the log exists for: an audit trail an operator can silently shorten
+is not an audit trail, and the first thing a compromised operator would erase is the record of what
+they read. So the slice bounds deletion from every direction it can be attacked:
+
+- **The window is a domain policy, not a request field.** `OperatorAccessRetentionPolicy` (floor 90
+  days, ceiling 3650) is validated at construction, so a bad value fails the boot rather than the
+  first purge. A caller cannot say "delete everything" or "delete Bob's rows" because there is no
+  field in which to say it. `36500` — a plausible typo for `3650` — is rejected rather than pinning
+  every row while appearing to have retention; "keep everything" is expressed by disabling retention.
+- **Erasing is its own authority.** `access-log-retention` is distinct from `operator-access-report`,
+  so the read can be granted widely and the erase narrowly. A caller holding only the report scope
+  is refused, and refused with 404 rather than 403 per ADR-008.
+- **The purge records itself before it deletes,** stamped `now` — inside the window it is about to
+  prune — so the record of the erasure survives the erasure by construction, not by ordering luck.
+- **Retention is off by default.** `OPERATOR_ACCESS_RETENTION_DAYS` unset ⇒ endpoint 404, rather
+  than offering a purge with no mandate.
+
+ADR-017 records these decisions. It also notes what this slice deliberately does not do: there is no
+scheduled purge. An unattended purger changes who is accountable for an erasure, which is a separate
+decision.
+
+### Files changed
+
+| Area | Files |
+| --- | --- |
+| Domain | `domain/governance/retention.py` (new): `OperatorAccessRetentionPolicy` |
+| Application | `application/use_cases/operator_access_retention.py` (new): `PurgeOperatorAccessLog`; `ports/operator_access.py` (+`purge_before`), `use_cases/operator_grants.py` |
+| Infrastructure | `infrastructure/db/operator_access_log.py`, `infrastructure/security/operator_access_log.py` |
+| Wiring | `bootstrap/config.py`, `bootstrap/container.py` |
+| API | `presentation/api/routers/ops.py`, `presentation/schemas.py` |
+| Docs | `docs/ADR/ADR-017-operator-access-log-retention.md` (new), `docs/ADR/README.md` |
+| Tests | `tests/domain/test_operator_access_retention.py`, `tests/application/test_operator_access_retention.py`, `tests/api/test_ops_access_retention_api.py` (new); `tests/persistence/test_operator_access_log.py` (extended) |
+
+No migration: the purge deletes rows, it does not alter the table.
+
+### Validation
+
+| Gate | Result |
+| --- | --- |
+| `ruff format --check` | clean (also on the ADR files, which CI formats) |
+| `ruff check` | All checks passed |
+| `mypy` | Success: no issues in 143 source files |
+| `pytest` (full) | 1551 passed / 4 skipped |
+| Mutation control | widening `at < cutoff` to `at <= cutoff` fails 2 persistence tests; source restored, 13 passed |
+
+The mutation control matters because the retention slice is entirely about one boundary. A test that
+has never been seen to fail is a hypothesis; these two were seen to fail on a one-character change
+and pass again after the revert.
+
+### Delivery state
+
+PR #5 remains open and unmerged. Verified against the GitHub API this run: its body is 56934 chars
+and **already carries NEX-074**, so only NEX-075 is missing from it. An earlier draft of this section
+said the body stopped at NEX-073 and was corrected before commit — the STATE/CHECKPOINT rows that
+claimed NEX-074 coverage were right, and the assumption that they were stale was the error. Issue #2
+has no comment this run.
+
+### Next action
+
+Poll CI on `319a3dd`. If green, append the single NEX-075 section to PR #5's body and post one issue
+#2 comment covering it.
