@@ -3725,3 +3725,109 @@ body and issue #2 is owed by the next run.
 
 ---
 
+
+## NEX-087 — Report the exact oldest retained access entry (run `NEX-2026-11-28-87`)
+
+**Phase.** 3 (governance) — audit integrity.
+**Priority.** P1 (foundational: the one number that states how far back retained evidence reaches).
+**Status.** IMPLEMENTED · TESTED · COMMITTED `82d8a64` · PUSHED. **Not VERIFIED** — CI has not been
+read to a verdict yet.
+**Depends on.** NEX-075 (the purge and its `retained_from` field), NEX-072 (the durable log).
+
+### The defect
+
+`PurgeOperatorAccessLog` is the only mutation the append-only operator access log permits, and it
+reports `retained_from` — "the oldest entry still in the log after the purge". That field is the
+whole reason the result is not just a count: an operator reads it to learn how far back the
+retained evidence actually reaches. NEX-075 documented it as *the* oldest surviving entry and the
+API schema promises the same.
+
+The implementation computed it from `self._access_log.recent(limit=1000)[-1]`. `recent` is
+newest-first and capped, so its last element is the oldest entry of **that page**, not of the log.
+Once the log held more than one page of survivors, the field reported an entry that was too
+recent: the trail looked shorter than it was, and the error grew with traffic. It is the
+dangerous direction. An auditor asking "does our retained evidence still cover the incident?" gets
+"no, it starts on the 31st" when the evidence in fact starts earlier — the answer that makes them
+conclude history is gone when it is not, or, worse, the answer that makes a shorter-than-claimed
+retention look compliant.
+
+The existing suite passed because every fixture was smaller than one page. The bug was invisible
+below 1000 entries and monotonic above it.
+
+### Evidence, before any change
+
+A probe recorded one old entry plus 1500 newer ones into the in-memory ring and read the use case:
+
+```
+removed: 0
+true oldest survivor:   2026-08-31T12:00:00+00:00
+reported retained_from: 2026-08-31T12:08:22+00:00
+field lies? True   understates age by: 0:08:22
+```
+
+The understatement is exactly the width of the discarded window, which is why it scales with
+volume and vanishes on a quiet deployment.
+
+### The fix
+
+`recent` cannot answer this question at all — it is newest-first and has to be capped — so the
+question is asked directly. The port gains `oldest_retained() -> datetime | None`:
+
+- **SQL adapter**: `select(func.min(OperatorAccessRow.at))`. An aggregate reads no rows and cannot
+  be truncated by volume. The result is relabelled to aware UTC with the same rule
+  `UTCDateTime.process_result_value` applies, because SQLite hands back a naive value for a plain
+  `TIMESTAMP` column and the domain speaks aware UTC.
+- **In-memory ring**: `self._entries[0].at` under the lock — the `deque` already keeps insertion
+  order, so the first element *is* the oldest.
+- **Test spy**: `min(entry.at ...)`, so the fake stays honest against the port rather than
+  certifying whatever the use case happens to do.
+
+`None` still means "empty log". An empty log is a fact; the caller must be able to say "nothing is
+retained" without inventing a timestamp.
+
+The use case now delegates: `oldest = self._access_log.oldest_retained()`. The `_OLDEST_SCAN_LIMIT`
+constant and its apologetic comment ("never claims to be exhaustive") are deleted — a constant that
+exists to paper over a truncation should not survive the fix that removes the truncation.
+
+### Tests — built to fail against the old answer
+
+Each new assertion is chosen so a page-derived implementation *cannot* satisfy it:
+
+- `test_the_oldest_surviving_entry_is_exact_beyond_one_page` (application): 1500 survivors, past
+  the ring's `DEFAULT_CAPACITY` of 1000. Asserts `retained_from == true_oldest` exactly.
+- `test_oldest_retained_is_exact_beyond_one_page` (persistence): one 10-year-old row plus 1200
+  filler rows, past `_OLDEST_SCAN_LIMIT`.
+- `test_oldest_retained_is_aware_utc`: pins that SQLite's naive `MIN` does not leak into the
+  domain as a naive datetime.
+- `test_oldest_retained_is_none_on_an_empty_log`: empty is a fact, not an invented stamp.
+- `test_oldest_retained_advances_past_a_purge`: after the ancient row is purged, the read names the
+  actual survivor — it tracks reality, not the pre-purge state.
+
+**Mutation control.** With the page-derived read restored inside the use case, the application
+regression fails on the observed wrong value (`2026-08-30T17:08:22` where `2026-08-31T12:00:00`
+was expected). Source restored, re-run green before the commit. This is the NEX-083 guard: the
+test was proved to fail without the fix, not merely to pass with it.
+
+### Local gates on the committed tree
+
+`ruff format .` (1 file reformatted) then clean; `ruff check .` all checks passed; `mypy` 143
+source files clean; `pytest` full suite exit 0 (4 skipped). Run bare, as `.github/workflows/ci.yml`
+does.
+
+### Security
+
+Read-only, gated, unchanged scope. No new authority, no new endpoint, no migration. The gate still
+runs before the purge. The change makes an audit field truthful, which is the security property:
+a retention report that understates how far back the evidence reaches is a report an operator
+cannot use to decide whether history was destroyed prematurely.
+
+### Remaining
+
+1. Poll CI on `82d8a64` to a `completed/success` verdict before writing VERIFIED anywhere.
+2. Deliver to PR #5 body and issue #2.
+3. Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the grant table in
+   Python (recorded as a risk); this slice is the same *shape* of defect — a bounded read standing
+   in for an exact answer — so an audit of the remaining audit reads for page-derived values is
+   warranted.
+
+---

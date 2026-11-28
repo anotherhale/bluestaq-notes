@@ -7,17 +7,49 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…**NEX-086 VERIFIED**. **NEX-086** (run 86, `70d7667`): the revocation history was **unbounded on read**. NEX-080 made revocation provenance visible but served every revoked grant ever recorded in one tuple, and revoked rows are never pruned — so on a long-lived deployment the report could not be read at all. Same defect NEX-082 fixed for the access trail, in a second audit report. `limit`/`offset` + `count_revoked()` now bound it, with `revoked_total`/`next_offset`/`truncated` on the response. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…**NEX-086 VERIFIED**; **NEX-087 IMPLEMENTED/TESTED/COMMITTED `82d8a64`/PUSHED but NOT VERIFIED** — CI has not been read to a verdict. **NEX-087** (run 87): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. The port now has an exact `oldest_retained()` (`MIN(at)` in SQL, insertion order in the ring). Prior: **NEX-086** (run 86, `70d7667`): the revocation history was **unbounded on read**. NEX-080 made revocation provenance visible but served every revoked grant ever recorded in one tuple, and revoked rows are never pruned — so on a long-lived deployment the report could not be read at all. Same defect NEX-082 fixed for the access trail, in a second audit report. `limit`/`offset` + `count_revoked()` now bound it, with `revoked_total`/`next_offset`/`truncated` on the response. |
 | Branch | `feature/agentic-enterprise-platform` |
-| Starting commit (run 86) | `82bf1e6` — the run-85 close-out head. |
-| Head commit (measured) | Product **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`). Prior: **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z, so NEX-086 is **VERIFIED**. `70d7667`'s own Backend push-run reads `completed/cancelled` (superseded by the docs push) and is never evidence. Prior: `d9d0a3a` … `2f58931` (all NEX-085 docs heads) **4/4 success**; `09cc4ad` (NEX-084) **4/4 success**; `453e134` (NEX-083) **2/2** 06:39Z; `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
-| Tracking issue | #2 (open) — `7236123126` covers **NEX-086** (VERIFIED, CI 4/4), posted this run after asserting zero prior mentions of NEX-086. Earlier: `7235822904` NEX-085; `7235362658` NEX-083 (posted by a **concurrent** run at 06:32:43Z, claims verified independently here); `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-086** (96780 bytes; NEX-086 appended this run after asserting `body.count("## NEX-086 ")==0`, then read back from the API: NEX-085 ×1, NEX-086 ×1). Twenty-nine slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. **No delivery debt remains.** |
-| **Open P1** | **None outstanding as of NEX-086.** NEX-086 bounded the last unbounded audit-report response: the revocation history was served whole, and revoked rows are never pruned, so the report could not be read at all on a long-lived deployment. Earlier: NEX-085 closed the last fail-closed asymmetry in operator revocation (issueable but unrevokable authority); NEX-084 closed the last unbounded arrow in grant delegation — a grant could be handed on for longer than the issuer held it. NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. Everything before this is closed and verified: NEX-080 made revocation readable, NEX-079 gave a grant a way to end early, NEX-077 made issuer and reason readable, NEX-076 made a human-issued grant say why, NEX-075 bounded the access log's retention, NEX-074 made the grant record writable. |
+| Starting commit (run 87) | `b4f9f22` — the run-86 close-out head, measured with `git ls-remote` this run. |
+| Head commit (measured) | Product **`82d8a64`** (NEX-087, **CI not yet read**). Prior: **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **None yet for `82d8a64`** — the next run must poll it. Prior concluded: `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z. `d9d0a3a` … `2f58931` (all NEX-085 docs heads) **4/4 success**; `09cc4ad` (NEX-084) **4/4 success**; `453e134` (NEX-083) **2/2** 06:39Z; `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
+| Tracking issue | #2 (open) — `7236123126` covers **NEX-086** (VERIFIED, CI 4/4). **NEX-087 not yet commented — owed by the next run.** Earlier: `7235822904` NEX-085; `7235362658` NEX-083 (posted by a **concurrent** run at 06:32:43Z, claims verified independently here); `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-086** (96780 bytes). **NEX-087 not yet appended — owed by the next run.** Thirty slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **NEX-087 is an open P1 until CI concludes** — it makes an audit-retention field truthful, and until the verdict is read it is COMMITTED/PUSHED, not VERIFIED. Before it, none outstanding as of NEX-086. Prior fixes: NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-087 (run `NEX-2026-11-28-87`) — the retention report said the retained evidence was younger than it was
+
+**Status: COMMITTED `82d8a64` · PUSHED · CI NOT YET READ — not VERIFIED.**
+
+`PurgeOperatorAccessLog` is the only mutation the append-only operator access log permits, and its
+result carries `retained_from`: "the oldest entry still in the log after the purge". That field is
+why the result is not merely a count — an operator reads it to decide whether the retained evidence
+still covers the period they care about.
+
+It was computed as `recent(limit=1000)[-1]`. `recent` is newest-first and capped, so its last
+element is the oldest entry of **that page**, not of the log. Past one page of survivors the field
+understated the age of the retained evidence: the trail looked shorter than it was, the error grew
+with traffic, and it grew in the direction that makes a premature loss of history look acceptable.
+A probe measured it: 1500 survivors, reported `12:08:22` against a true oldest of `12:00:00`. Every
+existing fixture held fewer than one page, so the suite could not see it.
+
+The port gained `oldest_retained() -> datetime | None` and the use case delegates to it. `recent`
+cannot answer the question — newest-first and capped means it can only ever answer about a page — so
+the question is asked directly: `MIN(at)` in SQL (an aggregate that reads no rows and cannot be
+truncated by volume, relabelled to aware UTC because SQLite returns naive for a plain `TIMESTAMP`),
+the first entry of the ring in insertion order under the lock, and `min()` in the test spy so the
+fake stays honest. `_OLDEST_SCAN_LIMIT` and its "never claims to be exhaustive" comment were
+deleted rather than kept — a constant that admits its own truncation is the defect written down.
+
+Tests were built to fail against the old answer and proved to: with the page-derived read restored
+the 1500-survivor regression fails on the observed wrong timestamp. `None` still means "empty log";
+an empty log is a fact, not a stamp to invent.
+
+Security surface unchanged — read-only, gated, no new authority, no migration. The security property
+*is* the truthfulness of the field: a retention report that understates the age of the retained
+evidence cannot support the decision it exists to support.
 
 ## NEX-085 (run `NEX-2026-11-28-85`) — the strongest grant in the system could not be revoked
 

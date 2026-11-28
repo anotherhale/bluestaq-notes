@@ -10348,3 +10348,98 @@ Take the next dependency-ready slice from `BACKLOG.md` — Phase 4 (admin consol
 remaining backend gaps. Write the failing test first. Do not redo NEX-077…NEX-086.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-87` — NEX-087: the retention report said retained evidence was younger than it was
+
+**Run ID:** `NEX-2026-11-28-87`
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `b4f9f22` (run-86 close-out head, measured with `git ls-remote` this run)
+**Ending commit (product):** `82d8a64`
+**Phase:** 3 (governance) — audit integrity
+
+### Task started and completed
+
+**NEX-087** — make `PurgeOperatorAccessLog.retained_from` the exact oldest surviving entry instead
+of the tail of a capped page. Status: IMPLEMENTED · TESTED · COMMITTED · PUSHED. **Not VERIFIED** —
+CI has not yet been read to a verdict.
+
+### What was wrong
+
+`retained_from` was derived from `recent(limit=1000)[-1]`, i.e. the oldest entry of one page of a
+newest-first read. Past one page of survivors the field understated the age of the retained
+evidence, in the reassuring direction, and the error grew with traffic. Both the port docstring
+and the API schema promised "the oldest entry still in the log"; the implementation quietly
+promised something weaker. Every fixture in the suite was under one page, so the bug was invisible
+to the tests that existed.
+
+### Evidence before touching source
+
+Probe into the in-memory ring with 1500 survivors: reported `2026-08-31T12:08:22` against a true
+oldest of `2026-08-31T12:00:00` — an 8m22s understatement equal to the discarded window, which is
+exactly why it scales with volume.
+
+### Files changed (6, +147/−21)
+
+- `application/ports/operator_access.py` — new `oldest_retained()` on the port, with the reason it
+  cannot be derived from `recent` recorded where the next implementer will read it.
+- `infrastructure/db/operator_access_log.py` — `MIN(at)` aggregate, aware-UTC relabelling.
+- `infrastructure/security/operator_access_log.py` — first entry of the ring under the lock.
+- `application/use_cases/operator_access_retention.py` — delegate to the port; `_OLDEST_SCAN_LIMIT`
+  and its "never claims to be exhaustive" comment deleted.
+- `tests/application/test_operator_access_retention.py` — spy `oldest_retained`; 1500-survivor
+  regression.
+- `tests/persistence/test_operator_access_log.py` — 4 adapter tests (exactness, aware UTC, empty,
+  advance-past-purge).
+
+### Validation
+
+- `ruff format .` — 1 file reformatted, then clean. `ruff check .` — all checks passed.
+- `mypy` — 143 source files clean.
+- `pytest` — full suite, **exit 0**, 4 skipped. (Trusted the exit code, not a grepped summary.)
+- **Mutation control** — page-derived read restored inside the use case: the application regression
+  fails on the observed wrong timestamp; restored and re-ran green before committing.
+
+### Decisions
+
+- **A new port method, not a bigger page.** Raising the cap would move the cliff, not remove it,
+  and would leave the field's truthfulness a function of traffic. The question "what is the oldest
+  row" has an exact answer (`MIN`); asking a bounded page for it was the defect.
+- **Delete `_OLDEST_SCAN_LIMIT` rather than keep it as a safety valve.** A constant whose comment
+  admits it "never claims to be exhaustive" is the defect written down. Keeping it would invite a
+  future reader to reuse the bounded read.
+- **`None` for empty, unchanged.** Engineering a sentinel timestamp for "nothing retained" would
+  make an empty log look like a very old log, which is the same class of lie in a different place.
+
+### Risks identified
+
+- The same *shape* — a bounded read standing in for an exact answer — may exist in other audit
+  reads. `count_revoked()` and `revoked_grants()` scan the grant table in Python and are correct
+  today, but an audit pass over remaining audit surfaces is warranted and is recorded as a
+  follow-up.
+- No scheduled purge exists for the operator access log (ADR-017) — unchanged by this slice.
+
+### Delivery state
+
+- Commit `82d8a64` pushed; remote head verified with `git ls-remote` (`82d8a6446f9d5b…`).
+- **CI: not yet read.** Nothing is marked VERIFIED.
+- **PR #5 and issue #2: not yet updated** — owed by the next run, together with the CI poll.
+
+### Tooling note
+
+A multi-line `git commit -F -` heredoc was mangled by the terminal (body fragments interleaved and
+repeated). Nothing was committed — the tree was verified intact afterwards — and the message was
+rewritten to a file and committed with `git commit -F <file>`. This is the same corruption class
+recorded for `python3 - <<'PY'` heredocs; **write the payload to a file, never inline it.**
+
+### Next exact action
+
+1. Poll CI for `82d8a64` (both `push` and `pull_request` runs) to a concluded verdict. If the docs
+   push supersedes it in the concurrency group, anchor evidence to a docs head whose product tree
+   is identical (`git diff <product> <docs-head> -- src/ tests/` must be empty) — a `cancelled`
+   verdict alone is never evidence.
+2. Only then write NEX-087 VERIFIED in `CHECKPOINT.json`, `STATE.md` and `BACKLOG.md`, and sweep
+   the neighbouring narrative fields for stale NEX-086 wording.
+3. Append the NEX-087 section to PR #5's body and comment on issue #2.
+4. Take the next dependency-ready slice; do not redo NEX-077…NEX-087.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
