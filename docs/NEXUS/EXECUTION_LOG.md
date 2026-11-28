@@ -9498,3 +9498,67 @@ evidence and the correction of the record, which is the part a run must never ta
 Two pushes were rejected before this landed (`cannot lock ref ... expected 6637c50`), so the
 docs commit was rebased onto `4862b06` — the concurrent run's checkpoint — keeping its NEX-078
 record and appending only what it could not know. No force push, no rewrite of pushed history.
+
+## NEX-079 (run `NEX-2026-11-27-79`) — an authority with no way to end early
+
+**The gap.** Every other piece of live authority here has a revoker. Delegations have
+`RevokeDelegation`; approvals have a revocable grant (NEX-025); agents have an emergency stop.
+An **operator grant** had exactly one way to end: reach `expires_at`. That is fine for a bounded
+hand-out and useless for the two cases that matter. A mistaken grant stays live for its whole
+term — the remedy is to wait. And a *configuration* grant (`granted_by IS NULL`) has no
+`expires_at` at all, so it could not be ended short of editing the deployment seed and
+redeploying, which also rewrites every other configuration grant and only takes effect at the
+next boot. Authority you cannot withdraw is the wrong shape for a security control; this is the
+same class as R28 (a grant outliving the consent that justified it) one layer up.
+
+**The slice.** Revocation is recorded **as a fact on the existing row**, never applied by
+deleting it. The whole reason to keep a grant is that an auditor can read what authority
+existed; a `DELETE` erases the grant *and* the evidence that it was taken away — the exact fact
+the audit is for. Four properties carry it:
+
+1. **Attributable or not a record.** `revoked_at` and `revoked_by` are set together or not at
+   all. A revoker with no instant, or an instant with no revoker, is a half-written fact. The
+   domain refuses it and so does a `CHECK` constraint — no writer can create one even outside
+   the use case.
+2. **The revocation survives the revoker.** `revoked_by` is `SET NULL` on user deletion, not
+   `CASCADE`. Losing a revocation because the revoker's account was later removed would erase
+   the record of the revocation itself. `revoked_at` survives regardless.
+3. **Revoking what is not held is `409`, not a silent success.** A caller told "revoked" when
+   nothing was live would believe they had withdrawn authority they had not.
+4. **The gate is unchanged and still fails closed.** Same operator allowlist as the rest of
+   `/ops`; a non-operator gets `404`, not `403`, so probing cannot confirm the surface exists.
+
+**Two defects found before the commit, both pre-existing.**
+
+- The migration created `ix_operator_grants_user_scope`, which **already existed** on the table
+  from an earlier slice. On SQLite that is a hard `OperationalError: index ... already exists`;
+  about eleven persistence tests failed on the migration path alone. Removed both the
+  `create_index` and its matching `drop_index`.
+- `test_the_table_exists_in_the_migrated_schema` asserted the **pre-slice** column set. Its
+  whole purpose is to prove the ORM model and the migration agree, so it *must* change when they
+  legitimately both change. Added the two columns with a note saying why.
+
+Neither was caught by the new tests; both were caught by the suites those tests live beside. A
+slice's own tests passing says nothing about the migration path it shares with everyone else.
+
+**Validation on the committed tree.** `ruff format --check` clean; `ruff check` clean; `mypy`
+no issues in 143 source files; `pytest` full suite **0 failed, 4 skipped**. 11 new API tests:
+revocation, re-listing after revocation, re-issuing a scope after revoking it, and the
+non-operator `404`. Commit `a0c8ee0`, pushed; `git ls-remote` confirms remote head equals local.
+
+**CI is UNVERIFIED at run end.** All four check-runs were queued/in-progress with
+`conclusion: None` when the run closed. That is not a pass, and `CHECKPOINT.json` says so.
+
+**The gap this slice creates, stated plainly.** Revocation is durable and enforced, but it is
+**not readable through the API**. The detail view does not expose `revoked_at`/`revoked_by`, so
+an operator can see a grant is gone but not who ended it or when without reading the table.
+Storing an audit fact no interface surfaces is half the control. That is **NEX-080**, next.
+
+**Delivery debt.** NEX-079 is not yet in PR #5's body or on issue #2.
+
+**Process note, twice in one run.** Heredocs corrupted twice this run: a `python3 - <<'PYEOF'`
+fix script echoed its own body back interleaved and hung to the 180s timeout, leaving the target
+file *untouched* (verified: 82 lines, zero corruption markers, the intended edit absent). The
+repo was never damaged, but a run that had trusted the exit status would have believed it fixed
+something it had not. `file_editor` did the same edit in one call. Third recorded occurrence of
+this exact failure; it is now the standing rule.

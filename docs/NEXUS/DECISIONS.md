@@ -210,3 +210,43 @@ They share the constant, so they cannot drift.
 
 **Deliberately not done.** No rationale on the *revocation* path (there is no revocation path
 yet), and no free-text field on the configuration seeder — see D-076a.
+
+**D-079a — revocation is a fact on the row, not a delete of it.** A grant is kept precisely so
+an auditor can read what authority existed. `DELETE` would remove the grant and, with it, the
+evidence that the authority was withdrawn — the one fact the audit record is for. Both revokers
+therefore write `revoked_at`/`revoked_by` and leave the row in place. Consequence accepted: every
+read path must exclude revoked rows, and `OperatorGrant.is_active` is the single place that does —
+both adapters (`active_grants`) route through it rather than filtering in their own query, so
+there is one definition of "active" and no path can quietly omit the check.
+
+**D-079e — a revoked grant is inactive regardless of the caller's clock.** `is_active` checks
+`revoked_at` before any time comparison and does not compare it to `now`. Revocation only ever
+removes authority, so honouring it "from the moment the revoker's clock says" could resurrect the
+grant for a caller whose clock runs behind. Same family as R29, resolved in the fail-safe
+direction. A future-dated revocation record still confers nothing immediately.
+
+**D-079b — the pairing is enforced twice, on purpose.** `revoked_at` without `revoked_by`, or the
+reverse, is a half-written fact that reads as a complete one. The domain refuses the pair, and a
+`CHECK` constraint refuses it for any writer that bypasses the use case (a seeder, a migration,
+psql). Unlike D-076c this is not duplication of a constant but of an *invariant*, and it is
+justified because the two enforcers protect different populations: the domain protects callers,
+the constraint protects the table.
+
+**D-079c — `revoked_by` is SET NULL, not CASCADE.** A revocation must not be erasable by an
+unrelated action. If the revoking operator's account is deleted, `CASCADE` would delete the
+revocation record with it, silently restoring a grant in the audit trail's reading. `SET NULL`
+keeps the instant and loses only the attribution — a degradation, and a visible one: the pairing
+constraint forces `revoked_at` to stay, so a NULL `revoked_by` on a revoked row is legible as
+"revoked, revoker removed".
+
+**D-079d — no rationale field on the revocation path.** D-076 argued the *rationale* field
+existed to justify handing privilege *out*. Withdrawing privilege is the fail-safe direction:
+making it require a written reason would add friction exactly where the system should be cheap to
+make safer, and would tempt a hurried operator to type "x". `revoked_by` + `revoked_at` is the
+audit minimum. If revocation review is ever needed, it belongs in an approval workflow, not a
+free-text column.
+
+**Deliberately not done.** No cascade from revocation to the holder's sessions or tokens: an
+operator grant is re-read per request from the repository, so revocation takes effect on the next
+call without a token to invalidate. If a token cache is ever introduced, that reasoning stops
+holding and this needs revisiting.
