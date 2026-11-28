@@ -3519,7 +3519,7 @@ issue #2 comment `7234571708` reports it.
 | --- | --- |
 | Phase | 3 (governance) / platform operations — Audit Center |
 | Priority | P1 — an audit surface that could only show its newest window, permanently |
-| Status | **IMPLEMENTED + TESTED locally; CI NOT YET POLLED** — product `4f8e15d`, docs `25f5a6c`, both pushed |
+| Status | **VERIFIED** — CI 2/2 `completed/success` at `4f8e15d` (polled 2026-11-28T05:36Z); docs head `ab018b2`; PR #5 and issue #2 updated |
 | Dependencies | ADR-017 (access-log retention), NEX-075 (bounded retention) — met |
 | Architecture | `application/ports/operator_access.py`, `application/use_cases/operator_access_report.py`, `infrastructure/db/operator_access_log.py`, `infrastructure/security/operator_access_log.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
 

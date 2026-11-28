@@ -9862,6 +9862,22 @@ through a heredoc — write the file with `file_editor`, then pass the path.
 
 ### Next action
 
-Poll CI for `4f8e15d`. If green, promote NEX-082 to VERIFIED, append its section to PR #5
-(asserting it is absent first), update issue #2, and take the next dependency-ready slice
-from `BACKLOG.md`.
+Poll CI for this run's docs head. **NEX-082's product tree is already verified**: `4f8e15d`
+concluded **2/2 `completed/success`** (polled 2026-11-28T05:36Z), PR #5's body carries NEX-082
+exactly once (asserted by read-back) and issue #2 carries comment `7234921303`. Do **not**
+redo either of those. The docs commits that follow `4f8e15d` read `completed/cancelled` once
+superseded in the concurrency group — by design, never evidence — so poll the newest docs
+head and then take the next dependency-ready slice from `BACKLOG.md`.
+
+### Update — same run, after the first checkpoint
+
+`4f8e15d` concluded **2/2 `completed/success`**, so NEX-082 moved COMMITTED → **CI PASSED**
+without waiting for the next run. PR #5 (`82822` bytes) and issue #2 were then updated in this
+run, and NEX-082 was promoted to **VERIFIED** in `STATE.md`, `BACKLOG.md` and
+`CHECKPOINT.json`. The run's docs commits are `25f5a6c` (state + decisions) and `ab018b2`
+(backlog), plus the checkpoint commit that follows them.
+
+One trap re-confirmed: a `python3 - <<'PYEOF'` heredoc used to edit `STATE.md` echoed fragments
+of its own body back interleaved and was killed before it wrote anything — `STATE.md` was
+verified clean afterwards and the edits were redone through `file_editor`. The rule in
+`MEMORY.md` holds: no heredocs for content writes, however short.
