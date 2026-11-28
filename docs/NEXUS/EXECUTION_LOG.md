@@ -9482,3 +9482,19 @@ Reconciliation, no force, no rewrite:
 Concurrency risk worth stating plainly: two runs on one branch cancel each other's CI and can
 race on `CHECKPOINT.json`. Each run's commits survive as ancestors, but a run that reads CI
 mid-race will see `cancelled` and must not mistake it for a failure.
+
+### NEX-078 promoted to VERIFIED — 4/4 green on `6637c50`
+
+Re-polled `6637c50` at 2026-11-28T03:57Z. The pair that was `in_progress` when this run first
+looked has concluded: **Backend (ruff, mypy, pytest, migrations) success**, **Frontend
+(typecheck, lint, test, build) success**. The second pair for the same SHA reads Backend
+`cancelled` / Frontend `success`, which is the branch concurrency group re-running — the
+concluded pair is the verdict, and `cancelled` on a duplicate pair is not a failure.
+
+So NEX-078 is IMPLEMENTED → TESTED → VERIFIED → COMMITTED → PUSHED → CI PASSED. It was
+implemented and pushed by the concurrent run; this run's contribution is the verification
+evidence and the correction of the record, which is the part a run must never take on trust.
+
+Two pushes were rejected before this landed (`cannot lock ref ... expected 6637c50`), so the
+docs commit was rebased onto `4862b06` — the concurrent run's checkpoint — keeping its NEX-078
+record and appending only what it could not know. No force push, no rewrite of pushed history.
