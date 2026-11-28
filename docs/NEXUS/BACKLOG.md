@@ -3207,7 +3207,7 @@ carry the real proof, so the DOM check is a UI hint, not the verdict.
 | Field | Value |
 | --- | --- |
 | Phase | 3 (governance) |
-| Status | **COMMITTED + PUSHED** at `e375a1f`; CI **UNKNOWN** — not yet polled |
+| Status | **VERIFIED** at `e375a1f` — CI 4/4 `completed/success`, polled 2026-11-28T02:20Z |
 | Priority | P1 — an incident remedy with no caller is a remedy that does not exist |
 | Dependencies | NEX-072 (durable `operator_access_log`), the operator-grant store and `OperatorAccessLog` port |
 | Architecture | `application/use_cases/operator_grants.py`, `application/ports/operator_grants.py`, ADR-008 (404-vs-403), ADR-015 |

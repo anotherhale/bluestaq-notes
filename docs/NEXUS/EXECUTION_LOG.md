@@ -8887,8 +8887,9 @@ check-run pairs for one SHA is normal, and the verdict is taken from pairs whose
 
 ### Task completed
 
-**NEX-074 — issue a bounded, attributable operator grant.** IMPLEMENTED + TESTED + COMMITTED + PUSHED.
-**Not VERIFIED:** CI on `e375a1f` was not polled.
+**NEX-074 — issue a bounded, attributable operator grant.** IMPLEMENTED + TESTED + COMMITTED + PUSHED +
+CI PASSED = **VERIFIED**. CI on `e375a1f` read 4/4 `completed/success` (backend ×2, frontend ×2),
+polled 2026-11-28T02:20Z.
 
 The gap was not a missing feature but an unreachable one. `OperatorGrant` carried `expires_at` and
 `granted_by`; the store was durable since NEX-072; the holder report could read every grant. But no
@@ -8949,5 +8950,5 @@ in this environment.
 
 ### Next action
 
-Read check-runs on `e375a1f`; if 4/4 `completed/success`, promote NEX-074 to VERIFIED. Then append
-the NEX-074 section to PR #5's body, which still stops at NEX-073.
+NEX-074 is VERIFIED. Append the NEX-074 section to PR #5's body, which still stops at NEX-073, then
+write the `operator_access_log` retention ADR line — the last open P1-adjacent item.
