@@ -4896,8 +4896,11 @@ runtime evidence; this guard's job is to keep the *arrangement* from drifting be
 ## NEX-104 — A word pair is sensitive wherever it sits, not only at the end
 
 **Phase:** 5 (durable runtime) — security hardening. **Priority:** P1.
-**Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (CI verdict not yet read back; this
-entry is not promoted to VERIFIED until it is).
+**Status:** VERIFIED — CI run `46172569641` concluded `completed/success` on the product commit
+`1c02241`, read per run, per job and per step: Backend 12/12 (including *Migrations apply and
+revert on a fresh database*), Frontend 11/11, zero failed, zero skipped, zero in any other state.
+`headSha` confirmed equal to the product commit; `event=push`, and it is the only run for that head
+(no PR exists, so no `pull_request` event fired).
 **Dependencies:** NEX-034 — the shape-based matcher this extends.
 
 ### The defect

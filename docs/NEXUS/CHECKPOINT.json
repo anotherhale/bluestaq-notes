@@ -11,7 +11,7 @@
   "task_statuses": {
     "NEX-034": "VERIFIED (CI 4/4 green at e386e02, verdicts read back)",
     "NEX-038": "VERIFIED (CI 4/4 green at 5c0575b; PR #3 MERGED at head b0f9b56)",
-    "NEX-104": "TESTED + COMMITTED + PUSHED (CI verdict UNREAD at time of writing; NOT promoted to VERIFIED)",
+    "NEX-104": "VERIFIED (CI 46172569641 completed/success on 1c02241; Backend 12/12, Frontend 11/11, zero failed/skipped)",
     "NEX-104-docs-backlog": "COMMITTED+PUSHED by the commit containing this file (structural one-commit lag; a state file cannot name its own commit)"
   },
   "task_status_legend": "PLANNED < STARTED < IMPLEMENTED < TESTED < VERIFIED < COMMITTED < PUSHED < PR UPDATED < CI PASSED. Never interchanged. A task is not VERIFIED because code exists, not PUSHED because a commit exists locally, and CI is not passing because local tests pass.",
