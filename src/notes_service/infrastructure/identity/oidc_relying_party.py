@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import re
 import secrets
 from datetime import UTC, datetime
@@ -33,10 +34,15 @@ from jwt import PyJWKClient
 
 from notes_service.application.errors import AuthenticationError
 from notes_service.application.ports.oidc import VerifiedIdToken
-from notes_service.domain.identity.assurance import AuthenticationAssurance
+from notes_service.domain.identity.assurance import (
+    STEP_UP_FLOOR,
+    AuthenticationAssurance,
+)
 
 #: Bound on any single IdP HTTP call. A hanging IdP must not hang the request.
 _HTTP_TIMEOUT_SECONDS = 10.0
+
+_LOGGER = logging.getLogger("notes_service.identity.oidc")
 
 
 class HttpOidcRelyingParty:
@@ -186,6 +192,24 @@ class HttpOidcRelyingParty:
         if issued_at is None or expires_at is None:
             raise AuthenticationError("identity token has malformed timestamps")
 
+        assurance = derive_assurance(claims)
+        if not assurance.meets(STEP_UP_FLOOR):
+            # A step-up policy will refuse this login's delegations, and the only
+            # place that fact can be explained is here: by the time the gateway
+            # refuses, the claims are long gone. Log the *shape*, never the value —
+            # ``acr`` is a class name an IdP chooses and ``amr`` can name methods
+            # that are personal to the account. The shape is enough to answer the
+            # operator's real question ("my IdP does MFA, why is this
+            # single-factor?"): it says whether a claim arrived at all, whether we
+            # recognised its type, how many factor families we resolved, and
+            # whether an ``acr`` negation vetoed the marker.
+            _LOGGER.info(
+                "oidc login recorded single-factor assurance, so step-up policies "
+                "will refuse delegations granted from it: provider=%s shape=%s",
+                self._provider_name,
+                _assurance_claim_shape(claims),
+            )
+
         return VerifiedIdToken(
             issuer=str(claims.get("iss", "")),
             subject=subject,
@@ -279,6 +303,23 @@ def _marker_is_negated(tokens: list[str], start: int, span: int) -> bool:
     return before in _ACR_NEGATIONS or after in _ACR_NEGATIONS
 
 
+def _acr_multi_factor_markers(tokens: list[str]) -> list[tuple[int, int]]:
+    """Every multi-factor marker in ``tokens``, as ``(start, span)``, negated or not.
+
+    Shared by the enforcement check and the diagnostic so the two cannot disagree
+    about *which* segments are markers. Every marker is returned, not just the
+    first: ``mfa-optional:multi-factor`` has a vetoed marker followed by a live
+    one, and enforcement must still see the live one.
+    """
+    markers: list[tuple[int, int]] = []
+    for index, token in enumerate(tokens):
+        if token in _ACR_MULTI_FACTOR_TOKENS:
+            markers.append((index, 1))
+        elif token == "multi" and index + 1 < len(tokens) and tokens[index + 1] == "factor":
+            markers.append((index, 2))
+    return markers
+
+
 def _acr_names_multi_factor(acr: str) -> bool:
     """True when ``acr`` positively asserts a multi-factor login.
 
@@ -290,17 +331,21 @@ def _acr_names_multi_factor(acr: str) -> bool:
     never happened, so the blunt direction is the safe one.
     """
     tokens = _acr_tokens(acr)
-    for index, token in enumerate(tokens):
-        if token in _ACR_MULTI_FACTOR_TOKENS and not _marker_is_negated(tokens, index, 1):
-            return True
-        if (
-            token == "multi"
-            and index + 1 < len(tokens)
-            and tokens[index + 1] == "factor"
-            and not _marker_is_negated(tokens, index, 2)
-        ):
-            return True
-    return False
+    return any(
+        not _marker_is_negated(tokens, start, span)
+        for start, span in _acr_multi_factor_markers(tokens)
+    )
+
+
+def _acr_has_only_vetoed_markers(acr: str) -> bool:
+    """True when ``acr`` carries a multi-factor marker and every one was vetoed.
+
+    Only used to explain a refusal, so the diagnostic can say "your IdP sent
+    ``mfa-optional``" rather than the unhelpful "unrecognised".
+    """
+    tokens = _acr_tokens(acr)
+    markers = _acr_multi_factor_markers(tokens)
+    return bool(markers) and all(_marker_is_negated(tokens, start, span) for start, span in markers)
 
 
 def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
@@ -347,6 +392,67 @@ def derive_assurance(claims: dict[str, Any]) -> AuthenticationAssurance:
         return AuthenticationAssurance.MULTI_FACTOR
 
     return AuthenticationAssurance.SINGLE_FACTOR
+
+
+def _assurance_claim_shape(claims: dict[str, Any]) -> str:
+    """Describe *why* an assurance derivation came out single-factor, without values.
+
+    Deliberately value-free: no ``acr`` string, no ``amr`` method names, no claim
+    count that could fingerprint an account. It answers the operator's diagnostic
+    question — "the IdP says it enforces MFA, so why is this login single-factor?"
+    — by naming the failing stage, which is the only thing that can be fixed:
+
+    * ``acr-absent`` / ``acr-not-string`` — the IdP sent no usable ``acr``;
+    * ``acr-unrecognised`` — an ``acr`` arrived but names no level this build models
+      (numeric NIST levels are intentionally unmapped, see ``derive_assurance``);
+    * ``amr-absent`` / ``amr-not-string-or-list`` / ``amr-empty`` — no methods;
+    * ``amr-unrecognised-methods`` — methods arrived but none are in the closed
+      vocabulary, so they can only understate;
+    * ``amr=recognised amr-families=1`` — recognised methods, but all from one factor
+      family (``otp``+``totp`` is one factor, which is the usual surprise);
+    * ``acr=negated`` — an ``acr`` marker was vetoed by an adjacent negation.
+    """
+    acr = claims.get("acr")
+    acr_state = "absent"
+    if acr is not None:
+        if not isinstance(acr, str):
+            acr_state = "not-string"
+        elif not acr.strip():
+            acr_state = "empty"
+        elif _acr_names_multi_factor(acr):
+            acr_state = "multi-factor"
+        elif _acr_has_only_vetoed_markers(acr):
+            acr_state = "negated"
+        else:
+            acr_state = "unrecognised"
+
+    amr = claims.get("amr")
+    amr_state: str
+    families: set[str] = set()
+    if amr is None:
+        amr_state = "absent"
+    elif isinstance(amr, str):
+        method = amr.strip().lower()
+        if not method:
+            amr_state = "empty"
+        elif method in _AMR_FAMILIES:
+            families = {_AMR_FAMILIES[method]}
+            amr_state = "recognised"
+        else:
+            amr_state = "unrecognised-methods"
+    elif isinstance(amr, list | tuple):
+        methods = {str(item).strip().lower() for item in amr if isinstance(item, str)}
+        families = {_AMR_FAMILIES[method] for method in methods if method in _AMR_FAMILIES}
+        if not methods:
+            amr_state = "empty"
+        elif not families:
+            amr_state = "unrecognised-methods"
+        else:
+            amr_state = "recognised"
+    else:
+        amr_state = "not-string-or-list"
+
+    return f"acr={acr_state} amr={amr_state} amr-families={len(families)}"
 
 
 def _as_datetime(value: object) -> datetime | None:
