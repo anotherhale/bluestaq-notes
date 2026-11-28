@@ -614,6 +614,19 @@ class GetApprovalRequest(UseCase):
             return request
 
 
+@dataclass(frozen=True, slots=True)
+class ToolInvocationAuditPage:
+    """One page of an agent's audit trail plus the trail's exact size.
+
+    ``total`` counts the whole trail, not the page. A page is capped, so a
+    page-derived total would equal the page size and make a window over 3,412
+    attempts indistinguishable from a complete trail of 50.
+    """
+
+    items: list[ToolInvocation]
+    total: int
+
+
 class ListToolInvocations(UseCase):
     """List the tool-invocation audit trail for one of the caller's agents.
 
@@ -625,6 +638,12 @@ class ListToolInvocations(UseCase):
     which tools an agent reached for and when, so it is the owning human's
     evidence. A non-owner gets ``404``, never ``403``, so the endpoint cannot be
     used to probe for the existence of another user's agent.
+
+    The count and the page are read in one transaction, so the pair cannot
+    straddle a commit boundary between them. Under ``READ COMMITTED`` a
+    concurrent invocation may still land between the two statements; the count
+    answers "how long is the trail now", which is the honest answer to give,
+    and it is never derived from the page.
     """
 
     def run(
@@ -634,10 +653,12 @@ class ListToolInvocations(UseCase):
         agent_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ToolInvocation]:
+    ) -> ToolInvocationAuditPage:
         with self._uow_factory() as uow:
             agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
-            return uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
+            items = uow.tool_invocations.list_for_agent(agent.id, limit=limit, offset=offset)
+            total = uow.tool_invocations.count_for_agent(agent.id)
+            return ToolInvocationAuditPage(items=items, total=total)
 
 
 class VerifyToolInvocationChain(UseCase):

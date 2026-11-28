@@ -200,6 +200,20 @@ class ToolInvocationRepository(Protocol):
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[ToolInvocation]: ...
 
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """How many entries this agent's trail holds, for the page's metadata.
+
+        Exists so a paginated listing can say "showing 50 of 3,412" instead of
+        "showing 50". Deriving the total from ``len(rows)`` cannot work: a page
+        is capped, so the count would equal the page size on every page and a
+        reader could not tell a complete trail from a window over a larger one.
+        One indexed aggregate answers the question the page cannot.
+
+        Scoped by agent for the same reason as :meth:`list_for_agent`: a count
+        is a fact about another user's trail too, so it is never global.
+        """
+        ...
+
     def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
         """The position and predecessor hash for this agent's next entry.
 

@@ -259,13 +259,18 @@ def list_tool_invocations(
     is explicit here rather than the unpaginated ``_page`` helper used by the
     other listings: an audit trail grows without bound, so a fixed default window
     keeps one request from returning an agent's entire history.
+
+    ``meta.total`` is the length of the whole trail, not of ``items``. A window
+    that reports its own size as the total cannot be told apart from a complete
+    trail, which is the difference between "this agent made 50 attempts" and
+    "the first 50 of thousands".
     """
-    invocations = container.list_tool_invocations().run(
+    page = container.list_tool_invocations().run(
         principal, agent_id=str(agent_id), limit=limit, offset=offset
     )
-    items = [ToolInvocationAuditResponse.from_domain(item) for item in invocations]
+    items = [ToolInvocationAuditResponse.from_domain(item) for item in page.items]
     return ToolInvocationAuditListResponse(
-        items=items, meta=PageMeta(total=len(items), limit=limit, offset=offset)
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
     )
 
 

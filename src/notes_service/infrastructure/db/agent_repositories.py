@@ -764,6 +764,15 @@ class SqlAlchemyToolInvocationRepository:
         )
         return [_invocation_to_domain(row) for row in rows]
 
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        return int(
+            self._session.execute(
+                select(func.count())
+                .select_from(ToolInvocationRow)
+                .where(ToolInvocationRow.agent_id == _as_uuid(agent_id))
+            ).scalar_one()
+        )
+
     def next_chain_link(self, agent_id: AgentId) -> tuple[int, str]:
         anchor = self.chain_anchor(agent_id)
         if anchor.is_empty:
