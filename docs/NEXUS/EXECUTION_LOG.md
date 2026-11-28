@@ -11938,3 +11938,47 @@ commit is test-and-docs only — no product file changes, and the nine tests it 
 locally on this tree (1778 passed). Treat its own CI as a separate, later verdict rather than folding it
 into the table above.
 
+
+## Run 98 close-out — delivery verified, not just attempted
+
+**Run ID:** NEX-2026-11-28-98 · **Branch:** `feature/agentic-enterprise-platform` · **Head:** `e9ccba4`
+
+The verdict the previous section deferred is now in, and it is the good outcome:
+
+| Commit | What it is | CI at its own `head_sha` |
+| --- | --- | --- |
+| `f4a2845` | NEX-098 product | 4/4 `completed/success` (46153368050, 46153373346) |
+| `e9ccba4` | docs + strengthened test | 4/4 `completed/success` (46153750548, 46153754933) |
+
+Both runs read **per job**: Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped. Neither
+verdict is descendant-CI.
+
+The earlier caveat — that the strengthened tiebreaker test postdated the product commit and so rode on an
+unvalidated commit — is **resolved rather than repeated**: that test shipped in `e9ccba4`, and `e9ccba4`
+got its own full pair of runs. The feared `cancelled` concurrency outcome did not occur, because
+`f4a2845`'s runs had already concluded before the docs push, leaving the group free. Recorded that way
+because "we expected cancelled and got green" is only useful if which one happened is stated.
+
+### Delivery surfaces
+
+- **PR #5:** NEX-098 section appended with `--body-file`, then the landed body **read back**: 136237
+  characters, byte-exact against the composed body, heading and load-bearing section both present. A
+  publisher's exit 0 is not evidence the artifact landed.
+- **Issue #2:** verdict posted as comment `7240543435` and read back — 83 comments, last body 2373
+  characters, carrying the VERIFIED heading and the nothing-turned-red finding. Issue left **open**.
+
+### What went wrong in this run, worth recording
+
+A `python3 - <<'PY'` heredoc carrying the checkpoint patch **self-interleaved mid-write**, the same failure
+mode already known for prose-through-a-heredoc. It did not corrupt anything — the tree stayed clean and
+`CHECKPOINT.json` remained valid JSON — because the interleaved text never reached a file write. The patch
+was redone with `file_editor` line edits and revalidated. The standing rule holds and is now confirmed for
+*structured* payloads, not just prose: write with `file_editor`, never a heredoc.
+
+### Status of the task board at close
+
+NEX-098 is **VERIFIED** (product CI green at its own head) and **PUSHED** (remote head confirmed by
+`git ls-remote`, not by a local ref). PR #5 is **PR UPDATED** and remains **open and unmerged** for human
+review. Tracking issue #2 is **open** with the delivery recorded. No `MERGED` status is claimed for
+anything — that is reserved for human/repository evidence.
+

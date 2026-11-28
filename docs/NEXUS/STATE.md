@@ -57,8 +57,10 @@ asserted the untested claim were rewritten to the measured result rather than le
 `pytest -o addopts=--strict-markers` **1778 passed, 4 skipped** (baseline 1769 + 9).
 
 CI: `f4a2845` **4/4 `completed/success` on the product commit itself** — runs `46153368050` (push) and
-`46153373346` (pull_request), both `head_sha = f4a2845`, per job. Caveat recorded in the execution log:
-the strengthened test postdates `f4a2845` and is not in the commit CI validated.
+`46153373346` (pull_request), both `head_sha = f4a2845`, per job. **Caveat resolved:** the strengthened
+test postdates `f4a2845` but shipped in `e9ccba4`, whose own runs are 4/4 `completed/success` on its own
+`head_sha` (`46153750548`, `46153754933`, per job, zero failed, zero skipped). Both commits are green at
+their own head; neither verdict is descendant-CI. PR #5 body and issue #2 were updated and **read back**.
 
 ## Next best actions (run `NEX-2026-11-28-98`, superseding every list above)
 
@@ -3707,7 +3709,8 @@ is not "trust the docstring less" — it is that a comment recording a *performa
 checked against the statement it describes, because a green test suite proves correctness, not cost.
 The regression here asserts cost.
 
-## Next best actions (run `NEX-2026-11-28-93`, superseding every list above)
+## Next best actions (run `NEX-2026-11-28-93`, **superseded** — kept for history; the live list is the
+run-98 block near the top of this file)
 
 No NEXUS delivery debt remains through NEX-092. The next run starts clean:
 

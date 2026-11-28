@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-98",
-  "timestamp": "2026-11-28T14:20Z",
+  "timestamp": "2026-11-28T14:40Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "f4a28459a82fdd853bba5134c9cef89b66ab7d73",
   "product_commit": "f4a28459a82fdd853bba5134c9cef89b66ab7d73",
@@ -38,17 +38,17 @@
     "doc_correction": "BACKLOG.md and DECISIONS.md both asserted the tiebreaker test was load-bearing, which was not established when first written. Both were rewritten to the measured result, including the failed first probe, rather than patched to look right."
   },
   "uncommitted_work": false,
-  "ci_status": "f4a2845 (NEX-098 product): 4/4 completed/success ON THE PRODUCT COMMIT ITSELF (runs 46153368050 push, 46153373346 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = f4a28459a82fdd853bba5134c9cef89b66ab7d73), verified per run AND per job -- the exit code alone is not the verdict. Prior: febb810 (NEX-097 product) 4/4 on itself (46148603437, 46148607713); d18da82 4/4 on itself (46149271375, 46149276202); bedc235 (run-96 docs head) 4/4; cf51518 4/4; 5e0c926 4/4; 87936d4 (NEX-096 product) 4/4 on itself; fb027ee (NEX-095) 4/4 on itself; d4abd07 (run-94 docs head) 4/4; d8353ff (NEX-094 product) carried ZERO check-runs (superseded in the concurrency group) so that verdict was descendant-CI; 48ad062 (NEX-093) 4/4. CAVEAT: the strengthened persistence test postdates f4a2845 and is NOT in the commit CI validated; it rides on this docs+test commit, whose own run is a separate later verdict.",
+  "ci_status": "f4a2845 (NEX-098 product): 4/4 completed/success ON THE PRODUCT COMMIT ITSELF (runs 46153368050 push, 46153373346 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, both head_sha = f4a28459a82fdd853bba5134c9cef89b66ab7d73), verified per run AND per job -- the exit code alone is not the verdict. Prior: febb810 (NEX-097 product) 4/4 on itself (46148603437, 46148607713); d18da82 4/4 on itself (46149271375, 46149276202); bedc235 (run-96 docs head) 4/4; cf51518 4/4; 5e0c926 4/4; 87936d4 (NEX-096 product) 4/4 on itself; fb027ee (NEX-095) 4/4 on itself; d4abd07 (run-94 docs head) 4/4; d8353ff (NEX-094 product) carried ZERO check-runs (superseded in the concurrency group) so that verdict was descendant-CI; 48ad062 (NEX-093) 4/4. CAVEAT: the strengthened persistence test postdates f4a2845 and is NOT in the commit CI validated. RESOLVED in this close-out: that test shipped in e9ccba4, and e9ccba4's own runs are 4/4 completed/success on its own head_sha (runs 46153750548 push, 46153754933 pull_request; Backend 12/12 and Frontend 11/11 steps green, zero failed, zero skipped, per job). Both commits are green at their own head_sha; neither verdict is descendant-CI.",
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
-    "head_ref_oid": "f4a28459a82fdd853bba5134c9cef89b66ab7d73",
-    "body_covers": "NEX-052..NEX-097. NEX-098 section appended in this close-out with --body-file, then the landed body read back to confirm it landed -- a publisher exit 0 is not evidence the artifact landed.",
+    "head_ref_oid": "e9ccba4f6bb421f424a828fd8fcb3b79182771ee",
+    "body_covers": "NEX-052..NEX-098. NEX-098 section appended with --body-file, then the landed body read back: 136237 chars, byte-exact against the composed body, heading and load-bearing section both present. A publisher exit 0 is not evidence the artifact landed; the read-back is.",
     "nex_097_in_body": true,
-    "nex_098_in_body": "pending this close-out"
+    "nex_098_in_body": "delivered and read back (byte-exact, 136237 chars)"
   },
-  "tracking_issue": "Issue #2 open, not closed. NEX-098 verdict delivered as a comment this run and read back. NEX-097 delivered in run 97; NEX-096 as 7239449984; NEX-092 through NEX-097 all delivered.",
+  "tracking_issue": "Issue #2 open, not closed. NEX-098 verdict delivered as comment 7240543435 and read back (83 comments; last body 2373 chars; carries the VERIFIED heading and the nothing-turned-red finding). NEX-097 delivered in run 97; NEX-096 as 7239449984; NEX-092 through NEX-097 all delivered.",
   "blockers": [],
   "risks": [
     "The exact-total paging family (NEX-082..NEX-098) is now CLOSED. The next run must not invent another paging slice to continue the pattern: every remaining whole-set list_* is either user-authored and small (FoldersRepository.list_for_owner, on no paged route) or already windowed. DECISIONS records why folders are deliberately left alone.",
@@ -74,7 +74,7 @@
     "The strengthened persistence test inserts in reverse id order and asserts the listing's sequence equals its id-sorted sequence. Without that, a stable-but-arbitrary order passes and the test proves nothing -- which is exactly what the first draft did."
   ],
   "run_summary": "Run 98. Delivered NEX-098: GET /organizations/{id}/members was the last whole-set organization read -- no window, and meta.total was len(items), so a large tenant grew both the read and the response without bound. Shipped limit/offset on the port and adapter, a count_for_organization aggregate sharing the roster predicate, (created_at, id) ordering, and a 200 cap that rejects rather than clamps. Product f4a2845 pushed and VERIFIED: CI 4/4 completed/success on the product commit itself, both runs, per job. The significant finding is about the tests, not the code: reverting the total turned 2 tests red, but dropping the id tiebreaker turned NOTHING red -- the fixture's docstring claimed reversed insertion order while inserting forward, so SQLite's insertion order satisfied the walk either way. That is a guard encoding the defect it exists to catch. Fixed the fixture to insert reversed and added a sequence assertion, then re-probed: the tiebreaker is now load-bearing. Both docs that asserted the untested claim were rewritten to the measured result instead of being left to look right.",
-  "docs_delivery": "This run's docs+test commit follows f4a2845. The docs half touches docs/NEXUS/ only and is licensed to land on f4a2845's concluded green verdict; the test half strengthens tests/persistence/test_organization_roster_paging.py without touching product code. A docs push still supersedes in the concurrency group, so this commit's own run may read cancelled -- expected, and not evidence either way. The verdict of record stays f4a2845 4/4 on itself.",
+  "docs_delivery": "DELIVERED. e9ccba4 pushed and 4/4 completed/success on its OWN head_sha (46153750548 push, 46153754933 pull_request; per job, zero failed, zero skipped). It did NOT read cancelled as this field previously feared: f4a2845's runs had already concluded before the docs push, so the concurrency group was free and e9ccba4 got its own full pair. The docs half touches docs/NEXUS/ only; the test half strengthens tests/persistence/test_organization_roster_paging.py with no product-code change. Both PR #5 body and issue #2 were updated and read back.",
   "observed_remote_head_on_entry": "997a6ac on main (grafted shallow clone). The branch was not checked out; it was created at the live remote head, resolved with `git ls-remote`, before any edit.",
-  "head_semantics": "`commit` names the product commit f4a2845 whose CI is the verdict of record. The docs+test commit containing this file lands after it; a one-commit lag is expected and correct."
+  "head_semantics": "`commit` names the product commit f4a2845 whose CI is the verdict of record for the product change; `product_commit` repeats it. The docs+test commit e9ccba4 lands after it and is itself 4/4 green on its own head_sha, so both are validated. A file still cannot contain the hash of the commit that contains it, so the hash recorded here lags the commit that writes it by one; that lag is structural and correct."
 }
