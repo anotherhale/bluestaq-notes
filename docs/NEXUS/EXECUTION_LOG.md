@@ -9462,3 +9462,23 @@ and five test files (`test_governance_policy.py`, `test_operator_grant.py`,
 Poll `GET /repos/anotherhale/bluestaq-notes/commits/6637c50/check-runs`. When all are
 `completed`/`success`, mark NEX-078 VERIFIED, append it to PR #5's body, comment on issue #2, and
 take the next dependency-ready slice from `BACKLOG.md`.
+
+## Reconciliation at run 77's end — a concurrent run landed NEX-078 on this branch
+
+Run 77 pushed four docs commits (`acd9d30`, `3047b53`, `8edd159`, `281cc05`). When the run
+verified the remote before closing out, `refs/heads/feature/agentic-enterprise-platform` read
+`6637c50` — `fix(security): enforce three-way separation of duties and tz-aware grant expiry
+(NEX-078)` — a commit this run did not author. A second NEXUS run is working the same branch.
+
+Reconciliation, no force, no rewrite:
+
+- `git merge-base --is-ancestor 281cc05 6637c50` → true. Every run-77 commit is an ancestor of
+  the remote tip, so nothing was lost. Fast-forwarded with `git merge --ff-only 6637c50`.
+- CI on `8edd159` and `281cc05` reads `cancelled` on all four check-runs. That is **superseded**,
+  not failed: NEX-078's push started a newer run on the same concurrency group.
+- CI on `6637c50`: frontend 2/2 `completed/success`; backend 2/2 still `in_progress` at run end.
+  NEX-078 is therefore IMPLEMENTED + PUSHED, **not** VERIFIED. Recorded that way.
+
+Concurrency risk worth stating plainly: two runs on one branch cancel each other's CI and can
+race on `CHECKPOINT.json`. Each run's commits survive as ancestors, but a run that reads CI
+mid-race will see `cancelled` and must not mistake it for a failure.

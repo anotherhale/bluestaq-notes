@@ -160,7 +160,7 @@
     "mergeable": true,
     "body_covers": "NEX-052..NEX-076",
     "body_chars": 54625,
-    "head": "not recorded here — read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+    "head": "not recorded here \u2014 read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
     "note": "Body 63858 chars, PATCHed by run 76, carrying NEX-052..NEX-076. Open, draft=false, unmerged.",
     "merging": "prohibited for automated runs; awaiting human review"
   },
@@ -174,12 +174,13 @@
   "risks": [
     "No scheduled purge exists for the operator access log (ADR-017). An unattended purger changes who is accountable for an erasure, so it is a separate decision.",
     "PR #5 stacks twenty-three slices; the reviewer's 'consider a split' note stands and is a human decision.",
-    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect."
+    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect.",
+    "Two NEXUS runs worked this branch concurrently on 2026-11-28. Run 77's docs commits were superseded by NEX-078 and their CI reads `cancelled`; nothing was lost (they are ancestors of 6637c50), but the runs raced on CHECKPOINT.json and pushed over each other."
   ],
-  "next_task": "NEX-078 is pushed (6637c50) with CI pending. Poll check-runs on 6637c50 until every entry is `completed`, then record VERIFIED only if all are success. Then pick the next dependency-ready slice from BACKLOG.md. Do NOT re-implement NEX-078, NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058.",
+  "next_task": "Poll CI on 6637c50 (NEX-078) to a backend verdict and record it - frontend is already green. Then pick the next dependency-ready slice. Do NOT re-implement NEX-077/076/075/074/073/058, do NOT re-append NEX-077 to PR #5, and do NOT re-do NEX-078: it is pushed.",
   "next_action": "Poll `GET /repos/anotherhale/bluestaq-notes/commits/6637c50/check-runs`; when all completed and success, mark NEX-078 VERIFIED, add its section to PR #5's body, comment on issue #2, and take the next backlog slice.",
   "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this file's commit field always lags by one. 3. NEX-077 is VERIFIED (CI 4/4 on 9f9a70f) and PR #5's body carries it - do not re-append. Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. 4. PR #5 is open, draft=false, unmerged. Never merge it. 5. Next: pick the next dependency-ready slice from BACKLOG.md.",
-  "ci_status": "6637c50 (NEX-078 product commit): check-runs not yet registered at checkpoint time (total_count 0). Poll before claiming CI. Prior head 281cc05 docs-only.",
+  "ci_status": "6637c50 (NEX-078): frontend 2/2 completed/success, backend 2/2 in_progress when run 77 read it (2026-11-28T03:55Z) - verdict NOT established. 8edd159 and 281cc05 (run 77 docs): all four check-runs `cancelled`, i.e. SUPERSEDED by NEX-078's push, not failed. 9f9a70f (NEX-077 product): 4/4 completed/success, polled 2026-11-28T03:44Z. acd9d30 (docs): 4/4 completed/success, polled 2026-11-28T03:51Z.",
   "commits_this_run": [
     "6637c50 fix(security): enforce three-way separation of duties and tz-aware grant expiry (NEX-078)"
   ],
@@ -248,5 +249,5 @@
     "Append NEX-078 to PR #5's body and issue #2 (the two findings it closes).",
     "Take the next dependency-ready backlog slice from BACKLOG.md."
   ],
-  "last_ci_result": "Not yet read for 6637c50. Prior: acd9d30 (docs) 4/4 success 2026-11-28T03:51Z."
+  "last_ci_result": "6637c50 frontend 2/2 green, backend in_progress at 2026-11-28T03:55Z; 8edd159 + 281cc05 cancelled (superseded); 9f9a70f 4/4 success; acd9d30 4/4 success"
 }
