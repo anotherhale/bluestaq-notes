@@ -3730,8 +3730,9 @@ body and issue #2 is owed by the next run.
 
 **Phase.** 3 (governance) — audit integrity.
 **Priority.** P1 (foundational: the one number that states how far back retained evidence reaches).
-**Status.** IMPLEMENTED · TESTED · COMMITTED `82d8a64` · PUSHED. **Not VERIFIED** — CI has not been
-read to a verdict yet.
+**Status.** **VERIFIED** — IMPLEMENTED · TESTED · COMMITTED `82d8a64` · PUSHED · **CI PASSED**
+(4/4 `completed/success` on docs head `cf44c89`, runs `46125167112` push and `46125170933`
+pull_request, polled 08:22:33Z) · DELIVERED (PR #5 body, issue #2 comment `7236499955`).
 **Depends on.** NEX-075 (the purge and its `retained_from` field), NEX-072 (the durable log).
 
 ### The defect
@@ -3823,9 +3824,10 @@ cannot use to decide whether history was destroyed prematurely.
 
 ### Remaining
 
-1. Poll CI on `82d8a64` to a `completed/success` verdict before writing VERIFIED anywhere.
-2. Deliver to PR #5 body and issue #2.
-3. Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the grant table in
+None. CI concluded 4/4 on a docs head whose product tree is identical to `82d8a64`
+(`git diff 82d8a64 cf44c89 -- src/ tests/` empty), and delivery to PR #5 and issue #2 is done.
+
+Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the grant table in
    Python (recorded as a risk); this slice is the same *shape* of defect — a bounded read standing
    in for an exact answer — so an audit of the remaining audit reads for page-derived values is
    warranted.

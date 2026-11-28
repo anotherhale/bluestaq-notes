@@ -5,24 +5,23 @@
   "branch": "feature/agentic-enterprise-platform",
   "commit": "82d8a6446f9d5ba56bd50f4c71df4b53eb75c854",
   "branch_head": "82d8a64 (product, NEX-087); a docs commit carrying this checkpoint advances the tip one past it",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-086 VERIFIED; NEX-087 IMPLEMENTED/TESTED/COMMITTED/PUSHED but NOT VERIFIED. NEX-087: the access-log retention report's retained_from was the tail of a capped newest-first page, not the log, so past 1000 survivors it understated how far back the retained evidence reached - in the reassuring direction, growing with traffic. The port now exposes an exact oldest_retained(): MIN(at) in SQL, insertion order in the ring.",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-087 VERIFIED. NEX-087: the access-log retention report's retained_from was the tail of a capped newest-first page, not the log, so past 1000 survivors it understated how far back the retained evidence reached - the reassuring direction, growing with traffic. The port now exposes an exact oldest_retained(): MIN(at) in SQL, insertion order in the ring.",
   "active_task": null,
   "task_statuses": {
     "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
     "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
     "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
     "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126.",
-    "NEX-087": "COMMITTED 82d8a64, PUSHED, CI NOT YET READ - not VERIFIED. Local gates green on the committed tree (ruff format/check clean, mypy 143 files clean, pytest full suite exit 0, 4 skipped). Mutation control: page-derived read restored -> 1500-survivor regression fails; restored and re-ran green before commit. Delivery to PR #5 body and issue #2 is owed."
+    "NEX-087": "VERIFIED - product 82d8a64, CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request). Delivered to PR #5 body and issue #2 comment 7236499955."
   },
   "completed_tasks": [
     "NEX-084",
     "NEX-085",
-    "NEX-086"
-  ],
-  "verified_tasks_up_to": "NEX-086",
-  "in_progress_tasks": [
+    "NEX-086",
     "NEX-087"
   ],
+  "verified_tasks_up_to": "NEX-087",
+  "in_progress_tasks": [],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. COMMITTED + PUSHED is not VERIFIED, and neither is 'local suite green'. NEX-087 is COMMITTED/PUSHED with green local gates and is deliberately NOT recorded as VERIFIED because no CI verdict has been read. NEX-086 became VERIFIED by reading 4/4 completed/success on docs head f780afb, whose product tree is identical to 70d7667's (proved with git diff -- src/ tests/, empty). A docs commit that supersedes the product commit in the concurrency group reads completed/cancelled, which is never a failure but is also never evidence; anchor to a concluded run or to a docs head whose product tree is identical.",
   "validation": {
     "commands_run_on_committed_tree": [
@@ -35,8 +34,8 @@
     "new_tests": 6,
     "ci": {
       "commit": "82d8a64",
-      "result": "NOT YET READ",
-      "detail": "The next run must poll both the push and pull_request runs for 82d8a64 (and for any docs head that supersedes it) to a concluded verdict before writing VERIFIED."
+      "result": "4/4 completed/success",
+      "detail": "CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request; Backend + Frontend both success), polled 2026-11-28T08:22:33Z. Product tree identical to 82d8a64 (git diff 82d8a64 cf44c89 -- src/ tests/ empty). 82d8a64's own runs read completed/cancelled - superseded in the concurrency group, never a failure. Delivered to PR #5 body (100876 bytes) and issue #2 comment 7236499955."
     },
     "verified_prior": {
       "commit": "70d7667",
@@ -50,22 +49,21 @@
     "draft": false,
     "mergeable": true,
     "state": "open",
-    "body_sections_through": "NEX-086",
-    "body_length_bytes": 96780,
+    "body_sections_through": "NEX-087",
+    "body_length_bytes": 100876,
     "head_sha": "82d8a64",
-    "note": "PR #5 body carries NEX-052..NEX-086 (96780 bytes). NEX-087 is NOT yet appended; the next run must append it after asserting body.count('## NEX-087 ')==0 and read back from the API."
+    "note": "PR #5 body carries NEX-052..NEX-087 (100876 bytes). NEX-087 was appended after asserting body.count('## NEX-087 ')==0, then read back from the API: NEX-087 x1, NEX-086 x1."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "comment_count": 70,
-    "latest_comment": "7236123126",
-    "covers": "NEX-086",
-    "note": "Comment 7236123126 posts the NEX-086 verification summary. NEX-087 is NOT yet commented - owed by the next run, after its CI is read. Use lists, not markdown tables, in issue comments on this repository."
+    "comment_count": 71,
+    "latest_comment": "7236499955",
+    "covers": "NEX-087",
+    "note": "Comment 7236499955 posts the NEX-087 verification summary, after asserting zero prior mentions of NEX-087. Use lists, not markdown tables, in issue comments on this repository."
   },
   "blockers": [],
   "risks": [
-    "NEX-087 has no CI verdict yet; it is COMMITTED/PUSHED, not VERIFIED.",
     "NEX-087's defect shape - a bounded read standing in for an exact answer - may recur in other audit reads. count_revoked()/revoked_grants() scan the grant table in Python and are correct today, but a sweep of remaining audit surfaces for page-derived values is warranted.",
     "No scheduled purge exists for the operator access log (ADR-017).",
     "PR #5 stacks thirty slices; the reviewer's 'consider a split' note stands and is a human decision.",
@@ -73,17 +71,18 @@
     "ON DELETE SET NULL on granted_by/revoked_by shapes domain validation; the NEX-080 defect that made an account with revocation history undeletable is fixed, but the pattern deserves a durable test if a third such column is added.",
     "Heredocs corrupt in this environment: a `git commit -F -` heredoc interleaved and repeated its own body. Write payloads to a file and use `-F <file>`; never inline multi-line bodies."
   ],
-  "next_task": "NEX-087 is committed and pushed. Read CI for 82d8a64 to a verdict; then deliver NEX-087 to PR #5 and issue #2; then take the next dependency-ready slice from BACKLOG.md.",
-  "next_action": "1. Poll CI for 82d8a64 (push + pull_request). If a docs push supersedes it, anchor to a docs head with an identical product tree (git diff <product> <docs-head> -- src/ tests/ must be empty) - a cancelled verdict alone is never evidence. 2. Only then write NEX-087 VERIFIED in CHECKPOINT.json, STATE.md and BACKLOG.md, and sweep the neighbouring narrative rows for stale NEX-086 wording. 3. Append the NEX-087 section to PR #5's body and comment on issue #2. 4. Then pick the next dependency-ready slice; do not redo NEX-077..NEX-087.",
+  "next_task": "NEX-087 VERIFIED and delivered. Take the next dependency-ready slice from BACKLOG.md: Phase 4 (admin console frontend) or the remaining backend gaps. No delivery debt remains on PR #5 or issue #2.",
+  "next_action": "1. Read docs/NEXUS/BACKLOG.md and pick the highest-priority dependency-ready task not already VERIFIED. 2. Implement and test it as one vertical slice, failing test first, with a mutation control proving the new test fails without the fix. 3. Commit, push, then poll CI on the product commit (and on a docs head with an identical product tree, proved with git diff -- src/ tests/) to a verdict before writing VERIFIED. 4. Deliver to PR #5 body and issue #2. 5. Do not start a new slice with under 10 minutes left on the clock. 6. Strong candidate: the NEX-087 follow-up - sweep the remaining audit reads for page-derived values standing in for exact answers (the shared shape of NEX-082, NEX-086, NEX-087).",
   "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-077..NEX-086 are implemented, pushed and CI-verified - do not redo or re-verify them. 3) NEX-087 is implemented, tested, committed (82d8a64) and pushed with green local gates, but its CI has NOT been read and it is NOT delivered to PR #5 or issue #2 - finish that before starting anything new. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files, because writing them is itself a commit that advances the tip. 5) A docs commit reads completed/cancelled once superseded in the concurrency group - never a failure, never evidence. 6) Never inline a multi-line commit message or Python body as a heredoc here; write it to /tmp and pass the file.",
   "ci_status": {
     "product_commit": "82d8a6446f9d5ba56bd50f4c71df4b53eb75c854",
-    "result": "NOT YET READ",
-    "detail": "No CI verdict has been read for 82d8a64. Prior concluded: docs head f780afb (product tree identical to 70d7667) 4/4 completed/success, runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z."
+    "result": "4/4 completed/success",
+    "detail": "CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request; Backend + Frontend both success), polled 2026-11-28T08:22:33Z. Product tree identical to 82d8a64 (git diff 82d8a64 cf44c89 -- src/ tests/ empty). 82d8a64's own runs read completed/cancelled - superseded in the concurrency group, never a failure. Delivered to PR #5 body (100876 bytes) and issue #2 comment 7236499955."
   },
   "commits_this_run": [
     "82d8a64 fix(ops): report the exact oldest retained access entry (NEX-087)",
-    "this docs commit (STATE/BACKLOG/EXECUTION_LOG/CHECKPOINT for run 87)"
+    "cf44c89 docs(nexus): record NEX-087 (run 87)",
+    "this docs commit (NEX-087 -> VERIFIED)"
   ],
   "decisions_this_run": [
     "A new port method, not a bigger page. Raising the 1000-entry cap would move the cliff rather than remove it and would leave the field's truthfulness a function of traffic; 'what is the oldest row' has an exact answer (MIN), so the question is asked directly.",
@@ -91,6 +90,6 @@
     "None still means 'empty log'. Engineering a sentinel timestamp for 'nothing retained' would make an empty log look like a very old log - the same class of lie in a different place.",
     "The SQL MIN result is relabelled to aware UTC with the same rule UTCDateTime applies, because SQLite returns a naive datetime for a plain TIMESTAMP column and the domain speaks aware UTC."
   ],
-  "run_summary": "Run 87 found and fixed a truthfulness defect in the operator-access retention report. retained_from was derived from the last element of a capped newest-first page, so past 1000 survivors it understated how far back the retained evidence reached - the reassuring direction, worse as traffic grew, and invisible to a suite whose every fixture was under one page. A probe reproduced it (1500 survivors: reported 12:08:22 vs a true oldest of 12:00:00). The port gained an exact oldest_retained() (MIN(at) in SQL, insertion order in the ring, min() in the spy); the use case delegates and _OLDEST_SCAN_LIMIT is gone. Six new tests, each chosen so a page-derived implementation cannot satisfy it; mutation control proved the key regression fails without the fix. Full suite exit 0, ruff/mypy clean. Product commit 82d8a64 pushed to feature/agentic-enterprise-platform (remote head verified). NEX-087 remains NOT VERIFIED because no CI verdict has been read, and it is not yet delivered to PR #5 or issue #2 - both are the next run's work.",
-  "docs_head_delivered": "Not yet. 82d8a64 is a product commit; the docs commit carrying this checkpoint follows it and supersedes it in the CI concurrency group, so its own push-run may read cancelled - never evidence. Anchor the verdict to a concluded run, or to a docs head whose product tree is identical (git diff 82d8a64 <docs-head> -- src/ tests/ empty)."
+  "run_summary": "Run 87 found and fixed a truthfulness defect in the operator-access retention report, then verified and delivered it. retained_from was derived from the last element of a capped newest-first page, so past 1000 survivors it understated how far back the retained evidence reached - the reassuring direction, worse as traffic grew, invisible to a suite whose every fixture was under one page. A probe reproduced it (1500 survivors: reported 12:08:22 against a true oldest of 12:00:00). The port gained an exact oldest_retained() (MIN(at) in SQL, insertion order in the ring, min() in the spy); the use case delegates and _OLDEST_SCAN_LIMIT is gone. Six new tests, each chosen so a page-derived implementation cannot satisfy it; mutation control proved the key regression fails without the fix. Full suite exit 0; ruff/mypy clean. Product commit 82d8a64 pushed, docs head cf44c89 pushed; CI concluded 4/4 completed/success (4 of 4 jobs) on cf44c89, whose product tree is identical to 82d8a64's. NEX-087 is VERIFIED and delivered to PR #5 body (100876 bytes) and issue #2 comment 7236499955.",
+  "docs_head_delivered": "cf44c89 carried the run-87 docs and is CI-verified 4/4 completed/success (runs 46125167112 push, 46125170933 pull_request) with a product tree identical to 82d8a64. The promotion commit carrying this checkpoint follows it and is itself the head the next run should poll."
 }
