@@ -69,8 +69,43 @@ class OperatorGrantRepository(Protocol):
     def active_for(self, user_id: UserId, *, now: datetime) -> frozenset[str]:
         """The scopes ``user_id`` may use at ``now``. Empty when none apply.
 
-        Expired, not-yet-valid, and never-granted all yield the empty set: a
-        caller cannot distinguish them, and none of them confers anything.
+        Expired, not-yet-valid, revoked, and never-granted all yield the empty
+        set: a caller cannot distinguish them, and none of them confers anything.
+        """
+        ...
+
+    def revoke(
+        self,
+        user_id: UserId,
+        scope: str,
+        *,
+        at: datetime,
+        by: UserId,
+    ) -> int:
+        """Revoke every live grant of ``scope`` held by ``user_id`` (NEX-079).
+
+        Returns the number of rows changed. A revocation is stamped as a fact on
+        each matching grant (``revoked_at``/``revoked_by``) rather than deleting
+        it, so the fact that authority was taken away — and by whom, and when —
+        survives for an auditor. A grant already revoked is left untouched, so the
+        *first* revocation is the one recorded and a second call reports zero
+        rather than rewriting history.
+
+        Only *currently live* grants are revoked — one that already lapsed
+        confers nothing, so recording a revocation on it would be a misleading
+        audit entry. ``at`` is the revoker's clock, matching every other bound in
+        this subsystem (R29): the same clock that decides "live" stamps the
+        revocation.
+
+        This is deliberately keyed by ``(user, scope)`` and not by a single row:
+        a holder may have several live grants of one scope only through a
+        re-issue, and the operator asking to remove a permission means the
+        permission, not one row. Revoking all live rows of that scope is the
+        behaviour that matches the request.
+
+        There is no self-revoke guard or attenuation check in the port: those are
+        policy decisions for the use case, exactly as ``add`` leaves the issue
+        policy to ``IssueOperatorGrant``.
         """
         ...
 

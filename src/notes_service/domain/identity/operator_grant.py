@@ -136,6 +136,18 @@ class OperatorGrant:
     hand-out between people needs a recorded justification. Requiring it here,
     at the type level, means a caller cannot create an attributable grant whose
     purpose is unknown.
+
+    ``revoked_at``/``revoked_by`` are the *undo* (NEX-079). Before them the only
+    way to end a grant was to wait for ``expires_at``, so a mistaken hand-out — or
+    a configuration grant, which never expires — stayed live until a redeploy
+    rewrote the seed. A revocation is the one authority change that can be made
+    *authoritatively* and immediately, so it is recorded as a fact on the grant
+    rather than applied by deleting the row: an audit that can see a grant was
+    taken away, by whom and when, is the point of keeping it.
+
+    Revocation only ever *removes* authority, so it is honoured unconditionally —
+    see :meth:`is_active`. The two fields are set together or not at all: a
+    revocation nobody signed is not a record.
     """
 
     user_id: UserId
@@ -145,6 +157,8 @@ class OperatorGrant:
     not_before: datetime | None = None
     expires_at: datetime | None = None
     rationale: OperatorGrantRationale | None = None
+    revoked_at: datetime | None = None
+    revoked_by: UserId | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_id, UserId):
@@ -176,13 +190,26 @@ class OperatorGrant:
         # ``utcoffset() is None`` is checked as well as ``tzinfo is None`` because a
         # tzinfo that yields no offset (a misconfigured zone) is naive too, by the
         # same rule the stdlib uses.
-        for field_name in ("granted_at", "not_before", "expires_at"):
+        for field_name in ("granted_at", "not_before", "expires_at", "revoked_at"):
             value = getattr(self, field_name)
             if value is not None and (value.tzinfo is None or value.utcoffset() is None):
                 raise ValidationError(
                     f"operator grant {field_name} must be timezone-aware; "
                     "a naive datetime names a wall-clock reading, not an instant"
                 )
+        if self.revoked_at is not None and self.revoked_by is None:
+            # A revocation with no actor is an anonymous erasure of someone else's
+            # authority — exactly the fact an audit must be able to attribute.
+            raise ValidationError("a revoked operator grant must record who revoked it")
+        if self.revoked_by is not None and self.revoked_at is None:
+            # The reverse would name a revoker for a grant that is still live,
+            # which reads as a revocation that never happened.
+            raise ValidationError("a revoker on an operator grant requires revoked_at")
+        if self.revoked_at is not None and self.revoked_at < self.granted_at:
+            # A grant cannot be revoked before it existed. This is the same class
+            # as an expiry before issue: a clock-skewed fact that would otherwise
+            # look like a working revocation.
+            raise ValidationError("operator grant revoked_at must not be before granted_at")
         if self.expires_at is not None and self.expires_at <= self.granted_at:
             # A grant that expires at or before it was issued is a mistake that
             # would otherwise look like a working grant until the first check.
@@ -199,9 +226,21 @@ class OperatorGrant:
 
         ``now`` is supplied by the caller's clock (R29): the same clock that
         stamped the request decides whether the grant covers it. A grant is
-        inactive before ``not_before``, at or after ``expires_at``, and — by
-        definition — a bare grant with no bounds is active once granted.
+        inactive before ``not_before``, at or after ``expires_at``, once revoked,
+        and — by definition — a bare grant with no bounds is active once granted.
+
+        **A revoked grant is inactive regardless of ``now``.** This is the one
+        branch that deliberately ignores the clock: revocation is not a time
+        bound, it is a decision, and honouring it "from now on" would resurrect
+        authority for any caller whose clock ran behind the revoker's. A grant
+        taken away must confer nothing to anyone the instant the record says so.
+        Checking it first makes that true even for a future-dated revocation.
         """
+        if self.revoked_at is not None:
+            # Deliberately not compared to ``now``: see the docstring. Revocation
+            # only ever removes authority, so there is no case where honouring it
+            # early could grant something.
+            return False
         if now < self.granted_at:
             # A grant cannot be used before it was issued. This is not pedantry:
             # a clock skew that put granted_at in the future would otherwise
@@ -210,6 +249,11 @@ class OperatorGrant:
         if self.not_before is not None and now < self.not_before:
             return False
         return self.expires_at is None or now < self.expires_at
+
+    @property
+    def is_revoked(self) -> bool:
+        """True once this grant has been revoked."""
+        return self.revoked_at is not None
 
     @property
     def is_expiring(self) -> bool:

@@ -99,6 +99,7 @@ from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.operator_grants import (
     IssueOperatorGrant,
     ListOperatorGrants,
+    RevokeOperatorGrant,
 )
 from notes_service.application.use_cases.organization import (
     AddTeamMember,
@@ -310,6 +311,8 @@ class Container:
     list_operator_grants: Callable[[], ListOperatorGrants]
     # Handing a grant to another user, bounded and attributable (NEX-074).
     issue_operator_grant: Callable[[], IssueOperatorGrant]
+    # Taking a grant away, attributable and immediate (NEX-079).
+    revoke_operator_grant: Callable[[], RevokeOperatorGrant]
     # Pruning the access log by the configured retention window (NEX-075).
     # ``None`` when retention is disabled, so the endpoint can answer 404 rather
     # than expose a purge that would delete nothing.
@@ -574,6 +577,18 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             user_exists=user_exists,
         )
 
+    # The undo of the grant store (NEX-079). A revocation ends a grant immediately
+    # and records who ended it, which is the only way to stop a mistaken hand-out
+    # before its deadline — and the only way to stop a configuration grant at all.
+    # It shares the issue use case's dependencies and nothing else: no user lookup,
+    # because revoking from a user who does not exist is simply "nothing to revoke".
+    def make_revoke_operator_grant() -> RevokeOperatorGrant:
+        return RevokeOperatorGrant(
+            grants=operator_grants,
+            operator_gate=operator_gate,
+            clock=clock,
+        )
+
     # Retention (NEX-075). Built only when the deployment configured a window:
     # ``None`` means "keep everything", and the endpoint then answers 404 rather
     # than offering a purge with no mandate. The policy validates the window when
@@ -788,6 +803,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
         issue_operator_grant=make_issue_operator_grant,
+        revoke_operator_grant=make_revoke_operator_grant,
         purge_operator_access_log=make_purge_operator_access_log,
         draft_policy=make_draft_policy,
         approve_draft=make_approve_draft,

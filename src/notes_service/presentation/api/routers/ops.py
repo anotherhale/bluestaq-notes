@@ -22,7 +22,10 @@ from notes_service.application.use_cases.operator_access_report import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
 )
-from notes_service.application.use_cases.operator_grants import IssueOperatorGrantRequest
+from notes_service.application.use_cases.operator_grants import (
+    IssueOperatorGrantRequest,
+    RevokeOperatorGrantRequest,
+)
 from notes_service.domain.identity.operator_grant import OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
@@ -33,6 +36,8 @@ from notes_service.presentation.schemas import (
     OperatorGrantIssueRequest,
     OperatorGrantReportResponse,
     OperatorGrantResponse,
+    OperatorGrantRevokedResponse,
+    OperatorGrantRevokeRequest,
     WithholdingReportResponse,
 )
 
@@ -208,3 +213,44 @@ def issue_operator_grant(
         ),
     )
     return OperatorGrantResponse.from_domain(grant)
+
+
+@router.post(
+    "/operator-grants/revoke",
+    response_model=OperatorGrantRevokedResponse,
+    summary="Revoke a user's operator grant of one scope (operators only)",
+    dependencies=[RateLimitDep],
+)
+def revoke_operator_grant(
+    body: OperatorGrantRevokeRequest,
+    principal: PrincipalDep,
+    container: ContainerDep,
+) -> OperatorGrantRevokedResponse:
+    """Take a named operator scope away from another user, effective immediately.
+
+    The undo of the issue endpoint. Until this existed a grant could only end by
+    expiry, so a mistaken hand-out stayed live for its whole term and a
+    *configuration* grant — unbounded, reviewed at deploy time — could not be ended
+    without editing the deployment seed. A revocation is recorded on the grant as
+    an attributable fact (who, when) rather than applied by deleting it, so the
+    history of who held what, and who removed it, survives the revocation.
+
+    The caller must be a peer, never the holder: a self-revoke is refused with
+    ``409``, the same separation of duties that stops a self-grant. Revoking
+    authority nobody holds is also ``409`` rather than a cheerful ``200`` — a
+    responder must not be told authority was removed when it had already lapsed or
+    the wrong user was named. A non-operator gets ``404`` like every other ops
+    endpoint.
+    """
+    revoked = container.revoke_operator_grant().execute(
+        principal,
+        RevokeOperatorGrantRequest(
+            user_id=UserId.parse(body.user_id),
+            scope=body.scope,
+        ),
+    )
+    return OperatorGrantRevokedResponse(
+        user_id=body.user_id,
+        scope=body.scope,
+        grants_revoked=revoked,
+    )

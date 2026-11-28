@@ -356,4 +356,7 @@ def test_the_table_exists_in_the_migrated_schema(engine: Engine) -> None:
         "not_before",
         "expires_at",
         "rationale",
+        # NEX-079: a revocation is a recorded fact on the row, not a deletion.
+        "revoked_at",
+        "revoked_by",
     }

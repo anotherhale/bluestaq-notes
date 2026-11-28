@@ -43,7 +43,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
@@ -68,6 +68,8 @@ def _to_domain(row: OperatorGrantRow) -> OperatorGrant:
         # written before a bound changed (or by hand) fails loudly here rather
         # than surfacing as an unchecked string.
         rationale=(OperatorGrantRationale(row.rationale) if row.rationale is not None else None),
+        revoked_at=row.revoked_at,
+        revoked_by=UserId(str(row.revoked_by)) if row.revoked_by is not None else None,
     )
 
 
@@ -123,7 +125,30 @@ class SqlAlchemyOperatorGrantRepository:
             if grant.granted_by is not None:
                 raise ValueError("replace_configured only accepts configuration grants")
         with self._session_factory() as session:
-            session.execute(delete(OperatorGrantRow).where(OperatorGrantRow.granted_by.is_(None)))
+            # Delete only configuration grants that are still live. A revoked
+            # configuration grant is kept (NEX-079): the revocation is a standing
+            # decision, and deleting the row here would let the next boot's seed
+            # silently reinstate authority an operator deliberately removed.
+            live_config = [
+                row
+                for row in session.execute(
+                    select(OperatorGrantRow).where(OperatorGrantRow.granted_by.is_(None))
+                ).scalars()
+                if row.revoked_at is None
+            ]
+            for row in live_config:
+                session.delete(row)
+            # A scope that was revoked for this user stays revoked: skip its re-seed
+            # so the same boot cannot add a fresh live grant beside the revoked one.
+            revoked_pairs = {
+                (row.user_id, row.scope)
+                for row in session.execute(
+                    select(OperatorGrantRow).where(
+                        OperatorGrantRow.granted_by.is_(None),
+                        OperatorGrantRow.revoked_at.is_not(None),
+                    )
+                ).scalars()
+            }
             session.add_all(
                 [
                     OperatorGrantRow(
@@ -135,6 +160,7 @@ class SqlAlchemyOperatorGrantRepository:
                         expires_at=grant.expires_at,
                     )
                     for grant in materialised
+                    if (_as_uuid(grant.user_id), grant.scope) not in revoked_pairs
                 ]
             )
             session.commit()
@@ -150,6 +176,42 @@ class SqlAlchemyOperatorGrantRepository:
             # exactly one place regardless of which adapter answered. Filtering in
             # SQL would duplicate the rule and let the two drift.
             return frozenset(row.scope for row in rows if _to_domain(row).is_active(now=now))
+
+    def revoke(self, user_id: UserId, scope: str, *, at: datetime, by: UserId) -> int:
+        """Stamp a revocation on every live grant of ``scope`` (NEX-079).
+
+        ``is_active`` is the domain's decision, so the rows that count as "live" are
+        selected here and filtered through it rather than through a SQL predicate on
+        ``expires_at`` — one definition of "in force", the same one the gate uses.
+        The update itself is still a single statement per row, and it only writes
+        the two revocation columns: the grant's original bound and provenance are
+        never rewritten by a revocation.
+
+        A row already carrying a revocation is skipped, so the *first* revocation is
+        the one recorded and a repeat call reports zero (see the port). The commit
+        happens once, after every matching row is stamped, so a partial revocation
+        cannot be observed.
+        """
+        changed = 0
+        with self._session_factory() as session:
+            candidates = session.execute(
+                select(OperatorGrantRow)
+                .where(
+                    OperatorGrantRow.user_id == _as_uuid(user_id),
+                    OperatorGrantRow.scope == scope,
+                )
+                .order_by(OperatorGrantRow.id)
+            ).scalars()
+            for row in candidates:
+                if row.revoked_at is not None:
+                    continue
+                if not _to_domain(row).is_active(now=at):
+                    continue
+                row.revoked_at = at
+                row.revoked_by = _as_uuid(by)
+                changed += 1
+            session.commit()
+        return changed
 
     def active_grants(self, *, now: datetime) -> tuple[OperatorGrant, ...]:
         with self._session_factory() as session:

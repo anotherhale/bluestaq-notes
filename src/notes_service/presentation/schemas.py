@@ -1067,12 +1067,43 @@ class OperatorGrantIssueRequest(StrictModel):
         return value
 
 
+class OperatorGrantRevokeRequest(StrictModel):
+    """Ask to take one operator scope away from one user (NEX-079).
+
+    Naming ``(user_id, scope)`` rather than a grant id is deliberate: the intent is
+    "this person must no longer hold this permission", and a row id would force the
+    caller to list first, then race a re-issue between the list and the revoke.
+
+    There is no ``revoked_by`` field and no way to revoke "everything": the revoker
+    is the authenticated caller, stamped by the use case, and a request must name
+    exactly the authority it removes so the audit entry is specific.
+    """
+
+    user_id: str
+    scope: str = Field(min_length=1, max_length=64)
+
+
+class OperatorGrantRevokedResponse(ResponseModel):
+    """What a revocation did (NEX-079).
+
+    Reports the number of grants revoked, not a grant body: a revocation is the
+    absence of authority and can have changed more than one row (a holder may have
+    been re-issued the same scope), so echoing a single grant would understate it.
+    The count is what the responder needs to confirm the action landed.
+    """
+
+    user_id: str
+    scope: str
+    grants_revoked: int
+
+
 class OperatorGrantResponse(ResponseModel):
     """The single grant that was just written.
 
     Echoed back so the issuer can confirm the exact scope, subject, deadline, and
-    stated reason that landed — the store is append-only and a mistaken grant is
-    fixed by letting it lapse, not by editing it.
+    stated reason that landed. The store is append-only: a mistaken grant is fixed
+    by revoking it (NEX-079) — which records the revocation on the grant rather
+    than editing its terms — or by letting it lapse, never by rewriting it.
     """
 
     user_id: str

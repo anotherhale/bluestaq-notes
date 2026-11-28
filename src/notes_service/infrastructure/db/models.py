@@ -756,11 +756,29 @@ class OperatorGrantRow(Base):
     not_before: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Revocation (NEX-079): recorded as a fact rather than applied by deleting the
+    # row, so an audit can see authority was taken away, by whom, and when. Both
+    # columns are set together or not at all (a CHECK enforces the pairing below).
+    # ``revoked_by`` is SET NULL on user deletion rather than CASCADE: revoking a
+    # grant is a security fact, and losing it because the revoker's account was
+    # later removed would erase the record of the revocation itself.
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "scope", "granted_at", name="uq_operator_grants_identity"),
         CheckConstraint("length(scope) > 0", name="scope_not_empty"),
         CheckConstraint("rationale IS NULL OR length(rationale) > 0", name="rationale_not_empty"),
+        # A revocation is attributable or it is not a record. A NULL ``revoked_at``
+        # with a non-NULL ``revoked_by`` (or the reverse) is a half-written fact,
+        # refused here so no writer can create one even outside the domain.
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by IS NULL) "
+            "OR (revoked_at IS NOT NULL AND revoked_by IS NOT NULL)",
+            name="revocation_is_attributable",
+        ),
         Index("ix_operator_grants_user_scope", "user_id", "scope"),
     )
 

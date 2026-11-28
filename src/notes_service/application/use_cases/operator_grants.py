@@ -237,9 +237,21 @@ have made every auditor able to mint operators, which is the escalation this
 whole subsystem exists to make visible.
 """
 
+REVOKE_OPERATION = "operator-grant-revoke"
+"""The scope that gates *revoking* a grant (NEX-079).
+
+A third token, distinct from reading (``operator-access-report``) and issuing
+(``operator-grant-issue``), because taking authority away is its own authority. A
+deployment may reasonably want an incident responder who can *stop* an operator
+without being able to *make* one, and folding revoke into issue would have forced
+them to grant both to get the first. Keeping it separate also means the answer to
+"who removed this grant" is a narrower, auditable set than "who could have".
+"""
+
 KNOWN_OPERATOR_OPERATIONS = frozenset(
     {
         ISSUE_OPERATION,
+        REVOKE_OPERATION,
         OPERATION,
         "access-log-retention",
         "audit-integrity",
@@ -380,14 +392,98 @@ class IssueOperatorGrant:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class RevokeOperatorGrantRequest:
+    """Ask to take one scope away from one user (NEX-079).
+
+    Scoped to ``(user, scope)`` rather than to a grant id on purpose. An operator
+    revoking authority means "this person must no longer hold this permission", not
+    "delete this particular row" — and a caller forced to name a row would have to
+    list first, then race a re-issue between the list and the revoke. Naming the
+    permission is both the intent and the safe unit.
+
+    There is no ``revoked_by`` field: the revoker is the authenticated principal,
+    stamped by the use case, for the same reason :class:`IssueOperatorGrantRequest`
+    takes no ``granted_by``.
+    """
+
+    user_id: UserId
+    scope: str
+
+
+class RevokeOperatorGrant:
+    """Revoke a user's live grant of one scope (NEX-079).
+
+    Before this, a grant could only end by expiry. That made a mistaken hand-out
+    live for its whole term, and a *configuration* grant — which never expires —
+    impossible to end without editing the deployment seed and redeploying. This
+    use case closes both: a revocation is effective immediately and is recorded as
+    an attributable fact on the grant rather than applied by deleting it.
+
+    Three refusals, each a real escalation if omitted:
+
+    * **Unknown scope.** Revoking a token no use case checks would report success
+      while changing nothing. Refused, so a typo is a loud error, mirroring issue.
+    * **No self-revoke.** An operator cannot revoke their own grant. Removing your
+      own authority is not a security improvement the platform needs an operator
+      for, and allowing it is the mirror image of self-grant: a single compromised
+      operator session could strip a scope from every peer it names, so requiring a
+      *second* operator to revoke is the same separation of duties that stops
+      self-granting. (Self-service offboarding is a distinct feature with its own
+      threat model; it is not this one.)
+    * **Nothing to revoke is a conflict, not a silent success.** If the holder has
+      no live grant of that scope, the request is refused with 409. Reporting
+      success for a no-op would let an incident responder believe authority was
+      removed when it had already lapsed — or, worse, when they named the wrong
+      user. The operator learns the truth.
+    """
+
+    def __init__(
+        self,
+        *,
+        grants: OperatorGrantRepository,
+        operator_gate: OperatorGate,
+        clock: Clock,
+    ) -> None:
+        self._grants = grants
+        self._operator_gate = operator_gate
+        self._clock = clock
+
+    def execute(self, principal: Principal, request: RevokeOperatorGrantRequest) -> int:
+        # Gate first, exactly like issue: a refused caller reaches no store.
+        self._operator_gate.authorize(principal, operation=REVOKE_OPERATION)
+
+        if request.scope not in KNOWN_OPERATOR_OPERATIONS:
+            raise ValidationError(
+                f"unknown operator scope {request.scope!r}; "
+                f"expected one of {sorted(KNOWN_OPERATOR_OPERATIONS)}"
+            )
+        if request.user_id == principal.user_id:
+            raise Conflict(
+                "an operator cannot revoke their own grant; a second operator must revoke it"
+            )
+
+        revoked = self._grants.revoke(
+            request.user_id, request.scope, at=self._clock.now(), by=principal.user_id
+        )
+        if revoked == 0:
+            # No live grant to remove. Refused rather than reported as done: a
+            # responder must never be told authority was taken away when it was not.
+            raise Conflict(f"{request.user_id} holds no live {request.scope!r} grant to revoke")
+        return revoked
+
+
 __all__ = [
     "ISSUE_OPERATION",
     "KNOWN_OPERATOR_OPERATIONS",
     "OPERATION",
+    "REVOKE_OPERATION",
     "IssueOperatorGrant",
     "IssueOperatorGrantRequest",
     "ListOperatorGrants",
     "OperatorGrantDetail",
     "OperatorGrantSnapshot",
     "OperatorHolder",
+    "RevokeOperatorGrant",
+    "RevokeOperatorGrantRequest",
 ]
