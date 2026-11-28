@@ -1,12 +1,9 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-76",
-  "timestamp": "2026-11-28T03:20Z",
+  "run_id": "NEX-2026-11-27-76b",
+  "timestamp": "2026-11-28T03:50Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": {
-    "product_head": "319a3dd",
-    "note": "Product head, not the docs tip. This file's own commit can never be the tip; resolve with git ls-remote origin refs/heads/feature/agentic-enterprise-platform."
-  },
+  "commit": "b3c75e0",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-076 implemented, NEX-076 VERIFIED. NEX-076 (run 76) closed the follow-up NEX-074 recorded: a human-issued operator grant must now state why, and that reason is persisted. CI 4/4 completed/success on 4fa0463, polled by run 76.",
   "active_task": null,
   "task_statuses": {
@@ -151,7 +148,7 @@
     ],
     "ci": "4fa0463 4/4 completed/success (backend x2, frontend x2), polled by run 76."
   },
-  "uncommitted_work": "None at hand-off; the promotion edits are committed as the docs commit.",
+  "uncommitted_work": "None.",
   "pr_state": {
     "number": 5,
     "state": "open",
@@ -176,14 +173,13 @@
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect."
   ],
   "next_task": "NEX-076 is VERIFIED. Pick the next dependency-ready backlog slice. Do NOT re-implement NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. Two follow-ups NEX-076 itself recorded remain open and are small: (a) expose the rationale on the grant read path - a disclosure decision, and (b) ask the owner whether PR #5's twenty-two stacked slices should be split before review.",
-  "next_action": "Read CI for the NEX-076 product commit before anything else; it is the only thing between this run and a VERIFIED task. Do not start a new slice with under 10 minutes left.",
-  "recovery_instructions": "The head carries the NEX-076 product commit (rationale on operator grants) plus this docs checkpoint. Resolve the true head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform. NEX-076's code and tests are pushed; the only outstanding work is reading its CI, promoting it to VERIFIED, and appending its section to PR #5's body.",
+  "next_action": "Nothing pending on NEX-076. Select the next dependency-ready slice from BACKLOG.md.",
+  "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this file's commit field always lags by one. 3. NEX-076 is VERIFIED (CI 4/4 on 4fa0463). Do not re-implement NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. 4. PR #5 is open, draft=false, unmerged, body carries NEX-052..NEX-076. Never merge it. 5. Next: pick the next dependency-ready slice from BACKLOG.md.",
   "ci_status": "4fa0463: 4/4 completed/success (backend x2, frontend x2).",
   "commits_this_run": [
     {
-      "sha": "see git log",
-      "subject": "feat(ops): require a rationale on a human-issued operator grant (NEX-076)",
-      "state": "PUSHED"
+      "sha": "b3c75e0",
+      "subject": "docs(nexus): promote NEX-076 to VERIFIED after a 4/4 green CI read"
     }
   ],
   "decisions_this_run": [
@@ -203,9 +199,9 @@
     "issue_note": "Issue #2 open. Latest comment 7232583113 covers NEX-075. No comment added this run; NEX-076 is not yet VERIFIED. The issue stays open: the programme is not done.",
     "delivery_debt": "None outstanding. PR #5 body carries every slice through NEX-076."
   },
-  "branch_head": "319a3dd is the NEX-075 product commit; docs checkpoints follow it. Resolve the live head with git ls-remote.",
+  "branch_head": "b3c75e0 (docs promotion). This checkpoint is written by one further commit on top.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "A checkpoint's own commit field can never name the commit that writes it; it lags the head by exactly one commit. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
+  "commit_note": "A checkpoint's own commit field can never name the commit that writes it - it lags the head by exactly one commit, forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": {
     "run_id": "NEX-2026-11-27-76",
     "branch": "feature/agentic-enterprise-platform",
