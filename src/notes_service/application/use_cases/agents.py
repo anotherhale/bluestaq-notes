@@ -46,7 +46,13 @@ from notes_service.domain.agent.value_objects import (
 )
 from notes_service.domain.errors import InvariantViolation
 from notes_service.domain.identity.principal import Principal
+from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.organization.tenant_access import TenantAccessStatus
+from notes_service.domain.organization.value_objects import (
+    OrganizationId,
+    OrgPermission,
+    capabilities_for,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,6 +400,26 @@ class DecideApprovalRequest(UseCase):
     Separation of duties is enforced in the aggregate: the approver must be a
     distinct human identity. The caller here is always a human principal; an
     agent has no user id and cannot reach this path.
+
+    Two authorities may reach a request, and which one applies depends on what
+    the request still needs (NEX-071):
+
+    * **The owner** of the agent the request belongs to. The owner always signs,
+      and their signature is the *first* one.
+    * **A tenant approver** — a human holding ``APPROVE_AGENT_ACTION`` in an
+      organization the owner also belongs to — for the *second* signature of a
+      two-person request.
+
+    Without the second authority the two-person control was unsatisfiable
+    through the API: only the owner could decide, and the aggregate refuses the
+    owner signing twice, so every ``second-approver`` policy (and every
+    ``HIGH``-risk capability, whose floor is two) deadlocked permanently. The
+    obligation read as enforced in the audit trail while no request could ever
+    complete. The security architecture requires an *independent* approver for
+    high-risk actions; this is where that approver is authorised.
+
+    A caller who holds neither authority gets 404, not 403, so an approval id
+    cannot be used to probe for another user's agent.
     """
 
     def run(
@@ -409,10 +435,12 @@ class DecideApprovalRequest(UseCase):
             request = uow.approvals.get(ApprovalRequestId.parse(approval_id))
             if request is None:
                 raise ResourceNotFound("approval request not found")
-            # The approver must own the agent the request was opened for, so one
-            # user cannot decide another user's agent's requests.
             agent = uow.agents.get(request.agent_id)
-            if agent is None or agent.owner_user_id != principal.user_id:
+            if agent is None:
+                raise ResourceNotFound("approval request not found")
+
+            is_owner = agent.owner_user_id == principal.user_id
+            if not is_owner and not self._may_second_sign(uow, principal, request, agent):
                 raise ResourceNotFound("approval request not found")
             if approve:
                 request.approve(approver_user_id=principal.user_id, now=now, reason=reason)
@@ -421,6 +449,84 @@ class DecideApprovalRequest(UseCase):
             uow.approvals.save(request)
             uow.commit()
             return request
+
+    @staticmethod
+    def _may_second_sign(
+        uow: UnitOfWork,
+        principal: Principal,
+        request: ApprovalRequest,
+        agent: AgentIdentity,
+    ) -> bool:
+        """Whether the caller may supply the *second* signature on ``request``.
+
+        Narrow on purpose. A tenant approver is admitted only for a request that
+        already carries its first signature and is waiting on one more. They may
+        not open the control's first signature — that is the owner's act, made
+        where the agent was created — and they cannot act at all on a request
+        nobody has signed.
+
+        Both decisions are permitted once admitted: approving completes the
+        control, and denying ends it. Refusal is fail-closed, and the aggregate
+        already models "a second human refuses a half-approved request" as a
+        distinct recorded outcome (``denied_by_user_id``), so an independent
+        approver who judges the action unsafe must be able to say so.
+        """
+        if request.required_approvals != 2 or request.decided_by_user_id is None:
+            return False
+        if request.status is not ApprovalStatus.PENDING:
+            return False
+        if request.second_approver_user_id is not None:
+            return False
+        return _holds_agent_approval_in_shared_tenant(
+            uow, user_id=principal.user_id, owner_user_id=agent.owner_user_id
+        )
+
+
+def _holds_agent_approval_in_shared_tenant(
+    uow: UnitOfWork, *, user_id: UserId, owner_user_id: UserId
+) -> bool:
+    """Whether ``user_id`` may co-sign agent actions in a tenant the owner shares.
+
+    Requires an *active* membership carrying ``APPROVE_AGENT_ACTION`` in an
+    organization where the agent's owner is also an active member. The shared
+    tenant is what keeps the authority bounded: an org admin cannot co-sign for
+    an agent whose owner is outside their tenant, because the two never share an
+    organization to be responsible within.
+
+    Read-only roles are excluded by the capability matrix itself rather than by
+    a role check here, so ``ORG_SECURITY_ADMIN`` and ``ORG_AUDITOR`` — whose
+    separation from administration is a deliberate invariant — cannot approve.
+    """
+    approver = user_id
+    owner = owner_user_id
+    if approver == owner:
+        # Separation of duties: the same human is never a second approver. The
+        # aggregate refuses this too; refusing here keeps the 404 rule intact
+        # for a caller who is only the owner.
+        return False
+
+    # Organizations where the approver holds the co-signing capability.
+    approver_tenants: set[OrganizationId] = set()
+    for membership in uow.organization_memberships.list_for_user(approver):
+        if not membership.grants_access:
+            continue
+        if OrgPermission.APPROVE_AGENT_ACTION in capabilities_for(membership.role):
+            approver_tenants.add(membership.organization_id)
+    if not approver_tenants:
+        return False
+
+    # The authority only reaches agents whose owner is in the same tenant: the
+    # two must share an organization to be jointly responsible within.
+    for membership in uow.organization_memberships.list_for_user(owner):
+        if not membership.grants_access:
+            continue
+        if membership.organization_id not in approver_tenants:
+            continue
+        organization = uow.organizations.get(membership.organization_id)
+        if organization is None or not organization.is_operational:
+            continue
+        return True
+    return False
 
 
 class RevokeApprovalRequest(UseCase):

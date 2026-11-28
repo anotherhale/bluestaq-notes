@@ -258,6 +258,11 @@ class OrgPermission(StrEnum):
     MANAGE_MEMBERSHIPS = "manage_memberships"
     MANAGE_ROLES = "manage_roles"
     VIEW_AUDIT = "view_audit"
+    #: Supply the *second* signature on a two-person agent-action approval.
+    #: Deliberately separate from the structure-management capabilities: a
+    #: role can be trusted to co-sign a sensitive agent action without being
+    #: able to reshape the organization, and vice versa.
+    APPROVE_AGENT_ACTION = "approve_agent_action"
 
 
 # The role -> capability matrix. ORG_ADMIN can do everything administrative
@@ -275,6 +280,7 @@ ROLE_CAPABILITIES: dict[OrganizationRole, frozenset[OrgPermission]] = {
             OrgPermission.MANAGE_MEMBERSHIPS,
             OrgPermission.MANAGE_ROLES,
             OrgPermission.VIEW_AUDIT,
+            OrgPermission.APPROVE_AGENT_ACTION,
         }
     ),
     OrganizationRole.ORG_SECURITY_ADMIN: frozenset(
