@@ -13033,9 +13033,14 @@ merged by the repository owner; a push therefore has no PR vehicle, and creating
 show activity would manufacture delivery debt. Issue #2 remains open; NEX-104 was not posted as a
 comment this run.
 
-**Next action.** Run 107: resolve the live head with `git ls-remote`, poll NEX-104's CI to a
-conclusion and read it per job and per step; promote to VERIFIED if green, fix it if red. Then
-select the next dependency-ready slice. Do not re-open the structural-guard family.
+**Next action.** Run 107: resolve the live head with `git ls-remote` and confirm the docs
+head `91173bf` reached the remote, then poll that head's CI run to a conclusion and read it
+per job and per step. This line originally said "poll NEX-104's CI", which was wrong twice
+over: the push under discussion is NEX-105's `afd07e1`, and NEX-104's CI was already green
+and read back in the previous window. The NEX-105 verdict was then obtained in this same run
+(run `46174865205`, `completed/success`), so only the docs head remains unchecked. Then post
+the NEX-105 comment on issue #2, and select the next dependency-ready slice from
+`docs/NEXUS/BACKLOG.md`. Do not re-open the structural-guard family.
 
 ---
 
@@ -13082,6 +13087,15 @@ existing logout tests (403 instead of 204). The guard was correct — `TestClien
 alternative (exempt `/auth/logout`) was rejected because it is the exact route that needs the
 check. Weakening a control to keep a test green is the failure mode the operating rules name
 explicitly.
+
+**CI verdict, read back in the same run rather than deferred.** Run `46174865205` on product
+`afd07e1` finished `completed/success` while this run was still open. Read per job and per
+step, not from the run conclusion alone: Backend (ruff, mypy, pytest, migrations) success
+with 12 steps, Frontend (typecheck, lint, test, build) success with 11 steps, 0 failed and
+0 skipped, 2/2 jobs green. Every step executed, which is what separates a real green from a
+billing-blocked run (that one shows every job failing with zero failed steps). NEX-105 is
+therefore promoted to **VERIFIED** in this run, and the earlier "CI verdict pending" wording
+in this entry is superseded by this paragraph rather than left standing.
 
 **Files changed.** `src/notes_service/presentation/csrf.py` (new),
 `src/notes_service/bootstrap/app.py`, `src/notes_service/bootstrap/config.py`,
