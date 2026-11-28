@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from notes_service.application.errors import AccessDenied, InvalidInput, ResourceNotFound
+from notes_service.application.errors import InvalidInput, ResourceNotFound
 from notes_service.application.ports.authorization import Action
 from notes_service.application.use_cases.base import UseCase
 from notes_service.domain.identity.principal import Principal
@@ -27,20 +27,13 @@ class ShareNote(UseCase):
         level: PermissionLevel,
     ) -> NotePermission:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.MANAGE_PERMISSIONS, note=note
+            note = self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.MANAGE_PERMISSIONS,
+                denied_message="only the note owner may manage permissions",
             )
-            if not decision.allowed:
-                # Only the owner reaches here; hiding existence for non-owners.
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("only the note owner may manage permissions")
 
             if target_user_id == note.owner_id:
                 raise InvalidInput("the note owner already has full access")
@@ -67,19 +60,13 @@ class RevokePermission(UseCase):
 
     def run(self, principal: Principal, *, note_id: NoteId, target_user_id: UserId) -> None:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.MANAGE_PERMISSIONS, note=note
+            note = self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.MANAGE_PERMISSIONS,
+                denied_message="only the note owner may manage permissions",
             )
-            if not decision.allowed:
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("only the note owner may manage permissions")
 
             removed = note.revoke_permission(
                 actor_id=principal.user_id,
@@ -103,17 +90,11 @@ class ListPermissions(UseCase):
 
     def run(self, principal: Principal, *, note_id: NoteId) -> list[NotePermission]:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.MANAGE_PERMISSIONS, note=note
+            self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.MANAGE_PERMISSIONS,
+                denied_message="only the note owner may view permissions",
             )
-            if not decision.allowed:
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("only the note owner may view permissions")
             return uow.permissions.list_for_note(note_id)

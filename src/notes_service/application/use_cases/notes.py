@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from notes_service.application.errors import AccessDenied, Conflict, InvalidInput, ResourceNotFound
+from notes_service.application.errors import Conflict, InvalidInput
 from notes_service.application.ports.authorization import Action
 from notes_service.application.use_cases.base import UseCase
 from notes_service.domain.errors import VersionConflict
@@ -134,21 +134,13 @@ class UpdateNote(UseCase):
         expected_version: NoteVersion,
     ) -> Note:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            # Unreadable notes are hidden as 404; readable-but-unwritable notes
-            # are a 403, because the caller already knows the note exists.
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.UPDATE, note=note
+            note = self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.UPDATE,
+                denied_message="you do not have permission to modify this note",
             )
-            if not decision.allowed:
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("you do not have permission to modify this note")
 
             try:
                 note.update_content(
@@ -178,19 +170,13 @@ class DeleteNote(UseCase):
 
     def run(self, principal: Principal, *, note_id: NoteId) -> None:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.DELETE, note=note
+            note = self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.DELETE,
+                denied_message="only the note owner may delete this note",
             )
-            if not decision.allowed:
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("only the note owner may delete this note")
             uow.notes.delete(note)
             uow.commit()
 
@@ -212,19 +198,13 @@ class MoveNote(UseCase):
         folder_id: FolderId | None,
     ) -> Note:
         with self._uow_factory() as uow:
-            note = uow.notes.get(note_id)
-            if note is None:
-                raise ResourceNotFound("note not found")
-            decision = self._authorization.decide(
-                principal=principal, action=Action.MOVE, note=note
+            note = self._load_note_for_action(
+                uow,
+                principal=principal,
+                note_id=note_id,
+                action=Action.MOVE,
+                denied_message="only the note owner may move this note",
             )
-            if not decision.allowed:
-                read_decision = self._authorization.decide(
-                    principal=principal, action=Action.READ, note=note
-                )
-                if not read_decision.allowed:
-                    raise ResourceNotFound("note not found")
-                raise AccessDenied("only the note owner may move this note")
 
             if folder_id is not None:
                 folder = uow.folders.get(folder_id)

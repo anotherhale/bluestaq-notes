@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from notes_service.application.errors import ResourceNotFound
+from notes_service.application.errors import AccessDenied, ResourceNotFound
 from notes_service.application.ports.authorization import Action, AuthorizationProvider
 from notes_service.application.ports.clock import Clock
 from notes_service.application.ports.repositories import UnitOfWork
@@ -44,4 +44,27 @@ class UseCase:
         decision = self._authorization.decide(principal=principal, action=Action.READ, note=note)
         if not decision.allowed:
             raise ResourceNotFound("note not found")
+        return note
+
+    def _load_note_for_action(
+        self,
+        uow: UnitOfWork,
+        *,
+        principal: Principal,
+        note_id: NoteId,
+        action: Action,
+        denied_message: str,
+    ) -> Note:
+        """Load a note for a mutating action, splitting 404 from 403 (ADR-008).
+
+        The whole non-enumeration rule lives here so each call site states only
+        its intent. A caller who cannot *read* the note gets 404 -- identical to
+        an absent note -- so a denied action never confirms existence. A caller
+        who can read but not perform ``action`` gets 403, because it already
+        knows the note exists.
+        """
+        note = self._load_note_for_read(uow, principal=principal, note_id=note_id)
+        decision = self._authorization.decide(principal=principal, action=action, note=note)
+        if not decision.allowed:
+            raise AccessDenied(denied_message)
         return note
