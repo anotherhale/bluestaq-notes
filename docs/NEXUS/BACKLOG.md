@@ -3833,3 +3833,60 @@ Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the gr
    warranted.
 
 ---
+
+## NEX-088 — Report the exact trail size on the tool-invocation audit page (run `NEX-2026-11-28-88`)
+
+**Phase.** 3 (governance) — audit integrity.
+**Priority.** P1 (foundational: the total on an audit page decides whether the trail looks complete).
+**Status.** IMPLEMENTED · TESTED · COMMITTED `06b5b32` · PUSHED. **CI not yet read; not VERIFIED.**
+**Depends on.** NEX-082 (the access trail's pagination, whose shape this mirrors).
+
+### The defect
+
+`GET /agents/{agent_id}/tool-invocations` accepted `limit`/`offset` but filled `meta.total`
+with `len(items)` — the size of the page it had just built. On a three-entry trail the first
+page answered `total: 2`, the second answered `total: 1`, and neither number survived a turn of
+the page. A window that reports its own size as the total is indistinguishable from a complete
+trail, which is exactly the difference between "this agent made 50 tool attempts" and "these are
+the first 50 of thousands". The suite did not catch it because no fixture asked for a second page.
+
+### The fix
+
+The count is asked for directly rather than inferred from a page, the same resolution as NEX-082
+and NEX-087: `count_for_agent(agent_id)` on `ToolInvocationRepository`, implemented as
+`SELECT count(*) ... WHERE agent_id = :agent_id` — an aggregate that reads no rows and cannot be
+truncated by volume. `ListToolInvocations` returns `ToolInvocationAuditPage` (items + exact total),
+mirroring `NotePage`, and the router puts the true count in `PageMeta.total`.
+
+Four sibling listings (`agent_runs`, and three others) keep `total=len(items)`: each was checked
+and none accepts `limit`/`offset`, so on an unpaginated listing the page size *is* the total and
+the number is honest. Only the paginated one lied.
+
+### Tests — built to fail against the old answer
+
+- `test_meta_total_is_the_whole_trail_not_the_window`: two pages of a three-entry trail, asserting
+  `meta.total == 3` on both. The page-derived implementation returns 2 and then 1.
+- `test_meta_total_counts_only_this_agents_trail`: a second agent with its own invocations must not
+  appear in the first agent's total. This half was found by mutation — an **unscoped** count (no
+  `agent_id` filter) satisfied the first test while leaking another agent's trail size into this
+  one's total, so it passed. It now fails.
+
+### Validation
+
+`ruff format` / `ruff check` / `mypy` (143 source files) clean; `pytest` full suite exit 0
+(4 skipped), run bare as `.github/workflows/ci.yml` does. Mutation controls: reverting the router
+to `total=len(items)` fails the first test; dropping the `agent_id` scope fails the second.
+
+### Security
+
+Read-only, gated, unchanged scope, no migration. The property is the truthfulness of the total: a
+counting-scope bug (unscoped count) would disclose how many tool invocations another agent made,
+so the count is filtered by the same `agent_id` the page is filtered by.
+
+### Remaining
+
+CI verdict not yet read, and neither PR #5 nor issue #2 has been updated for NEX-088. The next run
+must poll CI on `06b5b32` (or a docs head with `git diff 06b5b32 <docs-head> -- src/ tests/` empty),
+then promote to VERIFIED and deliver.
+
+---

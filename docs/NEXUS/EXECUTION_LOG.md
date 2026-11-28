@@ -10443,3 +10443,92 @@ recorded for `python3 - <<'PY'` heredocs; **write the payload to a file, never i
 4. Take the next dependency-ready slice; do not redo NEX-077…NEX-087.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-88` — NEX-088: an audit page's total was its own window size
+
+**Run ID.** `NEX-2026-11-28-88` · **Timestamp.** 2026-11-28T08:30Z · **Branch.**
+`feature/agentic-enterprise-platform` · **Starting commit.** `e354d5f` (run-87 close-out head,
+measured) · **Ending commit.** `06b5b32` (product) plus this docs commit.
+
+### Task completed
+
+**NEX-088** — `GET /agents/{agent_id}/tool-invocations` reported `meta.total = len(items)`.
+
+`meta.total` on a paginated audit read exists to answer "how large is the trail". Answering it with
+the size of the page just built makes every page look like the whole trail: a three-entry trail
+answered `2` on the first page and `1` on the second, and neither number was the trail. On an audit
+surface that is the difference between "this agent made 50 tool attempts" and "these are the first
+50 of thousands". The one thing a reader of an audit page needs — is there more — was the one thing
+the field could not say.
+
+The count is now asked for directly: `count_for_agent(agent_id)` on the repository port, an
+`SELECT count(*)` scoped to the same agent the page is scoped to, read in the same transaction.
+`ListToolInvocations` returns a page object carrying the exact total.
+
+### The interesting part: the first test suite was satisfiable by a worse bug
+
+The regression test that pins `total` against the page size passed against an **unscoped** count —
+`SELECT count(*)` over the whole tool-invocation table, no `agent_id` filter. That is a different
+and worse defect: it reports every agent's attempts as this agent's, and so discloses how much
+another agent has done. Mutation found it, not review. The second test
+(`test_meta_total_counts_only_this_agents_trail`) was added to pin the scope, and the unscoped
+count now fails.
+
+Scope of the sweep: the other five `PageMeta(total=len(items))` sites were each read. All are
+genuinely unpaginated — no `limit`/`offset` parameter — so on an unpaginated listing the page size
+*is* the total. Only the paginated listing was dishonest. Recorded so the next reader does not
+re-litigate them.
+
+### Files changed
+
+`application/ports/agents.py` (+14), `application/use_cases/agents.py` (+25/−2),
+`infrastructure/db/agent_repositories.py` (+9), `presentation/api/routers/agents.py` (+11/−3),
+`tests/api/test_audit_trail_api.py` (+73/−2).
+
+### Tests executed
+
+`ruff format` clean · `ruff check` all passed · `mypy` 143 source files clean · `pytest` full suite
+**exit 0**, 4 skipped. `tests/api/test_audit_trail_api.py`: 11 passed. Mutation controls run and
+caught: (1) router back to `total=len(items)`; (2) count with the `agent_id` filter removed.
+
+A test-helper defect surfaced while writing the second test: `_register_agent` hardcoded the
+runtime identity, so a test using two agents failed `422 runtime identity already registered`. The
+helper now takes the identity as a parameter. Recorded because it would otherwise look like a
+product failure to the next run.
+
+### Decisions
+
+- A second port method, not a `len()` over a bigger page. Same reasoning as NEX-082/NEX-087: the
+  question "how many rows match" has an exact aggregate answer, and deriving it from a page makes
+  correctness a function of volume.
+- A page object returned from the use case (`ToolInvocationAuditPage`) rather than a tuple, to
+  match `NotePage` and keep the total impossible to omit accidentally at the call site.
+- The count is scoped in the same transaction as the page. This makes the pair *atomic*, not a
+  single snapshot — under READ COMMITTED a concurrent insert can land between the two statements.
+  The docstring says so rather than claiming a consistency it does not have.
+
+### Delivery state
+
+- Product commit `06b5b32` pushed; remote head verified with `git ls-remote`
+  (`06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8`).
+- **CI: not yet read.** Nothing is marked VERIFIED.
+- **PR #5 and issue #2: not updated** — owed by the next run together with the CI poll.
+
+### Risks
+
+- NEX-082, NEX-086, NEX-087 and now NEX-088 are one shape: a bounded or derived read standing in
+  for an exact answer. The sweep of `PageMeta(total=len(items))` sites is now complete and each
+  remaining one was justified individually, so this class should be exhausted on this surface —
+  but the shape is worth looking for wherever a total, a count, or an "oldest" is reported.
+- `count_revoked()`/`revoked_grants()` still scan in Python; correct today, unproven at volume.
+
+### Next exact action
+
+1. Poll CI for `06b5b32` (both `push` and `pull_request` runs) to a concluded verdict. If this docs
+   push supersedes it, anchor to a docs head whose product tree is identical
+   (`git diff 06b5b32 <docs-head> -- src/ tests/` empty); `cancelled` alone is never evidence.
+2. Only then write NEX-088 VERIFIED in `CHECKPOINT.json`, `STATE.md` and `BACKLOG.md`.
+3. Append NEX-088 to PR #5's body and comment on issue #2.
+4. Take the next dependency-ready slice; do not redo NEX-077…NEX-088.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
