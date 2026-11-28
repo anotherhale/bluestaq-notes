@@ -92,6 +92,25 @@ class OperatorAccessLog(Protocol):
         """
         ...
 
+    def oldest_retained(self) -> datetime | None:
+        """The stamp of the oldest entry still in the log, or ``None`` if empty.
+
+        This exists because "the oldest survivor" cannot be derived from
+        :meth:`recent`. ``recent`` answers newest-first and therefore has to be
+        capped, so the last entry of a page is the oldest of *that page*, not of
+        the log. A purge result built that way reports a ``retained_from`` that
+        drifts forward as the log grows: with 1500 survivors the field claims the
+        trail starts at entry 1000's timestamp, silently discarding the 500 oldest
+        entries' worth of history from the one number an auditor reads to learn how
+        far back the retained evidence reaches. The answer must be exact and must
+        not depend on how much traffic arrived, so it is asked for directly rather
+        than inferred from a bounded page.
+
+        ``None`` means the log is empty. An empty log is a fact, not a failure,
+        and a caller must be able to state it without inventing a timestamp.
+        """
+        ...
+
     def purge_before(self, *, cutoff: datetime) -> int:
         """Delete entries stamped strictly before ``cutoff``; return the count.
 

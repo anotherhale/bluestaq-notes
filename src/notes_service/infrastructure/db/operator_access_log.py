@@ -36,9 +36,9 @@ the view happened regardless of whether their own write succeeded.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.operator_access import OperatorAccessEntry
@@ -48,6 +48,11 @@ from notes_service.infrastructure.db.models import OperatorAccessRow
 
 def _as_uuid(value: object) -> uuid.UUID:
     return uuid.UUID(str(value))
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Relabel a naive column value as UTC, mirroring ``UTCDateTime.process_result_value``."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _to_domain(row: OperatorAccessRow) -> OperatorAccessEntry:
@@ -97,6 +102,23 @@ class SqlAlchemyOperatorAccessLog:
         with self._session_factory() as session:
             rows = session.execute(statement).scalars()
             return tuple(_to_domain(row) for row in rows)
+
+    def oldest_retained(self) -> datetime | None:
+        """The oldest ``at`` in the table, from a ``MIN`` aggregate, not a page.
+
+        ``recent`` is newest-first and capped, so reading "the oldest" as its last
+        element answers a question about one page and reports it as a fact about the
+        whole table. Once the table holds more than one page of rows the answer is
+        wrong in the *reassuring* direction — the trail looks shorter than it is —
+        and the error grows with traffic, which is precisely when an auditor relies
+        on it. ``MIN`` reads no rows and cannot be truncated by volume.
+        """
+        with self._session_factory() as session:
+            oldest = session.execute(select(func.min(OperatorAccessRow.at))).scalar()
+            # SQLite hands back a naive value for a plain TIMESTAMP column; the
+            # domain speaks aware UTC, so the same ``UTCDateTime`` relabelling the
+            # row read uses must apply here or the caller gets a naive/aware mix.
+            return _as_utc(oldest) if oldest is not None else None
 
     def purge_before(self, *, cutoff: datetime) -> int:
         """Delete rows stamped strictly before ``cutoff``; return how many went.

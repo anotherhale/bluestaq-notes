@@ -70,6 +70,18 @@ class InMemoryOperatorAccessLog:
                 )
             return tuple(list(newest_first)[:limit])
 
+    def oldest_retained(self) -> datetime | None:
+        """The oldest stamp in the ring, read under the lock and not through ``recent``.
+
+        ``recent`` is newest-first and capped, so its last element is the oldest of
+        the page it happened to build — not of the ring. This walks the ring in
+        insertion order instead, which is exactly the order the ``deque`` keeps, and
+        returns the first stamp. Reading it any other way would let the reported age
+        of the retained evidence depend on how many entries arrived.
+        """
+        with self._lock:
+            return self._entries[0].at if self._entries else None
+
     def purge_before(self, *, cutoff: datetime) -> int:
         """Nothing to purge: the ring already drops its oldest entry on write.
 

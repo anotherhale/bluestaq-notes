@@ -103,7 +103,7 @@ class PurgeOperatorAccessLog:
         cutoff = self._policy.cutoff(now=now)
         removed = self._access_log.purge_before(cutoff=cutoff)
 
-        oldest = self._oldest_retained()
+        oldest = self._access_log.oldest_retained()
         return OperatorAccessPurgeResult(
             cutoff=cutoff,
             removed=removed,
@@ -111,24 +111,6 @@ class PurgeOperatorAccessLog:
             retained_from=oldest,
             log_name=self._access_log.name,
         )
-
-    def _oldest_retained(self) -> datetime | None:
-        """The stamp of the oldest entry still in the log, or ``None`` if empty.
-
-        The port only answers newest-first, so "oldest" is read as the last entry
-        of a full page. This is a small read to make the result honest — a purge
-        that reported only a count could not be distinguished from one that
-        deleted nothing because the window was misconfigured.
-        """
-        recent = self._access_log.recent(limit=_OLDEST_SCAN_LIMIT)
-        return recent[-1].at if recent else None
-
-
-# A purge reports the oldest surviving entry by reading a bounded page. The page
-# is intentionally larger than any realistic single-window volume; a deployment
-# that exceeds it still gets a truthful "some entry at or after the cutoff
-# survives", which is what the field promises. It never claims to be exhaustive.
-_OLDEST_SCAN_LIMIT = 1000
 
 
 __all__ = ["OPERATION", "OperatorAccessPurgeResult", "PurgeOperatorAccessLog"]

@@ -96,6 +96,10 @@ class _RecordingLog:
     def recent(self, *, limit: int) -> tuple[OperatorAccessEntry, ...]:
         return self._entries[:limit]
 
+    def oldest_retained(self) -> datetime | None:
+        stamps = [entry.at for entry in self._entries]
+        return min(stamps) if stamps else None
+
     def purge_before(self, *, cutoff: datetime) -> int:
         self.cutoffs.append(cutoff)
         return self._removed
@@ -230,6 +234,38 @@ def test_the_oldest_surviving_entry_is_reported() -> None:
     result = _use_case(operators=frozenset({ALICE}), access_log=log).execute(_principal(ALICE))
 
     assert result.retained_from == oldest
+
+
+def test_the_oldest_surviving_entry_is_exact_beyond_one_page() -> None:
+    """``retained_from`` must not drift toward "now" once the log exceeds a page.
+
+    The defect this pins: the field was computed as the last element of a capped
+    newest-first page, so with more survivors than the cap it reported the oldest
+    of the *page*, not of the log — and the error grew with traffic. An auditor
+    reads this number to learn how far back the retained evidence reaches, so an
+    understatement is the dangerous direction: it silently claims the trail starts
+    later than it does.
+
+    The survivor count here deliberately exceeds any plausible page cap (the ring's
+    ``DEFAULT_CAPACITY`` is 1000), so a page-derived answer and an exact answer
+    cannot coincide.
+    """
+    true_oldest = NOW - timedelta(days=89)
+    log = InMemoryOperatorAccessLog(capacity=5000)
+    for i in range(1500):
+        log.record(
+            OperatorAccessEntry(
+                user_id=ALICE, operation="read", at=true_oldest + timedelta(seconds=i)
+            )
+        )
+    log.record(
+        OperatorAccessEntry(user_id=ALICE, operation="ancient", at=NOW - timedelta(days=200))
+    )
+
+    result = _use_case(operators=frozenset({ALICE}), access_log=log).execute(_principal(ALICE))
+
+    assert result.removed == 0, "the ring self-bounds, so it purges nothing"
+    assert result.retained_from == true_oldest
 
 
 def test_the_floor_is_enforced_even_through_the_use_case() -> None:

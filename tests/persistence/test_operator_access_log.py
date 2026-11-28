@@ -225,3 +225,58 @@ def test_purge_on_an_empty_log_removes_nothing(
     log: SqlAlchemyOperatorAccessLog,
 ) -> None:
     assert log.purge_before(cutoff=NOW) == 0
+
+
+# --------------------------------------------------------------------------
+# ``oldest_retained``: exact, not a page's tail.
+# --------------------------------------------------------------------------
+
+
+def test_oldest_retained_is_exact_beyond_one_page(
+    log: SqlAlchemyOperatorAccessLog,
+) -> None:
+    """The oldest stamp comes from ``MIN``, so surplus rows cannot truncate it.
+
+    Deriving this from a capped newest-first page understates the age of the
+    retained evidence once the table holds more than a page — the trail is made to
+    look shorter than it is, and the error grows exactly as the log fills. The row
+    count here is chosen to exceed ``_OLDEST_SCAN_LIMIT`` (1000) with room to spare
+    so a page-derived implementation cannot accidentally pass.
+    """
+    true_oldest = NOW - timedelta(days=3650)
+    log.record(_entry(ALICE, "oldest", at=true_oldest))
+    for i in range(1200):
+        log.record(_entry(ALICE, "filler", at=NOW - timedelta(seconds=i)))
+
+    assert log.oldest_retained() == true_oldest
+
+
+def test_oldest_retained_is_aware_utc(log: SqlAlchemyOperatorAccessLog) -> None:
+    """SQLite returns a naive ``MIN``; the port promises the domain's aware UTC."""
+    log.record(_entry(ALICE, "only", at=NOW))
+
+    oldest = log.oldest_retained()
+
+    assert oldest is not None
+    assert oldest.tzinfo is UTC
+    assert oldest == NOW
+
+
+def test_oldest_retained_is_none_on_an_empty_log(log: SqlAlchemyOperatorAccessLog) -> None:
+    """An empty log is a fact, not a stamp to invent."""
+    assert log.oldest_retained() is None
+
+
+def test_oldest_retained_advances_past_a_purge(
+    log: SqlAlchemyOperatorAccessLog,
+) -> None:
+    """After the oldest rows are gone, the read reflects the actual survivor."""
+    log.record(_entry(ALICE, "ancient", at=NOW - timedelta(days=200)))
+    first_survivor = NOW - timedelta(days=10)
+    log.record(_entry(ALICE, "kept", at=first_survivor))
+
+    # The 90-day window removes only the ancient row; "kept" is inside it.
+    removed = log.purge_before(cutoff=NOW - timedelta(days=90))
+
+    assert removed == 1
+    assert log.oldest_retained() == first_survivor
