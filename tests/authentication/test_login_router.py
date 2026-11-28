@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +25,7 @@ from notes_service.application.use_cases.authentication import (
 )
 from notes_service.bootstrap.config import Settings
 from notes_service.domain.identity.entities import ExternalIdentity
+from notes_service.domain.identity.session import hash_session_token
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.seed import DEMO_USERS
 from notes_service.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -206,8 +208,6 @@ class TestCallback:
     def test_cookie_token_is_not_the_raw_db_key(
         self, login_client: TestClient, session_factory: sessionmaker[Session]
     ) -> None:
-        from notes_service.domain.identity.session import hash_session_token
-
         link_alice(session_factory)
         state = begin(login_client)
         response = login_client.get(f"/api/v1/auth/callback?state={state}&code=abc")
@@ -261,6 +261,16 @@ class TestCallback:
 
 
 class TestLogout:
+    """Logout is cookie-authenticated, so it is subject to the origin guard.
+
+    A browser attaches ``Origin`` to every unsafe request, same-origin included —
+    without it the request is not one a browser can make, and the guard refuses it.
+    These tests therefore send the header a browser would send, then assert the
+    logout behaviour they were written for.
+    """
+
+    BROWSER_HEADERS: ClassVar[dict[str, str]] = {"Origin": "https://testserver"}
+
     def test_logout_clears_cookie(
         self, login_client: TestClient, session_factory: sessionmaker[Session]
     ) -> None:
@@ -268,25 +278,38 @@ class TestLogout:
         state = begin(login_client)
         login_client.get(f"/api/v1/auth/callback?state={state}&code=abc")
 
-        response = login_client.post("/api/v1/auth/logout")
+        response = login_client.post("/api/v1/auth/logout", headers=self.BROWSER_HEADERS)
         assert response.status_code == 204
         assert 'notes_session=""' in response.headers["set-cookie"].replace(" ", "")
 
     def test_logout_without_cookie_is_still_204(self, login_client: TestClient) -> None:
         assert login_client.post("/api/v1/auth/logout").status_code == 204
 
+    def test_logout_with_a_cookie_and_no_origin_is_refused(
+        self, login_client: TestClient, session_factory: sessionmaker[Session]
+    ) -> None:
+        link_alice(session_factory)
+        state = begin(login_client)
+        token = login_client.get(f"/api/v1/auth/callback?state={state}&code=abc").cookies[COOKIE]
+
+        response = login_client.post("/api/v1/auth/logout")
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "csrf_rejected"
+        with SqlAlchemyUnitOfWork(session_factory) as uow:
+            session = uow.sessions.get_by_token_hash(hash_session_token(token))
+        assert session is not None and session.revoked_at is None
+
     def test_logout_revokes_the_session(
         self,
         login_client: TestClient,
         session_factory: sessionmaker[Session],
     ) -> None:
-        from notes_service.domain.identity.session import hash_session_token
-
         link_alice(session_factory)
         state = begin(login_client)
         token = login_client.get(f"/api/v1/auth/callback?state={state}&code=abc").cookies[COOKIE]
 
-        login_client.post("/api/v1/auth/logout")
+        login_client.post("/api/v1/auth/logout", headers=self.BROWSER_HEADERS)
 
         with SqlAlchemyUnitOfWork(session_factory) as uow:
             session = uow.sessions.get_by_token_hash(hash_session_token(token))

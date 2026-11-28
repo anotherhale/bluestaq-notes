@@ -17,6 +17,7 @@ from notes_service.bootstrap.config import Settings, load_settings
 from notes_service.bootstrap.container import build_container
 from notes_service.bootstrap.logging_config import configure_logging
 from notes_service.presentation.api import api_router
+from notes_service.presentation.csrf import CookieAuthOriginGuardMiddleware
 from notes_service.presentation.errors import register_exception_handlers
 from notes_service.presentation.middleware import (
     BodySizeLimitMiddleware,
@@ -74,6 +75,15 @@ def _add_middleware(app: FastAPI, settings: Settings) -> None:
             allow_headers=["Authorization", "Content-Type", "X-Demo-User-ID", "X-Request-ID"],
             max_age=600,
         )
+
+    # Guard cookie-authenticated unsafe requests against a foreign origin. Added
+    # after CORS so it runs *before* it (last added runs first): a forged write
+    # must be refused by us, never answered by the CORS layer.
+    app.add_middleware(
+        CookieAuthOriginGuardMiddleware,
+        cookie_name=settings.session_cookie_name,
+        trusted_origins=settings.csrf_trusted_origins,
+    )
 
     app.add_middleware(RequestContextMiddleware)
 

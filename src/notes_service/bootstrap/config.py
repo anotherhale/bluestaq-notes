@@ -119,6 +119,11 @@ class Settings(BaseSettings):
 
     # -- HTTP security ----------------------------------------------------
     cors_allow_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    #: Extra origins permitted to drive a cookie-authenticated unsafe request,
+    #: for a split frontend/backend deployment. Same-origin requests are always
+    #: accepted; this list widens that. Unrelated to CORS on purpose: CORS is a
+    #: read barrier the browser enforces, not a write barrier.
+    csrf_trusted_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_request_body_bytes: int = 256 * 1024
     security_headers_enabled: bool = True
 
@@ -177,6 +182,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "cors_allow_origins",
+        "csrf_trusted_origins",
         "oidc_algorithms",
         "oidc_scopes",
         "ops_operator_user_ids",
