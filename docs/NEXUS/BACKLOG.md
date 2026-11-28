@@ -1877,7 +1877,8 @@ monitoring task.
 
 ## NEX-034 — A credential is recognised by shape, not by an exact key spelling
 
-**Status:** IMPLEMENTED + PUSHED at `e386e02` (CI in progress at time of writing).
+**Status:** VERIFIED at `e386e02` — CI green 4/4 (Backend ×2, Frontend ×2). Promoted from
+IMPLEMENTED + PUSHED after reading the check-run verdicts back, not from local evidence.
 **Phase:** 5 (durable runtime) — observability / security hardening.
 **Priority:** P1. **Closes:** the redaction hole NEX-033 opened by wiring
 `redact()` onto the formatting path.
@@ -2115,7 +2116,9 @@ adapter is process-local and bounded, so it answers "who read this recently", no
 ## NEX-038 — Re-poll NEX-037's CI, then close its delivery debt
 
 **Phase:** 5. **Priority:** P0 for the first step (a VERIFIED claim rests on unpolled CI).
-**Status:** PLANNED. **Dependencies:** none.
+**Status:** VERIFIED — `5c0575b` CI green 4/4 (Backend ×2, Frontend ×2); PR #3 MERGED at
+head `b0f9b56`. All three scope items closed; issue #2 remains OPEN and carries the
+NEX-037 comments. **Dependencies:** none.
 
 ### Objective
 
@@ -4887,3 +4890,79 @@ behavioural. It reads the source of the use-case package only: a note loaded in 
 router, or any module outside `application/use_cases/` is outside its scan, and it believes the
 call shape it sees rather than proving the runtime effect. The behavioural suites remain the
 runtime evidence; this guard's job is to keep the *arrangement* from drifting between them.
+
+---
+
+## NEX-104 — A word pair is sensitive wherever it sits, not only at the end
+
+**Phase:** 5 (durable runtime) — security hardening. **Priority:** P1.
+**Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (CI verdict not yet read back; this
+entry is not promoted to VERIFIED until it is).
+**Dependencies:** NEX-034 — the shape-based matcher this extends.
+
+### The defect
+
+NEX-034 taught `is_sensitive_key` to recognise a compound credential — `private_key`,
+`api_key`, `code_verifier` — by testing whether the **trailing two** words formed a known
+pair (`tuple(words[-2:]) in _SENSITIVE_WORD_PAIRS`). That covers the bare compound and
+nothing else. Add one qualifier and the pair is no longer trailing, so the verdict flips
+to safe:
+
+| key | words | pre-fix verdict |
+| --- | --- | --- |
+| `private_key` | private / key | sensitive |
+| `private_key_pem` | private / key / pem | **not sensitive** |
+| `access_key_id` | access / key / id | **not sensitive** |
+| `x_api_key_header` | x / api / key / header | **not sensitive** |
+| `signing_key_arn` | signing / key / arn | **not sensitive** |
+
+Measured with a direct probe against the pre-fix function, not inferred from the source.
+`private_key_pem`, `access_key_id`, `encryption_key_version` and `x_api_key_header` are not
+exotic — they are the AWS and Terraform spellings a real payload carries.
+
+This is the NEX-034 defect one level down. NEX-034 replaced an exact-*spelling* matcher
+with a *vocabulary* matcher; the vocabulary was right, but it was applied to one *position*.
+"One shape, one hole" survived its own fix by moving from the string to the offset.
+
+### The fix
+
+Scan **every adjacent pair**:
+
+```python
+pairs = itertools.pairwise(words)
+if any(pair in _SENSITIVE_WORD_PAIRS for pair in pairs):
+    return True
+```
+
+The pair set is unchanged, so nothing that was safe becomes sensitive through this path —
+only the position test was removed. A qualifier (`pem`, `id`, `header`, `arn`, `version`)
+is not a declassifier.
+
+### Load-bearing, measured
+
+`git stash push src/notes_service/domain/redaction.py` reverts the fix and keeps the tests.
+**13 of the 16** new cases go red, naming every qualified pair. Restored with
+`git stash pop`; tree diff confirmed. The 7 negative cases stay green under the revert, as
+they must — they guard a *breadth* risk the old matcher could not have had.
+
+### Tests
+
+16 new cases in `tests/domain/test_redaction.py` (`TestWordPairPositionDoesNotMatter`):
+9 positive (`private_key_pem`, `private_key_path`, `access_key_id`, `api_key_id`,
+`api_key_header`, `signing_key_arn`, `encryption_key_version`, `x_api_key_header`,
+`aws_secret_access_key`) and 7 negative (`secretary`, `keyboard`, `key_note`,
+`api_version`, `private_note`, `access_level`, `signing_status`) pinning that widening the
+scan to every position does **not** turn a bare `key` or `access` into a secret.
+
+### Gates
+
+`ruff format --check` 333 clean, `ruff check` clean, `mypy` 144 source files clean,
+`pytest` **2008 passed / 4 skipped** (baseline 1992 + 16).
+
+### Residual (stated, not hidden)
+
+The pair list is still finite: a credential compounded from two words on neither list
+(`vault_pass`, `seed_phrase`) still passes. Same direction as NEX-034's residual — additive
+vocabulary, not a structural hole. The structural holes this closes are *position* and
+*spelling*; what remains is *vocabulary*, which fails loudly the moment a test names the
+missing word.

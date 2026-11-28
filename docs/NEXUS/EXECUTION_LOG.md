@@ -12964,5 +12964,78 @@ them, and do not invent a sixth guard without first naming a concrete uncovered 
 `ci_status` PASSED with the per-job breakdown, `validation_status.ci` = VERIFIED, no blockers, no
 uncommitted product work.
 
+---
+
+## Run 106 — `NEXUS-2026-11-28-106` — NEX-104: a pair is sensitive wherever it sits
+
+| Field | Value |
+| --- | --- |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | resolved with `git ls-remote`; the local clone is shallow/grafted and its fetch refspec maps only `main`, so no in-file hash is trustworthy |
+| Ending commit | the commit containing this entry (resolve with `git ls-remote`) |
+| Phase | 5 (durable runtime) — security hardening |
+
+**Task completed.** NEX-104. `is_sensitive_key` in `src/notes_service/domain/redaction.py` — the
+single shared shape-based redactor used by both the log formatter and the tool gateway's
+`redaction` obligation (ADR-014) — tested only the **trailing two** words for a known sensitive
+pair. Any qualified spelling therefore flipped to safe. Measured against the pre-fix function:
+`private_key_pem`, `private_key_path`, `access_key_id`, `api_key_id`, `api_key_header`,
+`signing_key_arn`, `encryption_key_version` and `x_api_key_header` all returned
+`sensitive=False` and would have been emitted in full.
+
+The fix scans **every adjacent pair** (`itertools.pairwise(words)`). The pair set is unchanged, so
+nothing that was safe becomes sensitive through this path — only the position test was removed.
+NEX-034 replaced an exact-*spelling* matcher with a *vocabulary* matcher and got the vocabulary
+right; it applied it at one *offset*. "One shape, one hole" survived its own fix by moving from
+the string to the position.
+
+**Tasks verified.** NEX-034 promoted to VERIFIED (CI 4/4 green at `e386e02`) and NEX-038 promoted
+to VERIFIED (CI 4/4 green at `5c0575b`; PR #3 MERGED at head `b0f9b56`) — both from verdicts read
+back earlier in this run, not from local evidence. **NEX-104 is NOT VERIFIED**: its CI verdict was
+unread when the window closed, so it is recorded as TESTED + COMMITTED + PUSHED.
+
+**Files changed.** `src/notes_service/domain/redaction.py` (fix + `import itertools`),
+`tests/domain/test_redaction.py` (+16 cases), `docs/NEXUS/BACKLOG.md`, `docs/NEXUS/STATE.md`,
+`docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/EXECUTION_LOG.md`.
+
+**Tests executed (bare, exactly as CI runs them).** `ruff format` (reformatted the test file),
+`ruff format --check` 333 files already formatted, `ruff check` clean after RUF007 was fixed by
+adopting `itertools.pairwise`, `mypy` no issues in 144 source files, `pytest` **2008 passed /
+4 skipped**, 41.93s, exit 0. Baseline was 1992 passed / 4 skipped; the 16 new cases account for
+the delta exactly.
+
+**Negative control — the reason the tests are evidence.** `git stash push
+src/notes_service/domain/redaction.py` reverted the fix while keeping the tests: **13 of the 16**
+new cases went red, naming every qualified pair. `git stash pop` restored it and the file returned
+to green. The 7 negative controls stay green under the revert — correct, and the reason their
+passing is not the evidence for the positives.
+
+**Decision.** Hardened the *position* of the pair test rather than extending the pair
+*vocabulary*. Adding spellings would close today's examples and leave `private_key_pem`-shaped
+keys leaking while appearing fixed. Negative controls were added in the same slice because the fix
+widens a matcher, and a widening without a restraint is how redaction starts eating telemetry.
+
+**Incidents disclosed.** (1) A shell heredoc appending the NEX-104 backlog entry self-interleaved
+and wrote invalid UTF-8; `ruff` then refused to read `docs/NEXUS/BACKLOG.md`. The file was restored
+with `git checkout --`, which also discarded the uncommitted NEX-034/NEX-038 promotions made
+earlier in the run; those were re-applied with `file_editor` and read back. A second heredoc
+attempt to patch the checkpoint also self-interleaved and aborted before writing (syntax error,
+no file touched). This is the sixth recorded failure of prose-through-heredoc on this host. (2) An
+earlier draft of `CHECKPOINT.json` named a placeholder product hash (`aa0e5b1`) before that commit
+existed; it was removed and replaced with a resolve instruction, because a hash no commit backs is
+the exact unverified claim the status legend forbids.
+
+**Blockers.** None. **Risks.** The pair vocabulary remains finite (`vault_pass`, `seed_phrase`
+pass) — same direction as NEX-034's residual, additive vocabulary rather than a structural hole.
+
+**Push / PR / issue.** Pushed to the authorized branch. **No open PRs** — #3, #4, #5 are all
+merged by the repository owner; a push therefore has no PR vehicle, and creating one purely to
+show activity would manufacture delivery debt. Issue #2 remains open; NEX-104 was not posted as a
+comment this run.
+
+**Next action.** Run 107: resolve the live head with `git ls-remote`, poll NEX-104's CI to a
+conclusion and read it per job and per step; promote to VERIFIED if green, fix it if red. Then
+select the next dependency-ready slice. Do not re-open the structural-guard family.
+
 
 

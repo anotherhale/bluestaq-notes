@@ -21,6 +21,7 @@ the only layer both are allowed to import.
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 REDACTED = "<redacted>"
@@ -136,7 +137,14 @@ def is_sensitive_key(key: str) -> bool:
         # A plural is the same secret: ``tokens``, ``cookies``, ``credentials``.
         if word.endswith("s") and word[:-1] in _SENSITIVE_WORDS:
             return True
-    if len(words) >= 2 and tuple(words[-2:]) in _SENSITIVE_WORD_PAIRS:
+    # Every adjacent pair, not only the trailing two. A pair names a credential
+    # wherever it sits: ``private_key`` is a secret, and ``private_key_pem``,
+    # ``private_key_path``, ``access_key_id`` and ``x_api_key_header`` are the
+    # same secret with a trailing qualifier. Reading only the last two words
+    # made the qualifier the thing that decided — the same "one shape, one hole"
+    # defect as the exact-spelling matcher this replaced, one level down.
+    pairs = itertools.pairwise(words)
+    if any(pair in _SENSITIVE_WORD_PAIRS for pair in pairs):
         return True
     return _CONTENT_WORD in words and not _CONTENT_DESCRIPTOR_WORDS.intersection(words)
 

@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | **NEX-103** (run 105): ADR-008's *404-before-403* rule now lives in one method — `UseCase._load_note_for_action` — and six use cases (`UpdateNote`, `DeleteNote`, `MoveNote`, `ShareNote`, `RevokePermission`, `ListPermissions`) delegate to it instead of each hand-rolling the same twenty lines. `tests/architecture/test_note_authorization_boundaries.py` (5 tests) derives the arrangement from the AST: no decision or raw fetch outside the helper, no fetch-then-inline-403 anywhere, the helper orders 404 before 403, and the read path is 404-only. **VERIFIED at product `d47d15e`** — CI run `46169388330` `completed/success` on the product commit, Backend 12/12, Frontend 11/11, zero failed, zero skipped. Prior: **NEX-102** (run 104): *caller identity never arrives in a body* is derived, not documented — `tests/architecture/test_request_body_identity.py` (11 tests, 44 cases); **VERIFIED** at product `14b2a67` (CI `46166355995`/`46166360119`). Prior: **NEX-101**: the operator-authorization boundary is structurally pinned — `tests/architecture/test_operator_gate_boundaries.py`, 19 cases; **VERIFIED** at `ff8b6e63`. Prior: **NEX-100**: every API route provably authenticates (81 routes, 9 routers, 4 documented exemptions); **VERIFIED** at `9afd120`. **NEX-099b**: the tenant-access seam pinned structurally; **VERIFIED** at `bdc0308`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-103 VERIFIED**. |
+| Project phase | **NEX-104** (run 106): the shape-based redactor now checks **every** adjacent word pair, not only the trailing two, so `private_key_pem`, `access_key_id`, `x_api_key_header`, `signing_key_arn` and `encryption_key_version` are recognised as the credentials they are (pre-fix they returned `sensitive=False` and leaked — measured, not inferred). 16 new cases in `tests/domain/test_redaction.py`, 13 of them proved load-bearing by stashing the fix. **TESTED + COMMITTED + PUSHED; CI verdict unread this run — not promoted to VERIFIED.** Prior: **NEX-103** (run 105): ADR-008's *404-before-403* rule now lives in one method — `UseCase._load_note_for_action` — and six use cases delegate to it; `tests/architecture/test_note_authorization_boundaries.py` (5 tests) derives the arrangement from the AST. **VERIFIED at product `d47d15e`** — CI run `46169388330` `completed/success` on the product commit, Backend 12/12, Frontend 11/11, zero failed, zero skipped. Prior: **NEX-102** (run 104): *caller identity never arrives in a body* is derived, not documented — **VERIFIED** at product `14b2a67`. Prior: **NEX-101**: operator-authorization boundary structurally pinned; **VERIFIED** at `ff8b6e63`. Prior: **NEX-100**: every API route provably authenticates (81 routes, 9 routers, 4 documented exemptions); **VERIFIED** at `9afd120`. **NEX-099b**: the tenant-access seam pinned structurally; **VERIFIED** at `bdc0308`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-103 VERIFIED**. |
 
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 100) | `36da4b7` — live remote head resolved with `git ls-remote`. This clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot. |
@@ -23,6 +23,37 @@ truth; this file records intent and reconciliation.
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4). Three `waitFor`-wrapped negative assertions were passing vacuously; each now anchors on a positive assertion, and the isolation test fails on a real leak. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-104 (run `NEXUS-2026-11-28-106`) — a pair is sensitive wherever it sits
+
+**Status: TESTED + COMMITTED + PUSHED. CI verdict unread — not promoted to VERIFIED.**
+
+NEX-034 taught the shared redactor to recognise a compound credential by testing whether the
+**trailing two** words formed a known pair (`tuple(words[-2:])`). That covers the bare compound
+and nothing else: add one qualifier and the pair is no longer trailing, so the verdict flips to
+safe. Measured against the pre-fix function, not inferred from the source:
+
+| key | pre-fix |
+| --- | --- |
+| `private_key` | sensitive |
+| `private_key_pem` | **not sensitive** |
+| `access_key_id` | **not sensitive** |
+| `x_api_key_header` | **not sensitive** |
+| `signing_key_arn` | **not sensitive** |
+
+These are the AWS and Terraform spellings a real payload carries. The fix scans **every adjacent
+pair** (`itertools.pairwise`); the pair set is unchanged, so only the position test was removed
+and nothing that was safe becomes sensitive through this path. A qualifier is not a declassifier.
+
+**Load-bearing, measured:** fix stashed with tests kept → 13 of the 16 new cases red, naming every
+qualified pair; fix restored → green. The 7 negative controls stay green under the revert, as they
+must — they guard a breadth risk the old matcher could not have had.
+
+**Gates (bare, CI-identical):** `ruff format --check` 333 clean, `ruff check` clean, `mypy` 144
+files clean, `pytest` **2008 passed / 4 skipped** (baseline 1992 + 16).
+
+**Residual:** the pair *vocabulary* is still finite (`vault_pass`, `seed_phrase` pass). Same
+direction as NEX-034's residual — additive vocabulary, not a structural hole.
 
 ## NEX-103 (run `NEX-2026-11-28-105`) — the 404-before-403 rule is now one method, not six copies
 

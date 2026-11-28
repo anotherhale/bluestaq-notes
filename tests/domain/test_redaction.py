@@ -82,6 +82,47 @@ class TestShortLivedCredentials:
         assert is_sensitive_key(key) is True
 
 
+class TestWordPairPositionDoesNotMatter:
+    """A sensitive pair is sensitive wherever it sits, not only at the end."""
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "private_key_pem",
+            "private_key_path",
+            "access_key_id",
+            "api_key_id",
+            "api_key_header",
+            "signing_key_arn",
+            "encryption_key_version",
+            "x_api_key_header",
+            "aws_secret_access_key",
+        ],
+    )
+    def test_qualified_credential_pairs_are_sensitive(self, key: str) -> None:
+        # The predecessor matched only the trailing two words, so a trailing
+        # qualifier (``pem``, ``id``, ``header``) decided the verdict and the
+        # credential underneath it leaked. A qualifier is not a declassifier.
+        assert is_sensitive_key(key) is True
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "secretary",
+            "keyboard",
+            "key_note",
+            "api_version",
+            "private_note",
+            "access_level",
+            "signing_status",
+        ],
+    )
+    def test_words_adjacent_to_a_credential_word_alone_are_not(self, key: str) -> None:
+        # Widening the pair scan to every position must not turn a bare ``key``
+        # or ``access`` into a secret: only the listed pairs are sensitive.
+        assert is_sensitive_key(key) is False
+
+
 class TestNonSensitiveKeysStayReadable:
     """Redaction that eats telemetry is redaction people route around."""
 
