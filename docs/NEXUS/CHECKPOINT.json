@@ -3,9 +3,9 @@
   "run_id": "NEX-2026-11-28-97-closeout",
   "timestamp": "2026-11-28T13:10Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "febb8108bc0569c38b0aa04802e2b6f612ddb27d",
+  "commit": "fd114cda57d66b2b0edfe8a041429702eae87998",
   "product_commit": "febb8108bc0569c38b0aa04802e2b6f612ddb27d",
-  "commit_note": "`commit` is the PRODUCT head this checkpoint was written at, febb810 -- the live remote head at close-out start, confirmed with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. The docs commit recording this checkpoint follows it (a file cannot contain the hash of the commit that contains it): one-commit lag, expected, do not chase it. NEX-097 is VERIFIED at febb810 on its own CI, so no descendant-CI anchor is needed.",
+  "commit_note": "`commit` is the docs head this checkpoint was written at, fd114cd, which follows the product commit febb810. The CI verdict of record is about febb810 (4/4 on itself); fd114cd touches docs/NEXUS/ only, so it is licensed to land on that verdict. A file cannot contain the hash of the commit that contains it: the commit recording this checkpoint follows fd114cd, a one-commit lag that is expected and correct. Do not chase it.",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-097 VERIFIED. NEX-097 is VERIFIED on the product commit febb810 itself.",
   "active_task": null,
   "task_statuses": {
@@ -42,12 +42,12 @@
     "number": 5,
     "state": "open",
     "draft": false,
-    "head_ref_oid": "febb8108bc0569c38b0aa04802e2b6f612ddb27d",
-    "body_covers": "NEX-052..NEX-096 as of run 96. The NEX-097 section is appended in this close-out run once the docs CI concluded, then read back to confirm it landed -- a publisher's exit 0 is not evidence the artifact landed.",
+    "head_ref_oid": "fd114cda57d66b2b0edfe8a041429702eae87998",
+    "body_covers": "NEX-052..NEX-097. The NEX-097 section was appended in this close-out run with --body-file after the docs CI, then the landed body was read back (2399 -> 2400 lines, one NEX-097 section) to confirm it landed -- a publisher's exit 0 is not evidence the artifact landed.",
     "nex_096_in_body": true,
-    "nex_097_in_body": false
+    "nex_097_in_body": true
   },
-  "tracking_issue": "Issue #2 open, not closed. This close-out run delivered the NEX-097 verdict after CI concluded. NEX-096 verdict was delivered in run 96 as comment 7239449984; NEX-095 in run 95 (7239156441); NEX-094 in run 94 (7238119575). NEX-092 through NEX-097 are all delivered.",
+  "tracking_issue": "Issue #2 open, not closed. This close-out run delivered the NEX-097 verdict as comment 7239882077 (read back: 2517 chars at that URL). NEX-096 verdict was delivered in run 96 as comment 7239449984; NEX-095 in run 95 (7239156441); NEX-094 in run 94 (7238119575). NEX-092 through NEX-097 are all delivered.",
   "blockers": [],
   "risks": [
     "The organization roster is STILL a whole-set read with no limit/offset. NEX-097 fixed which rows it returns and made the total honest, but a large tenant can grow that set without bound and the response is one unpaged array. This is the next structural gap NEX-097 exposed: NEX-098 candidate, in organizations/ rather than the agent surface.",
@@ -71,8 +71,8 @@
     "Verified the guard test rather than assuming it: replacing the predicate with `== ACTIVE` turns test_a_suspended_member_stays_in_the_roster red (1 failed / 2 passed). The first draft of the run's notes claimed the opposite; it was corrected against the real fixture before committing.",
     "Every test and gate number in this close-out was re-run with PYTHONPATH pinned to this tree after two false-red failures from a borrowed venv."
   ],
-  "run_summary": "Run 97 close-out. Observed: on entry HEAD was main with the NEX-097 product slice committed as febb810 and both the docs edits and the verification still pending. Reconciled the false-red first: the borrowed venv imported another workspace's src, so the two new offboarding tests failed against correct code; re-ran with PYTHONPATH pinned to this tree (32 passed, full suite 1769 passed / 4 skipped, ruff and mypy clean). Corrected the suite count in the docs from a stale 1745 to the measured 1769. Then probed the design choice instead of asserting it: the rejected `== ACTIVE` filter turns the suspended test red, so the wrong fix is excluded by a test. Polled febb810's own CI and read 4/4 completed/success per run and per job with head_sha = febb810, so NEX-097 is VERIFIED with no descendant anchor. Promoted NEX-097 to VERIFIED across BACKLOG / ROADMAP / STATE, added DECISIONS D-097, and pushed the docs only after that verdict was in hand.",
+  "run_summary": "Run 97 close-out. Delivered: docs head fd114cd pushed and confirmed with `git ls-remote`; PR #5 body carries NEX-097 and was read back; issue #2 comment 7239882077 read back. Observed: on entry HEAD was main with the NEX-097 product slice committed as febb810 and both the docs edits and the verification still pending. Reconciled the false-red first: the borrowed venv imported another workspace's src, so the two new offboarding tests failed against correct code; re-ran with PYTHONPATH pinned to this tree (32 passed, full suite 1769 passed / 4 skipped, ruff and mypy clean). Corrected the suite count in the docs from a stale 1745 to the measured 1769. Then probed the design choice instead of asserting it: the rejected `== ACTIVE` filter turns the suspended test red, so the wrong fix is excluded by a test. Polled febb810's own CI and read 4/4 completed/success per run and per job with head_sha = febb810, so NEX-097 is VERIFIED with no descendant anchor. Promoted NEX-097 to VERIFIED across BACKLOG / ROADMAP / STATE, added DECISIONS D-097, and pushed the docs only after that verdict was in hand.",
   "docs_delivery": "This run's docs commit follows febb810. It touches docs/NEXUS/ only, so it is licensed to land on febb810's already-concluded green verdict. Per memory, a docs push still supersedes in the concurrency group, so the docs commit's own run may read cancelled -- that is expected and is not evidence either way. The product verdict of record stays febb810 4/4 on itself.",
   "observed_remote_head": "febb8108bc0569c38b0aa04802e2b6f612ddb27d (read at close-out start this run with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, not `git rev-parse`: this clone's fetch refspec maps only main, so origin/feature/... is a frozen snapshot that lies plausibly).",
-  "head_semantics": "`commit` and `pr_state.head_ref_oid` name the branch head at the moment this checkpoint was written, which is the PRODUCT commit febb810. A file cannot contain the hash of the commit that contains it, so once the docs commit writing this file lands, the true head is that docs commit. A one-commit lag is expected and correct: do not chase it with another commit."
+  "head_semantics": "`commit` and `pr_state.head_ref_oid` name the branch head at the moment this checkpoint was written, which is the docs commit fd114cd (the product commit beneath it is febb810). A file cannot contain the hash of the commit that contains it, so once the commit writing this file lands, the true head is that next docs commit. A one-commit lag is expected and correct: do not chase it with another commit."
 }
