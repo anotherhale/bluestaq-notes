@@ -14,10 +14,39 @@ truth; this file records intent and reconciliation.
 | Last CI result | **`319a3dd` (NEX-075): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T02:45Z — VERIFIED.** Prior: `e375a1f` (NEX-074) 4/4 `completed/success` 2026-11-28T02:20Z; `09888ac` (NEX-073) 4/4 2026-11-28T01:56Z; `38292d2` (NEX-058) backend 2/2, frontend 1/2 (the race); `3c26957` (NEX-072) 4/4. |
 | Tracking issue | #2 (open) — **comment `7232583113`** covers NEX-075 (VERIFIED, CI 4/4); `7231968445` covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-075** (60453 chars, updated 2026-11-28T02:46Z; exactly one NEX-075 section, NEX-074 intact). Twenty slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | None outstanding. Run 75 (NEX-075) gave the operator access log a bounded retention window, closing the last risk run 74 recorded. Run 74 (NEX-074) made the operator-grant record writable: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. |
+| **Open P1** | None outstanding. Run 76 (NEX-076) closed the last named follow-up from run 74: a human-issued operator grant now must state *why* it was issued, and that reason is persisted. Run 75 (NEX-075) gave the operator access log a bounded retention window. Run 74 (NEX-074) made the operator-grant record writable: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-076 (run `NEX-2026-11-27-76`) — a human-issued grant must say why
+
+**Status: IMPLEMENTED + TESTED, COMMITTED + PUSHED (CI not yet read).** Not VERIFIED until CI on
+the product commit is read. Local gates: 1569 passed / 4 skipped, ruff format+check clean, mypy
+clean.
+
+**The gap.** NEX-074 made an operator grant issuable and stamped the issuer, but recorded no
+reason — its own explicit follow-up. An auditor could reconstruct *that* a grant was handed out and
+*who* handed it out, never *why* it was justified. `granted_by` plus the gate's access log names an
+actor and an instant, not a justification.
+
+**Delivered.** `OperatorGrantRationale` value object; `OperatorGrant` now enforces the pairing (a
+human-issued grant — `granted_by` set — must carry a rationale; a configuration grant must not);
+`IssueOperatorGrantRequest.rationale` required; `POST /ops/operator-grants` accepts and returns it;
+migration `b4e6f1a2c9d7` adds a nullable `rationale TEXT` with a non-empty check constraint via
+`batch_alter_table` (SQLite and PostgreSQL).
+
+**Design note — nullability mirrors provenance.** The column is nullable on purpose: a
+configuration grant's reason is the reviewed deployment, so a per-row reason would be redundant.
+Only human-issued grants are forced to state one — exactly where an auditor's question lands. No
+backfill: existing rows predate the requirement and are configuration grants by construction (the
+human write path did not exist before NEX-074), so inventing reasons would fabricate audit facts.
+
+**Tests.** Domain pairing/value-object tests, application persistence-of-reason test, persistence
+restart-durability and empty-string-constraint tests, and API tests (201 round-trip; missing /
+blank / over-long reason each `422`; non-operator `404`; self-grant `409`).
+
+**Next.** Read CI on the product commit, then promote to VERIFIED and append NEX-076 to PR #5's body.
 
 ## NEX-075 (run `NEX-2026-11-27-75`) — the access log gets a bounded retention window
 

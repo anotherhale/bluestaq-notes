@@ -3246,7 +3246,7 @@ request body can set the issuer.
 | Field | Value |
 | --- | --- |
 | Phase | 3 (governance) |
-| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `319a3dd` — CI not yet read, so **not VERIFIED** |
+| Status | **VERIFIED** at `319a3dd` — CI 4/4 `completed/success`, polled 2026-11-28T02:45Z |
 | Priority | P1 — an audit log that grows without limit and never forgets is a compliance and storage liability |
 | Dependencies | NEX-072 (durable `operator_access_log`), NEX-074 (operator-grant issuance), the `OperatorAccessLog` port |
 | Architecture | `domain/governance/retention.py`, `application/use_cases/operator_access_retention.py`, ADR-017, ADR-008 (404-vs-403) |
@@ -3283,5 +3283,61 @@ erasure. That is a separate decision with its own approval question, not a confi
 `tests/persistence/test_operator_access_log.py`. Full suite 1551 passed / 4 skipped; ruff
 format+check and mypy (143 files) clean locally.
 
-**Remaining.** Read CI on `319a3dd` and promote to VERIFIED. Append NEX-074 and NEX-075 to PR #5's
-body, which still stops at NEX-073.
+**Remaining.** None. VERIFIED at `319a3dd` (CI 4/4, polled 2026-11-28T02:45Z). PR #5's body carries
+NEX-074 and NEX-075.
+
+## NEX-076 — Record why a human issued an operator grant
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Status | **IMPLEMENTED + TESTED** locally — CI not yet read, so **not VERIFIED** |
+| Priority | P1 — an audit of a privileged hand-out that cannot say *why* answers half the question |
+| Dependencies | NEX-074 (operator-grant issuance), NEX-072 (durable `operator_access_log`) |
+| Architecture | `domain/identity/operator_grant.py`, `application/use_cases/operator_grants.py`, migration `b4e6f1a2c9d7` |
+
+**Objective.** NEX-074 made a grant issuable and stamped the issuer, but the grant row had no
+column for a reason — the omission NEX-074 recorded as its explicit follow-up. An auditor could
+reconstruct *that* a grant was handed out and *who* handed it out, but never *why* it was
+justified. `granted_by` plus the gate's access log names an actor and an instant, not a
+justification.
+
+**Delivered.**
+
+- `OperatorGrantRationale` value object (stripped, non-empty, bounded).
+- `OperatorGrant` enforces the pairing: a **human-issued** grant (`granted_by` set) must carry a
+  rationale; a **configuration** grant (`granted_by IS NULL`) must not. This keeps the two
+  provenance kinds honestly distinguishable.
+- `IssueOperatorGrantRequest` gains a required `rationale`; `POST /ops/operator-grants` accepts it
+  and returns it.
+- Migration `b4e6f1a2c9d7` adds a nullable `rationale TEXT` column with a check constraint
+  (`IS NULL OR length > 0`), via `batch_alter_table` so it runs on both SQLite and PostgreSQL.
+
+**Design note — nullability mirrors provenance.** The column is nullable on purpose: a
+configuration grant's reason *is* the reviewed deployment, so storing a per-row reason for it
+would be redundant. Only human-issued grants are forced to state one, which is exactly where an
+auditor's question lands. No backfill: existing rows predate the requirement and are configuration
+grants by construction (the human write path did not exist before NEX-074), so inventing reasons
+for them would fabricate audit facts.
+
+**Boundary refusals.** A blank or over-long rationale is a `422` at the HTTP boundary (schema
+`min_length`/`max_length`); the domain value object enforces the same bound for every other caller,
+so the two cannot drift.
+
+**Tests.**
+
+- `tests/domain/test_operator_grant.py` — pairing rule (human-issued without rationale refused;
+  configuration grant with rationale refused), rationale value object.
+- `tests/application/test_issue_operator_grant.py` — the reason is persisted, not discarded.
+- `tests/persistence/test_operator_grants.py` — the rationale survives a restart through a second
+  adapter; an empty-string rationale is refused by the column constraint; migrated-schema column
+  set includes `rationale`.
+- `tests/api/test_ops_operator_grants_api.py` — 201 round-trips the reason; missing / blank /
+  over-long reasons are `422`; non-operator `404`; self-grant `409`.
+
+**Acceptance criteria.** An operator can issue a grant only with a stated reason; the reason is
+stored, returned, and readable after a restart; a human-issued grant cannot be constructed without
+one; a configuration grant cannot carry a fabricated one; the schema and domain agree on the bound.
+
+**Remaining.** Read CI on the product commit and promote to VERIFIED. Append NEX-076 to PR #5's
+body.

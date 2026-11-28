@@ -183,3 +183,30 @@ which the relying party can classify itself. This keeps the decision inside our 
 `["otp","totp","sms"]` was single-factor; it returned multi and failed. The test was wrong —
 one-time code and SMS are two families — so the case was replaced with three genuinely
 same-family spellings. The assertion was not loosened to fit.
+
+## D-076 — an operator-grant rationale is optional by provenance, not by convenience (NEX-076)
+
+**D-076a — the column is nullable because `granted_by` is.** The `rationale` column mirrors the
+provenance field exactly: a grant with a human issuer must carry a reason, and a configuration
+grant must not. This is the pairing rule, enforced in the domain, not two independent optional
+fields a caller could combine freely. Making `rationale` unconditionally required would force the
+configuration seeder to invent a reason for a decision whose reason is the reviewed deployment
+itself; making it unconditionally optional would let the one case that matters — a human handing
+out privilege — omit the justification.
+
+**D-076b — no backfill, and the gap is recorded rather than filled.** Every pre-existing row is a
+configuration grant by construction: the write path that sets `granted_by` was introduced in
+NEX-074, so no human-issued grant can predate the rationale requirement. There is nothing in the
+database from which to reconstruct a reason. Fabricating one would put a plausible-sounding
+sentence into an audit record that no human ever wrote, which is strictly worse than an honest
+NULL. A check constraint forbids the empty string so that "no record" and "a record that says
+nothing" stay distinguishable.
+
+**D-076c — one bound, declared twice, tested at both.** The length bound lives in
+`MAX_RATIONALE_LENGTH` and is applied by both the Pydantic request schema and the domain value
+object. This is deliberate duplication of a *constant*, not of logic: the boundary needs a cheap
+`422` with a field name, and the domain needs to be safe for callers that never pass through HTTP.
+They share the constant, so they cannot drift.
+
+**Deliberately not done.** No rationale on the *revocation* path (there is no revocation path
+yet), and no free-text field on the configuration seeder — see D-076a.

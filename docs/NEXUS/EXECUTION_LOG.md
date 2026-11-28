@@ -9100,3 +9100,77 @@ changes accountability); PR #5's twenty-slice stack is a human review decision.
 ### Next action
 
 Take the next dependency-ready slice from `BACKLOG.md`. Nothing is outstanding on NEX-075.
+
+## Run `NEX-2026-11-27-76` — a human-issued operator grant now records why (NEX-076)
+
+**Run ID** `NEX-2026-11-27-76` · **Branch** `feature/agentic-enterprise-platform` · **Phase** 3
+(governance) · 2026-11-28T03:2xZ.
+
+**Starting point.** `319a3dd` (NEX-075 product commit, VERIFIED CI 4/4) with the run-75 docs
+checkpoint above it. The checkpoint's `next_task` named two follow-ups: persist an operator-grant
+rationale (needs a migration), and decide with a human whether PR #5 should be split. The first is
+a dependency-ready engineering slice; the second is a human decision, so this run took the first.
+
+**NEX-076 — record why a human issued an operator grant.** IMPLEMENTED + TESTED + COMMITTED +
+PUSHED.
+
+**The gap.** NEX-074 made `POST /ops/operator-grants` issue a bounded, attributable grant, but
+deliberately omitted a `rationale`: the grant row had no column for one, so a required free-text
+field would have been validated and discarded. NEX-074 recorded that as an explicit follow-up. An
+auditor could reconstruct *that* a privileged grant was handed out and *who* handed it out, but
+never *why* it was justified — the question an auditor actually asks.
+
+**What was built, by layer.**
+
+- **Domain** (`domain/identity/operator_grant.py`): an `OperatorGrantRationale` value object
+  (stripped, non-empty, bounded). `OperatorGrant` gains a `rationale` field and a pairing
+  invariant: a human-issued grant (`granted_by` set) must carry a rationale; a configuration grant
+  (`granted_by IS NULL`) must not.
+- **Application** (`application/use_cases/operator_grants.py`): `IssueOperatorGrantRequest` gains a
+  required `rationale`, passed through to the constructed grant.
+- **Infrastructure** (`infrastructure/db/models.py`, `infrastructure/db/operator_grants.py`,
+  migration `b4e6f1a2c9d7`): a nullable `rationale TEXT` column with a check constraint
+  (`IS NULL OR length > 0`), added via `batch_alter_table` so it runs on SQLite and PostgreSQL. The
+  row maps the value object in both directions.
+- **Presentation** (`presentation/schemas.py`, `presentation/api/routers/ops.py`):
+  `OperatorGrantIssueRequest.rationale` is `Field(min_length=1, max_length=MAX_RATIONALE_LENGTH)`;
+  the response returns it.
+
+**The design decision worth recording (D-076a).** The column is *nullable*, and that is not
+sloppiness: it mirrors `granted_by` exactly. A configuration grant's reason *is* the reviewed
+deployment, so storing a per-row reason for it would be redundant, and a configuration writer has
+no human reason to give. Only human-issued grants are forced to state one — exactly where the
+auditor's question lands. The check constraint forbids an *empty string* (absence pretending to be
+a record) while leaving NULL legal, so a future manual repair can add a real reason without a
+migration.
+
+**No backfill (D-076b).** Existing rows predate the requirement and are configuration grants by
+construction — the write path that sets `granted_by` did not exist before NEX-074. There is nothing
+to reconstruct a reason from, and inventing one would fabricate an audit fact, which is worse than
+an honest gap.
+
+**Bound agreement (D-076c).** The HTTP schema and the domain value object enforce the same bound,
+so a reason the API accepts is a reason the domain accepts; the boundary is a `422`, not a
+validation error surfacing from the domain.
+
+**Tests.** `tests/domain/test_operator_grant.py` (pairing rule both ways, rationale value object),
+`tests/application/test_issue_operator_grant.py` (the reason is persisted, not discarded),
+`tests/persistence/test_operator_grants.py` (the rationale survives a restart through a second
+adapter; an empty-string rationale is refused by the column constraint; the migrated-schema column
+set includes `rationale`), and `tests/api/test_ops_operator_grants_api.py` (201 round-trips the
+reason; missing / blank / over-long reason each `422`; non-operator `404`; self-grant `409`).
+
+**Gates run on the committed tree** (bare, as CI runs them):
+`.venv/bin/ruff format` (3 files reformatted, then clean), `.venv/bin/ruff check` → All checks
+passed, `.venv/bin/mypy` → no issues in 143 source files, `.venv/bin/python -m pytest` →
+**1569 passed, 4 skipped** (up from 1551 — 18 new tests).
+
+**A test bug worth recording.** The first draft of the API fixture passed two scopes for one user
+as a single comma-joined entry via the `operator_grant` helper. The settings parser splits on the
+first `:` only, so the second scope became part of one 64-char-exceeding scope string and the app
+refused to build. Fixed by giving each scope its own entry — the helper joins *one* user's scopes
+into one string, which is only correct when there is exactly one. This is the sort of thing that
+looks like a domain bug and is really a test-fixture misunderstanding.
+
+**Next.** Read CI on the product commit; on green, promote NEX-076 to VERIFIED and append its
+section to PR #5's body.

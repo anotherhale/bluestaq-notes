@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-75",
-  "timestamp": "2026-11-28T02:44Z",
+  "run_id": "NEX-2026-11-27-76",
+  "timestamp": "2026-11-28T03:20Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": {
     "product_head": "319a3dd",
     "note": "Product head, not the docs tip. This file's own commit can never be the tip; resolve with git ls-remote origin refs/heads/feature/agentic-enterprise-platform."
   },
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-075 implemented. NEX-075 (run 75) gave the operator access log a bounded retention window: the last mutation that log permits, bounded on every side. Pushed at 319a3dd; CI not yet read.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-076 implemented. NEX-076 (run 76) closed the follow-up NEX-074 recorded: a human-issued operator grant must now state why, and that reason is persisted. Pushed; CI not yet read, so NEX-076 is COMMITTED + PUSHED, not VERIFIED.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -28,7 +28,8 @@
     "NEX-072": "VERIFIED - CI 4/4 completed/success at 3c26957 (both check-run pairs: Backend ruff+mypy+pytest+migrations and Frontend typecheck+lint+test+build), polled 2026-11-28T00:52Z by run 72. SqlAlchemyOperatorAccessLog is a second adapter behind the unchanged OperatorAccessLog port; append-only, ordered by surrogate id, user_id not a cascading FK, adapter commits its own session. Migration a1c7e2f60b93 upgrades and downgrades cleanly. 1501 passed / 4 skipped, mypy clean on 141 files.",
     "NEX-073": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at 09888ac, and CI 4/4 completed/success (backend x2, frontend x2) read 2026-11-28T01:56Z. Both frontend runs passed, where on 38292d2 one of two failed: CI evidence the flake is gone. Three absence-only assertions made non-vacuous in frontend/src/App.test.tsx: the two search tests now assert the filtered-in and filtered-out note in one waitFor, and the tenant-isolation test seeds a note for Bob and anchors on it before asserting Alice's note is absent. Root cause is the loading-state swap (loadingNotes empties the list during the identity-keyed refetch), not mere assertion ordering. Proved the isolation test can catch a leak: a temporary FakeApiClient with canRead()=true and listNotes forced to view:'all' makes the new assertion fail on 'Alice private'. Local gates: 127 passed / 9 files, tsc -b --force clean, eslint clean, vite build ok, 20/20 repeat runs 0 failures.",
     "NEX-074": "VERIFIED at e375a1f - CI 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T02:20Z. POST /ops/operator-grants issues a bounded grant with the issuer stamped by the application layer. Refuses an unbounded grant, a self-grant, a scope the issuer does not hold, and an unknown scope. No rationale field: the grant row has no column for one, so a required free-text field would be validated and discarded. 1545 passed / 4 skipped, ruff+mypy clean on 141 files, 11 new tests.",
-    "NEX-075": "VERIFIED at 319a3dd - CI 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T02:45Z. OperatorAccessRetentionPolicy (floor 90 days, ceiling 3650) is a domain policy, not a request field, validated at construction so a bad value fails the boot. Purge is gated on its own scope (access-log-retention, distinct from operator-access-report), records itself through the gate stamped now - inside the window it prunes - so it cannot erase the record of its own action, and retention is off by default (endpoint 404). Boundary is inclusive at its near edge: a row stamped exactly `window` ago is kept, and the same rule drives both the adapter's `at < cutoff` and covers(). 1551 passed / 4 skipped, ruff format+check clean, mypy clean on 143 files. Mutation control: widening `<` to `<=` fails 2 persistence tests."
+    "NEX-075": "VERIFIED at 319a3dd - CI 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T02:45Z. OperatorAccessRetentionPolicy (floor 90 days, ceiling 3650) is a domain policy, not a request field, validated at construction so a bad value fails the boot. Purge is gated on its own scope (access-log-retention, distinct from operator-access-report), records itself through the gate stamped now - inside the window it prunes - so it cannot erase the record of its own action, and retention is off by default (endpoint 404). Boundary is inclusive at its near edge: a row stamped exactly `window` ago is kept, and the same rule drives both the adapter's `at < cutoff` and covers(). 1551 passed / 4 skipped, ruff format+check clean, mypy clean on 143 files. Mutation control: widening `<` to `<=` fails 2 persistence tests.",
+    "NEX-076": "COMMITTED + PUSHED, NOT VERIFIED - CI not yet read. A human-issued operator grant (granted_by set) must carry an OperatorGrantRationale; a configuration grant must not. Migration b4e6f1a2c9d7 adds a nullable rationale TEXT with a non-empty check constraint via batch_alter_table. POST /ops/operator-grants requires the reason and returns it. 1569 passed / 4 skipped, ruff format+check clean, mypy clean on 143 files, 18 new tests. Promote to VERIFIED only after reading CI on the product commit."
   },
   "completed_tasks": [
     "NEX-039",
@@ -66,7 +67,8 @@
     "NEX-072",
     "NEX-073",
     "NEX-074",
-    "NEX-075"
+    "NEX-075",
+    "NEX-076"
   ],
   "verified_tasks": [
     "NEX-001",
@@ -141,13 +143,12 @@
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
   "validation": {
     "commands_run_on_committed_tree": [
-      ".venv/bin/python -m pytest -> 1551 passed / 4 skipped",
-      ".venv/bin/ruff format --check (incl. the ADR files, which CI formats) -> clean",
+      ".venv/bin/python -m pytest -> 1569 passed / 4 skipped",
+      ".venv/bin/ruff format --check -> 314 files already formatted",
       ".venv/bin/ruff check -> All checks passed",
-      ".venv/bin/mypy -> no issues in 143 source files",
-      "mutation: OperatorAccessRow.at < cutoff -> <= cutoff fails 2 persistence tests; source restored and 13 passed"
+      ".venv/bin/mypy -> no issues in 143 source files"
     ],
-    "ci": "4/4 completed/success on 319a3dd, polled 2026-11-28T02:45Z. Prior: e375a1f (NEX-074) 4/4 completed/success 2026-11-28T02:20Z."
+    "ci": "Not yet read for the NEX-076 product commit. Prior: 319a3dd (NEX-075) 4/4 completed/success, polled 2026-11-28T02:45Z."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -157,8 +158,8 @@
     "mergeable": true,
     "body_covers": "NEX-052..NEX-075",
     "body_chars": 54625,
-    "head": "not recorded here \u2014 read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
-    "note": "Body 60453 chars, PATCHed 2026-11-28T02:46Z, verified to hold exactly one NEX-075 section with NEX-074 intact. Open, draft=false, unmerged.",
+    "head": "not recorded here — read with: git ls-remote origin refs/heads/feature/agentic-enterprise-platform",
+    "note": "Body 60453 chars, PATCHed 2026-11-28T02:46Z by run 75, carrying NEX-052..NEX-075. NEX-076 is NOT yet in the body - append it after CI passes. Open, draft=false, unmerged.",
     "merging": "prohibited for automated runs; awaiting human review"
   },
   "tracking_issue": {
@@ -169,13 +170,13 @@
   },
   "blockers": [],
   "risks": [
-    "An operator-grant rationale is not persisted (no column). Intent rests on granted_by plus the gate access log; adding a column needs a migration.",
     "No scheduled purge exists for the operator access log (ADR-017). An unattended purger changes who is accountable for an erasure, so it is a separate decision.",
-    "PR #5 stacks twenty slices; the reviewer's 'consider a split' note stands and is a human decision."
+    "PR #5 stacks twenty-one slices; the reviewer's 'consider a split' note stands and is a human decision.",
+    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect."
   ],
-  "next_task": "Take the next dependency-ready slice from docs/NEXUS/BACKLOG.md. NEX-075 is VERIFIED and delivered; nothing is outstanding. Two named follow-ups remain: persist an operator-grant rationale (needs a migration) and decide with a human whether PR #5's twenty slices should be split before review. Do NOT re-implement NEX-075, NEX-074, NEX-073 or NEX-058.",
-  "next_action": "Read BACKLOG.md for the highest-priority task whose dependencies are met and start it. Do not start a new slice with under 10 minutes left on the clock.",
-  "recovery_instructions": "HEAD is the docs commit carrying this checkpoint, above the NEX-075 product commit 319a3dd (VERIFIED, CI 4/4). Resolve the true head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform. No product code and no delivery debt are outstanding; the next unit of work is a fresh backlog slice.",
+  "next_task": "NEX-076 is COMMITTED + PUSHED but NOT VERIFIED. FIRST: read CI on its product commit (GET /repos/anotherhale/bluestaq-notes/commits/<sha>/check-runs) and, on 4/4 completed/success, promote NEX-076 to VERIFIED in CHECKPOINT.json, STATE.md and BACKLOG.md. SECOND: append the NEX-076 section to PR #5's body (which carries NEX-052..NEX-075). THIRD: pick the next dependency-ready backlog slice. Do NOT re-implement NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058.",
+  "next_action": "Read CI for the NEX-076 product commit before anything else; it is the only thing between this run and a VERIFIED task. Do not start a new slice with under 10 minutes left.",
+  "recovery_instructions": "The head carries the NEX-076 product commit (rationale on operator grants) plus this docs checkpoint. Resolve the true head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform. NEX-076's code and tests are pushed; the only outstanding work is reading its CI, promoting it to VERIFIED, and appending its section to PR #5's body.",
   "ci_status": {
     "319a3dd": {
       "result": "4/4 completed/success",
@@ -190,24 +191,17 @@
   },
   "commits_this_run": [
     {
-      "sha": "319a3dd",
-      "subject": "feat(ops): purge the operator access log on a bounded retention window (NEX-075)",
-      "state": "PUSHED"
-    },
-    {
-      "sha": "849ad8d",
-      "subject": "docs(nexus): record NEX-075 retention slice, ADR-017, and reconcile delivery state",
+      "sha": "see git log",
+      "subject": "feat(ops): require a rationale on a human-issued operator grant (NEX-076)",
       "state": "PUSHED"
     }
   ],
   "decisions_this_run": [
-    "D-075a: the window is a domain policy, not a request field. No caller can express 'delete everything' or 'delete Bob's rows' because there is no field for it.",
-    "D-075b: erasing is its own authority (access-log-retention), distinct from operator-access-report, so the read can be granted widely and the erase narrowly.",
-    "D-075c: the purge records itself through the gate before deleting, stamped now - inside the window it prunes - so it cannot erase the record of its own action.",
-    "D-075d: retention is off by default and the endpoint 404s when unconfigured, rather than offering a purge with no mandate. A too-short window fails the boot, not the first purge.",
-    "D-075e: the boundary is inclusive at its near edge, and one rule drives both the adapter and covers() so they cannot disagree at the oldest surviving row."
+    "D-076a: the rationale column is nullable because it mirrors granted_by. A human-issued grant must carry a reason; a configuration grant must not. One pairing invariant in the domain, not two independent optional fields.",
+    "D-076b: no backfill. Every pre-existing row is a configuration grant by construction (the human write path did not exist before NEX-074), so inventing a reason would fabricate an audit fact. A check constraint forbids the empty string so 'no record' and 'a record that says nothing' stay distinguishable.",
+    "D-076c: one bound constant applied by both the request schema (422 at the boundary) and the domain value object (safe for non-HTTP callers), so the two cannot drift."
   ],
-  "run_summary": "Run 75 closed the second risk run 74 recorded: the durable operator access log was append-only and unbounded, so one row per granted /ops read accumulated forever, each attributed to a named user. No backlog task existed, so NEX-075 was created first. The design point is that the obvious fix - let an operator delete rows - destroys the property the log exists for, so deletion is bounded from every direction: a validated domain window, a distinct erase authority, a self-recording purge, and off-by-default retention. ADR-017 records the decisions and what was deliberately not done (a scheduled purge). Also fixed the ADR index, which had never listed ADR-016. One correction worth recording: this run first assumed PR #5's body stopped at NEX-073 and wrote that into STATE, the checkpoint and the execution log. The GitHub API showed it already carries NEX-074. All three were corrected before commit, and the correction is left visible rather than silently rewritten. CI on 319a3dd was read at the end of the run: 4/4 completed/success, so NEX-075 is VERIFIED, not merely pushed. PR #5's body was extended with the single NEX-075 section (56934 -> 60453 chars) and issue #2 received comment 7232583113.",
+  "run_summary": "Run 76 took the first of the two follow-ups the run-75 checkpoint named: persist an operator-grant rationale. NEX-074 had deliberately omitted the field because the row had no column for it, so a required free-text field would have been validated and discarded - a record that reads as evidence but is never written. NEX-076 adds the column (migration b4e6f1a2c9d7, nullable, non-empty check constraint), the OperatorGrantRationale value object, a domain pairing invariant (human-issued grants must state a reason; configuration grants must not), the required request field, and the router wiring. 18 new tests across four layers; full suite 1569 passed / 4 skipped; ruff format+check and mypy (143 files) clean. One test-fixture bug is recorded in the execution log: a helper that joins one user's scopes into a single comma-joined entry is only correct for one scope, and passing two produced a scope string that exceeded the parser's limit and failed the app build - a fixture misunderstanding that looked like a domain bug. CI on the product commit was NOT read in this run, so NEX-076 is COMMITTED + PUSHED, not VERIFIED; promoting it is the next run's first action.",
   "delivery_state": {
     "pr": 5,
     "pr_state": "open",
@@ -216,44 +210,44 @@
     "pr_note": "PR #5 open, unmerged. Body PATCHed to 60453 chars with one NEX-075 section; NEX-074 intact. Automated merging is prohibited - a human decides.",
     "issue": 2,
     "issue_state": "open",
-    "issue_note": "Issue #2 open. Comment 7232583113 (2026-11-28T02:46Z) covers NEX-075. The issue stays open: the programme is not done.",
-    "delivery_debt": "None. PR #5 body and issue #2 comment both carry NEX-075."
+    "issue_note": "Issue #2 open. Latest comment 7232583113 covers NEX-075. No comment added this run; NEX-076 is not yet VERIFIED. The issue stays open: the programme is not done.",
+    "delivery_debt": "NEX-076 section is missing from PR #5's body. Append it once CI on the product commit is green."
   },
   "branch_head": "319a3dd is the NEX-075 product commit; docs checkpoints follow it. Resolve the live head with git ls-remote.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint's own commit field can never name the commit that writes it; it lags the head by exactly one commit. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": {
-    "run_id": "NEX-2026-11-27-75",
+    "run_id": "NEX-2026-11-27-76",
     "branch": "feature/agentic-enterprise-platform",
-    "starting_commit": "f307999",
-    "ending_commit": "319a3dd (product, VERIFIED); docs commit 849ad8d and the checkpoint commit follow",
+    "starting_commit": "319a3dd (NEX-075 product head) + run-75 docs checkpoint",
+    "ending_commit": "see git log; the docs checkpoint commit follows the NEX-076 product commit",
     "tasks_completed": [
-      "NEX-075"
+      "NEX-076"
     ],
-    "tasks_verified": [
-      "NEX-075"
+    "tasks_verified": [],
+    "tasks_in_progress": [
+      "NEX-076 (COMMITTED + PUSHED, awaiting CI)"
     ],
-    "tasks_in_progress": [],
     "tasks_blocked": [],
-    "ci_status": "319a3dd: 4/4 completed/success, polled 2026-11-28T02:45Z",
-    "push_status": "f307999..319a3dd fast-forward, verified with git ls-remote",
-    "pr_status": "PR #5 open, unmerged, body 60453 chars covering NEX-052..NEX-075",
-    "issue_status": "issue #2 open; comment 7232583113 posted for NEX-075",
-    "recommended_next_action": "Pick the next dependency-ready backlog slice. Nothing is outstanding."
+    "ci_status": "Not read this run. Prior: 319a3dd (NEX-075) 4/4 completed/success.",
+    "push_status": "pushed to feature/agentic-enterprise-platform; verify with git ls-remote",
+    "pr_status": "PR #5 open, unmerged. Body carries NEX-052..NEX-075; NEX-076 not yet appended.",
+    "issue_status": "issue #2 open; no comment added this run (NEX-076 not yet VERIFIED).",
+    "recommended_next_action": "Read CI for the NEX-076 product commit; on green, promote to VERIFIED and append NEX-076 to PR #5's body."
   },
   "pr": {
     "body_covers_through": "NEX-075",
-    "body_updated_this_run": true,
-    "note": "Body carries NEX-052..NEX-073. NEX-074 and NEX-075 are missing. The reviewer's 'consider a split' note stands and is a human decision. Never merge without human review.",
+    "body_updated_this_run": false,
+    "note": "Body carries NEX-052..NEX-075. NEX-076 must be appended after CI. Never merge without human review.",
     "body_chars": 60453
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-075: VERIFIED. Implemented, tested, committed, pushed and CI 4/4 completed/success on 319a3dd. Local: 1551 passed / 4 skipped, ruff format+check clean, mypy clean (143 files). Mutation control proved the boundary tests fail when `<` is widened to `<=`.",
+  "validation_status": "NEX-076: IMPLEMENTED + TESTED + COMMITTED + PUSHED. NOT VERIFIED - CI not read. Local: 1569 passed / 4 skipped, ruff format+check clean, mypy clean (143 files).",
   "next_actions": [
-    "Take the next dependency-ready backlog slice.",
-    "Named follow-ups: persist an operator-grant rationale (migration required).",
-    "Ask the owner whether PR #5's twenty stacked slices should be split before review."
+    "Read CI for the NEX-076 product commit; promote to VERIFIED on 4/4 success.",
+    "Append the NEX-076 section to PR #5's body.",
+    "Ask the owner whether PR #5's twenty-one stacked slices should be split before review."
   ],
   "last_ci_result": "319a3dd (NEX-075): 4/4 completed/success, polled 2026-11-28T02:45Z."
 }
