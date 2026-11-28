@@ -13,7 +13,7 @@ truth; this file records intent and reconciliation.
 | Head commit (measured) | Product head `e375a1f` (**NEX-074, VERIFIED** — CI 4/4 `completed/success`, polled 2026-11-28T02:20Z), over `09888ac` (NEX-073, VERIFIED) and `38292d2` (NEX-058 scope item 7, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
 | Last CI result | **`e375a1f` (NEX-074): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T02:20Z — VERIFIED.** Prior: **`09888ac` (NEX-073): 4/4 `completed/success` (backend ×2, frontend ×2), polled 2026-11-28T01:56Z.** Both frontend runs passed — on `38292d2` one of two had failed, so CI independently confirms the flake is gone. Prior: `38292d2` (NEX-058): backend 2/2 success, frontend 1/2 (the race). `3c26957` (NEX-072): 4/4 success. |
 | Tracking issue | #2 (open) — **comment `7231968445`** covers NEX-073 (incl. PR #5 delivery catch-up); `7230423658` covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-073** (54625 chars); NEX-074's section is not appended yet. Nineteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-074** (56934 chars, updated 2026-11-28T02:23Z). Nineteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
 | **Open P1** | None outstanding. Run 74 (NEX-074) made the operator-grant record writable for the first time: `POST /ops/operator-grants` issues a bounded grant, refuses a self-grant and an over-broad scope, and stamps the issuer from the authenticated principal. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
@@ -2686,15 +2686,16 @@ log and checkpoint for the next free ID *before* writing the commit message.
    `gh run list --branch feature/agentic-enterprise-platform`, and judge on check-runs whose
    `status` is `completed` — a docs commit descending from it reads `cancelled` once
    superseded in the concurrency group, which is not a failure.
-2. **PR #5 body catch-up** for NEX-058 and NEX-065…NEX-073. The body currently stops at
-   NEX-070, so a reviewer reading it sees a stale picture of a branch that has advanced six
-   slices. This is delivery debt, not code debt, and it is the cheapest way to make the
-   review honest.
-3. **`operator_access_log` retention policy** — run 72's named follow-up. The table is
-   append-only and unbounded; nothing prunes it. Needs a decision on how long a
-   privileged-read record must be kept before code, so it is worth an ADR line rather than
-   an arbitrary `DELETE`.
+2. **PR #5 body catch-up — DONE through NEX-074.** The body now carries NEX-052…NEX-074
+   (56934 chars, updated 2026-11-28T02:23Z). No delivery debt outstanding; keep appending
+   one section per slice as work lands.
+3. **`operator_access_log` retention policy** — run 72's named follow-up and now the top
+   open item. The table is append-only and unbounded; nothing prunes it. Needs a decision on
+   how long a privileged-read record must be kept before code, so it is worth an ADR line
+   rather than an arbitrary `DELETE`. Related: an operator-grant rationale is still not
+   persisted (no column), which needs a migration if it is wanted.
 
-Do not re-implement NEX-058 or NEX-073. NEX-073 is test-only: if its CI turns red, read the
-failing assertion before assuming the product broke — the change cannot alter behaviour.
+Do not re-implement NEX-058, NEX-073 or NEX-074. NEX-073 is test-only: if its CI turns red,
+read the failing assertion before assuming the product broke — the change cannot alter
+behaviour.
 
