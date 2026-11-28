@@ -13142,3 +13142,67 @@ select the next dependency-ready slice.
 
 
 
+
+---
+
+## Run `NEXUS-2026-11-28-107` — close the NEX-105 verification gap, clear the issue backlog
+
+**Run window.** `RUN_START` 1795888869, `DEADLINE` 1795890369. This window was opened as a
+continuation of run 106, whose product slice was already committed and pushed; the remaining
+work was verification, delivery and checkpoint repair, not new implementation. That is the
+correct shape here: run 106 left the tree clean and the product correct, so spending the window
+on evidence and on GitHub state is worth more than starting a second slice with no time to
+integrate it.
+
+**Reconciliation.** Three discrepancies between the record and reality, all corrected rather
+than documented around:
+
+1. NEX-105 was recorded as PUSHED with the CI verdict unread. Read it back: run `46174865205`
+   on `afd07e1`, `completed/success`, Backend 12 steps, Frontend 11 steps, 0 failed, 0 skipped.
+   Promoted to **VERIFIED**.
+2. Run 106's next-action line said "poll NEX-104's CI". Wrong on two counts: the push in
+   question was NEX-105's `afd07e1`, and NEX-104's CI had already been read green a window
+   earlier. Corrected in place with the mislabel named, because an edited line that silently
+   changes meaning destroys the audit trail it exists to provide.
+3. The product commit's file list had been reported as 7 files, then as 5. `git show --stat`
+   says 5, with `docs/SECURITY.md` and `.env.example` left unstaged. Both are now committed.
+
+**Delivered.**
+
+| Item | Evidence |
+| --- | --- |
+| NEX-105 VERIFIED | CI run `46174865205`, per job and per step, 0 failed, 0 skipped |
+| Issue #2 current through NEX-105 | [comment 7243701163](https://github.com/anotherhale/bluestaq-notes/issues/2#issuecomment-7243701163), body re-read from the API: 3745 chars, all five sections present |
+| Push confirmed | `git ls-remote` head == local `HEAD` `e80efbc` |
+| Checkpoint repaired and atomic | previous file copied to `/tmp/CHECKPOINT.prev.json`, new JSON parsed and asserted before replacement |
+
+The issue comment clears a four-run backlog (NEX-102 through NEX-105). That backlog was the
+real cost of the previous windows: the engineering was done and verified, but GitHub still said
+nothing about it, which is the difference between work existing and work being reported.
+
+**Tests executed this window.** `ruff format --check` 335 files already formatted; `ruff check`
+all checks passed; both run bare, repo-wide, as CI runs them. No source or test file was touched
+this window, so the auth suite, mypy and pytest results from run 106 still stand for the product
+commit and were not re-run to look busy.
+
+**Security findings.** None new. One pre-existing residual limitation was written down instead
+of left implicit: the origin allowlist is a finite trust boundary, so it cannot distinguish a
+legitimate cross-origin app from one added to `CSRF_TRUSTED_ORIGINS` by mistake. That belongs
+under review whenever the value changes. No control was weakened to make anything pass.
+
+**Harness traps hit, recorded.** A multi-line python heredoc self-interleaved again; the
+checkpoint had already been committed and parsed clean, so nothing was damaged, and the work
+was redone with a `file_editor`-written script file. A `/tmp` message filename collided with a
+previous run's. Neither is interesting on its own, but both are the same two traps that have
+recurred across this project, and a log that omits them invites the next window to repeat them.
+
+**Status.** product IMPLEMENTED, TESTED, VERIFIED (CI), COMMITTED, PUSHED. Issue #2 UPDATED.
+No PR: nothing was opened, and #3/#4/#5 were merged by the owner, so automated merging stayed
+out of it entirely. Working tree clean.
+
+**Next action for run 108.** `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`
+for the live head, expecting `e80efbc` or later. Do not use `git rev-parse origin/<branch>`: this
+clone's fetch refspec maps only `main`, so that ref is a stale snapshot that agrees with itself
+and with any cached state file. Then read the docs-head CI run per job and per step — the two
+documentation commits after `afd07e1` have unread verdicts, so this is a real check. Then select
+one slice from `docs/NEXUS/BACKLOG.md` by dependency readiness and implement it.
