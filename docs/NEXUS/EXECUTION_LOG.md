@@ -12183,3 +12183,20 @@ been wrong twice. Do not start it with less than 10 minutes on the clock.
 
 `docs/NEXUS/CHECKPOINT.json` valid JSON, updated atomically via temp file + `os.replace`. Working
 tree clean after `a4e1880`; remote head confirmed by `git ls-remote`.
+
+### CI re-verified at `0d1674c` (the state-record commit)
+
+The state-record commit moved head again, so the `a4e1880` verdict was re-read at `0d1674c`
+rather than inherited:
+
+| Run | Event | Conclusion | Frontend job | Backend job |
+| --- | --- | --- | --- | --- |
+| `46156504960` | push | success | 11 steps, 0 failed, 0 skipped | 12 steps, 0 failed, 0 skipped |
+| `46156509147` | pull_request | success | 11 steps, 0 failed, 0 skipped | 12 steps, 0 failed, 0 skipped |
+
+**Structural invariant, now recorded so later runs stop chasing it:** a state file cannot contain
+the hash or CI verdict of the commit that contains it — any commit that records a verdict changes
+head and invalidates that verdict. The chain is therefore anchored by precedent, not by a fixed
+point: each target commit's own CI is verified before the next state commit lands, and the final
+docs-only commit's CI is never quoted as a verdict. Chasing a fixed point produces an unbounded
+sequence of "verify, commit, re-verify" runs that never ends.
