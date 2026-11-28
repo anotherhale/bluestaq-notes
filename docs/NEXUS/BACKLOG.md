@@ -3396,3 +3396,26 @@ the active set; an expired grant appears in neither.
 
 **Remaining.** Nothing for the read path. The disclosure question NEX-076 raised is answered here
 for operators (the listing is operator-gated); non-operator callers still see nothing.
+
+### NEX-078 — Three-way separation of duties and tz-aware grant expiry
+
+- **Phase:** 3 (governance)
+- **Priority:** P0 (security)
+- **Status:** IMPLEMENTED + TESTED + COMMITTED + PUSHED (`6637c50`); **CI pending — not VERIFIED**
+- **Source:** the two security findings in PR #5's discussion
+- **Dependencies:** NEX-065 (approval columns), NEX-077 (rationale) — both met
+- **Objective:** close two controls that were documented but not enforced at every boundary.
+  1. Policy author, approver and publisher must be three distinct principals (all three pairs),
+     enforced in the domain, the use cases and a DB CHECK.
+  2. An operator grant's `expires_at` must be timezone-aware, refused before any comparison.
+- **Acceptance criteria:**
+  - Approving one's own draft is refused; publishing a version one approved is refused.
+  - A naive `expires_at` is refused with a validation error, never a 500.
+  - Legacy published rows with no approver stay readable.
+  - The migration round-trips.
+- **Tests:** domain (`test_governance_policy.py`, `test_operator_grant.py`), application
+  (`test_policy_lifecycle.py`), API (`test_ops_policy_lifecycle_api.py`), persistence
+  (`test_policy_versions_db.py`).
+- **Security:** removes a one-person governance boundary wearing three names, and an
+  ambiguous-expiry grant that could silently extend access by the deployment's UTC offset.
+- **Next action:** poll CI on `6637c50`; mark VERIFIED only when all check-runs succeed.

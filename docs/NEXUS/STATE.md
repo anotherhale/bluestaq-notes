@@ -2841,3 +2841,49 @@ updated. There is no outstanding work on it.
 3. **Keep delivery state honest as you go.** A push is not a verdict: poll check-runs whose
    `status` is `completed` before writing VERIFIED, and remember a docs commit reads
    `completed/cancelled` once superseded in the concurrency group — never a failure.
+
+## Run `NEX-2026-11-27-78` — NEX-078: the two PR #5 security findings
+
+**Phase:** 3 (governance), continuing.
+
+**Active task:** none. NEX-078 is IMPLEMENTED + TESTED + COMMITTED + PUSHED (`6637c50`);
+its CI was still registering when this was written, so it is **not** VERIFIED yet.
+
+**Completed this run:** NEX-078, the two security findings raised in PR #5's discussion.
+
+- **P1 — distinct policy author, approver and publisher.** The prior rule checked only
+  `author != publisher`. That left a gap: an operator who approved a colleague's draft could
+  then publish it, so one person performed both halves of the two-person control while three
+  names appeared in the audit trail. `separation_of_duties()` now checks all three pairs, and
+  `approval_separation_of_duties()` applies the same rule to the approval step so an author
+  cannot approve their own draft. Enforced at the domain, in the `Publish`/`Approve` use cases,
+  and by DB CHECK `ck_policy_versions_policy_versions_separation_of_duties` (migration
+  `5d2b7c41e9a8`). The CHECK tolerates legacy published rows that record no approver, so
+  existing data stays readable.
+- **P2 — timezone-aware operator grant expiration.** `expires_at` is the whole safety property
+  of a bounded grant, so an ambiguous one is refused. A naive datetime names a wall-clock
+  reading in a zone the request never specified; the store would relabel it as UTC, so a UTC+10
+  operator who meant local midnight would grant ten hours more access than they wrote. Awareness
+  is checked before the comparison at the domain boundary and in `IssueOperatorGrant`, because
+  comparing a naive deadline to the aware clock raises `TypeError` — a 500 instead of the
+  fail-closed refusal the type promises.
+
+**Validation (on the committed tree):** 1589 passed / 4 skipped, 0 failed; `ruff format --check`
+315 files already formatted; `ruff check` all passed; `mypy` clean on 143 files; migration
+round-trips upgrade → downgrade −1 → upgrade on top of `b4e6f1a2c9d7`, single head.
+
+**Reconciliation note:** this work was begun as NEX-077, but a concurrent run claimed that id
+for the operator-grant rationale feature (now VERIFIED at `9f9a70f`). It was renumbered to
+NEX-078 and rebased onto the true head. Only this run's own references were renumbered; the
+other run's NEX-077 references were left untouched.
+
+## Next best actions (run `NEX-2026-11-27-78`)
+
+1. **Poll CI on `6637c50`.** Mark NEX-078 VERIFIED only when every check-run is
+   `completed`/`success`. A docs commit reads `completed/cancelled` once superseded in the
+   concurrency group — never a failure.
+2. **Append NEX-078 to PR #5's body and comment on issue #2**, naming the two findings it closes.
+3. **Take the next dependency-ready backlog slice** from `BACKLOG.md`. Do not start a new slice
+   with under 10 minutes left on the clock.
+
+**Do not redo** NEX-078, NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058 — all VERIFIED.

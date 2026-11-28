@@ -9385,3 +9385,80 @@ acd9d30:docs/NEXUS/CHECKPOINT.json`), re-applying the same edits in Python, and 
 Rule: `ruff format` is for Python only. A JSON, YAML or Markdown state file is formatted by
 rewriting it in Python (`json.dump(..., indent=2)`) and validating the parse. Never point
 `ruff format` at a data file — it accepts the argument and silently corrupts it.
+
+## Run NEX-2026-11-27-78 — NEX-078: three-way separation of duties and tz-aware grant expiry
+
+- **Run ID:** NEX-2026-11-27-78
+- **Branch:** feature/agentic-enterprise-platform
+- **Starting commit:** local `fe4eaea`, reconciled to remote `acd9d30`, then `8edd159`, `281cc05`
+  (three concurrent runs advanced the branch during this window)
+- **Ending commit:** `6637c50` (product) + this docs commit
+- **Task completed:** NEX-078
+
+### What changed
+
+Two security findings raised in PR #5's discussion, both about a control that was written
+down but not enforced everywhere it could be bypassed.
+
+**P1 — three distinct principals for policy author, approver and publisher.**
+The rule checked only `author != publisher`. An operator who approved a colleague's draft could
+then publish it: one person performed both halves of the two-person control, with three names in
+the audit trail. `separation_of_duties()` now checks all three pairs, and
+`approval_separation_of_duties()` applies the same rule at the approval step so an author cannot
+approve their own draft. Enforced in the domain invariants, in the `PublishPolicyVersion` and
+`ApprovePolicyVersion` use cases, and by DB CHECK
+`ck_policy_versions_policy_versions_separation_of_duties` (migration `5d2b7c41e9a8`). A rule
+enforced in only some of those layers is one an operator walks around by choosing another entry
+point.
+
+The CHECK tolerates a legacy published row that records no approver (the pre-NEX-065 shape), so
+existing data stays readable; every pairwise violation among *recorded* principals is refused.
+
+**P2 — timezone-aware operator grant expiration.**
+`expires_at` is the whole safety property of a bounded grant, so an ambiguous one is refused. A
+naive datetime is a wall-clock reading in a zone the request never named; the store would
+relabel it as UTC, so a UTC+10 operator who meant local midnight would grant ten hours more
+access than they wrote. Awareness is checked *before* the comparison, at the domain boundary and
+in `IssueOperatorGrant`, because comparing a naive deadline to the aware clock raises
+`TypeError` — a 500 instead of the fail-closed refusal this type promises. `utcoffset() is None`
+is checked as well as `tzinfo is None`, since a tzinfo yielding no offset is naive by the same
+rule the stdlib uses.
+
+### Files changed (12)
+
+`domain/governance/policy.py`, `domain/identity/operator_grant.py`,
+`application/use_cases/policy_lifecycle.py`, `application/use_cases/operator_grants.py`,
+`infrastructure/db/models.py`, `presentation/schemas.py`,
+`migrations/versions/5d2b7c41e9a8_distinct_approver_and_publisher.py`,
+and five test files (`test_governance_policy.py`, `test_operator_grant.py`,
+`test_policy_lifecycle.py`, `test_ops_policy_lifecycle_api.py`, `test_policy_versions_db.py`).
+
+### Validation
+
+- `.venv/bin/python -m pytest` → **1589 passed, 4 skipped**, 0 failed, 0 errors (rc=0)
+- `.venv/bin/ruff format --check` → 315 files already formatted
+- `.venv/bin/ruff check` → All checks passed
+- `.venv/bin/python -m mypy` → Success, no issues in **143 source files**
+- `alembic upgrade head → downgrade -1 → upgrade head` → single head `5d2b7c41e9a8`, CHECK present
+  in the resulting DDL, chain linear on top of NEX-077's `b4e6f1a2c9d7`
+
+### Decisions
+
+- **D-078a:** enforce the rule at all three layers rather than one. A control that can be
+  bypassed by choosing a different entry point is not a control.
+- **D-078b:** the DB CHECK tolerates the legacy no-approver published shape. Rejecting it would
+  have made existing rows unreadable for a rule that did not exist when they were written.
+- **D-078c:** renumbered from NEX-077 to NEX-078. A concurrent run had already claimed NEX-077
+  for the operator-grant rationale feature (VERIFIED at `9f9a70f`). Only this run's own
+  references were renumbered; the other run's were left untouched.
+
+### Risks
+
+- NEX-078 is **not** VERIFIED. It is pushed at `6637c50` with CI still registering. The next run
+  must poll check-runs until every entry is `completed` before writing VERIFIED.
+
+### Next action
+
+Poll `GET /repos/anotherhale/bluestaq-notes/commits/6637c50/check-runs`. When all are
+`completed`/`success`, mark NEX-078 VERIFIED, append it to PR #5's body, comment on issue #2, and
+take the next dependency-ready slice from `BACKLOG.md`.
