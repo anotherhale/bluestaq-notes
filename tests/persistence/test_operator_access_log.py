@@ -167,3 +167,61 @@ def test_rows_are_physically_present_after_record(
 
     assert len(rows) == 1
     assert rows[0].operation == "withholding-report"
+
+
+# --------------------------------------------------------------------------
+# Retention (NEX-075): the one mutation the append-only log permits.
+#
+# The window is pinned in tests/domain/test_operator_access_retention.py and the
+# authority in tests/application/test_operator_access_retention.py. What only a
+# real store can show is that the delete is bounded: it removes the aged rows,
+# keeps the ones inside the window, and keeps the row stamped *exactly* at the
+# cutoff — the boundary the policy says is inclusive.
+# --------------------------------------------------------------------------
+
+
+def test_purge_deletes_only_entries_strictly_before_the_cutoff(
+    log: SqlAlchemyOperatorAccessLog,
+    session_factory: sessionmaker[Session],
+) -> None:
+    cutoff = NOW
+    log.record(_entry(ALICE, "ancient", at=cutoff - timedelta(days=200)))
+    log.record(_entry(ALICE, "old", at=cutoff - timedelta(days=91)))
+    log.record(_entry(ALICE, "at-cutoff", at=cutoff))
+    log.record(_entry(ALICE, "recent", at=cutoff + timedelta(days=1)))
+
+    removed = log.purge_before(cutoff=cutoff)
+
+    assert removed == 2
+    surviving = [entry.operation for entry in log.recent(limit=10)]
+    # Newest first, and the row at the boundary survives it.
+    assert surviving == ["recent", "at-cutoff"]
+
+
+def test_purge_returns_zero_when_nothing_has_aged_out(
+    log: SqlAlchemyOperatorAccessLog,
+) -> None:
+    log.record(_entry(ALICE, "recent", at=NOW))
+
+    assert log.purge_before(cutoff=NOW - timedelta(days=90)) == 0
+    assert len(log.recent(limit=10)) == 1
+
+
+def test_purge_is_durable_across_a_restart(
+    log: SqlAlchemyOperatorAccessLog,
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The deletion commits on its own, so a second adapter sees it gone."""
+    log.record(_entry(ALICE, "ancient", at=NOW - timedelta(days=200)))
+    log.record(_entry(ALICE, "recent", at=NOW))
+
+    log.purge_before(cutoff=NOW)
+
+    restarted = _restart(session_factory)
+    assert [entry.operation for entry in restarted.recent(limit=10)] == ["recent"]
+
+
+def test_purge_on_an_empty_log_removes_nothing(
+    log: SqlAlchemyOperatorAccessLog,
+) -> None:
+    assert log.purge_before(cutoff=NOW) == 0

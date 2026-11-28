@@ -175,6 +175,7 @@ KNOWN_OPERATOR_OPERATIONS = frozenset(
     {
         ISSUE_OPERATION,
         OPERATION,
+        "access-log-retention",
         "audit-integrity",
         "policy-approve",
         "policy-draft",

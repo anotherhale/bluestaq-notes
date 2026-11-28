@@ -17,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from notes_service.application.errors import ResourceNotFound
 from notes_service.application.use_cases.operator_access_report import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -26,6 +27,7 @@ from notes_service.domain.identity.value_objects import UserId
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     ChainAuditReportResponse,
+    OperatorAccessPurgeResponse,
     OperatorAccessReportResponse,
     OperatorGrantIssueRequest,
     OperatorGrantReportResponse,
@@ -110,6 +112,38 @@ def get_operator_access_report(
     """
     snapshot = container.get_operator_access_report().run(principal, limit=limit)
     return OperatorAccessReportResponse.from_snapshot(snapshot)
+
+
+@router.post(
+    "/operator-access-log/purge",
+    response_model=OperatorAccessPurgeResponse,
+    summary="Purge access-log entries older than the retention window (operators only)",
+    dependencies=[RateLimitDep],
+)
+def purge_operator_access_log(
+    principal: PrincipalDep, container: ContainerDep
+) -> OperatorAccessPurgeResponse:
+    """Delete access-log entries that have aged out of the configured window.
+
+    The record of a privileged read is durable since NEX-072 and, until this
+    endpoint, nothing pruned it — an unbounded audit table is a slow failure. The
+    window comes from configuration and is bounded by the domain policy on both
+    sides, so this endpoint cannot be asked for a shorter window, a specific user's
+    entries, or a cutoff of the caller's choosing: it can only apply the retention
+    the deployment already declared.
+
+    Gated on ``access-log-retention``, deliberately not the read scope
+    ``operator-access-report`` — erasing the trail is a graver authority than
+    reading it. The purge is itself written to the log before it runs, stamped
+    inside the window, so it cannot delete the record of its own action. A
+    non-operator gets ``404`` like every other ops endpoint, and a deployment with
+    retention disabled gets ``404`` too: the endpoint exists only where a window
+    does.
+    """
+    use_case = container.purge_operator_access_log()
+    if use_case is None:
+        raise ResourceNotFound("not found")
+    return OperatorAccessPurgeResponse.from_result(use_case.execute(principal))
 
 
 @router.get(

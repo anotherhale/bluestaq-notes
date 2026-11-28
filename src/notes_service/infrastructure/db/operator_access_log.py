@@ -36,8 +36,9 @@ the view happened regardless of whether their own write succeeded.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.application.ports.operator_access import OperatorAccessEntry
@@ -88,6 +89,29 @@ class SqlAlchemyOperatorAccessLog:
                 select(OperatorAccessRow).order_by(OperatorAccessRow.id.desc()).limit(limit)
             ).scalars()
             return tuple(_to_domain(row) for row in rows)
+
+    def purge_before(self, *, cutoff: datetime) -> int:
+        """Delete rows stamped strictly before ``cutoff``; return how many went.
+
+        Strictly before, so a row exactly at the cutoff survives — the policy's
+        window is inclusive at its near edge and this must match it. The delete is
+        a single statement rather than a read-then-delete loop, so a row inserted
+        concurrently with a later timestamp is never in the candidate set, and the
+        count returned is the database's own ``rowcount`` rather than a guess.
+
+        This is the only mutation this adapter permits. There is no update path and
+        no way to delete a row that is inside the window: a store that could
+        rewrite or selectively erase the record of a privileged read would not be
+        evidence of anything.
+        """
+        with self._session_factory() as session:
+            result = session.execute(delete(OperatorAccessRow).where(OperatorAccessRow.at < cutoff))
+            session.commit()
+            # ``rowcount`` is on the CursorResult a DML statement returns, but the
+            # typed signature of ``execute`` is the generic Result. Reading it
+            # defensively keeps a driver that omits it from turning a successful
+            # purge into a crash — the deletion has already been committed.
+            return int(getattr(result, "rowcount", 0) or 0)
 
 
 __all__ = ["SqlAlchemyOperatorAccessLog"]

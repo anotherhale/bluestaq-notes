@@ -54,5 +54,27 @@ class OperatorAccessLog(Protocol):
         """The most recent entries, newest first, capped at ``limit``."""
         ...
 
+    def purge_before(self, *, cutoff: datetime) -> int:
+        """Delete entries stamped strictly before ``cutoff``; return the count.
+
+        The one mutation the append-only log permits, and it is deliberately the
+        narrowest possible: it can only *remove the oldest* rows, it cannot
+        rewrite a surviving one, and it takes an instant rather than a predicate
+        so a caller cannot express "delete this user's entries" or any other
+        selective erasure. ``cutoff`` comes from an
+        :class:`~notes_service.domain.governance.retention.OperatorAccessRetentionPolicy`,
+        which enforces a floor, so an adapter is never the thing deciding how long
+        evidence is kept.
+
+        An entry stamped exactly ``cutoff`` is *kept*: the policy's boundary is
+        inclusive at its near edge, and the adapter must agree with it or the two
+        would disagree at the one row that matters most — the oldest one.
+
+        Adapters that cannot purge (a demo ring that already drops its oldest
+        entry on write) return ``0`` rather than raising: nothing is being kept
+        forever there, so there is nothing to retain.
+        """
+        ...
+
 
 __all__ = ["OperatorAccessEntry", "OperatorAccessLog"]

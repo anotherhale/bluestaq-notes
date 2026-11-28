@@ -18,6 +18,9 @@ from notes_service.application.use_cases.agent_runs import RunAdvance
 from notes_service.application.use_cases.agents import IssuedToken, ResolvedToken
 from notes_service.application.use_cases.approval_advisory import ApprovalAdvisory
 from notes_service.application.use_cases.operator_access_report import OperatorAccessSnapshot
+from notes_service.application.use_cases.operator_access_retention import (
+    OperatorAccessPurgeResult,
+)
 from notes_service.application.use_cases.operator_grants import OperatorGrantSnapshot
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.policy_lifecycle import PolicyHistory
@@ -948,6 +951,33 @@ class OperatorGrantReportResponse(ResponseModel):
             holder_count=snapshot.holder_count,
             as_of=snapshot.as_of,
             source_name=snapshot.source_name,
+        )
+
+
+class OperatorAccessPurgeResponse(ResponseModel):
+    """What one access-log purge removed, for operators (NEX-075).
+
+    ``cutoff`` is the boundary the retention policy produced and ``window_days`` the
+    window behind it, so the response states *why* those rows went rather than just
+    how many. ``retained_from`` is the oldest entry still in the log after the purge
+    (``null`` when empty) — a purge that reported only a count could not be told
+    apart from one that deleted nothing because the window was misconfigured.
+    """
+
+    cutoff: datetime
+    removed: int
+    window_days: int
+    retained_from: datetime | None
+    log_name: str
+
+    @classmethod
+    def from_result(cls, result: OperatorAccessPurgeResult) -> OperatorAccessPurgeResponse:
+        return cls(
+            cutoff=result.cutoff,
+            removed=result.removed,
+            window_days=result.window_days,
+            retained_from=result.retained_from,
+            log_name=result.log_name,
         )
 
 

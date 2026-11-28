@@ -92,6 +92,9 @@ from notes_service.application.use_cases.notes import (
     UpdateNote,
 )
 from notes_service.application.use_cases.operator_access_report import GetOperatorAccessReport
+from notes_service.application.use_cases.operator_access_retention import (
+    PurgeOperatorAccessLog,
+)
 from notes_service.application.use_cases.operator_gate import OperatorGate
 from notes_service.application.use_cases.operator_grants import (
     IssueOperatorGrant,
@@ -137,6 +140,7 @@ from notes_service.application.use_cases.policy_lifecycle import (
 from notes_service.application.use_cases.tools import InvokeTool
 from notes_service.application.use_cases.withholding_report import GetWithholdingReport
 from notes_service.bootstrap.config import Settings
+from notes_service.domain.governance.retention import OperatorAccessRetentionPolicy
 from notes_service.domain.identity.operator_grant import OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.engine import create_db_engine, create_session_factory
@@ -306,6 +310,10 @@ class Container:
     list_operator_grants: Callable[[], ListOperatorGrants]
     # Handing a grant to another user, bounded and attributable (NEX-074).
     issue_operator_grant: Callable[[], IssueOperatorGrant]
+    # Pruning the access log by the configured retention window (NEX-075).
+    # ``None`` when retention is disabled, so the endpoint can answer 404 rather
+    # than expose a purge that would delete nothing.
+    purge_operator_access_log: Callable[[], PurgeOperatorAccessLog | None]
     # The policy lifecycle (NEX-047/NEX-048). Durable: a published version is
     # what a past decision was made against, so it must survive a restart.
     draft_policy: Callable[[], DraftPolicy]
@@ -566,6 +574,29 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
             user_exists=user_exists,
         )
 
+    # Retention (NEX-075). Built only when the deployment configured a window:
+    # ``None`` means "keep everything", and the endpoint then answers 404 rather
+    # than offering a purge with no mandate. The policy validates the window when
+    # it is constructed here, so a too-short or absurd value fails the boot, not
+    # the first purge an operator runs.
+    retention_policy: OperatorAccessRetentionPolicy | None = (
+        None
+        if settings.operator_access_retention_days is None
+        else OperatorAccessRetentionPolicy(
+            window=timedelta(days=settings.operator_access_retention_days)
+        )
+    )
+
+    def make_purge_operator_access_log() -> PurgeOperatorAccessLog | None:
+        if retention_policy is None:
+            return None
+        return PurgeOperatorAccessLog(
+            access_log=operator_access_log,
+            operator_gate=operator_gate,
+            clock=clock,
+            policy=retention_policy,
+        )
+
     # Policy versions are stored, not held in memory: the published version in
     # force is evidence for decisions already taken, so it must outlive the
     # process that published it (NEX-048).
@@ -757,6 +788,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         get_operator_access_report=make_get_operator_access_report,
         list_operator_grants=make_list_operator_grants,
         issue_operator_grant=make_issue_operator_grant,
+        purge_operator_access_log=make_purge_operator_access_log,
         draft_policy=make_draft_policy,
         approve_draft=make_approve_draft,
         publish_draft=make_publish_draft,
