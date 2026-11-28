@@ -1,18 +1,20 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-100",
-  "timestamp": "2026-11-28T15:37Z",
+  "timestamp": "2026-11-28T15:41Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "Head is whatever `git ls-remote` returns; a file cannot hold the hash of the commit containing it. The PRODUCT commit for NEX-100 is 9afd120 (tests/architecture/test_route_authentication.py). Docs-only state-record commits follow it. Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never `git rev-parse origin/<branch>` -- this clone's fetch refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot.",
   "product_commit": "9afd120",
   "product_commit_note": "Test-only change: tests/architecture/test_route_authentication.py (374 lines, 7 tests incl. 81 parametrized route cases). No production source, migration, or dependency modified.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-099b VERIFIED. NEX-100 (transport-boundary authentication guard): IMPLEMENTED + TESTED + COMMITTED 9afd120 + PUSHED; CI at 9afd120 in progress at checkpoint time.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-100 VERIFIED. NEX-100 (transport-boundary authentication guard) VERIFIED at product 9afd120.",
   "active_task": "NEX-100",
   "task_statuses": {
-    "NEX-100": "COMMITTED + PUSHED at 9afd120. CI PENDING at checkpoint time (runs 46160737353 push, 46160742596 pull_request, both head_sha 9afd120, both in_progress when written). tests/architecture/test_route_authentication.py resolves the authentication graph from presentation/dependencies.py itself -- primitives are a call to `authenticate` or a raise of `AuthenticationError`; a function authenticates if it takes an authenticating parameter; *Dep aliases naming an authenticating target are auth aliases; iterate to fixed point -- then requires all 81 routes across 9 routers to reference an authenticating dependency in dependencies=[...] or a parameter. ANONYMOUS_ROUTES names the 4 by-design public routes (begin_login, complete_login, logout, demo discovery) with a reason each; two tests fail when an exemption goes stale or when a declared-anonymous route starts authenticating."
+    "NEX-100": "VERIFIED. Product 9afd120; CI success on both runs at docs head beb45e4 (empty product diff). Delivered to PR #5 and issue #2."
   },
-  "task_status_legend": "PLANNED != STARTED != IMPLEMENTED != TESTED != VERIFIED != COMMITTED != PUSHED != PR UPDATED != CI PASSED. NEX-100 is COMMITTED + PUSHED and TESTED locally; it is NOT yet VERIFIED, because CI at 9afd120 had not concluded when this checkpoint was written.",
-  "completed_tasks": [],
+  "task_status_legend": "PLANNED != STARTED != IMPLEMENTED != TESTED != VERIFIED != COMMITTED != PUSHED != PR UPDATED != CI PASSED. NEX-100 is now VERIFIED: CI concluded success on both runs at docs head beb45e4, whose product diff against 9afd120 is empty.",
+  "completed_tasks": [
+    "NEX-100"
+  ],
   "validation": {
     "commands_run_on_working_tree": [
       "ruff format --check: 329 files already formatted (repo-wide, bare as CI runs it; includes Python inside Markdown fences)",
@@ -27,17 +29,19 @@
     "environment": "No .venv existed in this workspace. Rebuilt with `uv venv .venv --python 3.12` + `uv pip install -e '.[dev]'`, matching CI's Python 3.12."
   },
   "uncommitted_work": "None for product code. The state-record edits (EXECUTION_LOG/STATE/CHECKPOINT) that follow this checkpoint are docs-only and are committed after it.",
-  "ci_status": "PENDING at checkpoint time. Runs 46160737353 (push) and 46160742596 (pull_request) both carry head_sha 9afd120 and were in_progress when written. Prior head 36da4b7 was green in BOTH runs (46159460676 push, 46159465129 pull_request, completed/success). Read CI from `gh run list --json` / `gh run view --json jobs`, NEVER from a watch exit code.",
+  "ci_status": "CI PASSED at docs head beb45e4: runs 46160917496 (push) and 46160922284 (pull_request) both conclusion=success, verified per run AND per job via `gh run view <id> --json jobs` — Backend 12/12 steps success, Frontend 11/11 steps success, zero failed, zero skipped (polled 2026-11-28T15:40Z). The verdict is licensed to cover product commit 9afd120 because `git diff --name-only 9afd120 beb45e4` is docs/NEXUS/ only — an empty product diff. The product-commit runs 46160737353/46160742596 read completed/cancelled (superseded in the concurrency group) and are never evidence.",
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
     "merged": false,
     "head": "Follows the branch by construction; resolve with `git ls-remote`. The CI verdict, once it exists, anchors to the immovable product commit 9afd120.",
-    "body_covers": "NEX-052..NEX-099b. The NEX-100 section still needs appending this run (see next_action).",
-    "note": "Never merged by automation. Remains open for human review."
+    "body_covers": "NEX-052..NEX-100. The NEX-100 section is present in the landed body.",
+    "note": "Never merged by automation. Remains open for human review.",
+    "ci_verdict": "Anchor: product 9afd120, verdict read at docs head beb45e4. CI PASSED at docs head beb45e4: runs 46160917496 (push) and 46160922284 (pull_request) both conclusion=success, verified per run AND per job via `gh run view <id> --json jobs` — Backend 12/12 steps success, Frontend 11/11 steps success, zero failed, zero skipped (polled 2026-11-28T15:40Z). The verdict is licensed to cover product commit 9afd120 because `git diff --name-only 9afd120 beb45e4` is docs/NEXUS/ only — an empty product diff. The product-commit runs 46160737353/46160742596 read completed/cancelled (superseded in the concurrency group) and are never evidence.",
+    "body_currency": "PR #5 body updated with the NEX-100 section via `gh pr edit --body-file`. Measured against the live body: 2720 lines, the NEX-100 heading present at line 2654, and exactly one PR-level disclosure footer at line 205; the remaining AI-attribution lines are per-section links and were left in place. A duplicate PR-level footer from an earlier run was removed during the same edit. Issue #2 comment 7241653431 exists, is authored by anotherhale, contains NEX-100, and does not contain the typo 'It parse every'."
   },
-  "tracking_issue": "Issue #2 open. NEX-100 has not yet been posted as a comment at checkpoint time. NEX-099b was comment 7241302373. Issue stays open: its acceptance criteria are program-level.",
+  "tracking_issue": "Issue #2 open. NEX-100 VERIFIED and posted as comment 7241653431 (landed body read back byte-identical). NEX-099b was comment 7241302373. Issue stays open: its acceptance criteria are program-level.",
   "blockers": [],
   "risks": [
     "The guard measures syntax, not runtime. A route could satisfy it by naming PrincipalDep and ignoring it. Acceptable because get_principal raises on a missing credential, but do not mistake the guard for a runtime proof; the API tests remain the behavioural evidence.",
@@ -48,17 +52,18 @@
     "A state file cannot contain the hash of the commit containing it; one-commit lag is structural. Do not chase it."
   ],
   "next_task": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md and the current ROADMAP.md phase. NEX-100 closes the transport-boundary authentication guard; do not extend the authentication-test family further unless a concrete uncovered path exists. Candidates: the first open Phase 5 item whose dependencies are all VERIFIED, or a governance slice in Phase 3.",
-  "next_action": "1) Confirm CI at 9afd120 concluded by reading BOTH runs per run AND per job (`gh run view <id> --json jobs`); if green, promote NEX-100 to VERIFIED in CHECKPOINT/STATE. 2) Append the NEX-100 section to PR #5 body with --body-file and read the landed body back. 3) Post the NEX-100 result to issue #2 and read the landed comment back. 4) Commit the docs-only state-record updates and push, confirming with ls-remote. 5) Leave PR #5 UNMERGED.",
-  "recovery_instructions": "Read CHECKPOINT.json then STATE.md; Git wins any disagreement. NEX-100 is committed and pushed at product commit 9afd120 with a green local gate run; only CI confirmation and delivery to PR #5 / issue #2 may remain. Do NOT re-implement tests/architecture/test_route_authentication.py and do NOT re-run its four probes -- they are recorded above. Never merge PRs. Never push to main.",
+  "next_action": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md and the current ROADMAP.md phase — the first open Phase 5 item whose dependencies are all VERIFIED, or a Phase 3 governance slice. Do not re-open the paging family (NEX-082..NEX-098) or the authentication-guard family (NEX-099b, NEX-100); both are closed. Plan around the docs-commit concurrency hazard: anchor a CI verdict to a docs head only after proving `git diff <product> <docs>` touches no product path.",
+  "recovery_instructions": "Read CHECKPOINT.json then STATE.md; Git wins any disagreement. NEX-100 is VERIFIED at product commit 9afd120 (the live head moves with each docs commit, so resolve it with `git ls-remote`, never `git rev-parse origin/<branch>` — this clone's fetch refspec maps only refs/heads/main). Nothing is in flight: no uncommitted product work and no active task. Start the next slice from `next_action`.",
   "decisions_this_run": [
     "Enforce the invariant structurally instead of trusting the convention that every route carries RateLimitDep. Nothing in the tree proved it; the property held only because a shared dependency happened to authenticate transitively.",
     "Derive the authentication graph from presentation/dependencies.py rather than hardcoding a list of aliases -- the same lesson NEX-099b recorded: an enumeration is the defect one refactor later. test_discovery_finds_the_known_aliases guards against a vacuous pass if the parse breaks.",
     "Require a CALL or a RAISE for primitives, not a name mention. Probe 3 was written specifically to catch the leniency NEX-099b's first detector had.",
     "List only the 4 genuinely public routes by name with a reason each, plus stale-exemption and contradiction tests -- so an exemption cannot silently cover a renamed or newly-protected route.",
     "After measuring that no route relies on RateLimitDep alone, keep BOTH the explicit-declaration test and the shared-dependency test. The first makes each route's safety visible at the route; the second fails at the cause if the limiter ever changes. Neither is redundant.",
-    "Correct the docstring to the measured topology rather than shipping a correct test under a false narrative. A green test carrying a wrong claim is the most expensive kind of stale documentation."
+    "Correct the docstring to the measured topology rather than shipping a correct test under a false narrative. A green test carrying a wrong claim is the most expensive kind of stale documentation.",
+    "Promoted NEX-100 to VERIFIED on a descendant-CI verdict rather than waiting for a run at 9afd120 itself. Justification recorded rather than assumed: the docs push necessarily superseded the product run in the shared concurrency group (both 9afd120 runs read cancelled), and an empty product diff between 9afd120 and the green docs head means the green run exercised the identical product tree. The licence is the measured diff, not the cancellation."
   ],
-  "run_summary": "Run 100. Phase 3 had closed through NEX-099b with no TODO backlog items, so the next dependency-ready gap was found by auditing the transport boundary directly. All API routes did authenticate -- but only by convention, with no structural test. New tests/architecture/test_route_authentication.py derives the auth graph from dependencies.py and requires every one of 81 routes to authenticate or be a documented exemption. The first draft's premise (routes ride on RateLimitDep transitively) was measured and found false: all 77 protected routes name their own auth alias. The docstring was rewritten and the true property pinned by a new test. Four probes proved the guard bites. Gates bare: ruff format 329, ruff check clean, mypy 144 clean, pytest 1878 passed / 4 skipped. One product commit 9afd120, pushed, remote head verified with ls-remote. CI was still in_progress when the checkpoint was written, so NEX-100 is recorded COMMITTED + PUSHED and explicitly NOT VERIFIED.",
+  "run_summary": "Run 100. Phase 3 had closed through NEX-099b with no TODO backlog items, so the next dependency-ready gap was found by auditing the transport boundary directly. All API routes did authenticate -- but only by convention, with no structural test. New tests/architecture/test_route_authentication.py derives the auth graph from dependencies.py and requires every one of 81 routes to authenticate or be a documented exemption. The first draft's premise (routes ride on RateLimitDep transitively) was measured and found false: all 77 protected routes name their own auth alias. The docstring was rewritten and the true property pinned by a new test. Four probes proved the guard bites. Gates bare: ruff format 329, ruff check clean, mypy 144 clean, pytest 1878 passed / 4 skipped. One product commit 9afd120, pushed, remote head verified with ls-remote. CI was still in_progress when the checkpoint was first written; it has since concluded success on both runs at docs head beb45e4 (empty product diff against 9afd120), so NEX-100 is now VERIFIED.",
   "push_status": "PUSHED. One product commit this run: 36da4b7..9afd120. Verified by `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` returning 9afd120, matching local HEAD -- not by `git rev-parse origin/<branch>`.",
-  "validation_status": "Local gates GREEN on the tree that became 9afd120: ruff format 329 files, ruff check clean, mypy 144 clean, pytest 1878 passed / 4 skipped. CI at 9afd120: PENDING at checkpoint time."
+  "validation_status": "Local gates GREEN on the tree that became 9afd120: ruff format 329 files, ruff check clean, mypy 144 clean, pytest 1878 passed / 4 skipped. CI GREEN at docs head beb45e4 covering that same product tree (empty product diff). NEX-100 is VERIFIED."
 }

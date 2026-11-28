@@ -7,13 +7,13 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | **NEX-100** (run 100): every API route now *provably* authenticates. All routes did authenticate already, but only by convention — nothing structural held it. `tests/architecture/test_route_authentication.py` parses every router and the authentication graph in `presentation/dependencies.py`, then requires all 81 routes (9 routers) to reference an authenticating dependency or be a documented exemption. **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `9afd120` (1878 passed / 4 skipped, gates green, 4 load-bearing probes); **CI PENDING at checkpoint time** — recorded COMMITTED + PUSHED, explicitly NOT VERIFIED. Prior: **NEX-099b** (run 99b): the tenant-access seam was pinned by a **structural** guard, `tests/architecture/test_identity_paths.py`, which **discovers** providers from `src/notes_service/infrastructure/identity` — any class defining `authenticate(self, context)` — instead of naming them (the prose enumeration had been wrong twice: three, then four, while a fifth ran unchecked). **VERIFIED** at `bdc0308` — CI both runs `completed/success` per run **and** per job (`46158409114` push, `46158414451` pull_request; Backend 12/12, Frontend 11/11, zero failed, zero skipped). **NEX-099** (run 99): the demo identity provider was an uncounted fifth path checking only `is_active`; fixed by routing it through `ensure_tenant_access` at `20bd267`, CI green there and at `a4e1880`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-099b VERIFIED**, NEX-100 committed. Prior: **NEX-098** (product `f4a2845`, CI 4/4 on itself) bounded and paged the organization roster. |
+| Project phase | **NEX-100** (run 100): every API route now *provably* authenticates. All routes did authenticate already, but only by convention — nothing structural held it. `tests/architecture/test_route_authentication.py` parses every router and the authentication graph in `presentation/dependencies.py`, then requires all 81 routes (9 routers) to reference an authenticating dependency or be a documented exemption. **VERIFIED** at product commit `9afd120` — local gates green (1878 passed / 4 skipped) and CI `completed/success` on both runs at docs head `beb45e4`, whose diff against `9afd120` is `docs/NEXUS/` only (empty product diff), so the green verdict covers the NEX-100 tree itself (`46160917496` push, `46160922284` pull_request; Backend 12/12, Frontend 11/11, zero failed, zero skipped, polled 2026-11-28T15:40Z). Prior: **NEX-099b** (run 99b): the tenant-access seam was pinned by a **structural** guard, `tests/architecture/test_identity_paths.py`, which **discovers** providers from `src/notes_service/infrastructure/identity` — any class defining `authenticate(self, context)` — instead of naming them (the prose enumeration had been wrong twice: three, then four, while a fifth ran unchecked). **VERIFIED** at `bdc0308` — CI both runs `completed/success` per run **and** per job (`46158409114` push, `46158414451` pull_request; Backend 12/12, Frontend 11/11, zero failed, zero skipped). **NEX-099** (run 99): the demo identity provider was an uncounted fifth path checking only `is_active`; fixed by routing it through `ensure_tenant_access` at `20bd267`, CI green there and at `a4e1880`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-100 VERIFIED**. Prior: **NEX-098** (product `f4a2845`, CI 4/4 on itself) bounded and paged the organization roster. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 100) | `36da4b7` — live remote head resolved with `git ls-remote`. This clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot. |
 | Head commit (measured) | The live head moves with every state-record commit, so a SHA written here is stale by construction — resolve it with `git ls-remote`. Fixed and citable: the **product** commit for NEX-100 is `9afd120` (`tests/architecture/test_route_authentication.py`), and any CI verdict anchors to it. Prior chain: `36da4b7` → `9afd120` → docs close-out. Never trust a SHA recorded in this file; use `git ls-remote`, never `git rev-parse origin/<branch>`. |
-| Last CI result | **PENDING at `9afd120`** when this snapshot was written — runs `46160737353` (push) and `46160742596` (pull_request) both `in_progress`. Prior head `36da4b7` was **PASSED in both runs** (`46159460676`, `46159465129`, `completed/success`). Read from `gh run view --json jobs`, not from a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). |
-| Tracking issue | #2 (open) — NEX-099b **VERIFIED** and posted as comment `7241302373`. NEX-100 **not yet posted** at checkpoint time. Issue stays **open**: its acceptance criteria are program-level. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=MERGEABLE`)** — `feature/agentic-enterprise-platform` → `main`. The PR follows the branch head; the CI verdict will anchor to the immovable product commit `9afd120`. Body carries NEX-052…**NEX-099b**; the NEX-100 section is to be appended this run. **Never merged by automation.** |
+| Last CI result | **PASSED at docs head `beb45e4`** — runs `46160917496` (push) and `46160922284` (pull_request) both `completed/success`; per job Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped (polled 2026-11-28T15:40Z). `git diff 9afd120 beb45e4` is `docs/NEXUS/` only, so this verdict covers the NEX-100 product tree. The earlier product-commit runs `46160737353`/`46160742596` read `completed/cancelled` — superseded in the concurrency group, never evidence. Read from `gh run view --json jobs`, not from a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). |
+| Tracking issue | #2 (open) — NEX-099b **VERIFIED** and posted as comment `7241302373`. NEX-100 **VERIFIED** and posted as comment `7241653431` (landed body read back byte-identical). Issue stays **open**: its acceptance criteria are program-level. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=MERGEABLE`)** — `feature/agentic-enterprise-platform` → `main`. The PR follows the branch head; the CI verdict anchored to the immovable product commit `9afd120`. Body carries NEX-052…**NEX-100**; measured against the live body: 2720 lines, the `## NEX-100` heading at line 2654, one PR-level disclosure footer at line 205 (a duplicate left by an earlier run was removed in the same edit), and the remaining AI-attribution lines are per-section links. **Never merged by automation.** |
 | **Open P1 (transport)** | **Every API route proves its authentication from the dependency graph.** NEX-100 added `tests/architecture/test_route_authentication.py`: 81 routes, 9 routers, four documented exemptions (`begin_login`, `complete_login`, `logout`, demo discovery), two tests guarding the exemption list against staleness and contradiction. The measured topology — all 77 protected routes name their own auth alias, none relies on `RateLimitDep` alone — is pinned by `test_protected_routes_name_authentication_explicitly`, not narrated. |
 | **Open P1 (identity)** | **Every identity-establishing path obeys the tenant-access seam — enforced mechanically** by NEX-099b. A sixth provider cannot ship unchecked; an exclusion cannot go stale. |
 | **Open P1b** | **No unbounded *organization* list remains.** The paging family (NEX-082…NEX-098) is closed. `FoldersRepository.list_for_owner` is deliberately unpaged (DECISIONS). |
@@ -23,7 +23,10 @@ truth; this file records intent and reconciliation.
 
 ## NEX-100 (run `NEX-2026-11-28-100`) — every API route must authenticate, derived from the dependency graph
 
-**Status: COMMITTED + PUSHED at `9afd120`; CI PENDING at checkpoint time — deliberately not VERIFIED.**
+**Status: VERIFIED at product `9afd120`** — CI `completed/success` on both runs at docs head `beb45e4`
+(`git diff 9afd120 beb45e4` is `docs/NEXUS/` only, so the verdict covers the product tree). Runs
+`46160917496` (push) and `46160922284` (pull_request); Backend 12/12 and Frontend 11/11 steps, zero failed,
+zero skipped. Delivered to PR #5 body (landed byte-identical) and issue #2 comment `7241653431`.
 Local gates green (1878 passed / 4 skipped; ruff format 329, ruff check clean, mypy 144 clean).
 
 Phase 3 was closed through NEX-099b with no open dependency-ready backlog items, so the next gap came
@@ -69,16 +72,16 @@ behavioural evidence, and review catches a discarded dependency.
 
 ## Next best actions (run `NEX-2026-11-28-100`)
 
-NEX-100 closes the transport-boundary authentication guard. Do not extend the authentication-test family
-further without a concrete uncovered path.
+NEX-100 is VERIFIED and delivered. Do not extend the authentication-test family further without a concrete
+uncovered path.
 
-1. **Confirm CI at `9afd120`** by reading BOTH runs per run *and* per job (`gh run view <id> --json jobs`);
-   if green, promote NEX-100 to VERIFIED in `CHECKPOINT.json`/`STATE.md`.
-2. **Deliver**: append the NEX-100 section to PR #5 body with `--body-file` and read the landed body back;
-   post the result to issue #2 and read the landed comment back.
-3. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md` — the first open Phase 5 item
-   whose dependencies are all VERIFIED, or a Phase 3 governance slice.
-4. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+1. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md` — the first open Phase 5 item
+   whose dependencies are all VERIFIED, or a Phase 3 governance slice. Do not re-open the paging or
+   authentication-guard families; both are closed.
+2. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+3. **Standing hazard to plan around:** a docs commit supersedes the product commit in the CI concurrency
+   group, so the product run reads `cancelled`. Anchor the verdict to the docs head **only** after proving
+   `git diff <product> <docs>` touches no product path.
 
 **Do not redo** NEX-100 or anything before it. **Do not** re-append NEX-079…NEX-099b to PR #5's body —
 all of them are already in it; append only NEX-100.

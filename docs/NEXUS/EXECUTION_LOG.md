@@ -12441,3 +12441,87 @@ Committed `9afd120`, pushed, remote head confirmed with `git ls-remote` (not `re
 entry was written, so NEX-100 is recorded **COMMITTED + PUSHED**, explicitly **not** VERIFIED. Prior
 head `36da4b7` was green in both runs (`46159460676`, `46159465129`).
 
+## Run `NEX-2026-11-28-100-close` — NEX-100 promoted to VERIFIED and delivered
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-28-100-close` (continuation of `NEX-2026-11-28-100`) |
+| Timestamp | 2026-11-28T15:42Z |
+| Starting commit | `9afd120` (product, NEX-100 guard) |
+| Ending commit | `beb45e4` (state records: CHECKPOINT/EXECUTION_LOG/STATE) |
+| Branch | `feature/agentic-enterprise-platform` |
+| Tasks completed | NEX-100 — promoted **COMMITTED + PUSHED** → **VERIFIED** |
+| Tasks started | none (no new slice — under 10 min of window remained after integration) |
+| Files changed | `docs/NEXUS/CHECKPOINT.json`, `docs/NEXUS/EXECUTION_LOG.md`, `docs/NEXUS/STATE.md` (docs only) |
+| Migrations | none |
+| Tests executed | none new; CI re-ran the full suite at `beb45e4` |
+| Test outcomes | CI Backend 12/12 steps, Frontend 11/11 steps, zero failed, zero skipped |
+
+### CI verdict, and why it is licensed to cover `9afd120`
+
+The product-commit runs for `9afd120` (`46160737353` push, `46160742596` pull_request) both read
+`completed/cancelled`. That is the documented hazard, not a defect: pushing the state records
+superseded them in the shared concurrency group. A cancelled run is never evidence.
+
+Rather than wait for a run that a docs push would keep cancelling, the verdict was anchored to the
+green docs head `beb45e4` after **proving the licence**:
+
+```
+git diff --name-only 9afd120 beb45e4 | grep -v '^docs/NEXUS/'
+→ (none)
+```
+
+An empty product diff means the green run exercised the identical product tree. The evidence was read
+per run *and* per job:
+
+| Run | Event | Conclusion | Backend | Frontend |
+| --- | --- | --- | --- | --- |
+| `46160917496` | push | success | 12/12 steps, 0 failed, 0 skipped | 11/11 steps, 0 failed, 0 skipped |
+| `46160922284` | pull_request | success | 12/12 steps, 0 failed, 0 skipped | 11/11 steps, 0 failed, 0 skipped |
+
+Read with `gh run view <id> --json jobs`, not from a `gh run watch --exit-status` code, which returns 0
+even for a cancelled run.
+
+### Delivery
+
+- **PR #5 body** updated with the NEX-100 section via `gh pr edit --body-file`; the landed body was read
+  back (2720 lines) and **the NEX-100 section is present** — `## NEX-100 — every API route must
+  authenticate, derived from the dependency graph` at line 2654. The body carries exactly **one**
+  PR-level disclosure footer (`*This pull request was created by an AI agent (OpenHands/NEXUS) on
+  behalf of @anotherhale.*`, line 205); the other AI-attribution lines are per-section links, which are
+  the established convention in this body and were left alone. A **duplicate PR-level footer** from an
+  earlier run was found during that edit and removed; this run's measurement of the live body confirms
+  the terminal footer count is now one. An earlier draft of this entry claimed "2719 lines / 1934
+  content lines / footer count 1" as a whole-body property — those figures did not survive measurement
+  against the live body and were replaced with the checks above rather than restated.
+- **Issue #2** comment `7241653431` posted and read back byte-identical. A typo ("It parse every") was
+  caught and fixed **before** publishing.
+
+### Status sweep for stale present-tense claims
+
+Grepped the negations across `STATE.md` and `CHECKPOINT.json`. `STATE.md` hits are all in historical
+sections (NEX-083, NEX-080, NEX-062) and correctly describe the past. `CHECKPOINT.json` held two real
+present-status claims inside `run_summary` ("recorded COMMITTED + PUSHED and explicitly NOT VERIFIED");
+the present-status clause was rewritten while the historical narration ("CI was still in_progress when the
+checkpoint was written") was preserved, because rewriting that would falsify the record. Both records now
+count zero `NOT VERIFIED`.
+
+### Decisions
+
+Promoted on a descendant-CI verdict with the licence measured and stated, rather than deferring to a run
+that the concurrency group would keep cancelling. The justification is the empty product diff, not the
+cancellation.
+
+### Risks
+
+Unchanged: the guard measures syntax, not runtime. A route could name `PrincipalDep` and discard it.
+`get_principal` raises on a missing credential, so practical exposure is nil, and the API tests remain the
+behavioural evidence.
+
+### Next action
+
+Select the next dependency-ready slice from `BACKLOG.md` / the current `ROADMAP.md` phase — the first open
+Phase 5 item whose dependencies are all VERIFIED, or a Phase 3 governance slice. Do not re-open the paging
+family (NEX-082…NEX-098) or the authentication-guard family (NEX-099b, NEX-100). Next run should begin with
+a full fresh window and can take a product slice.
+
