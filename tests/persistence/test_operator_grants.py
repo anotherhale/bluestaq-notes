@@ -15,7 +15,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import Engine, delete, inspect, select
+from sqlalchemy import Engine, delete, event, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -48,8 +48,23 @@ def _grant(user: str, scope: str, **overrides: object) -> OperatorGrant:
     return OperatorGrant(
         user_id=UserId.parse(user),
         scope=scope,
-        granted_at=NOW,
-        **overrides,  # type: ignore[arg-type]
+        **{"granted_at": NOW, **overrides},  # type: ignore[arg-type]
+    )
+
+
+def _lapsed(user: str, scope: str, *, before: datetime) -> OperatorGrant:
+    """A grant whose window closed before ``before`` — expired, not revoked.
+
+    The domain refuses a grant that expires at or before it was issued, so the
+    window has to be a real one: issued, then closed. The distinction matters here,
+    because ``revoked_at`` and ``expires_at`` reach the active predicate by different
+    clauses and only one of them is clock-relative.
+    """
+    return _grant(
+        user,
+        scope,
+        granted_at=before - timedelta(hours=1),
+        expires_at=before - timedelta(minutes=1),
     )
 
 
@@ -569,3 +584,187 @@ def test_the_table_exists_in_the_migrated_schema(engine: Engine) -> None:
         "revoked_at",
         "revoked_by",
     }
+
+
+# -- the active reads are bounded in the store (NEX-094) ----------------------
+
+
+def _counting_to_domain(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Count the rows the adapter turns into domain objects.
+
+    ``_to_domain`` is the adapter's only path from row to domain object, so counting
+    its calls counts the rows the store actually handed back — whether or not the
+    caller needed them.
+    """
+    from notes_service.infrastructure.db import operator_grants as adapter
+
+    converted: list[str] = []
+    real_to_domain = adapter._to_domain
+
+    def counting(row: OperatorGrantRow) -> OperatorGrant:
+        converted.append(row.scope)
+        return real_to_domain(row)
+
+    monkeypatch.setattr(adapter, "_to_domain", counting)
+    return converted
+
+
+def test_active_grants_does_not_read_the_whole_grant_table(
+    grants: SqlAlchemyOperatorGrantRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """NEX-094: the bound is a ``WHERE``, not a filter over a materialised table.
+
+    The active reads selected every grant row and discarded most in Python. Unlike
+    the revocation history, the rows they discard are never pruned — the table keeps
+    revoked and expired grants on purpose — so the cost grew with every grant the
+    deployment had ever issued. Asserted on work performed rather than on rendered
+    SQL, so clause reordering cannot fail it while a regression to in-Python
+    filtering cannot pass it.
+    """
+    converted = _counting_to_domain(monkeypatch)
+
+    for index in range(40):
+        scope = f"revoked-{index}"
+        grants.add(_grant(BOB, scope))
+        _revoke(grants, BOB, scope=scope)
+    for index in range(20):
+        grants.add(_lapsed(ALICE, f"lapsed-{index}", before=NOW))
+    live = [f"live-{index}" for index in range(3)]
+    for scope in live:
+        grants.add(_grant(ALICE, scope))
+
+    converted.clear()
+    holders = grants.active_grants(now=NOW)
+
+    # Three live rows read and built — not sixty-three rows filtered down to three.
+    assert [grant.scope for grant in holders] == live
+    assert sorted(converted) == sorted(live)
+
+
+def test_active_reads_filter_in_the_store_rather_than_in_python(engine: Engine) -> None:
+    """Both active reads must carry the bounds as a ``WHERE``, not a Python filter.
+
+    ``active_for`` builds its answer straight from ``row.scope``, so there is no
+    per-row conversion to count — the statement it sends is the only evidence of
+    where the work happens. Asserted on the emitted SQL rather than on the adapter's
+    source, so it holds however the statement is composed.
+
+    The table only grows: revoked and expired grants are kept on purpose, so a read
+    that omits the filter costs the whole grant history forever.
+    """
+    seen: list[str] = []
+
+    def record(conn: object, cursor: object, statement: str, *args: object) -> None:
+        if "operator_grants" in statement:
+            seen.append(" ".join(statement.lower().split()))
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        grants = SqlAlchemyOperatorGrantRepository(sessionmaker(bind=engine))
+        grants.add(_grant(ALICE, "scope-read"))
+        seen.clear()
+        grants.active_grants(now=NOW)
+        grants.active_for(UserId.parse(ALICE), now=NOW)
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    selects = [sql for sql in seen if sql.lstrip().startswith("select")]
+    assert len(selects) == 2, seen
+    for sql in selects:
+        assert "revoked_at is null" in sql, sql
+        assert "expires_at" in sql, sql
+
+
+def _boundary_grants(instant: datetime) -> list[tuple[str, dict[str, object]]]:
+    """One grant per comparison in ``is_active``, built around ``instant``.
+
+    Each case sits exactly on, or one second either side of, one boundary the
+    domain rule tests, so a SQL predicate that used ``<`` where the domain says
+    ``<=`` disagrees here rather than silently admitting or dropping a grant from
+    an operator read. ``granted_at`` is backdated where a case needs an earlier
+    bound, because the domain refuses a grant that expires at or before issue.
+    """
+    hour = timedelta(hours=1)
+    second = timedelta(seconds=1)
+    cases: list[tuple[str, dict[str, object]]] = [
+        ("bare", {"granted_at": instant - hour}),
+        ("expiry-at", {"granted_at": instant - hour, "expires_at": instant}),
+        ("expiry-after", {"granted_at": instant - hour, "expires_at": instant + second}),
+        ("expiry-before", {"granted_at": instant - 2 * hour, "expires_at": instant - second}),
+        (
+            "not-before-at",
+            {"granted_at": instant - hour, "not_before": instant, "expires_at": instant + hour},
+        ),
+        (
+            "not-before-after",
+            {
+                "granted_at": instant - hour,
+                "not_before": instant + second,
+                "expires_at": instant + hour,
+            },
+        ),
+        (
+            "not-before-before",
+            {"not_before": instant - second, "expires_at": instant + hour},
+        ),
+        ("granted-at-instant", {"granted_at": instant}),
+        ("granted-later", {"granted_at": instant + second}),
+        (
+            "window-straddling",
+            {"granted_at": instant - hour, "not_before": instant - hour, "expires_at": instant},
+        ),
+    ]
+    return cases
+
+
+@pytest.mark.parametrize(
+    "instant",
+    [NOW - timedelta(seconds=1), NOW, NOW + timedelta(seconds=1)],
+    ids=["before", "at", "after"],
+)
+def test_active_predicate_agrees_with_the_domain(
+    grants: SqlAlchemyOperatorGrantRepository, instant: datetime
+) -> None:
+    """The SQL predicate and ``is_active`` must select exactly the same grant set.
+
+    NEX-094 moved the "in force" decision into the store, which is only safe if the
+    translation is exact — including how the bound values are written and compared,
+    which is why a boundary case is evaluated at an instant it actually coincides
+    with. A revoked row is included too, since no clock may resurrect it.
+    """
+    on_domain_side: list[str] = []
+    for scope, overrides in _boundary_grants(instant):
+        grant = _grant(ALICE, scope, **overrides)
+        grants.add(grant)
+        if grant.is_active(now=instant):
+            on_domain_side.append(scope)
+
+    grants.add(_grant(ALICE, "revoked"))
+    # Revoked at exactly ``granted_at``: ``revoke`` refuses a grant that is not yet
+    # active at the instant given, so this is the earliest revocation it will record.
+    _revoke(grants, ALICE, scope="revoked", at=instant)
+
+    in_store = [grant.scope for grant in grants.active_grants(now=instant)]
+
+    assert in_store == on_domain_side
+    assert "revoked" not in in_store
+    # Guard against a vacuous pass: the case set must contain both verdicts.
+    assert len(on_domain_side) < len(_boundary_grants(instant))
+
+
+def test_a_revoked_grant_is_excluded_even_when_its_other_bounds_are_open(
+    grants: SqlAlchemyOperatorGrantRepository,
+) -> None:
+    """The one branch of ``is_active`` that ignores the clock must survive the move.
+
+    Revocation is a decision, not a time bound, so ``revoked_at IS NULL`` is not
+    optional in the predicate. Dropping it would leave a grant with no expiry open
+    to anyone at any clock value — the fail-open the delegation model exists to
+    prevent — and the grant here is revoked with a *future* instant, so a predicate
+    that compared ``revoked_at`` to ``now`` rather than to NULL would also admit it.
+    """
+    grants.add(_grant(ALICE, "withholding-report"))
+    _revoke(grants, ALICE, scope="withholding-report", at=NOW + timedelta(days=1))
+
+    assert grants.active_for(UserId.parse(ALICE), now=NOW) == frozenset()
+    assert grants.active_grants(now=NOW) == ()

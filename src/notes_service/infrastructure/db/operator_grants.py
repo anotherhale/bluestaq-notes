@@ -43,12 +43,45 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.infrastructure.db.models import OperatorGrantRow
+
+
+def _active_predicate(now: datetime) -> ColumnElement[bool]:
+    """The SQL translation of ``OperatorGrant.is_active(now=now)`` (NEX-094).
+
+    ``is_active`` is four branch tests: not revoked, granted at or before ``now``,
+    not ``not_before`` a future instant, and (when bounded) expires after ``now``.
+    Each is a bare comparison against a single column, with no arithmetic, no
+    cross-field expression and nothing the database evaluates differently from
+    Python — so this is an *exact* translation rather than an approximation of the
+    domain rule. That equivalence is what lets the read be bounded in the store:
+    before this, ``active_grants`` and ``active_for`` selected every grant row —
+    including the revoked and long-expired ones, which are never pruned — built a
+    domain object for each, and discarded most of them in Python. The table only
+    grows, so an operator read cost the deployment's entire grant history.
+
+    ``is_active`` stays the single definition of "in force"; this predicate is kept
+    directly beside the reads it serves and is pinned to the domain rule by
+    ``test_active_predicate_agrees_with_the_domain``, which compares the two across
+    boundary instants (exactly ``granted_at``, exactly ``not_before``, exactly
+    ``expires_at``). A future change to ``is_active`` that this does not mirror
+    fails that test rather than silently dropping a live grant from the answer.
+
+    ``UTCDateTime`` normalises values to naive UTC on bind, so comparing these
+    columns against an aware ``now`` is the same comparison
+    ``list_active_for_user`` and ``list_pending_for_agent`` already make.
+    """
+    return (
+        (OperatorGrantRow.revoked_at.is_(None))
+        & (OperatorGrantRow.granted_at <= now)
+        & ((OperatorGrantRow.not_before.is_(None)) | (OperatorGrantRow.not_before <= now))
+        & ((OperatorGrantRow.expires_at.is_(None)) | (OperatorGrantRow.expires_at > now))
+    )
 
 
 def _as_uuid(value: object) -> uuid.UUID:
@@ -169,13 +202,13 @@ class SqlAlchemyOperatorGrantRepository:
         with self._session_factory() as session:
             rows = session.execute(
                 select(OperatorGrantRow)
-                .where(OperatorGrantRow.user_id == _as_uuid(user_id))
+                .where(
+                    OperatorGrantRow.user_id == _as_uuid(user_id),
+                    _active_predicate(now),
+                )
                 .order_by(OperatorGrantRow.id)
             ).scalars()
-            # ``is_active`` is the domain's decision, so expiry is evaluated in
-            # exactly one place regardless of which adapter answered. Filtering in
-            # SQL would duplicate the rule and let the two drift.
-            return frozenset(row.scope for row in rows if _to_domain(row).is_active(now=now))
+            return frozenset(row.scope for row in rows)
 
     def revoke(self, user_id: UserId, scope: str, *, at: datetime, by: UserId) -> int:
         """Stamp a revocation on every live grant of ``scope`` (NEX-079).
@@ -214,9 +247,21 @@ class SqlAlchemyOperatorGrantRepository:
         return changed
 
     def active_grants(self, *, now: datetime) -> tuple[OperatorGrant, ...]:
+        """Every grant in force at ``now``, in insertion order (NEX-094).
+
+        Filtering happens in the store. Before this, the read selected *every*
+        grant row — the table keeps revoked and expired grants by design, so it
+        only grows — built a domain object for each, and discarded most of them in
+        Python, so listing the operators cost the deployment's whole grant history.
+
+        The predicate is ``_active_predicate``, the exact SQL form of
+        ``is_active``; the equivalence is pinned by test rather than assumed.
+        """
         with self._session_factory() as session:
-            rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
-            return tuple(grant for row in rows if (grant := _to_domain(row)).is_active(now=now))
+            rows = session.execute(
+                select(OperatorGrantRow).where(_active_predicate(now)).order_by(OperatorGrantRow.id)
+            ).scalars()
+            return tuple(_to_domain(row) for row in rows)
 
     def revoked_grants(
         self, *, limit: int | None = None, offset: int = 0
@@ -236,8 +281,9 @@ class SqlAlchemyOperatorGrantRepository:
         ``revoked_at IS NOT NULL`` is its exact translation rather than an
         approximation of it. There is nothing to drift, and the ``CHECK`` on the
         table forbids the only incoherent half (a named revoker with no instant).
-        ``is_active`` does carry real logic — a clock and two nullable deadlines —
-        which is why that filter stays in Python above; this one does not.
+        ``is_active`` carries four comparisons but no arithmetic, so its SQL form in
+        ``_active_predicate`` is likewise exact — NEX-094 uses it to bound the active
+        reads, and pins the equivalence by test.
 
         ``id`` ordering is the port's insertion order, and it is also what makes
         ``LIMIT``/``OFFSET`` here stable: the list is never appended to by reading
