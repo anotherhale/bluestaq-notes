@@ -12318,3 +12318,64 @@ unchanged and was repeated anyway: prose and multi-line Python do not go through
 No production source changed in this close-out. The only edits are state records: `STATE.md`,
 `CHECKPOINT.json`, and this log.
 
+## Run 99b close-out (continued) — the state records stop naming a hash they invalidate
+
+**Run ID:** `NEX-2026-11-28-99b` (second segment) · **Branch:** `feature/agentic-enterprise-platform`
+
+This segment added no product code. It finished the state record: the first segment had promoted
+NEX-099b to VERIFIED after both CI runs concluded and delivered that verdict to PR #5 and issue #2.
+What remained was reconciling the checkpoint against what the delivery actually changed.
+
+### What was wrong with the record
+
+The checkpoint and `STATE.md` both described PR #5's head as a literal SHA. That is a category
+error, not a typo. A PR follows its branch, so any hash written into the file is invalidated by the
+commit that writes it — the close-out commits pushed here each made the recorded value stale the
+moment they landed, and a reader trusting that field would conclude the PR was behind its branch.
+It was not: `gh pr view 5` reported `headRefOid` equal to the live head at each check.
+
+The fields now carry the invariant instead of a number: resolve the live head with `git ls-remote`,
+and anchor evidence to the immovable product commit `bdc0308`, which is what the CI verdict was
+measured on. This is the same one-commit lag that has bitten this repository before; the difference
+is that the field no longer pretends to be current.
+
+Two counts were corrected as well: the run made one *product* commit plus docs-only commits, not one
+commit total. `push_status` had described only the product push.
+
+### Commits
+
+| Commit | Content |
+| --- | --- |
+| `bdc0308` | product — the identity-path guard (first segment) |
+| `a1843f8` | docs — record the CI verdict, promote NEX-099b to VERIFIED |
+| `9f9ce60` | docs — reconcile PR #5 head and body coverage |
+| `9b57d6f` | docs — make the self-state lag-invariant, correct commit counts |
+
+Each push was followed by `git ls-remote` on the branch. This clone's fetch refspec maps only
+`refs/heads/main`, so `rev-parse origin/<branch>` would read a frozen snapshot and agree with itself.
+
+### Verified at the end of the segment
+
+- Tree clean; branch pushed; live head `9b57d6f` per `git ls-remote`.
+- `ruff format --check` 328 files, `ruff check` clean, `mypy` 144 source files.
+- `CHECKPOINT.json` valid JSON, 27 keys; asserted `product_commit == bdc0308` and `pr_state.merged is
+  False` rather than trusting the edit.
+- `gh pr view 5` — `state: OPEN`, `isDraft: false`, `mergedAt: null`, `mergeable: MERGEABLE`,
+  `headRefOid: 9b57d6f`. Issue #2 still `OPEN`.
+- Negation sweep for stale present-status claims (`CI PENDING`, `CI UNREAD`, `is being polled`)
+  returned two hits, both legitimately historical: they narrate the earlier promotion from PENDING to
+  VERIFIED, which is the record of how the evidence arrived. Rewriting them would falsify it.
+
+No source, no migration, no dependency changed. CI was not re-polled for these docs commits: each
+lands in the same concurrency group as the product run and reads `cancelled` once superseded, which is
+never evidence. The verdict stays anchored to `bdc0308`.
+
+### The heredoc hazard, repeated
+
+The first attempt at appending this very entry used a `cat >> file << 'EOF'` heredoc and corrupted
+the log: the body self-interleaved, repeating a paragraph and `| --` fragments dozens of times, and
+the file grew by 33 lines of garbage. The command still exited 0. Nothing was lost — `git checkout --`
+restored the file to its committed 12,320 lines — but this is the fourth documented failure of the
+same kind on this host. Prose destined for a file is written with `file_editor`, then the file is
+read back. An exit code from a shell write is not evidence the write landed.
+
