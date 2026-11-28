@@ -10532,3 +10532,88 @@ product failure to the next run.
 4. Take the next dependency-ready slice; do not redo NEX-077…NEX-088.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+## Run `NEX-2026-11-28-89` — NEX-089: window the approval history, count the status it returns
+
+- **Timestamp:** 2026-11-28T02:00Z (clock anchored at RUN_START `1795856466`).
+- **Branch:** `feature/agentic-enterprise-platform`.
+- **Starting commit:** `074b6b7` (run-88 close-out head, read with `git ls-remote`).
+- **Ending commit:** product `b3130ce`; docs head recorded in `CHECKPOINT.json`.
+- **Project phase:** Phase 3 (governance), continuing NEX-047…NEX-089.
+
+### Task completed
+
+**NEX-089 — window the approval history, and report the status total, not the page size.**
+COMMITTED `b3130ce` · PUSHED. **CI unread this run** — not VERIFIED.
+
+### Files changed
+
+`application/ports/agents.py` (approval repository gains `count_for_agent` and
+`limit`/`offset`/`status` on `list_for_agent`), `application/use_cases/agents.py`,
+`infrastructure/db/agent_repositories.py` (status + window in the page query, the same predicates in
+the count), `presentation/api/routers/agents.py` (`limit`/`offset` query params; `meta.total` from
+the count), `tests/api/test_agents_api.py` (`TestApprovalListingIsPaged`, six tests).
+
+### The defect
+
+`GET /agents/{agent_id}/approvals` read every approval the agent had ever opened — the history is
+never pruned — and applied the status filter in Python afterwards. The response body grew with the
+agent's age to answer with one slice of its history, and `meta.total` was `len(items)`, so a bounded
+page reported its own window as the total. Three denied approvals and the first three of three
+hundred both answered `total: 3`; the one field that lets an auditor separate a complete answer
+from a truncated one was the field guaranteed to erase the difference.
+
+### Decision
+
+Only the *reporting* path was windowed. `list_for_agent` keeps `limit=None` = "the whole history",
+and both tool-gateway call sites (`use_cases/tools.py`) are unchanged, because the gateway must see
+every live approval to decide whether a sensitive action is authorised. Paging that read would drop
+approvals out of an authorization decision — swapping a reporting defect for an enforcement one.
+Verified by grep that the only other consumer is the router.
+
+### Tests executed
+
+`.venv/bin/ruff format` (321 files, unchanged) · `ruff check` (All checks passed) · `mypy` (143
+source files, no issues) · `pytest` bare, as CI runs it — **1710 passed, 4 skipped, 1714 collected,
+exit 0, 31.66s**. Collection was confirmed rather than assumed (the previous run left it
+inconclusive): `collect-only` reports 1714 and the worktree holds the same 102 test files as HEAD,
+so the feature-only suites are in the run. `test_audit_sweep`, `test_policy_lifecycle` and
+`test_risk_based_approval` also pass individually, and `test_agents_api.py` reports 65 passed.
+
+### Falsifiability
+
+Both mutations applied and reverted, each caught:
+
+1. Router back to `total=len(items)` → `test_the_default_page_is_capped_and_the_total_is_the_whole_set`
+   and `test_every_page_draws_from_the_same_total` fail.
+2. Store status filter removed from the page query and the count query → the denied total and the
+   pending total disagree → `test_total_counts_the_requested_status_not_the_pending_queue` fails.
+
+### Security findings
+
+None new. Read-only, gated, unchanged scope, no migration, no new authority. A non-owner still gets
+**404**, now also on a paged and filtered request (`test_paging_does_not_bypass_ownership`), so
+paging cannot be used to probe for another user's agent (ADR-008 intact). `limit` is bounded
+`ge=1, le=200` in the router, so a caller cannot reopen the unbounded read by asking for it.
+
+### Risks
+
+- NEX-082/086/087/088/089 are one family: a derived or bounded value standing in for an exact one.
+  On this surface the sweep is complete; the shape is worth grepping for wherever a total, a count,
+  or an "oldest" is *inferred from a page* rather than asked for.
+- `list_for_agent` (delegations) and `list_pending_for_agent` are still unpaginated. Neither is on a
+  listing route today, so neither has this defect; noted for when one is added.
+
+### Next exact action
+
+1. Poll the two runs for `b3130ce` (`46129413548` push, `46129417285` pull_request) to a concluded
+   verdict. `cancelled` alone is never evidence; anchor to a docs head with an identical product tree
+   if this docs push supersedes them.
+2. Only after reading `completed/success`, promote NEX-089 to VERIFIED in `CHECKPOINT.json`,
+   `STATE.md`, `BACKLOG.md`.
+3. Append NEX-089 to PR #5 and comment on issue #2 — **not done this run**, so it is delivery debt
+   and must not be reported as done.
+4. Then take the next dependency-ready slice; do not redo NEX-077…NEX-089.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+

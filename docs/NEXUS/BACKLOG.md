@@ -3895,3 +3895,83 @@ None. Four sibling `total=len(items)` sites were each confirmed unpaginated and 
 the `PageMeta(total=len(items))` sweep on this surface is complete.
 
 ---
+
+## NEX-089 — Window the approval history, and count the status it returns (run `NEX-2026-11-28-89`)
+
+**Status: COMMITTED `b3130ce` · PUSHED · CI pending** (not VERIFIED until a CI verdict is read).
+
+`GET /agents/{agent_id}/approvals` is an auditor's view of what an agent asked to do. It read
+every approval the agent had ever opened — the history is never pruned — and filtered by status
+in Python afterwards. So one request's body grew with the agent's age, and it fetched a whole
+history to answer with one slice of it.
+
+The listing now takes `limit`/`offset` (`ge=1, le=200`, default 50, offset `ge=0`), and the status
+predicate and the window are both applied in the store. `meta.total` is a `COUNT(*)` over the same
+filtered set, so every page of one status reports the same total — the number of approvals *in
+that status*, not the size of the page just built.
+
+### Why the total mattered more than the paging
+
+The previous `meta.total` was `len(items)`. That is not "a page that forgot to count"; it is a
+response that looks bounded and complete while being neither. Three denied approvals and the first
+three of three hundred both answered `total: 3`, so the field an auditor would use to tell a
+complete answer from a truncated one was the one field guaranteed to hide the difference.
+
+### What was deliberately *not* bounded
+
+`list_for_agent` keeps `limit=None` meaning "the whole history", and both tool-gateway call sites
+(`use_cases/tools.py`, the sensitive-action authorization check and its live-approval scan) are
+unchanged. The gateway must see every live approval to decide whether an action is authorised;
+paging that read would silently drop an approval from the enforcement decision — trading a
+reporting defect for an authorization one. Only the reporting path is windowed.
+
+### Tests — built to fail against the old answer
+
+Six tests in `TestApprovalListingIsPaged` (`tests/api/test_agents_api.py`):
+
+- `test_the_default_page_is_capped_and_the_total_is_the_whole_set` — `limit=2` over three approvals
+  returns two items and `total: 3`. The page-derived total returns 2.
+- `test_every_page_draws_from_the_same_total` — offset 0 and offset 1 both report `total: 3`, with
+  disjoint items. A per-page total returns 3 and then 2.
+- `test_an_offset_past_the_end_is_empty_but_still_counts_the_set` — empty page, `total: 2`.
+- `test_total_counts_the_requested_status_not_the_pending_queue` — after one denial, the `denied`
+  view totals 1 and the default (`pending`) view totals 2. This is the test the store-side filter
+  mutation breaks.
+- `test_the_window_cannot_be_disabled` — `limit=0` and `limit=201` both answer 422, so a caller
+  cannot reopen the unbounded read by asking for it.
+- `test_paging_does_not_bypass_ownership` — a non-owner gets 404 (not 403) on a paged, filtered
+  request, so paging does not become a probe for another user's agent.
+
+### Validation
+
+`ruff format` (321 files, unchanged), `ruff check` (All checks passed), `mypy` (143 source files,
+no issues), `pytest` full suite exit 0 — 1710 passed, 4 skipped, **1714 collected**, run bare as
+`.github/workflows/ci.yml` does and covering the feature-only suites (`test_audit_sweep`,
+`test_policy_lifecycle`, `test_risk_based_approval` each run green individually as well).
+
+Falsifiability, both mutations applied and reverted:
+
+1. Router back to `total=len(items)` → `test_the_default_page_is_capped_and_the_total_is_the_whole_set`
+   and `test_every_page_draws_from_the_same_total` fail. **Caught.**
+2. Store status filter removed from the page query *and* the count query → the denied/pending
+   totals disagree → `test_total_counts_the_requested_status_not_the_pending_queue` fails. **Caught.**
+
+### Security
+
+Read-only, gated, unchanged scope, no migration, no new authority. Ownership is still enforced
+before the read and still answers 404 to a non-owner, now including on a paged request.
+
+### Remaining
+
+`list_for_agent` (delegations) and `list_pending_for_agent` remain unpaginated. Neither is exposed
+on a listing route, so neither has this defect today; they are noted for whenever such a route is
+added rather than changed speculatively now.
+
+### Verification
+
+Pending — this run committed and pushed the slice and did **not** read a CI verdict, so NEX-089 is
+COMMITTED/PUSHED, not VERIFIED. The next run reads the runs for `b3130ce` (and for its docs head if
+one is pushed) and promotes it only if they are `completed/success`.
+
+---
+
