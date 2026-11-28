@@ -12200,3 +12200,17 @@ head and invalidates that verdict. The chain is therefore anchored by precedent,
 point: each target commit's own CI is verified before the next state commit lands, and the final
 docs-only commit's CI is never quoted as a verdict. Chasing a fixed point produces an unbounded
 sequence of "verify, commit, re-verify" runs that never ends.
+
+### Delivery artifacts recorded
+
+| Artifact | Detail |
+| --- | --- |
+| PR #5 body | CI table extended from a single head (`20bd267`) to the verified chain (`20bd267`, `a4e1880`, `0d1674c`), each with both runs and both job step counts. Landed body fetched back: 141688 chars vs 141687 sent, differing only by GitHub's appended newline. The superseded claim — that `head_sha` is `20bd267` for both runs, stated as the *present* verdict — is absent from the landed text; absence, not presence, is the assertion here. |
+| Issue #2 comment | `7240996168` — 2670 bytes, landed body fetched back with both key phrases present. |
+
+### Process note
+
+Both artifacts were written with `file_editor` and published with `--body-file`. A heredoc or `-c`
+stdin carried prose through the shell four different ways on this host (truncation, self-interleaving,
+hang, parse error), and one publisher returned exit 0 while dropping a paragraph. Reading the landed
+body back is the only check that survives that.
