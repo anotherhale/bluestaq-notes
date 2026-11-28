@@ -11674,4 +11674,55 @@ Nothing is in flight and no verification debt remains: the NEX-082…NEX-096 exa
 closed. Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md` and implement it
 test-first. Before any docs push, confirm the product commit's own CI has concluded.
 
+---
+
+## Run NEX-2026-11-28-96-closeout (continued) — 2026-11-28T12:52Z → 13:09Z
+
+Second pass over the same close-out, closing the bookkeeping the first pass left behind. Still
+docs-only. Commits `5e0c926` → `bedc235` → `24d7585`, each pushed and each confirmed 4/4.
+
+### Why a second pass
+
+The first pass committed and pushed the promotion on `cf51518`, then left `STATE.md` mid-edit. More
+importantly, once `cf51518` was pushed it was no longer the head, and `STATE.md` named it as if it
+still were — a row that was true when written and false by the time it was read. Same class of defect
+the run was closing out, one level down.
+
+### What changed
+
+- **`STATE.md`** — `Last CI result` now leads with `bedc235` complete per-run-and-per-job evidence and
+  keeps the superseded heads as history, with `87936d4` still named as the verdict of record because
+  CI's real subject is the product commit. The `Starting commit` row was corrected to `87936d4` (it
+  had described the run-95 head).
+- **`CHECKPOINT.json`** — `commit` moved to `bedc235`, `ci_status` rewritten, `commits_this_run` lists
+  all four commits, `recovery_instructions` gives the full chain. `commit_note` was rewritten because
+  it had been asserting that `commit` held the product hash after `commit` had moved to a docs head.
+- **`EXECUTION_LOG.md`** — the run-96 product entry's `CI` and `Delivery` sections read "PENDING — no
+  verdict claimed" and "Not delivered this run". Both are now true history and both are *supersedable*
+  in a way that misleads a skimmer, so each carries an inline note pointing at the close-out that
+  discharged it. Left unaltered otherwise: the log is append-only, and rewriting what was known at the
+  time would falsify it.
+
+### CI
+
+- `bedc235`: **4/4 `completed/success`** — runs `46146653323` (push), `46146658116` (pull_request),
+  Backend 12/12 and Frontend 11/11 steps, 0 failed, 0 skipped, both `head_sha = bedc235`. Read per run
+  and per job.
+- `5e0c926`: 4/4 (`46146618423`, `46146623296`). `cf51518`: 4/4 (`46146365871`, `46146370519`).
+- `24d7585` carries the rows describing `bedc235`; it was cut with ~90s left, so its own CI is not
+  claimed here. Every docs commit in this chain touches `docs/NEXUS/` only — `git diff --stat 87936d4
+  HEAD` shows four files, all under `docs/NEXUS/` — so the product verdict on `87936d4` is untouched.
+
+### Incident (repeat, and the lesson held)
+
+Attempted the checkpoint edit with `python3 - <<'PY'`. The heredoc self-interleaved — the exact failure
+recorded in memory — and raised `SyntaxError`, so **no write happened**: the checkpoint was unchanged
+and still valid, verified before redoing the work. Switched to `file_editor` and made four small exact
+replacements instead. The lesson is unchanged: prose and structured edits do not go through heredocs.
+
+### Next action
+
+Unchanged and now unambiguous: read the live head, then select the next dependency-ready slice from
+`BACKLOG.md` / `ROADMAP.md` and implement it test-first. Nothing is in flight; no verification debt.
+
 
