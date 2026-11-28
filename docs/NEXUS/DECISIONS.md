@@ -511,3 +511,49 @@ commit was still running, and was not delivered to PR #5 or issue #2 until that 
 earlier draft of the backlog row said VERIFIED before CI had concluded; it was corrected. Recording
 a status you cannot yet evidence is the failure mode this whole file exists to prevent.
 
+## NEX-103 (run `NEXUS-2026-11-28-105`) — one helper owns the 404-before-403 ordering
+
+**Decision: extract `UseCase._load_note_for_action`; the ordering rule may not be re-implemented.**
+
+ADR-008 requires an unreadable note to answer **404** and a readable-but-unauthorized action to
+answer **403**. That is a two-step test: fetch, decide, then — only on refusal — re-check readability
+to choose between the two statuses. Six use cases carried this as duplicated code (`UpdateNote`,
+`DeleteNote`, `MoveNote`, `ShareNote`, `RevokePermission`, `ListPermissions`).
+
+*Why duplication was the defect, not mere untidiness.* The rule's correctness is entirely in the
+**order**. A copy that decided first and fetched later, or that dropped the readability re-check,
+turns a 403 into an existence oracle: the caller learns the note exists from the status code alone.
+Six copies are six places to write the order the wrong way round. The behavioural suite pins the
+*outcome* (status codes), so it would keep passing without hinting that six copies had appeared. The
+extraction makes the rule one method the structural guard can read.
+
+*The shape.* `_load_note_for_action(action, note_id, ...)` delegates to `_load_note_for_read`, which
+raises `ResourceNotFound`; only afterwards does it raise `AccessDenied`. It lives on `UseCase` rather
+than as a free function because it needs the unit of work and principal every use case already holds,
+and because that keeps the guard's scan surface to one package.
+
+*The exemption, named rather than widened.* `approval_advisory._note_title` loads a note directly and
+is a listed `RAW_LOAD_EXEMPTIONS` entry: it returns `None` instead of raising. An advisory about a
+pending approval must not refuse the request, so it cannot take part in a 404/403 decision at all.
+The reason sits in the function docstring. Do not remove the exemption; do not widen the rule to
+swallow it.
+
+*Guarded structurally.* `tests/architecture/test_note_authorization_boundaries.py` (5 tests) reads
+the AST: no `decide(..., note=...)` or `uow.notes.get` outside `base.py`; no function that both
+fetches a note and raises `AccessDenied` itself; `_load_note_for_action` calls the read helper before
+its `AccessDenied` by line number; `_load_note_for_read` raises only `ResourceNotFound`.
+
+*Load-bearing, measured.* Reverting only the two call-site modules (`git stash push` on `notes.py`
+and `permissions.py`, fix and guard kept) turns three of the five tests red and names all six
+original sites. The two ordering tests stay green under that revert because the helper itself is
+unchanged — the correct result, and exactly why their green is not the evidence.
+
+*Residual limit.* Static proof over `application/use_cases/` only; it believes the call shape it
+reads. `tests/security/test_authorization.py` remains the runtime evidence.
+
+*Status discipline.* Held at IMPLEMENTED / TESTED / COMMITTED / PUSHED while CI at `d47d15e` was
+running, and promoted to VERIFIED only after run `46169388330` concluded `completed/success` — read
+per job and per step (Backend 12/12, Frontend 11/11, zero failed, zero skipped). Local green was never
+treated as CI green, and the promotion happened in this same run because the verdict arrived before
+the window closed.
+

@@ -7,11 +7,12 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | **NEX-102** (run 104): *caller identity never arrives in a body* is now derived, not documented. `tests/architecture/test_request_body_identity.py` (11 tests, 44 cases) proves three guarantees from the source tree: every wire-bound request model forbids unknown fields (resolved through its base **by name**), no such model declares an actor-shaped field, and every use-case invocation takes its identity from a `PrincipalDep`-annotated parameter (73/73 positional; the agent gateway by a trusted keyword dependency) — never from a body attribute. **VERIFIED at product `14b2a67`** — CI `completed/success` on both runs (`46166355995` push, `46166360119` pull_request), read per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped. Anti-vacuity is explicit: a route binding a model not declared in `schemas.py` fails, a module-level helper may not invoke a use case outside the scan, and the single body-credential exemption (token introspection) fails once it stops matching a real call. Prior: **NEX-101** (run 103): the operator-authorization boundary is structurally pinned — `tests/architecture/test_operator_gate_boundaries.py`, 19 cases; **VERIFIED** at `ff8b6e63` (CI `46163954848`/`46163960436`, Backend 12/12, Frontend 11/11). Prior: **NEX-100**: every API route provably authenticates (`tests/architecture/test_route_authentication.py`, 81 routes, 9 routers, 4 documented exemptions); **VERIFIED** at `9afd120`. **NEX-099b**: the tenant-access seam pinned structurally by `tests/architecture/test_identity_paths.py`, discovering providers instead of naming them; **VERIFIED** at `bdc0308`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-102 VERIFIED**. Prior: **NEX-098** (product `f4a2845`) bounded and paged the organization roster. |
+| Project phase | **NEX-103** (run 105): ADR-008's *404-before-403* rule now lives in one method — `UseCase._load_note_for_action` — and six use cases (`UpdateNote`, `DeleteNote`, `MoveNote`, `ShareNote`, `RevokePermission`, `ListPermissions`) delegate to it instead of each hand-rolling the same twenty lines. `tests/architecture/test_note_authorization_boundaries.py` (5 tests) derives the arrangement from the AST: no decision or raw fetch outside the helper, no fetch-then-inline-403 anywhere, the helper orders 404 before 403, and the read path is 404-only. **VERIFIED at product `d47d15e`** — CI run `46169388330` `completed/success` on the product commit, Backend 12/12, Frontend 11/11, zero failed, zero skipped. Prior: **NEX-102** (run 104): *caller identity never arrives in a body* is derived, not documented — `tests/architecture/test_request_body_identity.py` (11 tests, 44 cases); **VERIFIED** at product `14b2a67` (CI `46166355995`/`46166360119`). Prior: **NEX-101**: the operator-authorization boundary is structurally pinned — `tests/architecture/test_operator_gate_boundaries.py`, 19 cases; **VERIFIED** at `ff8b6e63`. Prior: **NEX-100**: every API route provably authenticates (81 routes, 9 routers, 4 documented exemptions); **VERIFIED** at `9afd120`. **NEX-099b**: the tenant-access seam pinned structurally; **VERIFIED** at `bdc0308`. Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-103 VERIFIED**. |
+
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 100) | `36da4b7` — live remote head resolved with `git ls-remote`. This clone's fetch refspec maps only `refs/heads/main`, so `origin/feature/...` is a stale snapshot. |
-| Head commit (measured) | The live head moves with every state-record commit, so a SHA written here is stale by construction — resolve it with `git ls-remote`. Fixed and citable: the **product** commit for NEX-102 is `14b2a67` (`tests/architecture/test_request_body_identity.py`); NEX-101 was `ff8b6e63`; NEX-100 was `9afd120`. Any CI verdict anchors to a product commit. Never trust a SHA recorded in this file; use `git ls-remote`, never `git rev-parse origin/<branch>`. |
-| Last CI result | **PASSED at product `14b2a67`** — runs `46166355995` (push) and `46166360119` (pull_request) both `completed/success`, read per run, **per job and per step**: Backend 12/12, Frontend 11/11, zero failed, zero skipped, zero in any other state (polled 2026-11-28T16:42Z). Prior: **PASSED at `ff8b6e63`** — runs `46163954848`/`46163960436`. This anchors on the product commit itself rather than a later docs-only head, which is the strongest form the evidence can take here. Prior: **PASSED at `8c243c5`** — runs `46162157783`/`46162161898`. **Structural lag (unchanged):** a state file cannot contain the hash of the commit containing it, so the docs-only commit that carries this row has no verdict of its own — the product commit's verdict plus an empty product diff is the complete licence. A docs push also supersedes the product run in the concurrency group, so read the product commit's runs *before* pushing docs. Read with `gh run view <id> --json jobs`, never a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). |
+| Head commit (measured) | The live head moves with every state-record commit, so a SHA written here is stale by construction — resolve it with `git ls-remote`. Fixed and citable: the **product** commit for NEX-103 is `d47d15e` (six use cases + `tests/architecture/test_note_authorization_boundaries.py`); NEX-102 was `14b2a67`; NEX-101 was `ff8b6e63`; NEX-100 was `9afd120`. Any CI verdict anchors to a product commit. Never trust a SHA recorded in this file; use `git ls-remote`, never `git rev-parse origin/<branch>`. |
+| Last CI result | **PASSED at product `d47d15e`** — run `46169388330`, `completed/success`, read per run, **per job and per step**: Backend 12/12 (including the migration apply-and-revert step), Frontend 11/11, zero failed, zero skipped, zero in any other state. This anchors on the product commit itself rather than a later docs-only head, which is the strongest form the evidence can take here. It is the sole run for that head: there is no open PR, so no `pull_request` event fired. Prior: **PASSED at `14b2a67`** — runs `46166355995`/`46166360119`. Prior: **PASSED at `ff8b6e63`** — runs `46163954848`/`46163960436`. **Structural lag (unchanged):** a state file cannot contain the hash of the commit containing it, so the docs-only commit carrying this row has no verdict of its own — the product commit's verdict is the complete licence for it, and `git diff d47d15e <docs-head>` touching only `docs/NEXUS/` is the empty-product-diff proof. A docs push also supersedes the product run in the concurrency group, so read the product commit's runs *before* pushing docs. Read with `gh run view <id> --json jobs`, never a watch exit code (`watch --exit-status` returns 0 even for a cancelled run). Pipe that JSON to a file, not to a parser: `gh` writes a progress spinner to stdout and corrupts a direct pipe. |
 | Tracking issue | #2 (open) — NEX-099b **VERIFIED** and posted as comment `7241302373`. NEX-100 **VERIFIED** and posted as comment `7241653431` (landed body read back byte-identical). NEX-102 **VERIFIED** and posted as comment `7242499683` (landed body read back: `VERIFIED` and `unmerged` both present, 2220 bytes / 51 lines). The merge reconciliation was then posted as comment `7242534647` (3871 bytes / 79 lines) and compared against the local file with all whitespace stripped: identical. Issue stays **open**: its acceptance criteria are program-level. |
 | PR #5 | **MERGED by the repository owner, not by NEXUS.** `mergedAt=2026-11-28T16:45:30Z`, `mergedBy=anotherhale`, squash commit `7ec710ea` (*Enforce published governance policy at the tool gateway*), 128 files. That instant is **36 seconds before** the promotion push (`4a076bf`, 16:46:06Z), so main carries the NEX-102 **test** (`tests/architecture/test_request_body_identity.py`, 24758 bytes, present and verified) but its `STATE.md` still reads NEX-101 — the promotion records were pushed after the squash and are therefore **not** on main. `feature/agentic-enterprise-platform` now differs from `origin/main` by **`docs/NEXUS/` only** (6 files, 300 insertions / 53 deletions, no product file), so a future branch→main PR delivers just the promotion record. Automated merging remains prohibited; this merge is human evidence, and NEXUS reports it rather than claiming it. **No open PRs exist** as of this run. Original: `feature/agentic-enterprise-platform` → `main`, body carried NEX-052…NEX-101. Body carries NEX-052…**NEX-101** (the NEX-101 section was appended only after CI at `ff8b6e63` concluded green). **Never merged by automation.** |
 | **Open P1 (transport)** | **Every API route proves its authentication from the dependency graph.** NEX-100 added `tests/architecture/test_route_authentication.py`: 81 routes, 9 routers, four documented exemptions (`begin_login`, `complete_login`, `logout`, demo discovery), two tests guarding the exemption list against staleness and contradiction. The measured topology — all 77 protected routes name their own auth alias, none relies on `RateLimitDep` alone — is pinned by `test_protected_routes_name_authentication_explicitly`, not narrated. |
@@ -22,6 +23,64 @@ truth; this file records intent and reconciliation.
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4). Three `waitFor`-wrapped negative assertions were passing vacuously; each now anchors on a positive assertion, and the isolation test fails on a real leak. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-103 (run `NEX-2026-11-28-105`) — the 404-before-403 rule is now one method, not six copies
+
+**Status: VERIFIED at product `d47d15e`.** CI run `46169388330` concluded `completed/success` **on the
+product commit itself**, read per run, per job and per step: Backend 12/12, Frontend 11/11, zero
+failed, zero skipped. No PR exists, so there is no `pull_request` run for this head — the single push
+run is the entire verdict, and it covers the exact tree that carries the slice.
+
+Six use cases hand-rolled the same twenty lines — `UpdateNote`, `DeleteNote`, `MoveNote`,
+`ShareNote`, `RevokePermission`, `ListPermissions`. Each fetched the note, raised `ResourceNotFound`
+when absent, called `decide(action)`, and on refusal **re-checked `READ`** to choose between 404 and
+403. The blocks were byte-for-byte identical, which is the hazard rather than the reassurance: six
+copies of an ordering rule are six independent chances to write it the other way round, and ADR-008's
+non-enumeration guarantee depends entirely on the order. Check readability *after* deciding to deny,
+or drop the second check, and a 403 becomes an existence oracle. The behavioural suite
+(`tests/security/test_authorization.py`) pins the outcome, so it would have kept passing while
+naming nothing.
+
+`UseCase._load_note_for_action` now owns the rule in one place: it delegates to `_load_note_for_read`
+(which raises `ResourceNotFound`) and only then raises `AccessDenied`. The six call sites state their
+intent and their own denial message and nothing else.
+
+**Behaviour is unchanged, and that is the load-bearing claim.** Same status codes, same messages, and
+the existing behavioural tests pass untouched — 404 for a caller who cannot read the note, 403 for a
+caller who can read but lacks the action (`test_2_…` asserts 404, `test_5_read_permission_does_not_
+allow_modification` asserts 403). A refactor that changed either number would have failed those tests
+rather than being discovered later.
+
+**The guard** (`tests/architecture/test_note_authorization_boundaries.py`, 5 tests) reads the AST,
+not the docstrings: no `decide(..., note=...)` or `uow.notes.get` outside `base.py`; no function that
+both fetches a note and raises `AccessDenied` itself; `_load_note_for_action` calls the read helper
+*before* its `AccessDenied` by line number; and `_load_note_for_read` raises only `ResourceNotFound`.
+
+**The exemption is deliberate.** `approval_advisory._note_title` loads a note directly and is a named
+entry in `RAW_LOAD_EXEMPTIONS`, because it returns `None` instead of raising — an advisory about a
+pending approval must not refuse the request and must not become an oracle. The reason is in the
+function's docstring so the next reader does not "fix" it.
+
+**Load-bearing, measured.** Reverting only the two call-site modules while keeping the fix and the
+guard turns three of the five tests red, naming all six original sites — including both occurrences
+of each in the parametrised report. The two ordering tests stay green under that revert because the
+helper is untouched; that is correct behaviour, and exactly why their green is not the evidence.
+
+**Known limit, stated not hidden.** This is a static proof over `application/use_cases/` only. A note
+loaded in an adapter or a router is outside the scan, and the guard believes the call shape it reads.
+The behavioural suites remain the runtime evidence; this guard keeps the arrangement from drifting
+away from them.
+
+**Gates, bare as CI runs them, on the tree that became `d47d15e`:** `ruff format --check` 332 files
+already formatted, `ruff check` all passed, `mypy` no issues in 144 source files, `pytest`
+**1946 passed / 4 skipped** (baseline 1941 + the 5 new tests).
+
+**Reconciliation note for the next run.** The run identifier the scheduler handed this invocation
+(`NEXUS-2026-11-28-104`) collides with the identifier the *previous* run recorded for NEX-102 in
+`BACKLOG.md`, and this repo's own checkpoint named its successor "Run 105". Repository evidence was
+followed: this run is recorded as **105** and NEX-102 stays attributed to 104. If the scheduler keeps
+replaying an identifier, trust `CHECKPOINT.json`'s own successor numbering and the backlog over the
+incoming label.
 
 ## NEX-101 (run `NEX-2026-11-28-103`) — the operator gate is a control, not a convention
 
@@ -114,7 +173,29 @@ The guard measures syntax, not runtime: a route could name `PrincipalDep` and ig
 `get_principal` raises on a missing credential, but this is not a runtime proof — the API tests remain the
 behavioural evidence, and review catches a discarded dependency.
 
-## Next best actions (run `NEX-2026-11-28-100`)
+## Next best actions (run `NEXUS-2026-11-28-105`, superseding every list in this file)
+
+1. **Promote or fail NEX-103 on evidence, first thing.** Run `gh run view 46169388330 --json jobs`
+   and read it per job and per step. If it concluded `success`, promote NEX-103 to VERIFIED in
+   `BACKLOG.md` and `CHECKPOINT.json`, post it to issue #2, and read the posted body back. If it
+   concluded anything else, fix the defect under a new product commit — do not re-push the same tree
+   hoping for a different verdict, and do not edit the row to VERIFIED because the local gates were
+   green. Local green is not CI green.
+2. **Then select the next dependency-ready P1 slice from `BACKLOG.md`.** The five structural guards
+   — NEX-099b (identity providers), NEX-100 (route authentication), NEX-101 (operator scope),
+   NEX-102 (body identity), NEX-103 (note authorization arrangement) — are the completed set. Read
+   the backlog for the first open P1; do not assume the next number is a successor by inertia.
+3. **Carry the shape forward**: exact reads for the exact question, a test that fails without the
+   fix, a mutation that proves the test bites, and a CI verdict read rather than assumed. NEX-103
+   demonstrated the cheap version: `git stash push` only the call-site modules, watch the guard go
+   red naming the six sites, then restore.
+
+**Do not redo** NEX-103 or anything before it. **Do not** re-append NEX-052…NEX-103 to PR #5 — it
+was squash-merged as `7ec710ea` and there is **no open PR**; this branch now differs from `main` only
+in `docs/NEXUS/`, so a future PR delivers promotion records plus this slice. **Do not merge anything.**
+
+## Next best actions (run `NEX-2026-11-28-100`, superseded — kept for history)
+
 
 NEX-100 is VERIFIED and delivered. Do not extend the authentication-test family further without a concrete
 uncovered path.

@@ -4813,3 +4813,77 @@ satisfy the scan. The behavioural authorization suites remain the runtime eviden
 positional identity. That is correct — it is introspection — and is the single audited exemption.
 Do not "fix" it by routing a principal into it, and do not widen the rule to cover it.
 
+---
+
+## NEX-103 — Route every note read-then-authorize through one helper, structurally (run `NEX-2026-11-28-105`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | **P1** (authorization / trust boundary) |
+| Status | **VERIFIED** at product `d47d15e` (IMPLEMENTED, TESTED, COMMITTED, PUSHED, CI PASSED). CI run `46169388330` concluded `completed/success` **on the product commit itself**, read per run, per job and per step: Backend 12/12, Frontend 11/11, zero failed, zero skipped. No PR exists, so there is no `pull_request` run for this head — the single push run is the whole verdict. |
+| Dependencies | none (independent of NEX-099b/100/101/102; a fifth, distinct control) |
+| Complexity | Low (62 insertions / 78 deletions in product; 1 new test module) |
+
+**Objective:** make ADR-008's 404-before-403 rule impossible to re-derive incorrectly at a
+call site, by moving it into one method and pinning the arrangement from the source.
+
+**Architecture refs:** `ADR-008` (404 vs 403 non-enumeration), repo `AGENTS.md` security
+invariants, `ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (trusted actor context).
+
+**Why it was open.** Six use cases each hand-rolled the same twenty lines: fetch the note, 404 if
+absent, `decide(action)`, and on refusal **re-check `READ`** to choose between 404 and 403. The
+blocks were byte-for-byte identical, which is the danger rather than the comfort: each one was an
+independent opportunity to check readability *after* deciding to deny, or to drop the second check
+entirely. Either mistake turns a 403 into an existence oracle, and nothing in the suite would have
+named the file that did it — the behavioural tests (`tests/security/test_authorization.py`) pin the
+outcome, not the arrangement that produces it.
+
+**The slice:**
+
+- `UseCase._load_note_for_action` (`use_cases/base.py`) now owns the whole rule: it delegates to
+  `_load_note_for_read` (which raises `ResourceNotFound`) and *then* raises `AccessDenied`. The
+  ordering is a property of one function rather than a convention copied six times.
+- `UpdateNote`, `DeleteNote`, `MoveNote`, `ShareNote`, `RevokePermission`, `ListPermissions`
+  delegate to it, stating only intent and their own denial message. Behaviour is unchanged —
+  same status codes, same messages — and the existing behavioural suite passes untouched, which
+  is the evidence that this is a refactor and not a policy change.
+
+**The guard** (`tests/architecture/test_note_authorization_boundaries.py`, 5 tests):
+
+- **No decision outside the helper.** No use-case module but `base.py` may call
+  `decide(..., note=...)`. Organization and agent-token decisions are excluded by the `note=`
+  keyword, so the rule stays about notes.
+- **No raw fetch outside the helper.** No use-case module but `base.py` may call `uow.notes.get`.
+- **No fetch-then-inline-403.** No function may both load a note and raise `AccessDenied` itself;
+  that shape can deny before readability is known.
+- **Ordering, by line number.** `_load_note_for_action` must call `_load_note_for_read` *before*
+  it raises `AccessDenied`.
+- **The read path is 404-only.** `_load_note_for_read` must raise `ResourceNotFound` and must not
+  raise `AccessDenied`.
+
+**The exemption, deliberately.** `approval_advisory._note_title` loads a note directly and is
+excluded by name, because it returns `None` instead of raising: an advisory about a pending
+approval must not refuse the request and must not act as an oracle. The exemption is a named entry
+in `RAW_LOAD_EXEMPTIONS` with the reason recorded in the function's docstring — not an oversight.
+
+**Load-bearing, measured.** Reverting only the two call-site modules (`git stash push` on
+`notes.py` and `permissions.py`, fix and guard kept) turns three of the five tests red, naming all
+six original sites:
+
+```
+['notes.py:UpdateNote.run', 'notes.py:DeleteNote.run', 'notes.py:MoveNote.run', ...]
+['permissions.py:ShareNote.run', 'permissions.py:RevokePermission.run', 'permissions.py:ListPermissions.run']
+```
+
+The two ordering tests stay green under that revert because the helper itself is unchanged — which
+is correct, and is why the pass is not the evidence for those two.
+
+**Gates at run close:** `ruff format --check` 332 clean, `ruff check` clean, `mypy` 144 files
+clean, `pytest` **1946 passed / 4 skipped** (baseline 1941 + the 5 new tests).
+
+**Known limit, stated rather than hidden.** Like NEX-102 this guard is static (AST), not
+behavioural. It reads the source of the use-case package only: a note loaded in an adapter, a
+router, or any module outside `application/use_cases/` is outside its scan, and it believes the
+call shape it sees rather than proving the runtime effect. The behavioural suites remain the
+runtime evidence; this guard's job is to keep the *arrangement* from drifting between them.

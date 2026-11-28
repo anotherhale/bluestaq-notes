@@ -12893,5 +12893,76 @@ completion criteria in `docs/NEXUS/ROADMAP.md` before writing code. The four str
 (NEX-099b identity providers, NEX-100 route authentication, NEX-101 operator scope, NEX-102 body
 identity) are all **VERIFIED** and all present on main; none should be re-opened.
 
+## Run `NEXUS-2026-11-28-105` — 2026-11-28T17:0xZ
+
+**Run ID.** `NEXUS-2026-11-28-105`. The scheduler handed this invocation the identifier
+`NEXUS-2026-11-28-104`, which the previous run had already used for NEX-102 in `BACKLOG.md`; the
+previous run's own checkpoint named its successor "Run 105". Repository evidence won: this run is
+**105**, NEX-102 remains attributed to 104. Note recorded in `STATE.md` so the next run is not
+confused by a replayed label.
+
+**Starting commit.** `d47d15e` — NEX-103's product commit, pushed at the end of the previous run.
+Branch `feature/agentic-enterprise-platform`.
+
+**State recovered.** The previous run ended mid-repair of `BACKLOG.md`: the NEX-103 entry had been
+inserted inside NEX-102's tail, and a duplicated 12-line block (NEX-102's `Residual limit` / `Note
+for later runs` prose) sat at end of file. Verified rather than assumed — `grep -c` on two distinctive
+sentences returned 3 and 2, all three matches located by line number, the stray block at 4890–4901
+removed, and the file re-checked: `git diff --stat` reads **74 insertions, 0 deletions**, i.e. a pure
+addition to the previous state. No NEX-102 prose was lost.
+
+**Work completed.** Documentation and state record for NEX-103 only — no product change was made this
+run, and none was needed: the product refactor was already committed and verified. Wrote the NEX-103
+backlog row (table + prose, mirroring NEX-102), a headline section in `STATE.md`, a decision entry in
+`DECISIONS.md`, this log entry, and a rewritten `CHECKPOINT.json`.
+
+**Verification, and the status change it caused.** CI run `46169388330` on product `d47d15e` was
+`in_progress` when the previous run closed, and its records correctly said PUSHED rather than
+VERIFIED. This run polled it: **`completed/success`**, read per run, **per job and per step** —
+Backend 12/12 (including *Migrations apply and revert on a fresh database*), Frontend 11/11, zero
+failed, zero skipped. `gh run list --commit d47d15e…` confirms it is the **only** run for that head:
+there is no open PR, so no `pull_request` event exists, and the push run is the entire verdict. On
+that evidence NEX-103 was promoted to **VERIFIED** in `BACKLOG.md`, `STATE.md` and `DECISIONS.md` —
+this run, from PUSHED.
+
+**Two incidents, both disclosure-worthy.**
+
+1. A `cat >> file <<'XEOF'` heredoc containing the NEX-103 decision text **self-interleaved**: the
+   same paragraphs repeated and spliced into each other on stdout, and the command then hung. It
+   never reached the file — `git status` showed `DECISIONS.md` unmodified and its line count
+   unchanged — so nothing was corrupted, but this is the fourth distinct heredoc failure on this
+   host. The entry was written with `file_editor` instead. **Do not put prose destined for a file
+   through a shell heredoc on this machine.**
+2. `gh run view … --json … | python3 -` failed with `JSONDecodeError: Extra data`: `gh` writes a
+   progress spinner to **stdout**, so a direct pipe is not valid JSON. Redirect to a file first, then
+   parse. Recorded in `STATE.md`'s CI row so the next run does not rediscover it.
+
+**Files changed.** `docs/NEXUS/BACKLOG.md`, `docs/NEXUS/STATE.md`, `docs/NEXUS/DECISIONS.md`,
+`docs/NEXUS/EXECUTION_LOG.md`, `docs/NEXUS/CHECKPOINT.json`. Documentation only — no product file.
+
+**Gates.** No source change, so the gates were not re-run this run; the verdict above is the CI run on
+the product tree, which is stronger than a local re-run of an unchanged tree. `uv.lock` was left
+untracked and unstaged, as in the previous run: it is a local uv artifact with no repository decision
+behind it, and staging it would be an unreviewed dependency-lock commit.
+
+**Security.** No new surface. The slice *reduces* the chance of an ADR-008 existence-oracle
+regression by removing six copies of an ordering rule; that is the security argument recorded in
+`DECISIONS.md`.
+
+**Push status.** Pushed to `feature/agentic-enterprise-platform`. No force-push, no merge, no direct
+push to `main`. **No open PR exists** (PR #5 was squash-merged by the owner as `7ec710ea`); this run
+created none, because there is no further product change to carry and a docs-only PR would add
+nothing a reviewer could act on beyond what the branch already shows.
+
+**Next exact action.** Run 106: read the CI verdict for the docs commit this run pushes (expect
+`completed/cancelled` if superseded — not evidence either way, and the product verdict already covers
+it). Then select the next dependency-ready P1 from `BACKLOG.md`. The structural-guard set
+(NEX-099b, NEX-100, NEX-101, NEX-102, NEX-103) is complete and all VERIFIED; **do not** re-open any of
+them, and do not invent a sixth guard without first naming a concrete uncovered path.
+
+**Checkpoint status.** `CHECKPOINT.json` rewritten atomically for run 105: `product_commit d47d15e`,
+`ci_status` PASSED with the per-job breakdown, `validation_status.ci` = VERIFIED, no blockers, no
+uncommitted product work.
+
 
 
