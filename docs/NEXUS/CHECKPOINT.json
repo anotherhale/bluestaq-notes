@@ -3,7 +3,7 @@
   "run_id": "NEX-2026-11-27-77",
   "timestamp": "2026-11-28T03:46Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3047b53",
+  "commit": "8edd159",
   "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-077 implemented; NEX-076 and NEX-077 VERIFIED. NEX-077 (run 77) closed the follow-up NEX-076 recorded: the issuer and reason of every active operator grant are now readable on the ops listing, so the stored justification is an audit trail rather than a write-only field. CI 4/4 completed/success on 9f9a70f, polled 2026-11-28T03:44Z.",
   "active_task": null,
   "task_statuses": {
@@ -173,10 +173,10 @@
     "PR #5 stacks twenty-three slices; the reviewer's 'consider a split' note stands and is a human decision.",
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect."
   ],
-  "next_task": "NEX-077 is VERIFIED and PR #5's body carries it, so there is no delivery debt. Pick the next dependency-ready backlog slice. Do NOT re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058, and do NOT re-append NEX-077 to PR #5.",
+  "next_task": "Poll CI on 8edd159 (docs-only close-out) and record it. Then pick the next dependency-ready backlog slice. Do NOT re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058, and do NOT re-append NEX-077 to PR #5 - it is already there.",
   "next_action": "Select the next dependency-ready slice from BACKLOG.md and implement it.",
   "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this file's commit field always lags by one. 3. NEX-077 is VERIFIED (CI 4/4 on 9f9a70f) and PR #5's body carries it - do not re-append. Do not re-implement NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058. 4. PR #5 is open, draft=false, unmerged. Never merge it. 5. Next: pick the next dependency-ready slice from BACKLOG.md.",
-  "ci_status": "acd9d30 (docs): 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T03:51Z. 9f9a70f (NEX-077 product): 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T03:44Z. The acd9d30 run is docs-only, so it re-validates the unchanged NEX-077 product code.",
+  "ci_status": "acd9d30 (docs): 4/4 completed/success (backend x2, frontend x2), polled 2026-11-28T03:51Z. 9f9a70f (NEX-077 product): 4/4 completed/success, polled 2026-11-28T03:44Z. 8edd159 (docs, run 77 close-out): check-runs not yet registered at run end; it is docs-only (`git diff 9f9a70f..HEAD -- src tests migrations frontend/src` is empty), so it re-validates the unchanged NEX-077 product code. The next run must poll it and record the result.",
   "commits_this_run": [
     "acd9d30 docs(nexus): record that PR #5's body now carries NEX-077",
     "3047b53 docs(nexus): record 4/4 green CI on the NEX-077 docs head acd9d30"
@@ -233,5 +233,5 @@
     "Select the next dependency-ready slice from BACKLOG.md and implement it.",
     "Ask the owner whether PR #5's twenty-three stacked slices should be split before review."
   ],
-  "last_ci_result": "acd9d30 (docs) 4/4 completed/success 2026-11-28T03:51Z; 9f9a70f (NEX-077) 4/4 2026-11-28T03:44Z"
+  "last_ci_result": "acd9d30 (docs) 4/4 success 2026-11-28T03:51Z; 9f9a70f (NEX-077) 4/4 success 2026-11-28T03:44Z; 8edd159 pending"
 }
