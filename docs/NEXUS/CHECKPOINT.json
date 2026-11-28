@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "run_id": "nexus-run-101",
-  "timestamp": "2026-11-28T15:41Z",
+  "run_id": "NEXUS-102",
+  "timestamp": "2026-11-28T15:56Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "Head is whatever `git ls-remote` returns; a file cannot hold the hash of the commit containing it. The PRODUCT commit for NEX-100 is 9afd120 (tests/architecture/test_route_authentication.py). Docs-only state-record commits follow it. Resolve the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, never `git rev-parse origin/<branch>` -- this clone's fetch refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot.",
   "product_commit": "9afd120",
@@ -13,7 +13,9 @@
   },
   "task_status_legend": "PLANNED != STARTED != IMPLEMENTED != TESTED != VERIFIED != COMMITTED != PUSHED != PR UPDATED != CI PASSED. NEX-100 is now VERIFIED: CI concluded success on both runs at head 3b2b5c0, whose product diff against 9afd120 is empty.",
   "completed_tasks": [
-    "NEX-100"
+    "Ran 101+102: CI verdict for NEX-100 re-read at 3b2b5c0 per run/job/step and recorded.",
+    "Corrected the stale '00d6b54 is the live PR head' claim and documented the anchor-lag invariant.",
+    "Delivered per-job CI evidence to PR #5 and issue #2; both bodies verified on read-back."
   ],
   "validation": {
     "commands_run_on_working_tree": [
@@ -51,14 +53,14 @@
     "The exact-total paging family (NEX-082..NEX-098) is CLOSED. Do not invent another paging slice. FoldersRepository.list_for_owner is deliberately unpaged.",
     "A state file cannot contain the hash of the commit containing it; one-commit lag is structural. Do not chase it."
   ],
-  "next_task": "TBD-selection-next-run",
-  "next_action": "Select the next dependency-ready slice. Read docs/NEXUS/BACKLOG.md for the first task whose dependencies are all VERIFIED, preferring an open P1 security/authorization gap over new UI. Do not re-open the paging family (NEX-082..NEX-098) or the auth-guard family (NEX-099b, NEX-100) — both are VERIFIED and CI-green. Then implement + test it in the same run, and only promote it to VERIFIED after reading per-job CI at the head that contains it.",
+  "next_task": "Select the next dependency-ready slice from docs/NEXUS/BACKLOG.md: first task whose dependencies are all VERIFIED, preferring an open P1 security/authorization gap over new UI. Do NOT re-open the paging family (NEX-082..NEX-098) or the auth-guard family (NEX-099b, NEX-100) -- both VERIFIED and CI-green. Selection was deferred this run on clock, not on a blocker: BACKLOG.md is prose (no machine-readable status table), so choosing well needs a real read, and guessing a task ID would be fabrication.",
+  "next_action": "1) Read CI at head a05a019 per run, per job and per step (`gh run view <id> --json jobs`); it is docs-only, so expect success, but record only what the API returns. 2) Read docs/NEXUS/BACKLOG.md around the NEX-042 / NEX-045 / NEX-049 decisioning-and-policy cluster and any open P1 authorization item, pick the first with all dependencies VERIFIED, and implement it in the same run. 3) Promote to VERIFIED only after per-job CI at a head whose product diff covers the product commit. 4) Do not re-point the CI anchor for docs-only commits: the structural-lag invariant in ci_status is the standing licence.",
   "recovery_instructions": "Read CHECKPOINT.json then STATE.md; Git wins any disagreement. NEX-100 is VERIFIED at product commit 9afd120 (the live head moves with each docs commit, so resolve it with `git ls-remote`, never `git rev-parse origin/<branch>` — this clone's fetch refspec maps only refs/heads/main). Nothing is in flight: no uncommitted product work and no active task. Start the next slice from `next_action`.",
   "decisions_this_run": [
     "Refreshed the CI anchor to head 00d6b54 instead of leaving it at the ancestor beb45e4: this head is both green and the live PR head, so the reviewer's verdict and the record's verdict are the same run. The product anchor stays 9afd120.",
     "Did not start a new implementation slice: fewer than 10 minutes remained before DEADLINE, which the time-budget protocol forbids. Integration and reporting take precedence over new scope."
   ],
-  "run_summary": "Run 101: promotion-completion and CI re-read. Polled the two runs triggered by the docs head 00d6b54 to completion and read them per run, per job and per step — both completed/success with zero failed and zero skipped steps. Moved every present-tense CI claim from the ancestor head beb45e4 to 00d6b54 (CHECKPOINT.json ci_status, pr_state.ci_verdict, pr_state.head, task_statuses[NEX-100], task_status_legend, validation_status; STATE.md Last CI row), leaving the two genuinely historical mentions intact. Appended an addendum recording two self-caught defects: a self-inflicted ruff 'failure' from naming a .json path, and a negation grep too narrow to catch 'NOT yet VERIFIED'. Removed the unverifiable 1934-content-line claim. No product code changed: git diff 9afd120 00d6b54 is docs/NEXUS/ only. NEX-100 remains VERIFIED with stronger evidence.",
-  "push_status": "PUSHED. One product commit this run: 36da4b7..9afd120. Verified by `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` returning 9afd120, matching local HEAD -- not by `git rev-parse origin/<branch>`.",
+  "run_summary": "Run 102: CI verification completion and anchor correction. Pushed 3b2b5c0, then polled both runs it triggered to conclusion: 46161747115 (push) and 46161752452 (pull_request) both completed/success at head 3b2b5c0, read per job and per step (Backend 12/12, Frontend 11/11, zero failed, zero skipped, 2026-11-28T15:50Z). 3b2b5c0 was the live PR head at that moment, so the record's verdict and the reviewer's verdict were the same run. Corrected a self-inflicted stale claim from run 101: it asserted 00d6b54 was 'the live PR head', which pushing falsified; replaced with a 3b2b5c0 anchor and documented the structural lag (a state file cannot contain the hash of the commit containing it) as an invariant rather than chasing it, since re-pointing re-triggers CI forever. Posted the per-job evidence table to PR #5 (comment 7241787913) and issue #2 (comment 7241788241) and verified both landed by fetching the bodies back (identical: True; 6-byte delta was the em dashes only). Gates: ruff format 329 already formatted, ruff check clean. No product code changed: git diff 9afd120 a05a019 is docs/NEXUS/ only. NEX-100 remains VERIFIED. Nothing merged. Next-task selection deferred on clock, with the exact selection rule written into next_task.",
+  "push_status": "PUSHED. Two docs-only commits this run: 3b2b5c0 (CI re-read, run 101) and a05a019 (this run-102 record). Both verified with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`, which returned a05a019 at push time -- never with `git rev-parse origin/<branch>` (this clone's fetch refspec maps only refs/heads/main, so origin/feature/... is a frozen snapshot). a05a019 has its own CI run which was NOT read before this checkpoint was written; it is the next run's first action, and it is docs-only against a05a019's parent so it cannot change the product verdict below.",
   "validation_status": "Local gates GREEN on the tree that became 9afd120: ruff format 329 files, ruff check clean, mypy 144 clean, pytest 1878 passed / 4 skipped. CI GREEN at head 3b2b5c0 covering that same product tree (docs-only diff from 9afd120). NEX-100 is VERIFIED."
 }
