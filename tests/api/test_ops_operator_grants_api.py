@@ -129,10 +129,15 @@ ISSUE_PATH = PATH
 
 
 def _issue_body(**overrides: object) -> dict[str, object]:
+    # A fixed calendar deadline turns this file into a time bomb: the grant must
+    # expire in the future, so once that literal passes every issuing test fails
+    # for a reason that has nothing to do with the code under test. A relative
+    # deadline keeps the body valid forever; tests that need a specific window
+    # pass ``expires_at`` explicitly.
     body: dict[str, object] = {
         "user_id": BOB,
         "scope": "withholding-report",
-        "expires_at": "2026-11-28T12:00:00Z",
+        "expires_at": (datetime.now(UTC) + timedelta(days=7)).isoformat(),
         "rationale": "covering the incident review window",
     }
     body.update(overrides)
