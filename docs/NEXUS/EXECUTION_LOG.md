@@ -11577,7 +11577,9 @@ route gains two optional query parameters and the envelope shape is unchanged.
 
 ### CI
 
-**PENDING — no verdict claimed.** Pushed product commit `87936d4` and read its check-runs immediately:
+**PENDING — no verdict claimed.** *(Superseded: the run-96 close-out below read the check-runs and
+found 4/4 `completed/success` on `87936d4` itself, so NEX-096 is now VERIFIED. This paragraph is the
+state as recorded at the time and is kept unaltered.)* Pushed product commit `87936d4` and read its check-runs immediately:
 `46145902373` (pull_request) and `46145897805` (push) both `in_progress`. The prior head `c0e8628` was
 4/4 `completed/success` (`46144188707`, `46144183186`), but that is NEX-095's docs close-out and is not
 evidence about this change. NEX-096 is therefore **IMPLEMENTED · TESTED · COMMITTED · PUSHED**, not
@@ -11585,7 +11587,8 @@ VERIFIED.
 
 ### Delivery
 
-Not delivered this run, deliberately. Promoting NEX-096 or writing its PR/issue sections before a
+Not delivered this run, deliberately. *(Superseded by the run-96 close-out below, which delivered it:
+PR #5 body through NEX-096 and issue #2 comment `7239449984`.)* Promoting NEX-096 or writing its PR/issue sections before a
 concluded CI read would be the "claims its own verdict" failure. The next run reads the verdict first
 and delivers it.
 
