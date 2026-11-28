@@ -41,6 +41,19 @@ _SENSITIVE_WORDS = frozenset(
         "authorization",
         "bearer",
         "apikey",
+        # A JSON Web Token is a bearer credential in its own right: it is
+        # presented *as* the credential, so a JWT in a log line is a session
+        # anyone holding the line can replay. Its opaque dotted shape made it
+        # pass every word test above.
+        "jwt",
+        # One-time codes and PINs are credentials with a short life, not with no
+        # life. ``otp`` and ``pin`` are named as authentication factors in the
+        # OIDC ``amr`` vocabulary, and a code still valid when the log is read
+        # is a code an attacker can use.
+        "otp",
+        "totp",
+        "pin",
+        "passcode",
     }
 )
 
@@ -55,6 +68,14 @@ _SENSITIVE_WORD_PAIRS = frozenset(
         ("secret", "key"),
         ("signing", "key"),
         ("encryption", "key"),
+        # The PKCE ``code_verifier`` is the secret half of the pair whose hash is
+        # sent as ``code_challenge``; holding it lets a captured authorization
+        # code be redeemed. Neither word is sensitive alone, so this needs to be
+        # a pair, not a word.
+        ("code", "verifier"),
+        # ``one_time_code`` splits to ``one / time / code``; the pair test reads the
+        # trailing two words, so this covers the spelled-out form of ``otp``.
+        ("time", "code"),
     }
 )
 
