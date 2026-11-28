@@ -1,43 +1,47 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-92",
-  "timestamp": "2026-11-28T10:22Z",
+  "run_id": "NEX-2026-11-28-93",
+  "timestamp": "2026-11-28T10:46Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "d26a27f",
-  "product_commit": "977b21f",
-  "commit_note": "commit is the live head at the end of this run (the docs promotion). product_commit 977b21f is the tree CI validated; it is identical to the CI-verified head 6f8ca19 in every product file. Never trust this SHA - read the live head with git ls-remote.",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-091 VERIFIED. NEX-091 delivered external IdP identity linking (link, list, unlink). Next: select the next dependency-ready slice.",
+  "commit": "3159555",
+  "product_commit": "3159555",
+  "commit_note": "commit/product_commit are both 3159555: this run's CI verdict was read on the product commit itself (runs 46136495333 push and 46136499460 pull_request, 4/4 completed/success), so no anchor to a docs head and no empty-product-diff licence were needed. A later docs commit moves the live head; do not assume. Never trust the SHA in `commit`; read the live head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform.",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime): NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-092 VERIFIED. NEX-092 moved the operator-grant revocation report's filter, order and window into SQL; revoked_grants had run select(OperatorGrantRow) with no WHERE and converted every grant row to a domain object before slicing. Next: select the next dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
-    "NEX-091": "VERIFIED - CI 4/4 completed/success on docs head 6f8ca19 (runs 46134645157 (push) and 46134650328 (pull_request)), product tree identical to 977b21f; delivered to PR #5 and issue #2 this run",
-    "NEX-090": "VERIFIED - CI 4/4 completed/success on docs head ea0a696 (product aa4b2c8)"
+    "NEX-092": "VERIFIED - CI 4/4 completed/success on the product commit 3159555 itself (runs 46136495333 push, 46136499460 pull_request), each with Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) green. Delivered to PR #5 and issue #2 this run.",
+    "NEX-091": "VERIFIED - CI 4/4 completed/success on docs head 6f8ca19 (product tree identical to 977b21f).",
+    "NEX-090": "VERIFIED - CI 4/4 completed/success on docs head ea0a696 (product tree identical to aa4b2c8).",
+    "NEX-089": "VERIFIED - CI 4/4 completed/success on docs head c5a1250 (product tree identical to b3130ce).",
+    "NEX-088": "VERIFIED - CI 4/4 completed/success on docs head 592ba07 (product tree identical to 06b5b32).",
+    "NEX-087": "VERIFIED - CI 4/4 completed/success on docs head cf44c89 (product tree identical to 82d8a64)."
   },
   "completed_tasks": [
+    "NEX-092",
     "NEX-091",
     "NEX-090",
     "NEX-089",
     "NEX-088",
-    "NEX-087",
-    "NEX-086"
+    "NEX-087"
   ],
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format: 1 file reformatted, 323 unchanged",
+      "ruff format: 324 files unchanged (no reformatting needed)",
       "ruff check: All checks passed",
       "mypy: Success, no issues found in 144 source files",
-      "pytest full suite: 1740 passed, 4 skipped (exit 0)",
-      "pytest identity-linking only: 23 passed (10 application, 13 HTTP)"
+      "pytest full suite: 1741 passed, 4 skipped, exit 0 (the 4 skips are the PostgreSQL-marked migration tests, which CI's Backend job runs)"
     ],
-    "not_run": "No PostgreSQL-marked tests locally (4 skipped by marker); CI's Backend job runs the migration path."
+    "mutation_control": "Restoring the pre-fix adapter makes test_a_page_does_not_read_the_whole_grant_table fail with `assert 80 == 5`: all 40 never-revoked grants were being converted to answer a five-row page. The test bites on the real defect.",
+    "ci": "4/4 completed/success on 3159555 (product commit itself)."
   },
   "uncommitted_work": false,
   "pr_state": {
     "number": 5,
     "state": "open",
     "draft": false,
-    "head_ref_oid": "d26a27f",
-    "body_covers": "NEX-052..NEX-091; NEX-091 marked VERIFIED with CI cited",
-    "nex_091_in_body": true
+    "head_ref_oid": "3159555",
+    "body_covers": "NEX-052..NEX-092; NEX-092 section added this run",
+    "nex_092_in_body": true
   },
   "tracking_issue": {
     "number": 2,
@@ -48,28 +52,26 @@
   },
   "blockers": [],
   "risks": [
-    "An IdP subject is opaque and may contain '/', '@' or '+'. Never put one in a path segment: a subject-in-path route failed to match and answered 404 without reaching the use case, so an existing link looked absent. Address identity links by their own id.",
-    "Linking is a takeover route. Any future change to LinkExternalIdentity must keep the privilege-escalation guard (403 on a more privileged target) and the system-wide (provider, subject) uniqueness (422 rather than a silent rebind of another account).",
-    "NEX-091's HTTP tests assert list contents delta-style, not absolutely: seeded demo users already hold a `demo` identity link. An absolute count asserts the seed, not the change."
+    "A docstring that asserts a performance property is not evidence of it. NEX-086 documented revoked_grants as bounded while its body read every grant row; NEX-087, NEX-088 and NEX-092 were the same defect in three layers. Suspect a docstring promising bounding above a select() with no where(...).",
+    "Predicate pushdown is only safe when the domain predicate is a bare column test. is_revoked is `revoked_at is not None`, so `revoked_at IS NOT NULL` is its exact translation and the table's CheckConstraint(revoked_by IS NULL OR revoked_at IS NOT NULL) forbids the only incoherent row. is_active carries a clock and two nullable deadlines and must stay in Python.",
+    "ci.yml declares concurrency group ci-<workflow>-<ref> with cancel-in-progress: true. A docs push while the product commit's runs are in flight cancels them, leaving the product commit with zero or cancelled check-runs (the NEX-091 trap). Read the verdict before pushing docs.",
+    "An IdP subject is opaque and may contain '/', '@' or '+'. Never put one in a path segment: a subject-in-path route failed to match and answered 404 without reaching the use case, so an existing link looked absent rather than unaddressable."
   ],
-  "next_task": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md. NEX-091 is VERIFIED and delivered; nothing is carried over. Hold the next slice to the same standard: a test that fails without the fix, a mutation that proves the test bites, and a verdict read rather than assumed.",
-  "next_action": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md. NEX-091 is VERIFIED and delivered; nothing is carried over. Hold the next slice to the same standard: a test that fails without the fix, a mutation that proves the test bites, and a verdict read rather than assumed.",
+  "next_task": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md. Nothing through NEX-092 is outstanding. A productive seam remains the adapter sweep for reads documented as bounded whose bodies still materialise the table.",
+  "next_action": "Select the next dependency-ready slice from BACKLOG.md / ROADMAP.md; continue the adapter sweep for reads documented as bounded whose bodies still materialise the table. Hold the slice to the same standard: a test that fails without the fix, a mutation that proves the test bites, and a CI verdict read per run and per job.",
   "recovery_instructions": "Read this file and STATE.md first; git wins over both. Branch must be feature/agentic-enterprise-platform. Never trust the SHA in `commit`; read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. NEX-091 is VERIFIED at 977b21f (CI 4/4 on 6f8ca19) and delivered to PR #5 and issue #2. There is no outstanding delivery debt. Never merge PR #5.",
-  "ci_status": "GREEN on 6f8ca19. Runs 46134645157 (push) and 46134650328 (pull_request) each read 4/4 completed/success - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both success. The product commit 977b21f has zero check-runs of its own: the docs push superseded it in the concurrency group before any reported, so its runs read completed/cancelled - never evidence in either direction. The verdict is anchored to the docs head and licensed by an empty product diff (git diff 977b21f 6f8ca19 touches only docs/NEXUS/{BACKLOG.md,CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}).",
+  "ci_status": "GREEN on 3159555 (the product commit itself). Runs 46136495333 (push) and 46136499460 (pull_request) each read 4/4 completed/success - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) both green - polled 10:45Z. No anchor was needed: both runs concluded on the product commit, so no empty-product-diff licence applies this run.",
   "commits_this_run": [
-    "977b21f - feat(identity): link, list and unlink external IdP identities (NEX-091)",
-    "6f8ca19 - docs(nexus): record NEX-091 as committed and pushed with CI unread (that commit's own subject line, phrased for the state at that moment; superseded by the verdict recorded in ci_status and task_statuses)",
-    "docs commit - promote NEX-091 to VERIFIED after reading the CI verdict (this commit)"
+    "3159555 - fix(operator-grants): bound the revoked-grant read in the store, not after it",
+    "docs commit - docs(nexus): record NEX-092 as VERIFIED after reading CI 4/4 on the product commit"
   ],
   "decisions_this_run": [
-    "Unlink addresses the link by its own id, not (provider, subject). An IdP subject carries '/', '@' or '+'; a subject-in-path route failed to match and returned 404 without reaching the use case, so id-addressing removes the escaping problem.",
-    "Re-linking the same (provider, subject) to the same user is idempotent; binding a pair owned by a different account is refused 422 rather than silently rebinding another user's login.",
-    "Unlink revokes only the sessions minted from that exact (provider, subject), in the same transaction, so a live cookie from the removed link cannot outlive it.",
-    "An admin may not link an identity to a more privileged account (403). Linking is a takeover route, so the operation must not escalate.",
-    "Test assertions on the identity list are delta-based, not absolute: seeded demo users already carry a `demo` link, so an absolute count asserted the seed rather than the change under test.",
-    "The CI verdict is anchored to the docs head because the product commit was superseded in the concurrency group before any check-run reported. An empty product diff is what licenses that anchor; 'cancelled' is never a pass."
+    "The regression test observes work performed (_to_domain call count) rather than asserting on SQL text: a string assertion would pass for the wrong reason and pin the implementation, while the call count is the adapter's only row-to-domain path.",
+    "count_revoked became a count(*) aggregate so the port's 'without loading them' promise is actually kept; the WHERE clause is written once in the adapter, beside the one it must agree with.",
+    "is_active filtering stays in Python deliberately: it evaluates a clock against two nullable deadlines, which is real logic a SQL translation could drift from. is_revoked does not.",
+    "The docs push was deliberately delayed until the product commit's own runs concluded, because ci.yml cancels in-progress runs per ref."
   ],
-  "run_summary": "Run 92 recovered an interrupted NEX-091 (implementation and local gates green, HTTP tests missing), wrote the 13 HTTP tests, found that seeded demo users already carry a `demo` identity link and rewrote three absolute-count assertions to be delta-based, then committed 977b21f and pushed it. Read the CI verdict rather than assuming it: the product commit's own runs read completed/cancelled (superseded), so the verdict was taken on the docs head 6f8ca19 - 4/4 completed/success on both the push and pull_request events - and licensed by an empty product diff. Delivered to PR #5 (body) and issue #2 (comment 7237852341). NEX-091 is VERIFIED.",
-  "docs_head_delivered": "6f8ca19",
+  "run_summary": "Run 93 reconciled live GitHub (PR #5 open, PR #3/#4 merged - the task context's 'draft PR #3' was stale) and found the branch head at c408065 with a clean tree. Selected NEX-092: revoked_grants/count_revoked in the operator-grant adapter filtered in Python over every grant row despite NEX-086 documenting the read as bounded. Pushed filter, order and window into SQL, verified the pushdown's equivalence by reading the domain predicate and the table's CHECK constraint rather than assuming it, and added a regression test that counts row-to-domain conversions. Mutation control proves the test fails on the old adapter (80 != 5). Local gates green (1741 passed, 4 skipped). Product commit 3159555 waited for its own CI verdict before the docs commit: 4/4 completed/success.",
+  "docs_head_delivered": "see commits_this_run: the docs commit appended after the CI verdict was read",
   "delivery_this_run": "PR #5 body appended with the NEX-091 section (verified by reading the live body: NEX-091 present, NEX-090 intact at 3 references, 0 x 'CI UNREAD'); issue #2 comment 7237852341."
 }

@@ -4134,3 +4134,44 @@ diff**: `git diff 977b21f 6f8ca19` touches only the four `docs/NEXUS/` files, so
 tested exactly the tree `977b21f` ships.
 
 Nothing outstanding: the slice is in PR #5's body and reported on issue #2.
+
+## NEX-092 — Bound the revoked-grant read in the store, not after it (run `NEX-2026-11-28-93`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** VERIFIED · **Complexity** S
+**Depends on** NEX-086 (which recorded the read as bounded), NEX-087/NEX-088 (the same defect elsewhere)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (audit integrity), ADR-008
+
+### Objective
+
+`SqlAlchemyOperatorGrantRepository.revoked_grants(limit, offset)` and `count_revoked()` both ran
+`select(OperatorGrantRow)` with **no `WHERE`**, built a domain object per row, and only then sliced or
+counted. NEX-086's docstrings assert these reads are bounded; the bodies read the whole table. Filter,
+order and window now happen in SQL.
+
+### Acceptance criteria
+
+- [x] `revoked_grants` issues `WHERE revoked_at IS NOT NULL ORDER BY id OFFSET … LIMIT …`
+- [x] `count_revoked` issues `SELECT count(*) … WHERE revoked_at IS NOT NULL` and reads no rows
+- [x] Domain conversion happens only for rows in the requested page
+- [x] Same rows, same order, same results — no contract or migration change
+- [x] `is_active` filtering deliberately stays in Python (clock + two nullable deadlines = real logic)
+- [x] Docstrings corrected to describe the statement, not the intention
+
+### Required tests
+
+- [x] `test_a_page_does_not_read_the_whole_grant_table` — 80 grants (40 live, 40 revoked), page of 5,
+      asserts exactly 5 `_to_domain` calls
+- [x] Mutation control: restoring the old adapter fails the test with `assert 80 == 5`
+
+### Security considerations
+
+The predicate pushdown rests on a verified equivalence, not an assumption: `is_revoked` is
+`revoked_at is not None` with no logic, and `CheckConstraint("revoked_by IS NULL OR revoked_at IS NOT
+NULL")` forbids the only incoherent row, so SQL and domain cannot disaggregate on any admitted row. A
+revoked grant can therefore never be filtered out of the revocation report — the failure mode that
+would hide an authority removal from audit.
+
+### Validation
+
+`ruff format` 324 unchanged · `ruff check` passed · `mypy` 144 files · suite **1741 passed / 4
+skipped**. **CI 4/4 `completed/success`** on `3159555` itself.

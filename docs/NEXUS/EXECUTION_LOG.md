@@ -11118,3 +11118,78 @@ Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md`. Nothing
 outstanding — no verdict unread, no surface undelivered. Carry the run's shape forward: a test that
 fails without the fix, a mutation that proves the test bites, and a CI verdict read per run and per
 job rather than inferred from an exit code.
+
+## Run `NEX-2026-11-28-93` — NEX-092: the revoked-grant report was bounded only after it read everything
+
+**Timestamp** 2026-11-28T10:45Z · **Branch** `feature/agentic-enterprise-platform`
+**Starting commit** `c408065` · **Ending commit** product `3159555`, docs head appended below
+
+### Reconciliation
+
+Recovery state named run 92's close-out. `git ls-remote` was read rather than trusted: the branch head
+was `c408065`, the previous run's docs close-out, matching the checkpoint. `git status -sb` on arrival:
+clean, no untracked files. Local `HEAD` was `main` at `997a6ac` (the shallow clone's graft), so the
+working branch was created from the remote branch tip — no local work existed to preserve.
+
+Live GitHub reconciled against the stale task context: **PR #5 is the open PR** (`draft=false`,
+`feature/agentic-enterprise-platform` → `main`); PR #3 and PR #4 are **merged**. The task context's
+"draft PR #3" is stale and was not acted on.
+
+### Task completed
+
+`SqlAlchemyOperatorGrantRepository.revoked_grants` and `count_revoked` filtered in Python over every
+grant row. NEX-086's docstrings said otherwise. Both now push the predicate, ordering and window into
+SQL.
+
+The equivalence argument is load-bearing and was verified, not assumed: `is_revoked` is
+`revoked_at is not None` — one attribute test, no logic — so `revoked_at IS NOT NULL` is its exact
+translation, and `OperatorGrantRow.__table_args__` holds
+`CheckConstraint("revoked_by IS NULL OR revoked_at IS NOT NULL")`, which forbids the only incoherent
+row shape. `is_active`, by contrast, evaluates a clock against two nullable deadlines and stays in
+Python. The asymmetry is deliberate.
+
+### Files changed
+
+- `src/notes_service/infrastructure/db/operator_grants.py` — statement-level filter/order/window;
+  `count(*)` aggregate; docstrings corrected to describe the statement
+- `tests/persistence/test_operator_grants.py` — `test_a_page_does_not_read_the_whole_grant_table`
+
+### Tests executed
+
+`ruff format` (324 unchanged) · `ruff check` (all passed) · `mypy` (144 files, clean) · full `pytest`
+(**1741 passed, 4 skipped**, exit 0 — the 4 skips are the PostgreSQL-marked migration tests that CI's
+Backend job runs). Mutation control: restoring the old adapter fails the new test with `assert 80 == 5`,
+i.e. 40 never-revoked grants were being converted to answer a five-row page.
+
+### Decisions
+
+The test observes *work performed* (`_to_domain` call count) rather than asserting on SQL text. An SQL
+string assertion would pass for the wrong reason and pin the implementation; the call count is the
+adapter's only row-to-domain path, so it measures the defect directly.
+
+### Security findings
+
+No new surface. The pushdown cannot hide a revoked grant from audit: SQL and domain agree on every row
+the schema admits (checked above), so the revocation report cannot silently lose an authority removal —
+the failure mode that matters on an audit report.
+
+### Git
+
+- `3159555` — `fix(operator-grants): bound the revoked-grant read in the store, not after it`
+- docs commit — this run's records
+
+Push status: `c408065..3159555` pushed and confirmed via `git ls-remote`. PR #5 open, **not draft**,
+**not merged**; automated merging is prohibited.
+
+### Process note
+
+The product commit was pushed alone and its own CI run was allowed to conclude *before* any docs
+commit: runs `46136495333` (push) and `46136499460` (pull_request) sit in
+`ci-<workflow>-refs/heads/feature/agentic-enterprise-platform` with `cancel-in-progress: true`. A docs
+push during that window would have cancelled both — the exact trap that left NEX-091's product commit
+with zero check-runs. Verified by reading the workflow config before pushing, not after.
+
+### Next action
+
+Select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md`; continue the adapter sweep for
+reads documented as bounded whose bodies still materialise the table.

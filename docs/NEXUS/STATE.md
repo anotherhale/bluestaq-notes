@@ -7,7 +7,7 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-090 VERIFIED**. **NEX-090** (run 91, product `aa4b2c8`, **CI 4/4 success** on docs head `ea0a696`) paged `GET /agent-runs`, whose store listing was capped at 50 rows while the route reported `PageMeta(total=len(items))` and accepted no `limit`/`offset` — an agent with 60 runs answered a complete-looking history of fifty with no way to reach the rest. `meta.total` is now a `COUNT` over the same agent-scoped set and the window is the caller's. Prior: **NEX-089** (run 89, product `b3130ce`, **CI 4/4 success** on docs head `c5a1250`) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and reported the page size as the total. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-092 VERIFIED**. **NEX-092** (run 93, product `3159555`, **CI 4/4 `completed/success` on the product commit itself**) moved the revoked-grant report's filter, order and window into SQL: `revoked_grants` ran `select(OperatorGrantRow)` with no `WHERE`, converted **every** grant row to a domain object, then sliced — a five-row page priced the whole table, and `count_revoked()` did the same to answer one integer. Same defect NEX-087 fixed for the access log and NEX-088 for the audit trail, one layer lower. Prior: **NEX-090** (run 91, product `aa4b2c8`, **CI 4/4 success** on docs head `ea0a696`) paged `GET /agent-runs`, whose store listing was capped at 50 rows while the route reported `PageMeta(total=len(items))` and accepted no `limit`/`offset` — an agent with 60 runs answered a complete-looking history of fifty with no way to reach the rest. `meta.total` is now a `COUNT` over the same agent-scoped set and the window is the caller's. Prior: **NEX-089** (run 89, product `b3130ce`, **CI 4/4 success** on docs head `c5a1250`) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and reported the page size as the total. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 91) | `4302966` — the run-90 close-out head, matched by `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` this run (local HEAD identical, no divergence). |
 | Head commit (measured) | Product **`aa4b2c8`** (NEX-090, **VERIFIED** via docs head `ea0a696`); docs head this run's docs commit descends from it. Prior: **`b3130ce`** (NEX-089, **VERIFIED** via docs head `c5a1250`); **`06b5b32`** (NEX-088, **CI 4/4 success** on docs head `592ba07`); **`82d8a64`** (NEX-087, **CI 4/4 success** on docs head `cf44c89`); **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
@@ -3423,17 +3423,98 @@ test — they failed for the right reason. They are now delta-based (`body["id"]
 **Validation (on the committed tree):** `ruff format` 1 reformatted then 323 unchanged, `ruff check`
 all passed, `mypy` clean on **144** files, full suite **1740 passed / 4 skipped**, exit 0.
 
-## Next best actions (run `NEX-2026-11-28-92`, superseding every list above)
+## NEX-092 (run `NEX-2026-11-28-93`) — the revoked-grant report was bounded only after it had read everything
 
-No NEXUS delivery debt remains through NEX-091. The next run starts clean:
+**Status: COMMITTED `3159555` · PUSHED · VERIFIED — CI 4/4 `completed/success`**, runs
+`46136495333` (push) and `46136499460` (pull_request) **on the product commit itself** — no
+docs commit shared its concurrency group, so no anchor or empty-diff licence was needed this run.
 
-1. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`. Check what the backlog
-   still lists as open rather than assuming a successor exists.
-2. **Carry the shape forward**: a test that fails without the fix, a mutation that proves the test
-   bites, and a CI verdict read rather than assumed. Anchor a verdict to a head whose runs actually
-   concluded — a superseded run reading `cancelled` is not a pass, and this run needed an empty
-   product diff to license the anchor.
-3. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+`revoked_grants(limit=..., offset=...)` was recorded by NEX-086 as a bounded read. It was not. The
+adapter ran `select(OperatorGrantRow)` with **no `WHERE`**, built a domain object for every grant row
+in the table, and only then sliced the resulting list. A five-row page cost the entire table, and the
+cost grew with the deployment's total grant history — every grant ever issued, live or revoked.
+`count_revoked()` did the same thing to answer with a single integer.
 
-**Do not redo** NEX-091 or anything before it. **Do not** re-append NEX-079…NEX-091 to PR #5's body —
+This is the unbounded-read defect NEX-087 fixed for the access log and NEX-088 for the audit trail,
+one layer lower: in the adapter rather than in the use case. Those two were `len(items)` masquerading
+as a total; this one is a page whose cost was the table.
+
+### Why NEX-086's premise does not hold
+
+NEX-086 deliberately kept the predicate in Python:
+
+> ``revoked_at IS NOT NULL`` is a faithful SQL translation, but keeping the selection in Python
+> preserves the single definition of "revoked" … a schema-level predicate could drift from
+> ``is_revoked`` and page a different set than the report counts.
+
+That was a reasonable caution, and it is now demonstrably unnecessary for *this* predicate.
+`OperatorGrant.is_revoked` is a single attribute test with no logic in it:
+
+```python
+@property
+def is_revoked(self) -> bool:
+    return self.revoked_at is not None
+```
+
+`revoked_at IS NOT NULL` is therefore its **exact** translation, not an approximation of it. There is
+no derived state, no clock, no second column, nothing to drift. The table's
+`CheckConstraint("revoked_by IS NULL OR revoked_at IS NOT NULL", name="revocation_actor_requires_instant")`
+forbids the only incoherent half — a named revoker with no instant — so the two representations
+cannot disagree on any row the schema admits. I read the constraint rather than assuming it; it is at
+`models.py` in `OperatorGrantRow.__table_args__`.
+
+**`is_active` is different, and its filter stays in Python.** That predicate carries a clock and two
+nullable deadlines (`not_before`, `expires_at`) evaluated against `now`, so a SQL translation would
+have to duplicate real logic and could genuinely drift. The asymmetry is the point: push down what is
+a column test, keep what is a computation.
+
+### What changed
+
+- `revoked_grants`: `WHERE revoked_at IS NOT NULL ORDER BY id OFFSET :offset LIMIT :limit` — filter,
+  order and window all in the store; rows are converted to domain objects only for the page.
+- `count_revoked`: `SELECT count(*) … WHERE revoked_at IS NOT NULL` — an aggregate that reads no rows
+  and cannot be truncated by volume.
+- `id` ordering is retained because it is the port's insertion order *and* what makes `LIMIT`/`OFFSET`
+  stable: neither method appends to the list it reads, so a page cannot shift under a walker.
+
+No migration, no new authority, no contract change. Same rows, same order, same results.
+
+### The test asserts on work, not on SQL text
+
+Asserting the statement's SQL string would pin the implementation and pass for the wrong reasons.
+`_to_domain` is the adapter's only row-to-domain path, so counting its calls counts the rows actually
+read. `test_a_page_does_not_read_the_whole_grant_table` seeds 80 grants (40 live, 40 revoked), asks
+for five, and asserts exactly five conversions.
+
+**Mutation control run:** restoring the previous adapter makes the test fail with `assert 80 == 5` —
+all 40 never-revoked grants were being converted to answer a five-row page. The test bites on the real
+defect, not on an artefact of the fix.
+
+### Validation (on the committed tree)
+
+`ruff format` 324 files unchanged · `ruff check` all passed · `mypy` clean on **144** files · full
+suite **1741 passed / 4 skipped**, exit 0. The four skips are the PostgreSQL-marked tests, which CI's
+Backend job runs over the migration path.
+
+### Note for the next reader
+
+NEX-086's docstrings *asserted* this read was bounded while its body read the whole table. The lesson
+is not "trust the docstring less" — it is that a comment recording a *performance property* should be
+checked against the statement it describes, because a green test suite proves correctness, not cost.
+The regression here asserts cost.
+
+## Next best actions (run `NEX-2026-11-28-93`, superseding every list above)
+
+No NEXUS delivery debt remains through NEX-092. The next run starts clean:
+
+1. **Select the next dependency-ready slice** from `BACKLOG.md` / `ROADMAP.md`.
+2. **Finish the adapter sweep for the NEX-086 mistake** — a read documented as bounded whose body
+   still materialises the table. NEX-087 (access log), NEX-088 (audit trail) and NEX-092 (operator
+   grants) were the same defect three times. The cheap signal is a docstring promising bounding above
+   a `select()` with no `where(...)`, not an exhaustive grep.
+3. **Carry the shape forward**: a test that fails without the fix, a mutation that proves the test
+   bites, and a CI verdict read rather than assumed.
+4. **Do not start a new slice with under 10 minutes of window left.** Commit, push, deliver, record.
+
+**Do not redo** NEX-092 or anything before it. **Do not** re-append NEX-079…NEX-092 to PR #5's body —
 all of them are already in it.
