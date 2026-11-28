@@ -49,6 +49,7 @@ from notes_service.application.use_cases.agents import (
     IssueAgentToken,
     ListAgents,
     ListApprovalRequests,
+    ListDelegations,
     ListToolInvocations,
     OpenApprovalRequest,
     RegisterAgent,
@@ -274,6 +275,10 @@ class Container:
     get_agent: Callable[[], GetAgent]
     revoke_agent: Callable[[], RevokeAgent]
     grant_delegation: Callable[[], GrantDelegation]
+    # Reading the grants is what makes *narrow* revocation usable: a delegation
+    # id existed only in the POST that created it, so a lost response left
+    # RevokeAgent (which also kills the agent) as the only reachable remedy.
+    list_delegations: Callable[[], ListDelegations]
     revoke_delegation: Callable[[], RevokeDelegation]
     issue_agent_token: Callable[[], IssueAgentToken]
     resolve_agent_token: Callable[[], ResolveAgentToken]
@@ -821,6 +826,7 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         get_agent=make(GetAgent),
         revoke_agent=make(RevokeAgent),
         grant_delegation=make(GrantDelegation),
+        list_delegations=make(ListDelegations),
         revoke_delegation=make(RevokeDelegation),
         issue_agent_token=make(IssueAgentToken),
         resolve_agent_token=make(ResolveAgentToken),

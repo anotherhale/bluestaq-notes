@@ -309,6 +309,149 @@ class TestDelegationHttp:
         assert response.status_code == 204, response.text
 
 
+class TestDelegationListingHttp:
+    """The read path that makes *narrow* revocation usable.
+
+    A delegation id used to exist only in the ``POST`` response that created it.
+    A delegator who lost that response could not name the grant to withdraw it, so
+    the only reachable remedy was ``RevokeAgent`` — which also kills every other
+    grant, every token, and the agent itself. These pin the listing that fixes
+    that, including the ownership boundary and the total's meaning.
+    """
+
+    def test_listing_recovers_the_id_needed_to_revoke_one_grant(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[READ, UPDATE])
+        grant(client, agent["id"], [READ])
+        second = grant(client, agent["id"], [UPDATE])
+
+        listing = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations", headers=auth_headers(ALICE)
+        )
+
+        assert listing.status_code == 200, listing.text
+        ids = [item["id"] for item in listing.json()["items"]]
+        assert second["id"] in ids
+
+        # The id read back is enough to withdraw exactly this grant...
+        revoke = client.delete(
+            f"/api/v1/agents/delegations/{second['id']}", headers=auth_headers(ALICE)
+        )
+        assert revoke.status_code == 204, revoke.text
+
+        # ...and the other grant survives, which is the whole point: the narrow
+        # remedy is reachable without the emergency stop that kills the agent.
+        after = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations", headers=auth_headers(ALICE)
+        ).json()
+        statuses = {item["id"]: item["status"] for item in after["items"]}
+        assert statuses[second["id"]] == "revoked"
+        assert "active" in statuses.values()
+
+    def test_a_non_owner_gets_404_not_403(self, client: TestClient) -> None:
+        # An agent's existence is private, so the listing must not confirm it.
+        agent = register_agent(client, ALICE, capabilities=[READ])
+        grant(client, agent["id"], [READ])
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations", headers=auth_headers(BOB)
+        )
+
+        assert response.status_code == 404, response.text
+
+    def test_an_unknown_agent_is_404(self, client: TestClient) -> None:
+        response = client.get(
+            "/api/v1/agents/00000000-0000-0000-0000-000000000000/delegations",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 404, response.text
+
+    def test_the_status_filter_narrows_to_active_or_revoked(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[READ, UPDATE])
+        kept = grant(client, agent["id"], [READ])
+        gone = grant(client, agent["id"], [UPDATE])
+        client.delete(f"/api/v1/agents/delegations/{gone['id']}", headers=auth_headers(ALICE))
+
+        active = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?status=active",
+            headers=auth_headers(ALICE),
+        ).json()
+        revoked = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?status=revoked",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert [item["id"] for item in active["items"]] == [kept["id"]]
+        assert [item["id"] for item in revoked["items"]] == [gone["id"]]
+        # The default listing keeps both, so a withdrawn grant does not vanish.
+        everything = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations", headers=auth_headers(ALICE)
+        ).json()
+        assert everything["meta"]["total"] == 2
+
+    def test_an_unknown_status_is_rejected_as_a_client_error(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[READ])
+        grant(client, agent["id"], [READ])
+
+        response = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?status=banana",
+            headers=auth_headers(ALICE),
+        )
+
+        # 422 from query validation, never a 500 from an unhandled ValueError.
+        assert response.status_code == 422, response.text
+
+    def test_total_is_the_set_size_not_the_page_size(self, client: TestClient) -> None:
+        agent = register_agent(client, capabilities=[READ])
+        for _ in range(3):
+            grant(client, agent["id"], [READ])
+
+        page = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?limit=1&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()
+
+        assert len(page["items"]) == 1
+        # A page-derived total would read "1" and hide that two more exist.
+        assert page["meta"]["total"] == 3
+        assert page["meta"]["limit"] == 1
+        assert page["meta"]["offset"] == 0
+
+    def test_offset_walks_the_set_without_repeating_a_row(self, client: TestClient) -> None:
+        # Delegations granted in the same request burst share created_at to the
+        # microsecond, and an unstable tie order would shift the window so a row
+        # repeats while another is skipped. The adapter adds an id tiebreak for
+        # that case; SQLite happens to return insertion order for ties, so this
+        # pins the observable contract (pages are disjoint and together cover the
+        # set) rather than the tiebreak itself.
+        agent = register_agent(client, capabilities=[READ])
+        for _ in range(3):
+            grant(client, agent["id"], [READ])
+
+        first = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?limit=2&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+        second = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?limit=2&offset=2",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+
+        first_ids = {item["id"] for item in first}
+        second_ids = {item["id"] for item in second}
+        assert first_ids.isdisjoint(second_ids)
+        assert len(first_ids | second_ids) == 3
+
+        # Repeating the same page must return the same rows: a window that moves
+        # between identical requests is the failure mode paging depends on not
+        # happening.
+        replay = client.get(
+            f"/api/v1/agents/{agent['id']}/delegations?limit=2&offset=0",
+            headers=auth_headers(ALICE),
+        ).json()["items"]
+        assert [item["id"] for item in replay] == [item["id"] for item in first]
+
+
 class TestTokenIssuanceHttp:
     def test_issuing_returns_the_secret_once_and_no_hash(self, client: TestClient) -> None:
         agent = register_agent(client, capabilities=[READ, UPDATE])

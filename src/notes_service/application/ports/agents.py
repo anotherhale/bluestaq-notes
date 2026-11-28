@@ -21,6 +21,7 @@ from notes_service.domain.agent.value_objects import (
     ApprovalRequestId,
     ApprovalStatus,
     DelegatedAuthorizationId,
+    DelegationStatus,
 )
 from notes_service.domain.identity.value_objects import UserId
 
@@ -90,7 +91,44 @@ class DelegationRepository(Protocol):
 
     def get(self, delegation_id: DelegatedAuthorizationId) -> DelegatedAuthorization | None: ...
 
-    def list_for_agent(self, agent_id: AgentId) -> list[DelegatedAuthorization]: ...
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: DelegationStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[DelegatedAuthorization]:
+        """An agent's consent records, optionally one status, optionally paged.
+
+        Delegations are never pruned — revocation is recorded, not deleted — so
+        this set only grows. ``status`` is a stored column
+        (:class:`DelegationRow.status`), never derived, so selecting it in SQL
+        cannot disagree with filtering the same value in Python.
+
+        ``limit=None`` reads every delegation. ``RevokeAgent`` does not walk the
+        list (it calls :meth:`revoke_all_for_agent`), so nothing in production
+        depends on that behaviour today; it is kept so a future whole-set reader
+        cannot be silently truncated, and a serving path always passes a limit.
+        A total comes from :meth:`count_for_agent`, because a page-derived total
+        equals the page size and cannot tell a complete grant list from a
+        truncated one.
+
+        ``id`` breaks ``created_at`` ties. The window is an ``OFFSET``, so an
+        order that is not total lets one row appear twice while another is
+        skipped as the window shifts; grants made in the same instant are
+        exactly that case.
+        """
+        ...
+
+    def count_for_agent(self, agent_id: AgentId, *, status: DelegationStatus | None = None) -> int:
+        """Count an agent's delegations with a ``COUNT`` aggregate, not a page.
+
+        Scoped by ``agent_id`` for the same reason as the listing: an unscoped
+        count would disclose how many delegations another agent holds, and a
+        delegation names what a human consented to.
+        """
+        ...
 
     def list_active_for_delegator(self, user_id: UserId) -> list[DelegatedAuthorization]: ...
 

@@ -663,6 +663,18 @@ class DelegationResponse(ResponseModel):
         )
 
 
+class DelegationListResponse(BaseModel):
+    """Consent records for one agent, paged, with the set's exact size.
+
+    ``meta.total`` is the number of delegations matching the status filter, not
+    of ``items`` — otherwise a delegator could not tell "this agent has 2 grants"
+    from "this is the first 2 of 40".
+    """
+
+    items: list[DelegationResponse]
+    meta: PageMeta
+
+
 class AgentTokenIssueRequest(StrictModel):
     """Exchange a delegation for a short-lived, narrower token.
 

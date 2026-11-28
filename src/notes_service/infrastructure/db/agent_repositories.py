@@ -356,17 +356,35 @@ class SqlAlchemyDelegationRepository:
         row = self._session.get(DelegationRow, _as_uuid(delegation_id))
         return _delegation_to_domain(row) if row else None
 
-    def list_for_agent(self, agent_id: AgentId) -> list[DelegatedAuthorization]:
-        rows = (
-            self._session.execute(
-                select(DelegationRow)
-                .where(DelegationRow.agent_id == _as_uuid(agent_id))
-                .order_by(DelegationRow.created_at)
-            )
-            .scalars()
-            .all()
+    def list_for_agent(
+        self,
+        agent_id: AgentId,
+        *,
+        status: DelegationStatus | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[DelegatedAuthorization]:
+        statement = (
+            select(DelegationRow)
+            .where(DelegationRow.agent_id == _as_uuid(agent_id))
+            .order_by(DelegationRow.created_at, DelegationRow.id)
         )
+        if status is not None:
+            statement = statement.where(DelegationRow.status == status.value)
+        if limit is not None:
+            statement = statement.limit(limit).offset(offset)
+        rows = self._session.execute(statement).scalars().all()
         return [_delegation_to_domain(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId, *, status: DelegationStatus | None = None) -> int:
+        statement = (
+            select(func.count())
+            .select_from(DelegationRow)
+            .where(DelegationRow.agent_id == _as_uuid(agent_id))
+        )
+        if status is not None:
+            statement = statement.where(DelegationRow.status == status.value)
+        return int(self._session.execute(statement).scalar_one())
 
     def list_active_for_delegator(self, user_id: UserId) -> list[DelegatedAuthorization]:
         rows = (

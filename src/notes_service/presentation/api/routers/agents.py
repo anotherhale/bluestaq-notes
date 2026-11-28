@@ -23,7 +23,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
-from notes_service.domain.agent.value_objects import ApprovalStatus
+from notes_service.domain.agent.value_objects import ApprovalStatus, DelegationStatus
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
     AgentListResponse,
@@ -40,6 +40,7 @@ from notes_service.presentation.schemas import (
     ApprovalRevokeRequest,
     ChainVerdictResponse,
     DelegationGrantRequest,
+    DelegationListResponse,
     DelegationResponse,
     PageMeta,
     ResolvedAgentTokenResponse,
@@ -113,6 +114,52 @@ def revoke_agent(agent_id: UUID, principal: PrincipalDep, container: ContainerDe
 
 
 # -- delegations ----------------------------------------------------------
+
+
+@router.get(
+    "/{agent_id}/delegations",
+    response_model=DelegationListResponse,
+    summary="List the consent records behind one of the caller's agents",
+    dependencies=[RateLimitDep],
+)
+def list_delegations(
+    agent_id: UUID,
+    principal: PrincipalDep,
+    container: ContainerDep,
+    status_filter: DelegationStatus | None = Query(
+        default=None,
+        alias="status",
+        description=(
+            "Which state to list. Omitted means every delegation, active and "
+            "revoked, so a withdrawn grant stays visible rather than vanishing."
+        ),
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> DelegationListResponse:
+    """Delegations this agent holds, newest last, with the set's exact size.
+
+    This is the read path that makes *narrow* revocation usable. A delegation id
+    existed only in the ``POST`` response that created it, so a delegator who lost
+    that response could not withdraw one grant without ``RevokeAgent`` — an
+    emergency stop that also kills every other grant, every token, and the agent.
+
+    A non-owner gets 404, never 403, so the route cannot probe for another user's
+    agent. ``meta.total`` is the count of delegations matching the filter, not of
+    ``items``; a page-derived total cannot distinguish a complete list from a
+    truncated one.
+    """
+    page = container.list_delegations().run(
+        principal,
+        agent_id=str(agent_id),
+        status=status_filter.value if status_filter is not None else None,
+        limit=limit,
+        offset=offset,
+    )
+    items = [DelegationResponse.from_domain(delegation) for delegation in page.items]
+    return DelegationListResponse(
+        items=items, meta=PageMeta(total=page.total, limit=limit, offset=offset)
+    )
 
 
 @router.post(

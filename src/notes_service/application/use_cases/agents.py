@@ -42,6 +42,7 @@ from notes_service.domain.agent.value_objects import (
     ApprovalStatus,
     Capability,
     DelegatedAuthorizationId,
+    DelegationStatus,
     TokenAudience,
 )
 from notes_service.domain.errors import InvariantViolation
@@ -577,6 +578,57 @@ class ApprovalRequestPage:
     total: int
 
 
+@dataclass(frozen=True, slots=True)
+class DelegationPage:
+    """One page of an agent's consent records plus the set's exact size.
+
+    Same reasoning as :class:`ApprovalRequestPage`: ``total`` counts every
+    delegation matching the status filter, not the page. A delegator reviewing
+    "what have I handed this agent" must be able to tell a complete list from
+    the first 50 of 300.
+    """
+
+    items: list[DelegatedAuthorization]
+    total: int
+
+
+class ListDelegations(UseCase):
+    """List the consent records behind one of the caller's agents.
+
+    A delegation is the only thing that lets an agent act *as* a human, and it is
+    revocable — but until now the revocation id existed only in the grant
+    response. A delegator who closed that response could not name the grant to
+    withdraw it, so the only reachable remedy was ``RevokeAgent``, an emergency
+    stop that also kills every other grant, every token, and the agent itself.
+    Reading the grants is what makes narrow revocation usable.
+
+    Owner-only, and a non-owner gets ``404`` rather than ``403``: the existence of
+    another user's agent must not be probeable, and the consent set names which
+    capabilities a human handed over — the same reason the approval listing is
+    owner-only.
+
+    ``total`` is counted, never the page length. See :class:`DelegationPage`.
+    """
+
+    def run(
+        self,
+        principal: Principal,
+        *,
+        agent_id: str,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> DelegationPage:
+        with self._uow_factory() as uow:
+            agent = load_owned_agent(uow, principal=principal, agent_id=agent_id)
+            wanted = DelegationStatus(status) if status is not None else None
+            items = uow.delegations.list_for_agent(
+                agent.id, status=wanted, limit=limit, offset=offset
+            )
+            total = uow.delegations.count_for_agent(agent.id, status=wanted)
+            return DelegationPage(items=items, total=total)
+
+
 class ListApprovalRequests(UseCase):
     """List approval requests for one of the caller's agents.
 
@@ -717,12 +769,14 @@ class VerifyToolInvocationChain(UseCase):
 __all__ = [
     "ApprovalRequestPage",
     "DecideApprovalRequest",
+    "DelegationPage",
     "GetAgent",
     "GrantDelegation",
     "IssueAgentToken",
     "IssuedToken",
     "ListAgents",
     "ListApprovalRequests",
+    "ListDelegations",
     "ListToolInvocations",
     "OpenApprovalRequest",
     "RegisterAgent",
