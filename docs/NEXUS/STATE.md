@@ -7,22 +7,23 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-087 VERIFIED**; **NEX-088** (run 88) IMPLEMENTED · TESTED · COMMITTED `06b5b32` · PUSHED, **awaiting CI**. The tool-invocation audit page answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail; the count is now an agent-scoped `SELECT count(*)`. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-088 VERIFIED**. **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail; the count is now an agent-scoped `SELECT count(*)` and the scope itself is pinned by a test. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 88) | `e354d5f` — the run-87 close-out head, measured with `git ls-remote` this run. |
-| Head commit (measured) | Product **`06b5b32`** (NEX-088, **CI not yet read**). Prior: **`82d8a64`** (NEX-087, **CI 4/4 success** on docs head `cf44c89`). Prior: **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **None yet for NEX-088** — `06b5b32` has **not** been polled, so NEX-088 is not VERIFIED. Prior: `cf44c89` (NEX-087 docs head, product tree identical to `82d8a64`) — **4/4 `completed/success`**, runs `46125167112` (push) and `46125170933` (pull_request), polled 08:22:33Z. `82d8a64`'s own runs read `completed/cancelled` (superseded) and are never evidence. Prior: `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z. `d9d0a3a` … `2f58931` (all NEX-085 docs heads) **4/4 success**; `09cc4ad` (NEX-084) **4/4 success**; `453e134` (NEX-083) **2/2** 06:39Z; `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
+| Head commit (measured) | Product **`06b5b32`** (NEX-088, **CI 4/4 success** on docs head `592ba07`). Prior: **`82d8a64`** (NEX-087, **CI 4/4 success** on docs head `cf44c89`). Prior: **`70d7667`** (NEX-086, **CI 4/4 success** on docs head `f780afb`); **`d9d0a3a`** (NEX-085, **CI 4/4 success**) over product `c698979`; `4cadf4c` (NEX-084 docs head) over product `09cc4ad` (**NEX-084, CI 4/4 success**); `453e134` (**NEX-083**, VERIFIED 2/2) over `c16dd9b`, `9c1ae48` (**NEX-082**, VERIFIED 2/2) over `4f8e15d`, `85a013c` (**NEX-081**, VERIFIED 4/4) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | `592ba07` (NEX-088 docs head, product tree identical to `06b5b32`) — **4/4 `completed/success`**, runs `46127299155` (push) and `46127304188` (pull_request); plus `46127157086` on `06b5b32` itself, 2/2. So NEX-088 is **VERIFIED**. The `pull_request` run on `06b5b32` (`46127161135`) reads `cancelled` — superseded, never evidence. Prior: `cf44c89` (NEX-087 docs head, product tree identical to `82d8a64`) — **4/4 `completed/success`**, runs `46125167112` (push) and `46125170933` (pull_request), polled 08:22:33Z. `82d8a64`'s own runs read `completed/cancelled` (superseded) and are never evidence. Prior: `f780afb` (NEX-086 docs head, product tree identical to `70d7667`) — **4/4 `completed/success`**, runs `46122302349` (push) and `46122306894` (pull_request), polled 07:42:52Z. `d9d0a3a` … `2f58931` (all NEX-085 docs heads) **4/4 success**; `09cc4ad` (NEX-084) **4/4 success**; `453e134` (NEX-083) **2/2** 06:39Z; `9c1ae48` (NEX-082) 2/2 06:00Z; `85a013c` (NEX-081) 4/4 05:18Z. |
 | Tracking issue | #2 (open) — `7236499955` covers **NEX-087** (VERIFIED, CI 4/4), posted this run after asserting zero prior mentions of NEX-087. Earlier: `7236123126` NEX-086; `7235822904` NEX-085; `7235362658` NEX-083 (posted by a **concurrent** run at 06:32:43Z, claims verified independently here); `7234921303` NEX-082; `7234571708` NEX-081. Issue stays open. |
-| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-087** (100876 bytes). **NEX-088 is NOT yet in it — delivery is owed by the next run once CI is read.** Thirty-two slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | **One, open: NEX-088 is pushed but unverified and undelivered.** Its CI verdict and its delivery to PR #5 and issue #2 are the next run's first obligations. Prior: none outstanding as of NEX-087 — CI concluded 4/4 on `cf44c89`. Prior fixes: NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. |
+| PR #5 | **#5 (open, `draft=false`, `mergeable=true`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-088**. **No NEX delivery debt remains.** Thirty-two slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
+| **Open P1** | **None outstanding as of NEX-088** — CI concluded 4/4 on `592ba07` (product tree identical to `06b5b32`), and NEX-088 is delivered to PR #5 and issue #2. Prior fixes: NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap, NEX-082 a read-completeness gap on an audit surface, NEX-081 a verification-coverage gap. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
 
 ## NEX-088 (run `NEX-2026-11-28-88`) — the audit page's total was its own window size
 
-**Status: COMMITTED `06b5b32` · PUSHED · NOT VERIFIED.** Local gates green; **no CI verdict read**,
-and not yet delivered to PR #5 or issue #2. Do not record this as VERIFIED until CI is read.
+**Status: COMMITTED `06b5b32` · PUSHED · VERIFIED — CI 4/4 `completed/success`** (runs
+`46127299155` push and `46127304188` pull_request on docs head `592ba07`, product tree identical
+to `06b5b32`; also `46127157086` on `06b5b32` itself, 2/2). Delivered to PR #5 and issue #2.
 
 `GET /agents/{agent_id}/tool-invocations` takes `limit`/`offset` and answers `meta.total`. It filled
 that field with `len(items)` — the size of the page it had just built. A three-entry trail reported
@@ -3305,18 +3306,16 @@ other run's NEX-077 references were left untouched.
 NEX-073 — all VERIFIED with polled CI. Do not re-append NEX-078…NEX-081 to PR #5's body;
 all four are in it.
 
-## Next best actions (run `NEX-2026-11-28-88`, superseding every list above)
+## Next best actions (run `NEX-2026-11-28-89`, superseding every list above)
 
-1. **Poll CI for `06b5b32`** (both the `push` and `pull_request` runs) to a concluded verdict. If
-   this docs push supersedes it in the concurrency group, anchor to a docs head whose product tree
-   is identical (`git diff 06b5b32 <docs-head> -- src/ tests/` must be empty). A `cancelled` verdict
-   alone is never evidence. Only then write NEX-088 VERIFIED in `CHECKPOINT.json`, `STATE.md` and
-   `BACKLOG.md`.
-2. **Deliver NEX-088** — append it to PR #5's body (assert `body.count("## NEX-088 ")==0` first)
-   and comment on issue #2. Use lists, not markdown tables, in issue comments here.
-3. **Take the next dependency-ready slice** from `BACKLOG.md`. Do not start a new slice with under
-   10 minutes left on the clock.
+No NEXUS delivery debt remains through NEX-088. The next run starts clean:
 
-**Do not redo** NEX-088, NEX-087, NEX-086, NEX-085, NEX-084, NEX-083, NEX-082, NEX-081, NEX-080,
-NEX-079, NEX-078, NEX-077, NEX-076, NEX-075, NEX-074, NEX-073 or NEX-058 — do not re-implement, and
-do not re-append NEX-078…NEX-087 to PR #5's body; all of them are already in it.
+1. **Select the next dependency-ready slice** from `BACKLOG.md` (Phase 3 governance). Check what
+   the backlog still lists as open rather than assuming a successor exists.
+2. **Carry the shape forward**: exact reads for exact questions, mutation-tested guards, and a
+   regression test that fails against the old answer. NEX-082/086/087/088 were one family.
+3. **Do not start a new slice with under 10 minutes left** of the window; integration and
+   reporting are not compressible.
+
+**Do not redo** NEX-088 or anything before it. **Do not** re-append NEX-078…NEX-088 to PR #5's
+body — all of them are already in it.

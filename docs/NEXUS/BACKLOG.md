@@ -3838,7 +3838,7 @@ Follow-up worth a ticket: `count_revoked()`/`revoked_grants()` still scan the gr
 
 **Phase.** 3 (governance) — audit integrity.
 **Priority.** P1 (foundational: the total on an audit page decides whether the trail looks complete).
-**Status.** IMPLEMENTED · TESTED · COMMITTED `06b5b32` · PUSHED. **CI not yet read; not VERIFIED.**
+**Status.** IMPLEMENTED · TESTED · COMMITTED `06b5b32` · PUSHED · **VERIFIED — CI 4/4.**
 **Depends on.** NEX-082 (the access trail's pagination, whose shape this mirrors).
 
 ### The defect
@@ -3883,10 +3883,15 @@ Read-only, gated, unchanged scope, no migration. The property is the truthfulnes
 counting-scope bug (unscoped count) would disclose how many tool invocations another agent made,
 so the count is filtered by the same `agent_id` the page is filtered by.
 
+### Verification
+
+**VERIFIED — CI 4/4 `completed/success`.** Runs `46127299155` (push) and `46127304188` (pull_request) on docs head `592ba07`, whose product tree is identical to `06b5b32` (`git diff --stat 06b5b32 592ba07 -- src/ tests/ frontend/ Dockerfile docker/ .github/` empty); plus run `46127157086` directly on product `06b5b32`, 2/2 success. The `pull_request` run on `06b5b32` itself (`46127161135`) reads `completed/cancelled` because this push superseded it in the concurrency group — superseded, not a failure, and never evidence on its own.
+
+NEX-088 is **VERIFIED**. Delivered to PR #5 and issue #2 in the same run that read this verdict.
+
 ### Remaining
 
-CI verdict not yet read, and neither PR #5 nor issue #2 has been updated for NEX-088. The next run
-must poll CI on `06b5b32` (or a docs head with `git diff 06b5b32 <docs-head> -- src/ tests/` empty),
-then promote to VERIFIED and deliver.
+None. Four sibling `total=len(items)` sites were each confirmed unpaginated and left alone;
+the `PageMeta(total=len(items))` sweep on this surface is complete.
 
 ---

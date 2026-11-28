@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-88",
-  "timestamp": "2026-11-28T08:55:00Z",
+  "timestamp": "2026-11-28T09:10:00Z",
   "branch": "feature/agentic-enterprise-platform",
   "commit": "06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8",
   "branch_head": "06b5b32 (product, NEX-088); the docs commit carrying this checkpoint advances the tip one past it",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-087 VERIFIED. NEX-088: the tool-invocation audit page filled meta.total with len(items), so every page reported its own window as the whole trail. The count is now asked for directly (SELECT count(*) WHERE agent_id = ?), scoped to the same agent the page is.",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-088 VERIFIED. NEX-088 (run 88): the tool-invocation audit page filled meta.total with len(items), so every page reported its own window as the whole trail; the count is now an agent-scoped SELECT count(*), and the scope itself is pinned by a test.",
   "active_task": null,
   "task_statuses": {
     "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
@@ -13,7 +13,7 @@
     "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
     "NEX-086": "VERIFIED - product 70d7667, CI 4/4 completed/success on docs head f780afb (identical product tree, proved with git diff -- src/ tests/ empty). Runs 46122302349 (push) and 46122306894 (pull_request), polled 2026-11-28T07:42:52Z. 70d7667's own Backend push-run reads completed/cancelled (superseded, never a failure). Delivered to PR #5 body and issue #2 comment 7236123126.",
     "NEX-087": "VERIFIED - product 82d8a64, CI 4/4 completed/success on docs head cf44c89 (runs 46125167112 push, 46125170933 pull_request). Delivered to PR #5 body and issue #2 comment 7236499955.",
-    "NEX-088": "COMMITTED 06b5b32 + PUSHED, NOT VERIFIED - CI not yet read, and not delivered to PR #5 or issue #2. Local: ruff/mypy clean, full pytest exit 0 (twice)."
+    "NEX-088": "VERIFIED - CI 4/4 completed/success (runs 46127299155 push and 46127304188 pull_request on docs head 592ba07, product tree identical to 06b5b32; also 46127157086 on 06b5b32 itself). Delivered to PR #5 and issue #2."
   },
   "completed_tasks": [
     "NEX-084",
@@ -22,9 +22,9 @@
     "NEX-087",
     "NEX-088"
   ],
-  "verified_tasks_up_to": "NEX-087",
+  "verified_tasks_up_to": "NEX-088",
   "in_progress_tasks": [],
-  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. COMMITTED + PUSHED is not VERIFIED, and neither is 'local suite green'. NEX-088 is COMMITTED/PUSHED with green local gates and is deliberately NOT recorded as VERIFIED because no CI verdict has been read. Anchor a verdict to a concluded run, or to a docs head whose product tree is identical (git diff -- src/ tests/ empty); a docs commit superseded in the concurrency group reads completed/cancelled - never a failure, never evidence.",
+  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. NEX-088 was recorded COMMITTED/PUSHED-but-NOT-VERIFIED for exactly one run, then promoted here after reading runs 46127299155 and 46127304188 as completed/success. A verdict may be anchored to a docs head only when `git diff <product> <docs-head> -- src/ tests/ frontend/ Dockerfile docker/ .github/` is empty, so the green run tested the identical tree. A run superseded in the concurrency group reads completed/cancelled - never a failure, never evidence.",
   "validation": {
     "commands_run_on_committed_tree": [
       "ruff format . : 321 files left unchanged",
@@ -37,8 +37,9 @@
     "new_tests": 2,
     "ci": {
       "commit": "06b5b32",
-      "result": "NOT READ",
-      "detail": "No CI verdict has been read for 06b5b32. This is the first obligation of the next run."
+      "result": "4/4 completed/success",
+      "detail": "Runs 46127299155 (push, head 592ba07) and 46127304188 (pull_request, head 592ba07): both jobs - Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build) - completed/success. Product tree on 592ba07 is identical to 06b5b32. Run 46127157086 on 06b5b32 itself was 2/2 success. Run 46127161135 was superseded (cancelled).",
+      "verified_at": "2026-11-28T09:08Z"
     },
     "verified_prior": {
       "commit": "82d8a64",
@@ -52,17 +53,17 @@
     "draft": false,
     "mergeable": true,
     "state": "open",
-    "body_sections_through": "NEX-087",
+    "body_sections_through": "NEX-088",
     "body_length_bytes": 100876,
     "head_sha": "06b5b32",
-    "note": "PR #5 body carries NEX-052..NEX-087 (100876 bytes). NEX-088 is NOT yet in it - owed by the next run after its CI verdict."
+    "note": "PR #5 body now carries NEX-052..NEX-088. No NEX delivery debt remains."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
     "comment_count": 71,
     "latest_comment": "7236499955",
-    "covers": "NEX-087 (NEX-088 not yet posted)",
+    "covers": "NEX-088",
     "note": "Comment 7236499955 posts the NEX-087 verification summary, after asserting zero prior mentions of NEX-087. Use lists, not markdown tables, in issue comments on this repository."
   },
   "blockers": [],
@@ -74,13 +75,13 @@
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
     "Heredocs corrupt in this environment, including a `python3 - <<` body that interleaved into itself. Write the payload to a file with file_editor and run the file; never inline it."
   ],
-  "next_task": "NEX-088 is COMMITTED/PUSHED but NOT VERIFIED and NOT delivered. Its CI verdict and its delivery to PR #5 and issue #2 are the next run's first obligations. After that, take the next dependency-ready slice from BACKLOG.md.",
-  "next_action": "1. Poll CI for 06b5b32 (push and pull_request runs) to a concluded verdict; if superseded, anchor to a docs head with `git diff 06b5b32 <docs-head> -- src/ tests/` empty. 2. Only then write NEX-088 VERIFIED in CHECKPOINT.json, STATE.md and BACKLOG.md. 3. Append NEX-088 to PR #5's body and comment on issue #2 (lists, not tables). 4. Take the next dependency-ready slice. 5. Do not start a new slice with under 10 minutes left.",
+  "next_task": "No NEXUS delivery debt remains through NEX-088. Take the next dependency-ready slice from BACKLOG.md; do not redo NEX-077..NEX-088.",
+  "next_action": "1. Select the next dependency-ready slice from BACKLOG.md (Phase 3 governance has NEX-089+ candidates; check what the backlog still lists as open). 2. Implement it with the same shape: exact reads for exact questions, mutation-tested guards, tests that fail against the old answer. 3. Do not start a new slice with under 10 minutes left.",
   "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-077..NEX-087 are implemented, pushed and CI-verified - do not redo them. 3) NEX-088 IS implemented, tested, committed (06b5b32) and pushed, but its CI has NOT been read and it is NOT delivered - finish that before starting anything new. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files. 5) A docs commit reads completed/cancelled once superseded - never a failure, never evidence. 6) Never inline a multi-line commit message or Python body as a heredoc here; write it to /tmp and pass the file.",
   "ci_status": {
     "product_commit": "06b5b32522c69e91beab9e6bd9b9c3169bf7c9c8",
-    "result": "NOT READ",
-    "detail": "No CI verdict read for 06b5b32 yet. First obligation of the next run."
+    "result": "4/4 completed/success",
+    "detail": "Docs head 592ba07: runs 46127299155 (push) + 46127304188 (pull_request), both 2/2 jobs success. Product tree identical to 06b5b32."
   },
   "commits_this_run": [
     "06b5b32 fix(agents): report the exact trail size on the tool-invocation audit page (NEX-088)",
@@ -93,5 +94,5 @@
     "The count is in the same transaction as the page, but that is atomicity, not a single snapshot - under READ COMMITTED an insert can land between the two statements. The docstring says so."
   ],
   "run_summary": "Run 88 swept the derived-value audit surfaces and fixed 'GET /agents/{agent_id}/tool-invocations reported meta.total with len(items), so each page claimed its own window was the whole trail. A three-entry trail answered 2 then 1. The port gained count_for_agent (SELECT count(*) scoped to the agent), ListToolInvocations returns a page carrying the true total, and the router fills PageMeta.total from it. Mutation found that an unscoped count survived the first regression test - a worse bug that would disclose another agent's trail size - so a second test pins the scope; both mutations now fail. The four sibling total=len(items) listings were each verified unpaginated and left alone. ruff/mypy clean, full pytest exit 0 twice. Product 06b5b32 pushed and remote-verified. CI NOT read and PR #5 / issue #2 NOT updated - NEX-088 is COMMITTED+PUSHED, not VERIFIED.",
-  "docs_head_delivered": "None yet for NEX-088. The docs commit carrying this checkpoint is the head the next run should poll."
+  "docs_head_delivered": "592ba07 - the docs commit carrying the NEX-088 record; CI 4/4 success."
 }
