@@ -482,6 +482,60 @@ def test_revoked_grants_pages_with_limit_and_offset(
     assert grants.revoked_grants(limit=None, offset=1) == whole[1:]
 
 
+def test_a_page_does_not_read_the_whole_grant_table(
+    grants: SqlAlchemyOperatorGrantRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """NEX-092: the bound is in the store, not a slice of a materialised table.
+
+    NEX-086 reported this read as bounded and it was not. ``select(OperatorGrantRow)``
+    carried no ``WHERE``: every grant row came back, a domain object was built for
+    each, and only the resulting list was sliced. So a page of five cost the whole
+    table, and the cost grew with the deployment's total revocation history — the
+    unbounded-response defect NEX-087 and NEX-088 fixed elsewhere, one layer down.
+
+    Asserted on work performed rather than on generated SQL, so a harmless change of
+    clause order or SQLAlchemy's rendering cannot fail it while a regression to
+    in-Python selection cannot pass it. ``_to_domain`` is the adapter's only way to
+    turn a row into a domain object, so counting its calls counts the rows the
+    adapter actually read, whether or not the store returned more.
+    """
+    from notes_service.infrastructure.db import operator_grants as adapter
+
+    converted: list[str] = []
+    real_to_domain = adapter._to_domain
+
+    def counting(row: OperatorGrantRow) -> OperatorGrant:
+        converted.append(row.scope)
+        return real_to_domain(row)
+
+    monkeypatch.setattr(adapter, "_to_domain", counting)
+
+    revoked_scopes = [f"scope-{index}" for index in range(40)]
+    live_scopes = [f"live-{index}" for index in range(40)]
+    for scope in revoked_scopes:
+        grants.add(_grant(ALICE, scope))
+        _revoke(grants, ALICE, scope=scope)
+    for scope in live_scopes:
+        grants.add(_grant(BOB, scope))
+
+    converted.clear()
+    page = grants.revoked_grants(limit=5, offset=0)
+
+    # Five rows read, five objects built — not eighty rows filtered down to five.
+    assert [row.scope for row in page] == revoked_scopes[:5]
+    assert len(converted) == 5
+
+    converted.clear()
+    second = grants.revoked_grants(limit=5, offset=5)
+    assert [row.scope for row in second] == revoked_scopes[5:10]
+    assert len(converted) == 5
+
+    # The total is an aggregate: it must not convert a single row to answer.
+    converted.clear()
+    assert grants.count_revoked() == len(revoked_scopes)
+    assert converted == []
+
+
 def test_count_revoked_omits_live_and_merely_expired_grants(
     grants: SqlAlchemyOperatorGrantRepository,
 ) -> None:

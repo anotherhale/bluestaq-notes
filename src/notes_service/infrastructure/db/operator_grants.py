@@ -43,7 +43,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from notes_service.domain.identity.operator_grant import OperatorGrant, OperatorGrantRationale
@@ -221,35 +221,59 @@ class SqlAlchemyOperatorGrantRepository:
     def revoked_grants(
         self, *, limit: int | None = None, offset: int = 0
     ) -> tuple[OperatorGrant, ...]:
-        # ``is_revoked`` is the domain's predicate, applied here rather than a SQL
-        # ``revoked_at IS NOT NULL`` so the definition of "this row records a
-        # revocation" stays in one place, exactly as ``is_active`` does above.
-        #
-        # Paging (NEX-086) is applied after the domain filter, not pushed into SQL
-        # as ``OFFSET``/``LIMIT``. ``revoked_at IS NOT NULL`` is a faithful SQL
-        # translation, but keeping the selection in Python preserves the single
-        # definition of "revoked" the comment above states — a schema-level
-        # predicate could drift from ``is_revoked`` and page a different set than
-        # the report counts.
+        """Filter, order and bound in the store (NEX-092).
+
+        NEX-086 recorded that this read was bounded and it was not: the selection
+        ran in Python over every grant row — ``select(OperatorGrantRow)`` with no
+        ``WHERE``, a domain object built for each — and only then sliced the
+        materialised list. A page of 50 therefore cost the whole table, which is
+        the unbounded-response defect NEX-087 fixed for the access log and NEX-088
+        for the audit trail, one layer down in the adapter.
+
+        NEX-086 kept the predicate in Python to avoid a SQL translation drifting
+        from ``is_revoked``. The premise does not hold: ``is_revoked`` is a single
+        attribute test, ``self.revoked_at is not None``, with no logic in it, so
+        ``revoked_at IS NOT NULL`` is its exact translation rather than an
+        approximation of it. There is nothing to drift, and the ``CHECK`` on the
+        table forbids the only incoherent half (a named revoker with no instant).
+        ``is_active`` does carry real logic — a clock and two nullable deadlines —
+        which is why that filter stays in Python above; this one does not.
+
+        ``id`` ordering is the port's insertion order, and it is also what makes
+        ``LIMIT``/``OFFSET`` here stable: the list is never appended to by reading
+        it, so a page cannot shift under a walker.
+        """
+        statement = (
+            select(OperatorGrantRow)
+            .where(OperatorGrantRow.revoked_at.is_not(None))
+            .order_by(OperatorGrantRow.id)
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
         with self._session_factory() as session:
-            rows = session.execute(select(OperatorGrantRow).order_by(OperatorGrantRow.id)).scalars()
-            revoked = [grant for row in rows if (grant := _to_domain(row)).is_revoked]
-        if limit is None:
-            return tuple(revoked[offset:])
-        return tuple(revoked[offset : offset + limit])
+            rows = session.execute(statement).scalars()
+            return tuple(_to_domain(row) for row in rows)
 
     def count_revoked(self) -> int:
-        """How many grants have been revoked, ever (NEX-086).
+        """How many grants have been revoked, ever — an aggregate (NEX-086, NEX-092).
 
         A paged report needs the total to say whether a page is the last one and
-        to page without the caller knowing the size in advance. Counting through
-        the domain predicate keeps this consistent with ``revoked_grants``: a
-        cheaper ``revoked_at IS NOT NULL`` COUNT could disagree with the list it
-        is supposed to bound.
+        to page without the caller knowing the size in advance. NEX-086 counted by
+        materialising every row and filtering in Python, so the "without loading
+        them" promise in the port was not kept either. ``count(*)`` over
+        ``revoked_at IS NOT NULL`` reads no rows and cannot be truncated by volume,
+        and it selects through the same predicate as ``revoked_grants`` — the
+        ``WHERE`` clause is written once, in the adapter, beside the one it must
+        agree with.
         """
         with self._session_factory() as session:
-            rows = session.execute(select(OperatorGrantRow)).scalars()
-            return sum(1 for row in rows if _to_domain(row).is_revoked)
+            total = session.execute(
+                select(func.count())
+                .select_from(OperatorGrantRow)
+                .where(OperatorGrantRow.revoked_at.is_not(None))
+            ).scalar_one()
+        return int(total)
 
 
 __all__ = ["SqlAlchemyOperatorGrantRepository"]
