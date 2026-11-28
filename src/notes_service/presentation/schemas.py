@@ -21,7 +21,10 @@ from notes_service.application.use_cases.operator_access_report import OperatorA
 from notes_service.application.use_cases.operator_access_retention import (
     OperatorAccessPurgeResult,
 )
-from notes_service.application.use_cases.operator_grants import OperatorGrantSnapshot
+from notes_service.application.use_cases.operator_grants import (
+    OperatorGrantDetail,
+    OperatorGrantSnapshot,
+)
 from notes_service.application.use_cases.organization import OrganizationView
 from notes_service.application.use_cases.policy_lifecycle import PolicyHistory
 from notes_service.application.use_cases.tools import ToolResult
@@ -923,6 +926,41 @@ class OperatorHolderResponse(ResponseModel):
     expires_at: datetime | None
 
 
+class OperatorGrantDetailResponse(ResponseModel):
+    """One stored grant with its provenance, for operators (NEX-077).
+
+    The holder summary answers *who holds what until when*. It cannot answer
+    *why*, because folding a holder's several grants into one row discards the
+    per-grant issuer and reason. This row keeps the grant's own shape so the
+    reason NEX-076 records reaches the reader instead of resting unread in the
+    table.
+
+    ``granted_by`` and ``rationale`` are ``null`` for a configuration grant (the
+    seed path): a deployment-issued grant has no human issuer and no per-row
+    reason, and the domain forbids it from carrying a fabricated one. For a
+    human-issued grant both are present — that pairing is a domain invariant, so
+    a client may rely on it.
+    """
+
+    user_id: str
+    scope: str
+    granted_at: datetime
+    granted_by: str | None
+    expires_at: datetime | None
+    rationale: str | None
+
+    @classmethod
+    def from_detail(cls, detail: OperatorGrantDetail) -> OperatorGrantDetailResponse:
+        return cls(
+            user_id=str(detail.user_id),
+            scope=detail.scope,
+            granted_at=detail.granted_at,
+            granted_by=str(detail.granted_by) if detail.granted_by is not None else None,
+            expires_at=detail.expires_at,
+            rationale=detail.rationale,
+        )
+
+
 class OperatorGrantReportResponse(ResponseModel):
     """Every currently-active operator grant, for operators (NEX-045).
 
@@ -930,10 +968,18 @@ class OperatorGrantReportResponse(ResponseModel):
     process-local demo store for a durable deployment-wide one. ``as_of`` is the
     instant the answer describes, taken from the same clock that stamped the
     access-log entry this request wrote.
+
+    ``holders`` is the folded summary; ``grants`` is the un-folded detail behind
+    it (NEX-077). Both describe the same active set at the same instant, so
+    ``grant_count`` is never inconsistent with ``holder_count`` — a holder may
+    hold several grants, so ``grant_count >= holder_count`` whenever anyone holds
+    a grant at all.
     """
 
     holders: list[OperatorHolderResponse]
+    grants: list[OperatorGrantDetailResponse]
     holder_count: int
+    grant_count: int
     as_of: datetime
     source_name: str
 
@@ -948,7 +994,9 @@ class OperatorGrantReportResponse(ResponseModel):
                 )
                 for holder in snapshot.holders
             ],
+            grants=[OperatorGrantDetailResponse.from_detail(detail) for detail in snapshot.grants],
             holder_count=snapshot.holder_count,
+            grant_count=snapshot.grant_count,
             as_of=snapshot.as_of,
             source_name=snapshot.source_name,
         )

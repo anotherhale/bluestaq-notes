@@ -30,7 +30,10 @@ from notes_service.application.use_cases.operator_grants import (
     OPERATION,
     ListOperatorGrants,
 )
-from notes_service.domain.identity.operator_grant import OperatorGrant
+from notes_service.domain.identity.operator_grant import (
+    OperatorGrant,
+    OperatorGrantRationale,
+)
 from notes_service.domain.identity.principal import Principal
 from notes_service.domain.identity.value_objects import Email, UserId
 from notes_service.infrastructure.security.operator_access_log import (
@@ -278,3 +281,91 @@ def test_the_report_states_the_instant_and_the_source() -> None:
     assert snapshot.as_of == clock.now()
     assert snapshot.source_name == "in-memory"
     assert snapshot.holder_count == len(snapshot.holders)
+
+
+# -- the grant detail: the reason reaches the reader (NEX-077) --------------
+
+
+def test_a_human_issued_grant_reports_its_issuer_and_reason() -> None:
+    """The fold drops provenance; the detail keeps it, which is why it exists."""
+    use_case, _ = _list_use_case(
+        _reporting_store(
+            _grant(
+                BOB,
+                granted_by=ALICE,
+                rationale=OperatorGrantRationale("covering the incident review window"),
+            )
+        )
+    )
+
+    snapshot = use_case.run(_principal(ALICE))
+
+    bob = {row.scope: row for row in snapshot.grants if row.user_id == BOB}
+    assert bob["withholding-report"].granted_by == ALICE
+    assert bob["withholding-report"].rationale == "covering the incident review window"
+    # The summary folds the same grant; the two views agree on the holder set.
+    assert {holder.user_id for holder in snapshot.holders} == {ALICE, BOB}
+
+
+def test_a_configuration_grant_reports_no_issuer_and_no_reason() -> None:
+    """A seeded grant has neither; the detail says so rather than inventing one."""
+    use_case, _ = _list_use_case(_reporting_store(_grant(BOB)))
+
+    detail = {row.user_id: row for row in use_case.run(_principal(ALICE)).grants}[BOB]
+
+    assert detail.granted_by is None
+    assert detail.rationale is None
+
+
+def test_two_grants_for_one_holder_keep_their_own_reasons() -> None:
+    """The reason a fold cannot carry: one holder, two grants, two justifications."""
+    use_case, _ = _list_use_case(
+        _reporting_store(
+            _grant(
+                BOB,
+                scope="withholding-report",
+                granted_by=ALICE,
+                rationale=OperatorGrantRationale("incident review window"),
+            ),
+            _grant(
+                BOB,
+                scope="audit-integrity",
+                granted_by=ALICE,
+                rationale=OperatorGrantRationale("quarterly access recertification"),
+            ),
+        )
+    )
+
+    snapshot = use_case.run(_principal(ALICE))
+
+    reasons = {row.scope: row.rationale for row in snapshot.grants if row.user_id == BOB}
+    assert reasons == {
+        "withholding-report": "incident review window",
+        "audit-integrity": "quarterly access recertification",
+    }
+    # One holder, two grants: the counts stay consistent, not merely present.
+    assert snapshot.holder_count == 2  # ALICE (reader) + BOB
+    assert snapshot.grant_count == 3  # ALICE's read grant + BOB's two
+    assert snapshot.grant_count == len(snapshot.grants)
+
+
+def test_the_detail_excludes_an_expired_grant() -> None:
+    """Detail and summary describe the same active set, so expiry drops both."""
+    clock = FixedClock(BASE)
+    use_case, _ = _list_use_case(
+        _reporting_store(
+            _grant(
+                BOB,
+                granted_by=ALICE,
+                rationale=OperatorGrantRationale("a short window"),
+                expires_at=BASE + timedelta(hours=1),
+            )
+        ),
+        clock=clock,
+    )
+    assert any(row.user_id == BOB for row in use_case.run(_principal(ALICE)).grants)
+
+    clock.advance(timedelta(hours=2))
+    snapshot = use_case.run(_principal(ALICE))
+    assert not any(row.user_id == BOB for row in snapshot.grants)
+    assert BOB not in {holder.user_id for holder in snapshot.holders}

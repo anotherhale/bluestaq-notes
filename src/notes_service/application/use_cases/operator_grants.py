@@ -75,6 +75,37 @@ class OperatorHolder:
 
 
 @dataclass(frozen=True, slots=True)
+class OperatorGrantDetail:
+    """One stored grant, un-folded: who holds it, who issued it, and why.
+
+    ``OperatorHolder`` answers *who holds what until when* — the right shape for
+    a summary, and the wrong shape for an audit. Folding per-scope grants into one
+    row per holder necessarily discards the two fields that carry provenance: a
+    holder with three grants has three different issuers and three different
+    reasons, and a single ``rationale`` on the holder row would have to pick one
+    arbitrarily or drop them all. NEX-076 recorded exactly that gap — the reason
+    was written and never read back.
+
+    This row keeps the grant's own shape so the reason reaches the reader:
+
+    * ``granted_by`` is ``None`` for a configuration grant (the seed path), which
+      is an honest "no human issued this", never a missing field.
+    * ``rationale`` is the issuer's stated reason. The domain guarantees the
+      pairing (a human-issued grant always carries one; a configuration grant
+      never does), so a row with ``granted_by`` set always has a ``rationale``
+      here. It is typed ``str | None`` only because a configuration grant
+      legitimately has neither.
+    """
+
+    user_id: UserId
+    scope: str
+    granted_at: datetime
+    granted_by: UserId | None
+    expires_at: datetime | None
+    rationale: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class OperatorGrantSnapshot:
     """Every active operator at one instant, in stable order.
 
@@ -82,15 +113,27 @@ class OperatorGrantSnapshot:
     process-local demo store for a durable deployment-wide one. ``as_of`` is the
     instant the answer describes, taken from the gate's clock so it agrees with
     the access-log entry the same request wrote.
+
+    ``holders`` is the summary fold (one row per operator); ``grants`` is the
+    un-folded detail behind it (one row per stored grant). Both describe the same
+    active set at the same instant — they are two views, not two queries — so a
+    reader can reconcile them without trusting either alone. The detail exists
+    because the fold cannot carry per-grant provenance: see
+    :class:`OperatorGrantDetail`.
     """
 
     holders: tuple[OperatorHolder, ...]
+    grants: tuple[OperatorGrantDetail, ...]
     as_of: datetime
     source_name: str
 
     @property
     def holder_count(self) -> int:
         return len(self.holders)
+
+    @property
+    def grant_count(self) -> int:
+        return len(self.grants)
 
 
 class ListOperatorGrants:
@@ -116,9 +159,32 @@ class ListOperatorGrants:
         active = self._grants.active_grants(now=now)
         return OperatorGrantSnapshot(
             holders=_summarise(active),
+            grants=_detail(active),
             as_of=now,
             source_name=self._grants.name,
         )
+
+
+def _detail(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorGrantDetail, ...]:
+    """One detail row per active grant, in the store's stable order.
+
+    The fold in :func:`_summarise` answers "who holds what"; this answers "why,
+    and who said so". Both read the same ``active`` tuple, so the summary and its
+    detail cannot describe different instants or different sets. ``rationale`` is
+    unwrapped to its text here — the value object is the domain's guard at the
+    boundary, and a response should carry the operator's sentence, not a wrapper.
+    """
+    return tuple(
+        OperatorGrantDetail(
+            user_id=grant.user_id,
+            scope=grant.scope,
+            granted_at=grant.granted_at,
+            granted_by=grant.granted_by,
+            expires_at=grant.expires_at,
+            rationale=grant.rationale.value if grant.rationale is not None else None,
+        )
+        for grant in grants
+    )
 
 
 def _summarise(grants: tuple[OperatorGrant, ...]) -> tuple[OperatorHolder, ...]:
@@ -312,6 +378,7 @@ __all__ = [
     "IssueOperatorGrant",
     "IssueOperatorGrantRequest",
     "ListOperatorGrants",
+    "OperatorGrantDetail",
     "OperatorGrantSnapshot",
     "OperatorHolder",
 ]
