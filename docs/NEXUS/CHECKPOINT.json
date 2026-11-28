@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-27-72",
-  "timestamp": "2026-11-28T00:53Z",
+  "timestamp": "2026-11-28T00:56Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "3c26957c5e72905e18b22a271dc1f4af7fa8e081",
-  "project_phase": "Phase 3 (governance). NEX-072 makes the operator access log durable: the record of a granted read of a platform-wide operational view now survives a restart and is shared across workers, closing R36's recorded residual.",
+  "commit": "66d51ec",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049 verified. NEX-070..NEX-072 verified: the operator access log is now durable (a privileged read survives a restart and is shared across workers). Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -137,7 +137,7 @@
     ],
     "ci": "NEX-072 VERIFIED: 4/4 completed/success at 3c26957, polled 2026-11-28T00:52Z. Everything through NEX-072 is VERIFIED."
   },
-  "uncommitted_work": null,
+  "uncommitted_work": false,
   "pr_state": "PR #5 open, unmerged, awaiting human review. head 3c26957. Body does NOT yet carry a NEX-072 section.",
   "tracking_issue": {
     "issue": 2,
@@ -152,7 +152,7 @@
     "PR #5 body does not yet carry NEX-072 (nor NEX-071 was folded into a section header count); the body is the outstanding delivery debt for this slice."
   ],
   "next_task": "No carried-over implementation debt. NEX-072 pushed at 3c26957. Next: read docs/NEXUS/BACKLOG.md and pick the highest-value dependency-ready slice. Do not re-implement NEX-072.",
-  "next_action": "Commit and push these docs; append NEX-072 to PR #5; post the NEX-072 issue #2 comment; then the next dependency-ready backlog slice.",
+  "next_action": "Read docs/NEXUS/BACKLOG.md and implement the next dependency-ready slice. Candidates to evaluate: a retention policy for operator_access_log (named follow-up, not a defect), or whatever BACKLOG.md ranks highest among unblocked work. Do not re-implement NEX-072.",
   "recovery_instructions": "Tree is clean at 3c26957 (NEX-072 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. Next: read docs/NEXUS/BACKLOG.md, pick the highest-value dependency-ready slice, implement it as ONE vertical slice, and do not re-implement NEX-072.",
   "ci_status": {
     "adcb75e": "4/4 completed/success (NEX-071 docs head, descends from product a5d2710) - polled 2026-11-28T00:33Z by run 71",
@@ -175,17 +175,25 @@
   "run_summary": "NEX-072 recovered a prior run's uncommitted durable-adapter work, validated it end to end (full suite, mypy over 141 files, migration upgrade+downgrade), committed, pushed and polled CI. Closes R36's residual: the operator access log is no longer process-local.",
   "delivery_state": {
     "pr": 5,
+    "pr_state": "open",
+    "pr_draft": false,
+    "pr_merged": false,
+    "pr_body_len": 52842,
+    "pr_note": "NEX-072 section appended 2026-11-28T00:55Z (PATCH 200, body 50507 -> 52842 chars). PR #5 must remain UNMERGED: automated merging is prohibited, a human decides.",
     "issue": 2,
-    "note": "PR #5 body does not yet carry NEX-072. Issue #2 comment for NEX-072 pending."
+    "issue_state": "open",
+    "issue_comment_id": 7231239328,
+    "issue_note": "NEX-072 comment posted 2026-11-28T00:56Z (HTTP 201, 1838 chars).",
+    "delivery_debt": "none for NEX-072"
   },
   "branch_head": "3c26957 is the NEX-072 product commit; docs checkpoints follow it. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "A checkpoint commit cannot name itself. 787ed57 is the last substantive commit; every later commit on this branch is a docs-only checkpoint that descends from it, so its CI still compiles and tests the same product code. To find the live head, poll `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` rather than trusting this field. Each such docs commit also cancels the previous head's in-flight CI (branch concurrency), so `conclusion: cancelled` means superseded, never failed.",
+  "commit_note": "A checkpoint's own commit field can never name the commit that writes it; it lags the head by exactly one commit. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": {
     "run_id": "NEX-2026-11-27-72",
     "branch": "feature/agentic-enterprise-platform",
-    "starting_commit": "07b3f50 (live remote tip; reached by fast-forward from adcb75e)",
-    "ending_commit": "3c26957",
+    "starting_commit": "07b3f50",
+    "ending_commit": "66d51ec (docs); product 3c26957",
     "tasks_completed": [
       "NEX-072"
     ],
@@ -194,29 +202,11 @@
     ],
     "tasks_in_progress": [],
     "tasks_blocked": [],
-    "files_changed": [
-      "src/notes_service/infrastructure/db/models.py",
-      "src/notes_service/infrastructure/db/operator_access_log.py",
-      "src/notes_service/bootstrap/container.py",
-      "migrations/versions/a1c7e2f60b93_operator_access_log.py",
-      "tests/persistence/test_operator_access_log.py"
-    ],
-    "migrations": "a1c7e2f60b93 creates operator_access_log + 3 indexes; no backfill; upgrade/downgrade verified on sqlite",
-    "tests_executed": "ruff format, ruff check, mypy, full pytest, persistence subset, alembic upgrade+downgrade",
-    "test_outcomes": "ruff clean; ruff check all passed; mypy 141 files clean; 1501 passed / 4 skipped; 9 persistence tests pass",
-    "security_findings": [
-      "Fixed: the audit record of a privileged read was per-worker and lost on restart, so an operator's audit could be partial-but-complete-looking (R36 residual)."
-    ],
     "ci_status": "4/4 completed/success at 3c26957, polled 2026-11-28T00:52Z",
-    "commits": [
-      "3c26957"
-    ],
-    "push_status": "pushed 07b3f50..3c26957, fast-forward, verified with git ls-remote",
-    "pr_status": "PR #5 open and unmerged; body does not yet carry NEX-072",
-    "tracking_issue_status": "issue #2 open; NEX-072 comment posted",
-    "checkpoint_status": "updated",
-    "next_prioritized_task": "next dependency-ready backlog slice",
-    "recommended_next_action": "NEX-072 is VERIFIED. Next run: append a NEX-072 section to PR #5 (body currently ends at NEX-071) and pick the next dependency-ready backlog slice."
+    "push_status": "07b3f50..3c26957 (product) and 3c26957..66d51ec (docs), both fast-forward",
+    "pr_status": "PR #5 updated with the NEX-072 section; open, unmerged",
+    "issue_status": "issue #2 commented (7231239328); stays open, the programme is not done",
+    "recommended_next_action": "Read docs/NEXUS/BACKLOG.md and implement the next dependency-ready slice. Candidates to evaluate: a retention policy for operator_access_log (named follow-up, not a defect), or whatever BACKLOG.md ranks highest among unblocked work. Do not re-implement NEX-072."
   },
   "pr": {
     "body_covers_through": "NEX-068",

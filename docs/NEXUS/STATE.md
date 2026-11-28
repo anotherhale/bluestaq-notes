@@ -2590,3 +2590,12 @@ it fail without the fix.
 message says NEX-066, an ID already used by the obligation-enforcement slice; force-push is
 prohibited, so the message stands and the correction lives in `EXECUTION_LOG.md`. Grep the
 log and checkpoint for the next free ID *before* writing the commit message.
+
+## Delivery for NEX-072 (run `NEX-2026-11-27-72`)
+
+- **PR #5**: NEX-072 section appended 2026-11-28T00:55Z (PATCH 200, body 50507 -> 52842 chars).
+  Still **open, draft=false, unmerged** — automated merging is prohibited; a human decides.
+- **Issue #2**: NEX-072 comment posted 2026-11-28T00:56Z (id `7231239328`, HTTP 201, 1838 chars).
+  The issue stays open: the programme is not done.
+- **CI**: 4/4 `completed/success` at `3c26957`, polled 2026-11-28T00:52Z. Delivery debt for
+  NEX-072: **none**.
