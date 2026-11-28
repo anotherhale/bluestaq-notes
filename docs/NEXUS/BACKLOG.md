@@ -4175,3 +4175,102 @@ would hide an authority removal from audit.
 
 `ruff format` 324 unchanged · `ruff check` passed · `mypy` 144 files · suite **1741 passed / 4
 skipped**. **CI 4/4 `completed/success`** on `3159555` itself.
+
+---
+
+## NEX-094 — Bound the *active* operator-grant reads in the store (run `NEX-2026-11-28-93`)
+
+**Phase** 3 (governance) · **Priority** P1 · **Status** IMPLEMENTED + TESTED · **Complexity** S
+**Depends on** NEX-087 (the same defect class, closed elsewhere), NEX-079 (revocation as recorded fact), NEX-080 (`granted_by` provenance)
+**Architecture refs** `docs/ENTERPRISE_SECURITY_ARCHITECTURE_V1.md` (audit integrity), ADR-008
+
+### Objective
+
+`active_grants()` and `active_for()` — the two reads that answer *what authority is in force right
+now* — each ran `select(OperatorGrantRow)` over the whole table, built a domain object per row, and
+discarded the revoked and long-expired ones in Python. Grants are never pruned: revocation is
+recorded, not deleted (NEX-079), so the table only grows and every authorisation read cost the
+deployment's entire grant history. NEX-087/088/092 closed this class in the listing, revocation-report
+and count reads; these two were the remaining seam.
+
+### The blocker this run actually cleared
+
+The reason it had not been done is real and was documented in the code: `active_for` carried a
+comment saying `is_active` is *the* definition of "in force" and that filtering in SQL would duplicate
+it and let the two drift. That is correct in principle. It is only safe to push down if the SQL form is
+an **exact** translation, not an approximation — and for `revoked_grants` that was obvious
+(`revoked_at IS NOT NULL`), while for `is_active` it had been assumed to be "real logic: a clock and
+two nullable deadlines" that a SQL translation could drift from.
+
+### Why it turned out to be exact
+
+`is_active` is four independent branch tests, each a bare comparison against a single column: not
+revoked; `granted_at <= now`; `not_before IS NULL OR not_before <= now`; `expires_at IS NULL OR
+expires_at > now`. No arithmetic, no cross-field expression, no clock evaluation the database performs
+differently from Python. So `_active_predicate(now)` is a transcription, not a paraphrase — and the
+equivalence is *pinned by test* across the boundary instants rather than argued in a comment.
+
+### The fix
+
+- New module-level `_active_predicate(now) -> ColumnElement[bool]` in
+  `infrastructure/db/operator_grants.py`, kept directly beside the reads it serves, with a docstring
+  that states *why* it is exact and what now holds the two definitions together.
+- `active_grants` and `active_for` both carry it in their `WHERE`, so only in-force rows are returned to
+  the application, `order_by(id)` unchanged (insertion order — the port's contract and what lets tests
+  assert without sorting).
+- `active_for` no longer calls `_to_domain` at all: it reads `row.scope` straight off the filtered rows.
+- `revoked_grants`' docstring updated: it previously said `is_active` "carries real logic … which is why
+  that filter stays in Python". That claim is now false and would have misled the next reader.
+
+### Acceptance criteria
+
+- [x] Both active reads carry the active-window predicate in the `WHERE`, not a Python filter
+- [x] `is_active` remains the single definition of "in force"; the SQL form is pinned to it by test
+- [x] Same rows, same order, same results — no contract, port or migration change
+- [x] Stale comments in `active_for` and `revoked_grants` corrected rather than left to contradict the code
+
+### Required tests
+
+- [x] `test_active_grants_does_not_read_the_whole_grant_table` — 40 revoked + 20 lapsed + live grants,
+      asserts the adapter converts exactly the live ones (work-count probe, not SQL text)
+- [x] `test_active_reads_filter_in_the_store_rather_than_in_python` — records executed statements via
+      `before_cursor_execute`; both active-read `SELECT`s must contain `revoked_at is null` and
+      `expires_at`. Chosen because `active_for` has no per-row conversion to count, so its *statement*
+      is the only evidence of where the work happens
+- [x] `test_active_predicate_agrees_with_the_domain` — 10 boundary cases (each exactly on or one second
+      either side of a bound) × 3 instants; adapter result must equal domain-side filtering of all rows
+- [x] Mutation controls, both observed: (a) restoring the old adapter fails the work-count and the
+      statement tests; (b) changing one operator in the predicate (`<=` → `<`) fails all three
+      equivalence instants — so the boundary test bites on a one-character drift, not just a revert
+
+### Security considerations
+
+These two reads are what a policy gate consults to decide whether an operator may act. Two failure modes
+matter, and both are covered:
+
+- **Dropping a live grant** (under-select) would silently remove authority — fails closed for the
+  operator, but a wrong answer to "may this person act". The boundary equivalence test is what prevents
+  a `<`/`<=` drift silently narrowing the set.
+- **Admitting a lapsed or revoked grant** (over-select) would confer authority the record no longer
+  grants. `revoked_at IS NULL` is asserted in both statements, and revoked-grant exclusion is covered
+  by `test_a_revoked_grant_is_excluded_even_when_its_other_bounds_are_open`.
+
+No migration, no contract change, no new dependency. The predicate reads only columns already present.
+
+### Validation
+
+`ruff format` 325 files unchanged · `ruff check` all passed ·
+`mypy` no issues in 144 source files · full suite **1754 passed, 4 skipped** (1758 collected; the
+skips are `postgresql`-marked). Product commit **`d8353ff`**, committed and pushed. CI verdict:
+pending on that commit — this entry is COMMITTED + PUSHED, not yet VERIFIED. The test that carries
+the equivalence was proved load-bearing by mutating `granted_at <= now` to `< now`: 14 tests fail,
+including all three boundary instants.
+
+### Remaining / next
+
+The adapter sweep for reads documented as bounded whose bodies still materialise the table is now
+closed for `operator_grants.py`. `list_all_for_integrity_sweep` already carries `(created_at, id)`;
+the two delegation reads and `list_for_owner` use `created_at` alone but are unpaged whole-set reads,
+so an unstable tie can only reorder presentation — not this defect class, and not to be opened without
+a consumer that depends on the order.
+

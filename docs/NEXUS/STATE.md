@@ -7,17 +7,62 @@ truth; this file records intent and reconciliation.
 
 | Field | Value |
 | --- | --- |
-| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-093 VERIFIED**. **NEX-093** (run 93, product `48ad062`) made the agent listing queries deterministic. Approvals and tool invocations were ordered on a timestamp alone, so two rows written in the same instant had no defined relative order: an `OFFSET` page could return one row twice while skipping another, and the unbounded reads that feed authorisation could resolve differently run to run. Three queries now carry a tiebreaker that is unique within its own scope — approvals and pending approvals on `id`, tool invocations on `chain_sequence`, which orders tied rows the way the audit chain read them. Prior: **NEX-092** (run 93, product `3159555`, **CI 4/4 `completed/success` on the product commit itself**) moved the revoked-grant report's filter, order and window into SQL: `revoked_grants` ran `select(OperatorGrantRow)` with no `WHERE`, converted **every** grant row to a domain object, then sliced — a five-row page priced the whole table, and `count_revoked()` did the same to answer one integer. Same defect NEX-087 fixed for the access log and NEX-088 for the audit trail, one layer lower. Prior: **NEX-090** (run 91, product `aa4b2c8`, **CI 4/4 success** on docs head `ea0a696`) paged `GET /agent-runs`, whose store listing was capped at 50 rows while the route reported `PageMeta(total=len(items))` and accepted no `limit`/`offset` — an agent with 60 runs answered a complete-looking history of fifty with no way to reach the rest. `meta.total` is now a `COUNT` over the same agent-scoped set and the window is the caller's. Prior: **NEX-089** (run 89, product `b3130ce`, **CI 4/4 success** on docs head `c5a1250`) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and reported the page size as the total. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
+| Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED**. Phase 3 (governance): NEX-047…**NEX-093 VERIFIED**; **NEX-094 IMPLEMENTED + TESTED, NOT VERIFIED** (no CI verdict exists yet). **NEX-094** (run 93) bounded the two `active` operator-grant reads. `active_grants()` and `active_for()` — what a policy gate consults to decide whether an operator may act — each ran `select(OperatorGrantRow)` with **no `WHERE`**, built a domain object per row and discarded the revoked and lapsed ones in Python. Grants are never pruned, so the table only grows and every authorisation read priced the deployment's whole grant history. Both now carry `_active_predicate(now)` in the `WHERE`. Prior: **NEX-093** (run 93, product `48ad062`) made the agent listing queries deterministic. Approvals and tool invocations were ordered on a timestamp alone, so two rows written in the same instant had no defined relative order: an `OFFSET` page could return one row twice while skipping another, and the unbounded reads that feed authorisation could resolve differently run to run. Three queries now carry a tiebreaker that is unique within its own scope — approvals and pending approvals on `id`, tool invocations on `chain_sequence`, which orders tied rows the way the audit chain read them. Prior: **NEX-092** (run 93, product `3159555`, **CI 4/4 `completed/success` on the product commit itself**) moved the revoked-grant report's filter, order and window into SQL: `revoked_grants` ran `select(OperatorGrantRow)` with no `WHERE`, converted **every** grant row to a domain object, then sliced — a five-row page priced the whole table, and `count_revoked()` did the same to answer one integer. Same defect NEX-087 fixed for the access log and NEX-088 for the audit trail, one layer lower. Prior: **NEX-090** (run 91, product `aa4b2c8`, **CI 4/4 success** on docs head `ea0a696`) paged `GET /agent-runs`, whose store listing was capped at 50 rows while the route reported `PageMeta(total=len(items))` and accepted no `limit`/`offset` — an agent with 60 runs answered a complete-looking history of fifty with no way to reach the rest. `meta.total` is now a `COUNT` over the same agent-scoped set and the window is the caller's. Prior: **NEX-089** (run 89, product `b3130ce`, **CI 4/4 success** on docs head `c5a1250`) windowed `GET /agents/{id}/approvals`, which read every approval the agent had ever opened and reported the page size as the total. Prior: **NEX-088** (run 88, product `06b5b32`, docs head `592ba07`) fixed the tool-invocation audit page, which answered `meta.total` with `len(items)` — its own window size — so every page looked like the whole trail. Prior: **NEX-087** (run 87, product `82d8a64`, **CI 4/4 success** on docs head `cf44c89`): the retention report's `retained_from` was the tail of a *page*, not the log, so past 1000 survivors it understated how far back the retained evidence reached — in the reassuring direction, and worse as traffic grew. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 93) | `61ec31a` was the run-92 close-out docs head at run start (matched by `git ls-remote`; local HEAD identical, no divergence). Prior: `4302966` (run 91). |
-| Head commit (measured) | Product **`48ad062`** (NEX-093; local gates green, load-bearing test — the CI verdict is in `Last CI result`, not asserted here); prior product `3159555` (NEX-092, **VERIFIED** — CI 4/4 `completed/success` on the product commit itself), run-93 docs head `4413769`. Prior: **`aa4b2c8`** (NEX-090, VERIFIED via docs head `ea0a696`); `b3130ce` (NEX-089); `06b5b32` (NEX-088); `82d8a64` (NEX-087); `70d7667` (NEX-086); `d9d0a3a` (NEX-085) over `c698979`; `4cadf4c` (NEX-084) over `09cc4ad`; `453e134` (NEX-083, VERIFIED 2/2) over `c16dd9b`; `9c1ae48` (NEX-082) over `4f8e15d`; `85a013c` (NEX-081) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file. |
-| Last CI result | **`48ad062` (NEX-093 product) — 4/4 `completed/success` on the product commit itself**, runs `46138734219` (pull_request) and `46138728671` (push), Backend and Frontend green on each — no docs-head anchor required. Prior: `c470ef8` (run-93 docs head) — **2/2 `completed/success`** on both runs, `46137100857` (push) and `46137104305` (pull_request), Backend and Frontend green on each. `3159555` (NEX-092 product) — **4/4 `completed/success`**, runs `46136495333` (push) and `46136499460` (pull_request). The `4413769` runs (`46136930439`/`46136935020`) concluded `cancelled` — superseded in the concurrency group, no signal either way. `61ec31a` (NEX-092 docs head) — **2/2**, run `46136716838` (pull_request). Prior: `c5a1250` (NEX-089) 4/4; `ea0a696` (NEX-090) 4/4 licensed by an empty product diff because `aa4b2c8` had no check-runs of its own; `592ba07` (NEX-088) 4/4 plus `46127157086` on `06b5b32` itself 2/2; `cf44c89` (NEX-087) 4/4; `f780afb` (NEX-086) 4/4. |
-| Tracking issue | #2 (open) — `7238119575` covers **NEX-092's CI verdict and delivery** (run 93); PR #5 comment `7238131300` records the `61ec31a` docs-head verdict. Prior: `7237454626` NEX-090 (run 91); `7237162851` NEX-089. **NEX-092 is delivered.** |
-| PR #5 | **#5 (open, `draft=false`, head `bd736ce`, then `48ad062` once NEX-093 landed)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-092** (121690 bytes, read back from the API: `## NEX-092` present once, NEX-091/090/088 sections intact, 0 × `CI UNREAD`). NEX-092's section was added run 93. **Never merged by automation.** |
-| **Open P1** | **None.** NEX-090 is verified and delivered; the family that named P1 work from NEX-082 through NEX-090 is closed. The next run selects the next dependency-ready slice from `BACKLOG.md`/`ROADMAP.md`. Prior fixes: NEX-089 windowed the approval history and counted the status it returns; NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap. |
+| Head commit (measured) | Product for **NEX-094** — resolve with `git log --oneline -1 -- src/notes_service/infrastructure/db/operator_grants.py`. **IMPLEMENTED + TESTED; CI verdict pending** (recorded in `Last CI result`, not asserted here). Prior product **`48ad062`** (NEX-093; local gates green, load-bearing test — the CI verdict is in `Last CI result`, not asserted here); prior product `3159555` (NEX-092, **VERIFIED** — CI 4/4 `completed/success` on the product commit itself), run-93 docs head `4413769`. Prior: **`aa4b2c8`** (NEX-090, VERIFIED via docs head `ea0a696`); `b3130ce` (NEX-089); `06b5b32` (NEX-088); `82d8a64` (NEX-087); `70d7667` (NEX-086); `d9d0a3a` (NEX-085) over `c698979`; `4cadf4c` (NEX-084) over `09cc4ad`; `453e134` (NEX-083, VERIFIED 2/2) over `c16dd9b`; `9c1ae48` (NEX-082) over `4f8e15d`; `85a013c` (NEX-081) over `3a05db2`. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA recorded in this file. |
+| Last CI result | **NEX-094 product commit — NO VERDICT YET; treat as unverified until read per run and per job.** Prior: **`48ad062` (NEX-093 product) — 4/4 `completed/success` on the product commit itself**, runs `46138734219` (pull_request) and `46138728671` (push), Backend and Frontend green on each — no docs-head anchor required. Prior: `c470ef8` (run-93 docs head) — **2/2 `completed/success`** on both runs, `46137100857` (push) and `46137104305` (pull_request), Backend and Frontend green on each. `3159555` (NEX-092 product) — **4/4 `completed/success`**, runs `46136495333` (push) and `46136499460` (pull_request). The `4413769` runs (`46136930439`/`46136935020`) concluded `cancelled` — superseded in the concurrency group, no signal either way. `61ec31a` (NEX-092 docs head) — **2/2**, run `46136716838` (pull_request). Prior: `c5a1250` (NEX-089) 4/4; `ea0a696` (NEX-090) 4/4 licensed by an empty product diff because `aa4b2c8` had no check-runs of its own; `592ba07` (NEX-088) 4/4 plus `46127157086` on `06b5b32` itself 2/2; `cf44c89` (NEX-087) 4/4; `f780afb` (NEX-086) 4/4. |
+| Tracking issue | #2 (open) — **NEX-094 is committed and pushed but NOT YET delivered to the issue or to PR #5's body.** Prior: `7238119575` covers NEX-092's verdict and delivery (run 93); PR #5 comment `7238131300` records the `61ec31a` docs-head verdict; `7237454626` NEX-090; `7237162851` NEX-089. NEX-092 and NEX-093 are delivered. |
+| PR #5 | **#5 (open, `draft=false`)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-093** (read back from the API); **the NEX-094 section is NOT yet in the body** — append it with `--body-file`, then read the landed body back and diff. Historical head order: `bd736ce`, then `48ad062` when NEX-093 landed. **Never merged by automation.** |
+| **Open P1** | **One item: verify NEX-094.** It is implemented, tested and pushed but has no CI verdict — verifying it is the first action of the next run, not a new slice. Beyond that the family that named P1 work from NEX-082 through NEX-093 is closed; select the next dependency-ready slice from `BACKLOG.md`/`ROADMAP.md`. Prior fixes: NEX-089 windowed the approval history and counted the status it returns; NEX-086 bounded the last unbounded audit-report response; NEX-085 closed the last fail-closed asymmetry in operator revocation; NEX-084 closed the last unbounded arrow in grant delegation; NEX-083 closed the in-force read gap. |
 | **Open P4 (gate trust)** | **Closed by NEX-073** at `09888ac` (test-only; CI 4/4 `completed/success`, both frontend runs green). The flake was not "one assertion in the wrong order" — the note list is emptied into a loading state during every identity-keyed refetch, so three `waitFor`-wrapped *negative* assertions were passing vacuously on every run, including the tenant-isolation test. Each now anchors on a positive assertion, and the isolation test was proved to fail on a real leak. See NEX-073 below. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-094 (run `NEX-2026-11-28-93`) — the two "what authority is in force" reads priced the whole grant table
+
+**Status: IMPLEMENTED + TESTED · NOT VERIFIED** — no CI verdict exists on the product commit yet.
+Committed and pushed; `git log --oneline -1 -- src/notes_service/infrastructure/db/operator_grants.py`
+names it. Do not read this as VERIFIED until `Last CI result` carries a green verdict for it.
+
+`active_grants()` and `active_for()` are the reads a policy gate consults to answer *may this operator
+act now*. Both ran `select(OperatorGrantRow)` with **no `WHERE`**, built a domain object per row, and
+discarded the revoked and long-expired ones in Python. Grants are never pruned — revocation is
+recorded, not deleted (NEX-079) — so the table only grows, and every authorisation read cost the
+deployment's entire grant history. NEX-087 (access log), NEX-088 (audit trail) and NEX-092 (revocation
+report) closed this class in neighbouring reads; these two were the remaining seam.
+
+Both now carry an active-window predicate in the `WHERE`. The reason this had been left undone is that
+the code **said so**: `active_for` carried a comment that `is_active` is *the* definition of "in force"
+and that pushing it into SQL would duplicate the rule and let the two drift. That reasoning is sound —
+it is only safe when the SQL is an **exact** translation. It turned out to be one: `is_active` is four
+independent branch tests, each a bare single-column comparison (not revoked; `granted_at <= now`;
+`not_before IS NULL OR not_before <= now`; `expires_at IS NULL OR expires_at > now`), with no
+arithmetic and no clock behaviour the database evaluates differently from Python. So
+`_active_predicate(now)` is a transcription, and rather than argue that in a comment the equivalence is
+now pinned by test across the boundary instants.
+
+The test work, and the trap in it. `test_active_for_does_not_read_the_whole_grant_table` counted
+`_to_domain` calls — but the fixed `active_for` reads `row.scope` straight off the filtered rows and
+converts nothing, so the probe measured `[]` and the assertion contradicted the fix it was supposed to
+defend: it would have gone green only against unfixed code. Replaced by
+`test_active_reads_filter_in_the_store_rather_than_in_python`, which records executed statements
+through `before_cursor_execute` and requires both active-read `SELECT`s to carry `revoked_at is null`
+and `expires_at`. Generalise it: **a work-count probe only exists for a path that does work; when the
+fix removes the work, observe the statement.** `active_grants` does convert rows, so counting
+conversions remains the right observation there.
+
+Two mutation controls, both observed. Reverting the adapter fails the work-count and the statement
+tests (the captured SQL is a bare `select ... from operator_grants order by operator_grants.id`). More
+importantly, a one-character drift `<=` → `<` in the predicate fails all three
+`test_active_predicate_agrees_with_the_domain` instants — that is the control that matters, because it
+proves the boundary test catches a *transcription error*, not merely the absence of the fix. For a
+read that confers authority, the under-select direction is the dangerous one: it silently denies a live
+grant, and a test that only reverts the whole change cannot see it.
+
+`revoked_grants`' docstring also claimed `is_active` "carries real logic … which is why that filter
+stays in Python". That is now false and would have re-taught the wrong rule to the next reader, so it
+was corrected in the same commit.
 
 ## NEX-088 (run `NEX-2026-11-28-88`) — the audit page's total was its own window size
 
@@ -163,7 +208,29 @@ Gates: full suite **1678 passed, 4 skipped**, exit 0; `ruff format --check` 321 
    PR body before posting, and resolve the head with `git ls-remote`, because the other run's
    docs commits advance the tip independently.
 
-## Next best actions (run `NEX-2026-11-28-86`, superseding the lists above)
+## Next best actions (run `NEX-2026-11-28-93`, superseding the lists above)
+
+1. **Verify NEX-094 before anything else.** It is IMPLEMENTED + TESTED with no CI verdict. Read CI per
+   *run* and per *job* on the product commit; only `completed/success` on both Backend and Frontend, on
+   the product commit itself (or on a docs head whose product tree is identical — state that licence
+   explicitly), makes it VERIFIED. Then append the NEX-094 section to PR #5 with `--body-file` and read
+   the landed body back.
+2. **The `operator_grants.py` adapter sweep is closed.** Every read whose docstring promises bounding
+   now bounds in SQL. `list_all_for_integrity_sweep` already carries `(created_at, id)`; the two
+   delegation reads and `list_for_owner` order on `created_at` alone but are *unpaged whole-set* reads,
+   so an unstable tie can only reorder presentation — not this defect class. Do not open that without a
+   consumer that depends on the order.
+3. **Hold every slice to the same standard.** A test that fails without the fix; a *mutation* proving
+   the test bites on a small error, not just on a full revert; a CI verdict read per run and per job.
+   Then take the next dependency-ready slice from `BACKLOG.md`. Do not start one with under 10 minutes
+   left on the clock.
+4. **When promoting a status, sweep every record file for the old words** (`IMPLEMENTED + TESTED`,
+   `CI pending`, `not yet`, `no verdict`) — a promotion is a multi-file edit, not a one-line change.
+
+**Do not redo** NEX-094's implementation and do not re-verify NEX-086…NEX-093 — all are implemented,
+pushed and CI-verified.
+
+## Next best actions (run `NEX-2026-11-28-86`, superseded — kept for history)
 
 1. **Take the next dependency-ready slice from `BACKLOG.md`.** NEX-086 is closed, verified and
    delivered; no delivery debt remains on PR #5 or issue #2. Write the failing test first.

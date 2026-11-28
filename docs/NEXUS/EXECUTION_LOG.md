@@ -11328,3 +11328,66 @@ No docs-head anchor was needed. NEX-093 is **VERIFIED**.
 Rule carried forward from this run: **reversed insertion is not a load-bearing test for a tie.**
 It is satisfied by a backwards index scan, so it passes against the defect it claims to catch.
 Use a non-monotone permutation.
+
+---
+
+## Run `NEX-2026-11-28-93` — continuation: NEX-094
+
+**Starting commit** `940b68b` (unit of work already in the tree, uncommitted on entry)
+**Branch** `feature/agentic-enterprise-platform`
+
+### What this segment did
+
+Resumed the interrupted NEX-094 slice. The adapter change and the tests were already in the working
+tree but the tests had never run. First run failed for two reasons, both in the *tests*, not the code:
+
+1. `_grant()` passed `granted_at=NOW` as a fixed keyword, so the new `_lapsed()` helper — which backdates
+   `granted_at` to build a legally-expired grant — raised `TypeError: got multiple values for keyword
+   argument 'granted_at'`. Fixed by merging defaults through a dict so an override wins. Five tests
+   went green from that one change.
+2. `test_active_for_does_not_read_the_whole_grant_table` was built on the wrong premise. It counted
+   `_to_domain` calls, but the *fixed* `active_for` reads `row.scope` directly and never converts a row,
+   so the probe measured `[]` and asserted against the fix it was meant to defend. Replaced with
+   `test_active_reads_filter_in_the_store_rather_than_in_python`, which records executed statements via
+   `before_cursor_execute` and asserts both active-read `SELECT`s carry `revoked_at is null` and
+   `expires_at`.
+
+That second point is the reusable lesson: **a work-count probe only exists for a code path that does
+work.** `active_grants` converts rows, so counting conversions is the right observation; `active_for`
+does not, so the *statement* is the only evidence of where the filtering happens. Same defect class,
+different observable.
+
+### Validation, and both mutation controls
+
+- 40/40 in `tests/persistence/test_operator_grants.py`.
+- **Control (a)** — `git stash push -- .../operator_grants.py`, re-run: both the work-count test and the
+  statement test fail (`assert 80 == 5`-style / the recorded SQL is a bare
+  `select ... from operator_grants order by id`). `git stash pop` restored.
+- **Control (b)** — one-character drift, `granted_at <= now` → `granted_at < now`: all three
+  `test_active_predicate_agrees_with_the_domain` instants fail. This is the one that matters, because
+  it proves the equivalence test catches a *transcription error*, not merely the absence of the fix.
+  Reverted from a backup copy; `grep -c "granted_at <= now"` confirms 1.
+- Gates on the working tree: `ruff format` 325 already formatted · `ruff check` all passed ·
+  `mypy` clean over 144 source files · full `pytest` exit 0, **1754 passed, 4 skipped** (1758
+  collected). The skips are `postgresql`-marked; no Postgres server in this workspace.
+- **Re-measured in the next run** on the committed product tree, not carried over: same four gates,
+  full `pytest` **1754 passed, 4 skipped**. Both mutation controls re-observed: mutating
+  `granted_at <= now` → `< now` fails 14 tests including all three boundary instants
+  (`[before]`/`[at]`/`[after]`); file restored byte-identical (`diff -q` clean, `git status` clean).
+
+### Decisions
+
+- The SQL predicate lives in one named helper, beside the reads, rather than inlined twice. Two copies
+  of a four-clause predicate are two places to drift; the boundary test pins one, so fix the one.
+- The domain keeps `is_active` as the definition and the SQL is pinned to it by test, rather than
+  rewriting `is_active` to defer to SQL. The domain must not know about the database (layering test),
+  so the arrow points adapter → domain, never the reverse.
+- `revoked_grants`' docstring claimed `is_active` "carries real logic … which is why that filter stays
+  in Python". Left in place it would have contradicted the new code and re-taught the wrong rule, so
+  it was corrected in the same commit rather than noted as follow-up.
+
+### Status — deliberately not VERIFIED
+
+IMPLEMENTED + TESTED. There is no CI verdict on a product commit yet, and per section 17 of the
+operating directive a green local suite is not a green CI. Verification (push → read CI per run and per
+job → `completed/success`) is the next run's first act if it does not complete here.
