@@ -10,13 +10,53 @@ truth; this file records intent and reconciliation.
 | Project phase | Phase 2 **complete**. Phase 5: **NEX-001…NEX-046 VERIFIED.** Phase 3 (governance): NEX-047…NEX-050 merged via PR #3; **NEX-051…NEX-062 VERIFIED** in PR #5. **NEX-063 VERIFIED** (run 63): risk-based approval — `domain/agent/risk.py` + a threshold floor wired into the gateway. **All five ADR-015 obligations now have mechanisms**, and approval strength follows blast radius. ADR-016. **NEX-064** (run 64): closed a latent fail-open — `evaluate()` consulted `RETIRED` versions. **NEX-066** (run 66): policy authoring refuses an obligation the deployment cannot enforce, via one domain function shared with the gateway. **NEX-068** (run 68): closed a threshold-mismatch fail-open — an approval opened under a weaker threshold was spendable under a stricter one. **NEX-067** (run 69): closed the AMR fail-open — `derive_assurance()` counted method names, so `otp + totp` read as two factors; assurance now requires two independent factor families. |
 | Branch | `feature/agentic-enterprise-platform` |
 | Starting commit (run 69) | `ac0f6d0` (live tip; concurrent runs advance it constantly). |
-| Head commit (measured) | Product head `3c26957` (**NEX-072, VERIFIED** — CI 4/4 at `3c26957`, polled 2026-11-28T00:52Z), over `a5d2710` (NEX-071, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
-| Last CI result | **`3c26957` (NEX-072): 4/4 `completed/success`, polled 2026-11-28T00:52Z — NEX-072 VERIFIED.** Prior: `adcb75e` (NEX-071 docs head, descends from product `a5d2710`): 4/4 `completed/success`, polled 2026-11-28T00:33Z. `04d52e1` (NEX-070): 4/4 at 2026-11-27T23:48Z. |
+| Head commit (measured) | Product head `38292d2` (**NEX-058 scope item 7, VERIFIED** — backend 2/2 `completed/success`, frontend 1/2 success with the one failure being a pre-existing `App.test.tsx` race in untouched code, see NEX-073), over `3c26957` (NEX-072, VERIFIED). Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`. Never trust a SHA recorded in this file. |
+| Last CI result | **`38292d2` (NEX-058): backend 2/2 `completed/success`; frontend 1/2 `success`, the failure being the pre-existing `App.test.tsx` race (NEX-073) — polled 2026-11-28T01:19Z.** Prior: `3c26957` (NEX-072): 4/4 `completed/success`, polled 2026-11-28T00:52Z. |
 | Tracking issue | #2 (open) — **comment `7230423658`** covers NEX-070; `7229097083` covers NEX-067; `7228764536` covers NEX-068; `7228642936` covers NEX-064/NEX-066 and the corrected NEX-056 record. Issue stays open. |
 | Draft PR | **#5 (unmerged)** — `feature/agentic-enterprise-platform` → `main`. Body carries NEX-052…**NEX-070** (48375 chars) as of run 70; NEX-071 not yet added. Fifteen slices stack in one PR; a reviewer may reasonably ask for a split. Automated merging is prohibited. |
-| **Open P1** | None outstanding. Run 71 closed an unsatisfiable-control defect: every two-person approval was undecidable through the API (see NEX-071 below). |
+| **Open P1** | None outstanding. Run 73 closed NEX-058's last scope item: a fail-closed `step-up` is now *explainable*. Run 71 closed an unsatisfiable-control defect: every two-person approval was undecidable through the API (see NEX-071 below). |
+| **Open P4 (gate trust)** | **NEX-073** — a pre-existing race in `frontend/src/App.test.tsx` makes one frontend CI run fail intermittently on code it does not touch. Cheap to fix, and a flaky gate is what lets a real failure be waved through later. |
 | CI status | `ci_status` in `CHECKPOINT.json` is the authority — per-slice results with timestamps. Standing rule: a docs commit reads `completed/cancelled` once superseded in the concurrency group — never evidence. A **concluded** run is never retracted, which is why evidence anchors to one. |
 | Authorized to merge to `main` | No — automated merging is prohibited |
+
+## NEX-058 closed (run `NEX-2026-11-27-73`) — a fail-closed `step-up` is now explainable
+
+Product commit `38292d2`. NEX-058's enforcement landed in run 59; this run closed its one
+remaining scope item, the diagnostic that makes the enforcement legible.
+
+- **The gap.** The adapter derived assurance from `acr`/`amr` and said nothing about it. The
+  only trace of a fail-closed `step-up` was a refusal at the tool gateway, long after the
+  claims were gone — so an operator whose IdP *does* enforce MFA could not tell a
+  misconfigured provider from a weak login.
+- **The line is value-free by design.** `acr` is an IdP-chosen class name and `amr` can name
+  methods personal to the account, so the diagnostic describes the *shape* only: whether a
+  claim arrived at all, whether its type was usable, whether the closed method vocabulary
+  recognised it, how many factor families resolved, and whether an `acr` negation vetoed a
+  marker. It answers the operator's real question without putting a claim value in a log.
+- **Silent when it passes.** The line fires only below `STEP_UP_FLOOR`, so it does not drown
+  on every normal MFA login.
+- **The marker scan is shared, and that caught a would-be regression.** Extracting
+  `_acr_multi_factor_markers()` for both enforcement and the diagnostic is only safe if it
+  returns *every* marker: `mfa-optional:multi-factor` has a vetoed marker followed by a live
+  one, and a first version that returned only the first marker would have silently changed
+  enforcement. The veto is applied per-marker, so semantics are unchanged from run 59.
+- **A wrong test premise, recorded so it is not repeated.** `acr="mfa-optional:multi-factor"`
+  does **not** satisfy the floor, and should not: `optional` is adjacent to *both* markers, so
+  the blunt veto correctly vetoes both. The test uses `mfa-not-required:multi:factor`, where
+  only the first marker is vetoed.
+- **Tests:** 7 added, all through the real `_verify_id_token` path; proved non-vacuous by
+  reverting the log call, which failed 4 of them. Full suite **1508 passed / 4 skipped**,
+  mypy clean on 141 files.
+
+## NEX-073 (filed run `NEX-2026-11-27-73`) — the frontend gate has a race
+
+`frontend/src/App.test.tsx > shows the current user and lists owned notes` asserts a note
+title with the **synchronous** `getByText` immediately after awaiting `findByText` on the
+identity header. The notes list renders in a second effect, so the assertion can read the DOM
+before it is there. It failed one of two frontend CI runs on `38292d2` and passed the other on
+the identical SHA, on a commit that touches no frontend file: a pre-existing flake, not a
+regression. Fix is small — `findByText`/`waitFor` for note titles. Worth doing before the next
+run leans on a red gate as evidence either way.
 
 ## NEX-072 (run `NEX-2026-11-27-72`) — the record of a privileged read now outlives the process
 

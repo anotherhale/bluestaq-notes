@@ -8629,3 +8629,93 @@ the same commit via the branch concurrency group; the completed pair is the verd
 **Next:** read `docs/NEXUS/BACKLOG.md` and pick the highest-value dependency-ready slice. Do not
 re-implement NEX-072. A named follow-up, not a defect: the log is durable but unbounded — a
 retention policy is a separate slice.
+
+---
+
+## Run NEX-2026-11-27-73 — 2026-11-28T01:00Z
+
+**Run ID:** NEX-2026-11-27-73
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `13e0dfc` (docs checkpoint from run 72)
+**Ending commit:** product `38292d2`; this docs commit follows it
+**Phase:** 3 (governance) — closing NEX-058's last open scope item
+
+### Task: NEX-058 — the claim-shape diagnostic (scope item 7)
+
+Run 73 found the tree already carrying uncommitted work from an interrupted run: a
+refinement of `derive_assurance()` plus assurance-logging tests. Rather than discard it,
+this run reviewed it, completed it, and committed it.
+
+**What was missing.** NEX-058's scope item 7 asks the OIDC adapter to log the raw *claim
+shape* when it defaults to single-factor, so an operator whose IdP does support MFA can see
+why step-up policies refuse. The adapter derived assurance and said nothing, so the only
+trace of a fail-closed step-up was a refusal at the tool gateway — long after the claims
+were gone, and with nothing to distinguish a misconfigured IdP from a weak login.
+
+**What was added.**
+
+1. `_assurance_claim_shape(claims)` returns a value-free description: `acr` state
+   (absent / not-string / empty / multi-factor / negated / unrecognised), `amr` state,
+   how many distinct factor families resolved, and how many methods were recognised.
+   It never echoes a claim value: `acr` is an IdP-chosen class name and `amr` can name
+   methods personal to the account, so the shape is the safe and sufficient signal.
+2. One `INFO` line from `_verify_id_token` when — and only when — the derivation lands
+   below `STEP_UP_FLOOR`. A satisfying login logs nothing, so the signal does not drown
+   on every normal MFA login.
+3. The acr marker scan extracted into `_acr_multi_factor_markers()`, shared by enforcement
+   and the diagnostic so the two cannot disagree about which segment is the marker.
+
+**A correction made during this run.** The first version of the shared scan returned only
+the *first* marker, which silently changed enforcement: `mfa-optional:multi-factor` has a
+vetoed marker followed by a live one, and enforcement must still see the live one. The scan
+now returns every marker and the veto is applied per-marker. Enforcement semantics are
+therefore identical to before this run; only the diagnostic is new.
+
+**A test premise that was wrong.** A first attempt asserted that
+`acr="mfa-optional:multi-factor"` satisfies the floor. It does not, and should not:
+`optional` is adjacent to *both* markers, so the blunt veto correctly vetoes both. The test
+now uses `acr="mfa-not-required:multi:factor"`, where the veto applies only to the first
+marker and the second is genuinely live. Recorded here because the naive reading ("the
+second marker is untouched") is wrong and would invite a real regression later.
+
+**Files changed:** `src/notes_service/infrastructure/identity/oidc_relying_party.py`,
+`tests/authentication/test_oidc_relying_party.py`.
+
+**Tests executed:** `ruff format`, `ruff check`, `mypy`, full `pytest`, plus the targeted
+OIDC file.
+**Outcomes:** ruff format 306 files unchanged; ruff check all passed; mypy clean on 141
+files; **1508 passed, 4 skipped** (up from 1501 — 7 tests added, net +2 after two were
+reshaped); targeted OIDC file 36 passed. The new logging tests were proved non-vacuous by
+reverting the log call, which failed 4 of them.
+
+**Decisions:** D-058a the diagnostic describes the claim *shape* and never a claim value;
+D-058b the diagnostic fires only below the floor, so a passing login is silent; D-058c the
+marker scan is shared between enforcement and diagnostics so the two cannot drift, and it
+returns *every* marker with a per-marker veto.
+
+**Security:** no new writer of assurance; the diagnostic cannot influence the derived value
+or the gateway decision. It reduces a real operational blindness in the fail-closed path.
+
+**Commits:** `38292d2` — `fix(identity): log the claim shape behind a single-factor assurance`
+**Push status:** pushed `13e0dfc..38292d2`, fast-forward, verified with `git ls-remote`.
+
+**CI:** first poll at 2026-11-28T01:17Z showed the backend pair still in progress and one of
+two frontend pairs failed on `src/App.test.tsx > shows the current user and lists owned
+notes`. **This is not caused by this commit** — the commit touches zero frontend files, and
+the sibling frontend pair passed on the identical SHA. The failure is a race in the test
+itself: it calls the synchronous `getByText("Alice private")` immediately after awaiting
+`findByText("Alice Anderson")`, so it reads the note list before it has rendered. Filed as
+NEX-073 (below); the verdict on NEX-058 must be read from the backend pair and the passing
+frontend pair.
+
+### New task filed: NEX-073 — de-race `App.test.tsx` note-list assertions
+
+Pre-existing flake, not a regression. `getByText` for a note title must be
+`findByText`/`waitFor`, because the notes list renders in a second effect after the identity
+header. A flaky gate is a real cost: it made this run's CI verdict ambiguous and invites a
+future run to either re-run until green (which hides real failures) or distrust a red gate
+(which is worse).
+
+**Next:** verify NEX-058's CI verdict on the completed pairs, then pick the next
+dependency-ready slice from `docs/NEXUS/BACKLOG.md`. Candidates: NEX-073 (small, restores
+gate trust), or the `operator_access_log` retention policy named by run 72.

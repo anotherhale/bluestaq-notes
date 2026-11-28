@@ -2752,7 +2752,7 @@ fact that should be fixed at consent).
 | --- | --- |
 | Phase | 3 (governance) |
 | Priority | P1 |
-| Status | **TODO** |
+| Status | **VERIFIED** at `38292d2` (run 73). Backend pair 2/2 `completed/success`; frontend 1/2 `success`, the single failure being a pre-existing `App.test.tsx` race (NEX-073) in code this commit does not touch. All 7 scope items now implemented; item 7 (the claim-shape diagnostic) was the last gap. |
 | Dependencies | NEX-057 (ADR-015), NEX-053 (delegation model) |
 | Blocks | NEX-057 enforcement; `second-approver` (needs distinct-human identity) |
 
@@ -2789,6 +2789,17 @@ gateway never re-derives it. Widening the enum is a vocabulary change and needs 
 **Migration implications:** one additive column, nullable-then-NOT-NULL via server default.
 
 **Next:** after NEX-058 lands, implement `second-approver` on the same distinct-human footing.
+
+**Verified (run 73).** Scope item 7 landed at `38292d2`: the OIDC adapter logs the claim
+*shape* (never a value) when `derive_assurance()` returns below `STEP_UP_FLOOR`, naming which
+stage failed — claim absent, type unusable, method unrecognised, too few independent families,
+or an `acr` negation vetoing the marker. The line is silent on a satisfying login. The marker
+scan is shared with enforcement (`_acr_multi_factor_markers()`), and returns *every* marker with
+a per-marker veto, so the diagnostic cannot drift from the decision — a first version returned
+only the first marker, which would have silently changed enforcement for
+`mfa-optional:multi-factor`. 7 tests added through the real `_verify_id_token` path, proved
+non-vacuous by reverting the log call (4 fail). Full suite 1508 passed / 4 skipped; mypy clean
+on 141 files; backend CI 2/2 success at `38292d2`.
 
 ## NEX-059 — make `second-approver` a real two-person control
 
@@ -3021,3 +3032,64 @@ assurance.
 comment `7229055417` carry the evidence.
 **Named follow-up (not this task):** NEX-065 — the policy lifecycle has no `approve` verb, so a
 policy change is not itself recorded as approved.
+
+## NEX-073 — de-race the note-list assertions in `App.test.tsx`
+
+| Field | Value |
+| --- | --- |
+| Phase | 4 (developer experience / gate trust) |
+| Priority | P4 (but cheap, and it protects every future verdict) |
+| Status | **TODO** — filed by run 73 from CI evidence, not implemented |
+| Dependencies | None |
+| Blocks | Nothing functionally; it degrades the reliability of the frontend CI signal |
+| Owner | FRONTEND |
+
+**Objective:** make the frontend test gate deterministic, so a red frontend run is evidence of a
+real defect rather than a coin flip.
+
+**The defect.** `frontend/src/App.test.tsx > App — identity and ownership > shows the current
+user and lists owned notes` does this:
+
+```tsx
+expect(await screen.findByText("Alice Anderson")).toBeInTheDocument();
+expect(screen.getByText("Alice private")).toBeInTheDocument();
+```
+
+The identity header and the note list are rendered by *different* effects. Awaiting the header
+therefore says nothing about the list, and the synchronous `getByText` for the note title can
+run before the list has committed. It failed one of two frontend CI runs on `38292d2` and passed
+the other on the identical SHA, on a commit that touches **no** frontend file.
+
+**Evidence.** Check-run `140815503026` (`failure`, 26s) vs `140815484127` (`success`, 67s) on
+`38292d2dc5286f9f8bd05ed57fa8af30008fb394`. Annotation: `TestingLibraryElementError: Unable to
+find an element with the text: Alice private`, with the app shell and identity select present in
+the dumped DOM but no note list. The shorter runtime is consistent with failing early.
+
+**Scope**
+
+1. Replace synchronous `getByText` assertions on *asynchronously rendered* content with
+   `findByText` / `waitFor` in `App.test.tsx`.
+2. Audit the rest of the file for the same shape — a `getBy*` on note/folder content that
+   follows an `await` on something else. The same race can be latent elsewhere and merely not
+   have lost the coin flip yet.
+3. Prefer asserting through a role/`aria` query over raw text where it makes the intent clearer,
+   but do not rewrite tests wholesale: the goal is determinism, not churn.
+
+**Acceptance criteria**
+
+- The suite passes repeatedly in a loop (e.g. 20 consecutive runs of the file) with no failure.
+- No assertion is weakened or deleted to achieve that; each changed assertion must still fail if
+  the corresponding rendering is removed.
+- No production code changes.
+
+**Required tests:** the existing file, run in a loop locally; `npm run typecheck`, `npm run lint`,
+`npm test`, `npm run build`.
+
+**Security considerations:** none. This is test-only.
+
+**Migration implications:** none.
+
+**Complexity:** Low.
+
+**Next action:** change the note-title assertions to `findByText`, audit the file for the same
+pattern, then prove determinism with a loop.

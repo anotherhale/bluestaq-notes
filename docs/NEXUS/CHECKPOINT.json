@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-72",
-  "timestamp": "2026-11-28T00:56Z",
+  "run_id": "NEX-2026-11-27-73",
+  "timestamp": "2026-11-28T01:18Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "66d51ec",
-  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049 verified. NEX-070..NEX-072 verified: the operator access log is now durable (a privileged read survives a restart and is shared across workers). Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
+  "commit": "38292d2",
+  "project_phase": "Phase 2 complete. Phase 5 (durable runtime) NEX-001..NEX-046 verified. Phase 3 governance NEX-047..NEX-049, NEX-058, NEX-065..NEX-072 verified. NEX-058's last open scope item (the claim-shape diagnostic that explains a fail-closed step-up) closed this run. Next: read BACKLOG.md and pick the highest-value dependency-ready slice.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
     "NEX-057": "VERIFIED - ADR-015's design is backed by code: NEX-058 implements the signal ADR-015 names.",
-    "NEX-058": "VERIFIED - CI 4/4 at a4003bf (polled by run 58).",
+    "NEX-058": "VERIFIED (slice scope) - product 38292d2. Backend pair 2/2 completed/success; frontend pair 1/2 success, the single failure being a PRE-EXISTING race in frontend/src/App.test.tsx (getByText read immediately after findByText) in code this commit does not touch - see NEX-073. The slice's own evidence (ruff/mypy/pytest/migrations on both backend runs, plus a green frontend run on the identical SHA) is green. 1508 passed / 4 skipped, mypy clean on 141 files. Closes NEX-058 scope item 7: the OIDC adapter now logs the claim SHAPE when it derives single-factor.",
     "NEX-059": "VERIFIED - CI 4/4 at b9811d7 (polled by run 59).",
     "NEX-060": "VERIFIED - CI 4/4 at 29f71e5 (promoted by run 61).",
     "NEX-062": "VERIFIED - CI 4/4 at 0e2ca47 (polled 2026-11-27T20:16Z by run 62).",
@@ -22,7 +22,8 @@
     "NEX-069": "VERIFIED - CI 4/4 completed/success at 7a1d5e2, polled 2026-11-27T23:22Z by run 70. The NEX-065 migration required approved_at/approved_by for any in-force row; because a CHECK constraint is table-wide, `alembic upgrade head` failed on any database that had already published a policy. Now tolerates a legacy in-force row with both columns NULL while still refusing a half-written approval. Also fixed the test that had been silently vacuous (it seeded a text id into an INTEGER PK and never reached the migration). 1472 passed / 4 skipped locally; 5 tests fail with the source fix reverted.",
     "NEX-070": "VERIFIED",
     "NEX-071": "VERIFIED - CI 4/4 completed/success at adcb75e (the docs head, which descends from the product commit a5d2710 and therefore compiles and tests it), polled 2026-11-28T00:33Z by run 71. Both pairs concluded success (concurrency group re-runs the pair; the completed pair is the verdict). DecideApprovalRequest now admits a tenant approver holding OrgPermission.APPROVE_AGENT_ACTION in an operational organization the agent's owner also actively belongs to, for the second signature of a required_approvals==2 request only. 11 new tests; full suite green locally; ruff format/check + mypy clean on 140 files.",
-    "NEX-072": "VERIFIED - CI 4/4 completed/success at 3c26957 (both check-run pairs: Backend ruff+mypy+pytest+migrations and Frontend typecheck+lint+test+build), polled 2026-11-28T00:52Z by run 72. SqlAlchemyOperatorAccessLog is a second adapter behind the unchanged OperatorAccessLog port; append-only, ordered by surrogate id, user_id not a cascading FK, adapter commits its own session. Migration a1c7e2f60b93 upgrades and downgrades cleanly. 1501 passed / 4 skipped, mypy clean on 141 files."
+    "NEX-072": "VERIFIED - CI 4/4 completed/success at 3c26957 (both check-run pairs: Backend ruff+mypy+pytest+migrations and Frontend typecheck+lint+test+build), polled 2026-11-28T00:52Z by run 72. SqlAlchemyOperatorAccessLog is a second adapter behind the unchanged OperatorAccessLog port; append-only, ordered by surrogate id, user_id not a cascading FK, adapter commits its own session. Migration a1c7e2f60b93 upgrades and downgrades cleanly. 1501 passed / 4 skipped, mypy clean on 141 files.",
+    "NEX-073": "TODO - filed by run 73. Pre-existing flake in frontend/src/App.test.tsx: 'shows the current user and lists owned notes' asserts with the synchronous getByText on a note title immediately after awaiting findByText on the identity header, so it reads the note list before its second effect renders. Not a regression (the commit that surfaced it touches zero frontend files). Fix: use findByText/waitFor for note-title assertions."
   },
   "completed_tasks": [
     "NEX-039",
@@ -128,17 +129,17 @@
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
   "validation": {
     "commands_run_on_committed_tree": [
-      ".venv/bin/ruff format -> 1 file reformatted (new test), then clean",
+      ".venv/bin/ruff format -> 306 files unchanged",
       ".venv/bin/ruff check -> All checks passed!",
       ".venv/bin/mypy -> no issues found in 141 source files",
-      ".venv/bin/python -m pytest -> 1501 passed, 4 skipped (full suite)",
-      ".venv/bin/python -m pytest tests/persistence/test_operator_access_log.py -> 9 passed",
-      "alembic upgrade head -> downgrade -1 on a fresh sqlite DB: table + 3 indexes created, then dropped"
+      ".venv/bin/python -m pytest -> 1508 passed, 4 skipped (full suite)",
+      ".venv/bin/python -m pytest tests/authentication/test_oidc_relying_party.py -> 36 passed",
+      "negative control: log call removed -> 4 of the new tests fail; file restored (0 markers)"
     ],
-    "ci": "NEX-072 VERIFIED: 4/4 completed/success at 3c26957, polled 2026-11-28T00:52Z. Everything through NEX-072 is VERIFIED."
+    "ci": "NEX-058 at 38292d2: backend 2/2 completed/success. Frontend 1/2 success; the one failure is the pre-existing App.test.tsx race (NEX-073), in code this commit does not touch, while the sibling frontend run on the identical SHA passed."
   },
   "uncommitted_work": false,
-  "pr_state": "PR #5 open, unmerged, awaiting human review. head 3c26957. Body does NOT yet carry a NEX-072 section.",
+  "pr_state": "PR #5 open, unmerged, awaiting human review. Product head 38292d2. Body does not yet carry a NEX-058 section.",
   "tracking_issue": {
     "issue": 2,
     "state": "open",
@@ -149,69 +150,68 @@
   "risks": [
     "The access log is durable but unbounded: nothing prunes it. A retention policy (and the regulatory question of how long a privileged-read record must be kept) is a follow-up, not a defect - erring toward keeping the record is the safe direction.",
     "The log records user_id as a value, not a FK, so a query joining to users will silently drop rows for deleted accounts. That is deliberate (the record must outlive the account) but a reader must not assume an inner join is complete.",
-    "PR #5 body does not yet carry NEX-072 (nor NEX-071 was folded into a section header count); the body is the outstanding delivery debt for this slice."
+    "A flaky frontend gate (NEX-073) is a real cost, not cosmetic: it makes every run's CI verdict ambiguous and invites a future run to either re-run until green (hiding real failures) or distrust a red gate (worse). Fix it before it is leaned on.",
+    "PR #5 body still lacks a NEX-058 section; the body is the outstanding delivery debt."
   ],
-  "next_task": "No carried-over implementation debt. NEX-072 pushed at 3c26957. Next: read docs/NEXUS/BACKLOG.md and pick the highest-value dependency-ready slice. Do not re-implement NEX-072.",
-  "next_action": "Read docs/NEXUS/BACKLOG.md and implement the next dependency-ready slice. Candidates to evaluate: a retention policy for operator_access_log (named follow-up, not a defect), or whatever BACKLOG.md ranks highest among unblocked work. Do not re-implement NEX-072.",
-  "recovery_instructions": "Tree is clean at 3c26957 (NEX-072 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. Next: read docs/NEXUS/BACKLOG.md, pick the highest-value dependency-ready slice, implement it as ONE vertical slice, and do not re-implement NEX-072.",
+  "next_task": "No carried-over implementation debt. NEX-058 pushed at 38292d2. Next: read docs/NEXUS/BACKLOG.md and pick the highest-value dependency-ready slice. Do not re-implement NEX-058.",
+  "next_action": "Candidates, in order of cost/benefit: (1) NEX-073 - de-race App.test.tsx, small and it restores trust in the gate; (2) a retention policy for operator_access_log (named follow-up by run 72); (3) whatever BACKLOG.md ranks highest among unblocked work. Do not re-implement NEX-058.",
+  "recovery_instructions": "Tree is clean at 38292d2 (NEX-058 product commit), pushed to feature/agentic-enterprise-platform. Read the live tip with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA above. Next: read docs/NEXUS/BACKLOG.md, pick the highest-value dependency-ready slice, implement it as ONE vertical slice, and do not re-implement NEX-058.",
   "ci_status": {
     "adcb75e": "4/4 completed/success (NEX-071 docs head, descends from product a5d2710) - polled 2026-11-28T00:33Z by run 71",
     "04d52e1": "4/4 completed/success (NEX-070) - polled 2026-11-27T23:48Z",
-    "3c26957": "4/4 completed/success (NEX-072) - polled 2026-11-28T00:52Z by run 72"
+    "3c26957": "4/4 completed/success (NEX-072) - polled 2026-11-28T00:52Z by run 72",
+    "38292d2": "backend 2/2 completed/success; frontend 1/2 success, the failure being the pre-existing App.test.tsx race (NEX-073) in untouched code - polled 2026-11-28T01:19Z by run 73"
   },
   "commits_this_run": [
     {
-      "sha": "3c26957",
-      "subject": "feat(governance): store the operator access log so a privileged read survives a restart",
+      "sha": "38292d2",
+      "subject": "fix(identity): log the claim shape behind a single-factor assurance",
       "state": "PUSHED"
     }
   ],
   "decisions_this_run": [
-    "D-072a: order `recent()` by the surrogate autoincrement id, not by `at`. The port promises newest-first and two reads can share a timestamp; sorting on a shared value is implementation-defined, and an audit trail that can reorder itself is not evidence of sequence.",
-    "D-072b: user_id is a plain indexed value, not a FK to users and not cascading. Deleting a user must not erase the record of what that user read.",
-    "D-072c: the adapter commits its own session rather than joining the caller's unit of work. The record that the operator SAW the view must land even if the caller's content transaction rolls back.",
-    "D-072d: no backfill. The ring was never durable, so there is no earlier table whose rows this could reconstruct."
+    "D-058a: the diagnostic describes the claim SHAPE and never a claim value. acr is an IdP-chosen class name and amr can name methods personal to the account; the shape answers the operator's question without putting a claim value in the log.",
+    "D-058b: the line fires only when the derivation lands below STEP_UP_FLOOR. A satisfying login logs nothing, so the signal does not drown on every normal MFA login.",
+    "D-058c: the acr marker scan is shared by enforcement and the diagnostic so the two cannot disagree about which segment is the marker. It returns EVERY marker and the veto applies per-marker: a first version returned only the first marker, which would have silently changed enforcement for mfa-optional:multi-factor."
   ],
-  "run_summary": "NEX-072 recovered a prior run's uncommitted durable-adapter work, validated it end to end (full suite, mypy over 141 files, migration upgrade+downgrade), committed, pushed and polled CI. Closes R36's residual: the operator access log is no longer process-local.",
+  "run_summary": "NEX-058 recovered an interrupted run's uncommitted assurance work, completed its one missing scope item (the claim-shape diagnostic that makes a fail-closed step-up explainable), corrected a shared-scan refactor that would have altered enforcement, validated end to end, committed and pushed. Surfaced and filed a pre-existing frontend test race (NEX-073) rather than re-running CI until green.",
   "delivery_state": {
     "pr": 5,
     "pr_state": "open",
     "pr_draft": false,
     "pr_merged": false,
-    "pr_body_len": 52842,
-    "pr_note": "NEX-072 section appended 2026-11-28T00:55Z (PATCH 200, body 50507 -> 52842 chars). PR #5 must remain UNMERGED: automated merging is prohibited, a human decides.",
+    "pr_note": "PR #5 must remain UNMERGED: automated merging is prohibited, a human decides. Body still needs a NEX-058 section (delivery debt).",
     "issue": 2,
     "issue_state": "open",
-    "issue_comment_id": 7231239328,
-    "issue_note": "NEX-072 comment posted 2026-11-28T00:56Z (HTTP 201, 1838 chars).",
-    "delivery_debt": "none for NEX-072"
+    "issue_note": "Issue #2 stays open; the programme is not done. No comment posted this run.",
+    "delivery_debt": "PR #5 body lacks a NEX-058 section; issue #2 has no NEX-058 comment."
   },
-  "branch_head": "3c26957 is the NEX-072 product commit; docs checkpoints follow it. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
+  "branch_head": "38292d2 is the NEX-058 product commit; docs checkpoints follow it. Read the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
   "commit_note": "A checkpoint's own commit field can never name the commit that writes it; it lags the head by exactly one commit. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "run_report": {
-    "run_id": "NEX-2026-11-27-72",
+    "run_id": "NEX-2026-11-27-73",
     "branch": "feature/agentic-enterprise-platform",
-    "starting_commit": "07b3f50",
-    "ending_commit": "66d51ec (docs); product 3c26957",
+    "starting_commit": "13e0dfc",
+    "ending_commit": "38292d2 (product); docs commit follows",
     "tasks_completed": [
-      "NEX-072"
+      "NEX-058"
     ],
     "tasks_verified": [
-      "NEX-072"
+      "NEX-058"
     ],
     "tasks_in_progress": [],
     "tasks_blocked": [],
-    "ci_status": "4/4 completed/success at 3c26957, polled 2026-11-28T00:52Z",
-    "push_status": "07b3f50..3c26957 (product) and 3c26957..66d51ec (docs), both fast-forward",
-    "pr_status": "PR #5 updated with the NEX-072 section; open, unmerged",
-    "issue_status": "issue #2 commented (7231239328); stays open, the programme is not done",
-    "recommended_next_action": "Read docs/NEXUS/BACKLOG.md and implement the next dependency-ready slice. Candidates to evaluate: a retention policy for operator_access_log (named follow-up, not a defect), or whatever BACKLOG.md ranks highest among unblocked work. Do not re-implement NEX-072."
+    "ci_status": "backend 2/2 completed/success; frontend 1/2 success (one pre-existing App.test.tsx flake, NEX-073, in untouched code)",
+    "push_status": "13e0dfc..38292d2 fast-forward, verified with git ls-remote",
+    "pr_status": "PR #5 open, unmerged; body still needs a NEX-058 section",
+    "issue_status": "issue #2 open, no comment this run",
+    "recommended_next_action": "NEX-073 (de-race App.test.tsx) is the cheapest way to restore gate trust; otherwise read BACKLOG.md and take the highest-value dependency-ready slice. Do not re-implement NEX-058."
   },
   "pr": {
     "body_covers_through": "NEX-068",
-    "body_updated_this_run": true,
-    "note": "Body now carries NEX-052..NEX-068 (40653 chars). Fourteen slices stack in one PR; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review."
+    "body_updated_this_run": false,
+    "note": "Body carries NEX-052..NEX-068. NEX-058, NEX-065..NEX-072 sections are missing; the reviewer's 'consider a split' note stands and is a human decision. Never merge without human review."
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`."
 }
