@@ -12563,3 +12563,122 @@ state only the measured values.
 `00d6b54`; remote head verified by `git ls-remote`; PR #5 open, unmerged, `mergeable=MERGEABLE`;
 tracking issue #2 open. No uncommitted work. Next action is the `next_action` field in the
 checkpoint: select the next dependency-ready slice from `BACKLOG.md` / the current `ROADMAP.md` phase.
+
+---
+
+## Run NEX-2026-11-28-103 — NEX-101 operator-gate boundary guard
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-28-103` |
+| Timestamp | 2026-11-28T16:05Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `8c243c5` (live head via `git ls-remote`) |
+| Product commit | `ff8b6e63` |
+| Phase | 3 (governance) — authorization enforcement |
+
+### Task selected
+
+`NEX-101` — pin the `OperatorGate` boundaries structurally.
+
+The checkpoint's `next_task` warned off two specific families (paging
+NEX-082..NEX-098, auth-guard NEX-099b/NEX-100). This slice is neither. It guards
+a different control: `OperatorGate.authorize`, the scope check in front of every
+platform-wide operational view — not route authentication (NEX-100) nor identity
+providers (NEX-099b). Recorded explicitly, because that distinction is exactly
+the kind a later run loses when it reads only the family names.
+
+### The gap, and why prose was not enough
+
+`operator_gate.py` is the single enforcement point: it checks a live grant
+scoped to the operation, refuses with `ResourceNotFound`, and records one access
+entry. Fourteen use cases across six modules call it. That is the whole control.
+`ops.py` and `policies.py` carry only `PrincipalDep` and `RateLimitDep`, both of
+which any authenticated user satisfies.
+
+Three boundaries were therefore conventional, not enforced:
+
+1. a new operational view whose use case omits `authorize(...)` is reachable by
+   every authenticated user, and nothing notices;
+2. a view calling `authorize` after reading its data has already leaked the
+   count it meant to gate — the docstrings say "gate first, never after", but no
+   test read the order;
+3. a scope token in `KNOWN_OPERATOR_OPERATIONS` that no use case asks for is
+   stored, listed, and enforces nothing.
+
+### Implementation
+
+`tests/architecture/test_operator_gate_boundaries.py` — 415 lines, 19 test cases
+of which 14 are parametrised per container field. It derives each answer from
+the source tree instead of restating the docstrings: AST-walks the use cases for
+gate calls (a mention is not a call), resolves each `OPS_FIELDS` entry on the
+container to the use case its factory annotation constructs, follows the routers
+to the callables they expose, and reconciles the enforced operations against the
+registry in both directions.
+
+Pinned invariants: gate-before-act ordering; every container field resolves to a
+gated use case; every operator route reaches a gated use case; the registry
+covers every enforced operation and mints no unused scope; the read and issue
+authorities stay split.
+
+### Verification — measured, not asserted
+
+- The guard is load-bearing: blanking the gate call in `withholding_report.py`
+  turned 5 tests red. Restored.
+- The ordering invariant is real: injecting a read before the gate in
+  `GetPolicyHistory` turned the ordering test red. Restored.
+- `git diff` was empty after every restore, before committing.
+- The docstring's figure was checked against the code rather than copied:
+  exactly 14 gated use cases across 6 modules, as claimed.
+
+### Gates (bare, as CI runs them, on the authorized tree)
+
+`ruff format --check` 330 files already formatted · `ruff check` all passed ·
+`mypy` no issues in 144 source files · `pytest` 1901 passed, 0 failed, 0 errors,
+4 skipped (exit 0).
+
+The suite count was confirmed to come from the feature tree and not `main`, by
+checking that `main` lacks the NEX-100 guard file this run depends on.
+
+### Defect caught in this run — twice, same cause
+
+The commit message was first written through a shell heredoc and
+self-interleaved: repeated fragments, truncated lines. The commit itself
+succeeded with a correct tree. Caught by reading the message back, fixed by
+amending from a file, then confirmed the amended tree was identical to the
+tested content (`git diff a5773e9 ff8b6e63` empty).
+
+The same failure then hit this execution log — a much longer write — and the
+result was unrecoverable in place. It was discarded with `git checkout --` and
+rewritten through the file editor. The standing rule holds and is now the fifth
+recorded instance: prose destined for a file or a publisher never goes through a
+shell heredoc; write with the editor, then append or pass a file.
+
+### Delivery state
+
+Product commit `ff8b6e63` pushed; remote head confirmed with `git ls-remote`.
+CI for it was still in progress when this entry was written, so it is recorded as
+in progress, not passed. This state-file commit follows CI's conclusion, so the
+product verdict is not superseded in the concurrency group.
+
+### Next action
+
+Read CI at `ff8b6e63` per run, per job and per step; promote NEX-101 to VERIFIED
+only on that evidence. Then select the next dependency-ready slice.
+
+### CI verdict — recorded after the entry above
+
+The entry above was written while CI was still running; it claimed nothing. Read afterwards, at
+`ff8b6e63`:
+
+| Run | Event | Conclusion | Backend steps | Frontend steps |
+| --- | --- | --- | --- | --- |
+| `46163954848` | push | `completed/success` | 12/12 | 11/11 |
+| `46163960436` | pull_request | `completed/success` | 12/12 | 11/11 |
+
+Zero failed steps, zero skipped, zero in any other state, read per run *and* per job *and* per
+step — not from a run-level conclusion alone, and not from a `gh run watch --exit-status`.
+
+The verdict sits on the product commit itself rather than a docs-only head, which is the strongest
+anchor this repository permits. **NEX-101 is therefore VERIFIED**, promoted on this evidence and
+not before it.

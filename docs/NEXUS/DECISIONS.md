@@ -405,3 +405,49 @@ name. The assertions are unchanged; only the caller's other tenant was added.
 tests in `test_tenant_access_demo.py` red and leaves both positive controls green. The positive controls
 (active member, unaffiliated user) are the reason the file cannot pass by refusing everyone: they pin
 `UNAFFILIATED` → bootstrap-allowed and `ACTIVE` → authenticated, which is the same shape NEX-017 decided.
+
+## NEX-101 — the operator gate is pinned structurally, and its scope is stated
+
+*Decision.* Extend the structural-guard approach to `OperatorGate`, the one control in front of every
+platform-wide operational view, rather than adding more behavioural tests around it.
+
+*Why this control.* `OperatorGate.authorize` is the only thing standing between an authenticated user
+and a platform-wide aggregate. `ops.py` and `policies.py` carry `PrincipalDep` and `RateLimitDep`,
+both of which any authenticated user satisfies, so if the gate is absent or late the view is simply
+open. Fourteen use cases across six modules call it; that convention was the whole control.
+
+*Why structural rather than behavioural.* A behavioural test proves one view is gated. The defect
+that matters is the *next* view — written by someone who copied a neighbour that had since drifted.
+Only a test that enumerates the container and both routers catches a use case that never asks, or a
+route wired to one that does not.
+
+*The four invariants, and why each earns its place.* Gate-before-any-read, because a late gate has
+already leaked the number it was meant to withhold — a "gate first" docstring is not a mechanism.
+Container-field resolution, because a field pointing at an ungated use case is the actual bug and it
+is invisible in a diff. Router reachability, because a correctly gated use case wired to nothing, or
+a route bypassing it, both pass a use-case-level test. Two-way registry reconciliation, because the
+registry's own promise is that a view and its token land in the same change — one direction catches
+an enforced operation with no token, the other a token enforcing nothing.
+
+*The exclusion, stated rather than silent.* `GATED_ROUTERS` lists only `ops` and `policies`. The
+`agents` and `notes` routers are owner-scoped and gated by the authorization provider instead; they
+are not platform-wide, so `OperatorGate` is not their control and pinning them here would assert the
+wrong property. Widening the list would require a domain judgement about which routers are
+platform-wide, which is not something a syntactic test may decide for itself. The test's docstring
+records the reason, because an unexplained exclusion is exactly where a coverage gap hides.
+
+*Load-bearing, measured.* Blanking the gate call in `withholding_report.py` turned 5 tests red;
+injecting a read before the gate in `GetPolicyHistory` turned the ordering test red. Both restored
+with an empty `git diff` confirmed before the real commit. The docstring's own figure (fourteen use
+cases, six modules) was resolved from the code at runtime rather than copied into the assertion.
+
+*This is a third control, not a re-open.* The prior checkpoint closed the paging family
+(NEX-082…NEX-098) and the auth-guard family (NEX-099b, NEX-100) and warned against re-opening them.
+NEX-101 guards scope enforcement — neither route authentication nor identity providers. The
+distinction is recorded in `STATE.md`, `DECISIONS.md` and the checkpoint precisely because a later
+run reading only the family names would otherwise treat it as a duplicate.
+
+*Residual limit, stated plainly.* This is a static proof, not a runtime one. A use case could call
+`authorize` and then read data belonging to a different operation; the ordering test catches the
+realistic shape of that defect (a read before the gate), not every possible one. The use-case tests
+remain the behavioural evidence.

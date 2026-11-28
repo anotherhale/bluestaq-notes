@@ -4656,3 +4656,89 @@ non-vacuous and does not merely encode the fix.
 
 **Tests:** full suite 1784 passed, 4 skipped (baseline 1778 + 6 new); `ruff format`
 327 files unchanged, `ruff check` clean, `mypy` 144 files clean, run bare as CI does.
+
+## NEX-100 — Every API route must authenticate, derived from the dependency graph (run `NEX-2026-11-28-100`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 (foundational authorization) |
+| Status | **VERIFIED** at product `9afd120`; CI `46160917496`/`46160922284` |
+| Dependencies | NEX-006, NEX-017, NEX-099 (tenant access on every identity path) |
+| Architecture | explicit authorization, fail-closed security, shared dependency graph |
+
+**Objective:** every API route proved, structurally, to reference an authenticating dependency.
+All routes did authenticate already — but only by convention; nothing held it, so a new route
+added without `PrincipalDep` (or equivalent) would be reachable anonymously and no test would
+notice.
+
+**Delivered:** `tests/architecture/test_route_authentication.py` parses every router and the
+authentication graph in `presentation/dependencies.py`, then requires all 81 routes across 9
+routers to reference an authenticating dependency or appear in a documented four-entry exemption
+list (`begin_login`, `complete_login`, `logout`, demo identity discovery). Two tests guard the
+exemption list against staleness and against contradicting the graph. The measured topology — all
+77 protected routes name their own auth alias, none relies on `RateLimitDep` alone — is pinned by
+`test_protected_routes_name_authentication_explicitly` rather than narrated in prose.
+
+---
+
+## NEX-101 — Pin the operator-gate boundaries structurally (run `NEX-2026-11-28-103`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) |
+| Priority | P1 (foundational authorization) |
+| Status | **VERIFIED** at product `ff8b6e63`; CI `46163954848`/`46163960436`, per job and per step |
+| Dependencies | NEX-050 (`OperatorGate`), NEX-052…NEX-099 (the gated operational views) |
+| Architecture | explicit authorization, authorization-before-action, single enforcement seam |
+
+**Objective:** `OperatorGate.authorize` is the single enforcement point in front of every
+platform-wide operational view — it decides whether the caller holds a live grant scoped to the
+operation, refuses with `ResourceNotFound`, and records exactly one access entry. Fourteen use
+cases across six modules call it. `ops.py` and `policies.py` carry only `PrincipalDep` and
+`RateLimitDep`, which *any* authenticated user satisfies, so the gate was the whole control and
+nothing structural held it.
+
+**Three boundaries were convention, not enforcement:**
+
+1. a new operational view whose use case omits `authorize(...)` is reachable by every
+   authenticated user, and nothing notices;
+2. a view calling `authorize` *after* reading its data has already leaked the count it meant to
+   gate — "gate first, never after" was a docstring, not a mechanism;
+3. a scope token in `KNOWN_OPERATOR_OPERATIONS` that no use case asks for is stored, listed, and
+   enforces nothing, though that registry promises a view and its token land in the same change.
+
+**Delivered:** `tests/architecture/test_operator_gate_boundaries.py` (415 lines, 19 cases, 14
+parametrised per operator container field). It derives each answer from the source tree rather
+than restating the docstrings: AST-walks the use cases for gate *calls* (a mention is not a call),
+resolves each `OPS_FIELDS` entry on the container to the use case its factory annotation
+constructs, follows the routers to the callables they expose, and reconciles the enforced
+operations against the registry in both directions. Pinned invariants: gate-before-any-read
+ordering; every container field resolves to a gated use case; every operator route reaches a gated
+use case; the registry neither omits an enforced operation nor mints an unused scope; the read and
+issue authorities stay split.
+
+**The exclusion is stated, not silent.** `GATED_ROUTERS` lists only `ops` and `policies`. The
+`agents` and `notes` routers are owner-scoped and gated by the authorization provider instead, so
+`OperatorGate` is not their control and pinning them here would assert the wrong property. Widening
+the list needs a domain judgement about which routers are platform-wide, which a syntactic test may
+not decide for itself. The docstring records the reason — an unexplained exclusion is where a
+coverage gap hides.
+
+**This is a third control, not a re-open.** The paging family (NEX-082…NEX-098) and the auth-guard
+family (NEX-099b/NEX-100) were closed and VERIFIED. NEX-101 guards scope enforcement — neither
+route authentication nor identity providers.
+
+**Load-bearing, measured:** blanking the gate call in `withholding_report.py` turned 5 tests red;
+injecting a read before the gate in `GetPolicyHistory` turned the ordering test red; both restored
+with an empty `git diff` before the real commit. The docstring's figure (14 use cases, 6 modules)
+was resolved from the code at runtime rather than copied.
+
+**Tests:** full suite 1901 passed / 0 failed / 0 errors / 4 skipped; `ruff format --check` 330
+files, `ruff check` clean, `mypy` 144 files clean — all run bare, as CI does. CI green at product
+`ff8b6e63` per run, per job and per step (Backend 12/12, Frontend 11/11, zero failed, zero
+skipped).
+
+**Residual limit:** a static proof, not a runtime one. A use case could call `authorize` and then
+read data belonging to a different operation; the ordering test catches the realistic shape, not
+every possible one. The use-case tests remain the behavioural evidence.
