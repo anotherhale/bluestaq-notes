@@ -30,6 +30,8 @@ from notes_service.application.use_cases.policy_lifecycle import (
     DraftPolicy,
     DraftPolicyVersion,
     GetPolicyHistory,
+    ListPoliciesInForce,
+    PoliciesInForce,
     PublishDraft,
     PublishPolicyVersion,
     RollbackPolicy,
@@ -706,3 +708,308 @@ def test_rollback_remains_the_supported_way_to_restore_old_rules(
     assert rolled_back.version == 3
     assert store.published_for("p") == rolled_back
     assert evaluate(store.all_published(), {"risk": "high"}).effect is PolicyEffect.ALLOW
+
+
+# --------------------------------------------------------------------------- #
+# Policies in force (NEX-083)
+#
+# The endpoint that answers "what is constraining this deployment right now".
+# Before it, the only way to ask was to already know every ``policy_id`` and read
+# each history in turn — and an id is free-form text no other endpoint enumerates.
+# A policy set that cannot be enumerated can be sampled but not audited, so these
+# tests pin the properties an audit depends on: the report equals the set the
+# gateway evaluates, an empty set is a real answer, and nothing in it can claim a
+# review that did not happen.
+# --------------------------------------------------------------------------- #
+
+
+def _gate_for(user_ids: set[UserId], clock: FixedClock, *scopes: str) -> OperatorGate:
+    """A gate granting only ``user_ids``, each carrying ``scopes`` (default ``*``)."""
+    held = frozenset(scopes) if scopes else frozenset({"*"})
+    return OperatorGate(
+        grants=grants_from_scopes(dict.fromkeys(user_ids, held)),
+        access_log=InMemoryOperatorAccessLog(),
+        clock=clock,
+    )
+
+
+def _in_force(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    *,
+    rate_limiter_configured: bool = True,
+) -> PoliciesInForce:
+    return ListPoliciesInForce(
+        store=store,
+        operator_gate=gate,
+        clock=clock,
+        rate_limiter_configured=rate_limiter_configured,
+    ).execute(OPERATOR)
+
+
+def _rate_limited() -> PolicyRule:
+    return PolicyRule(
+        rule_id="allow-rate-limited",
+        effect=PolicyEffect.ALLOW,
+        obligations=(PolicyObligation.RATE_LIMIT,),
+    )
+
+
+def test_in_force_lists_only_the_published_versions(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """A draft is not in force, so it must not appear in this report.
+
+    This is the whole point: the report must equal the set the gateway evaluates,
+    not the set of rows that exist. A draft left behind by an unfinished lifecycle
+    is exactly what an operator would wrongly assume constrains the deployment if
+    the report listed every row.
+    """
+    draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
+    live = draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="live", rules=(_deny_all(),), rationale="in force")
+    )
+    _approve_then_publish(store, clock, gate, "live", live.version)
+    draft_policy.execute(
+        AUTHOR,
+        DraftPolicyVersion(policy_id="pending", rules=(_deny_all(),), rationale="never published"),
+    )
+
+    snapshot = _in_force(store, clock, gate)
+
+    assert [p.policy_id for p in snapshot.policies] == ["live"]
+    assert [p.policy_id for p in snapshot.policies] == [
+        v.policy_id for v in store.all_published()
+    ], "the report must equal the set the enforcement path evaluates"
+
+
+def test_in_force_reports_each_policy_once_when_one_is_superseded(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """A superseded version is retired, so the report never shows a policy twice.
+
+    "Exactly one version per policy in force" is the invariant the gateway relies
+    on. A report listing both v1 and v2 for one id would tell an operator that two
+    rule sets are simultaneously binding when only one is.
+    """
+    draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
+    v1 = draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="v1")
+    )
+    _approve_then_publish(store, clock, gate, "p", v1.version)
+    v2 = draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_allow_low_risk(),), rationale="v2")
+    )
+    _approve_then_publish(store, clock, gate, "p", v2.version)
+
+    snapshot = _in_force(store, clock, gate)
+
+    assert [p.version for p in snapshot.policies] == [2]
+    assert snapshot.policy_count == 1
+
+
+def test_in_force_is_empty_rather_than_an_error_when_nothing_is_published(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """Nothing published means the evaluator allows nothing — a fact, not a 404.
+
+    The most restrictive deployment state is an empty policy set, and it is the
+    one an operator most needs to see. Reporting it as "not found" would conflate
+    it with a missing route and hide the state behind a status that reads like a
+    client mistake.
+    """
+    snapshot = _in_force(store, clock, gate)
+
+    assert snapshot.policies == ()
+    assert snapshot.policy_count == 0
+
+
+def test_in_force_is_gated_and_a_refusal_is_not_found(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """A caller with no grant must not learn the policy set, or that it exists."""
+    drafted = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="x")
+    )
+    _approve_then_publish(store, clock, gate, "p", drafted.version)
+
+    with pytest.raises(ResourceNotFound):
+        _in_force(store, clock, _gate_for({AUTHOR.user_id}, clock))
+
+
+def test_in_force_gate_runs_before_the_store_is_read(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Authorisation precedes the query, so a refusal cannot leak a count.
+
+    If the store were read first, a refused caller would still have caused a full
+    policy enumeration. Pinned by making any read of the store fail loudly: a
+    refused caller must never reach it.
+    """
+    bystander = _gate_for({AUTHOR.user_id}, clock)
+
+    def _explode() -> tuple[PolicyVersion, ...]:
+        raise AssertionError("the store was read before authorisation")
+
+    monkeypatch.setattr(store, "all_published", _explode)
+
+    with pytest.raises(ResourceNotFound):
+        _in_force(store, clock, bystander)
+
+
+def test_in_force_excludes_drafts_from_the_count(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """``policy_count`` counts policies in force, not rows in the store.
+
+    A count that included drafts would overstate how much governance is actually
+    being applied — the number an operator is most likely to quote upward.
+    """
+    draft_policy = DraftPolicy(store=store, clock=clock, operator_gate=gate)
+    for policy_id in ("a", "b"):
+        drafted = draft_policy.execute(
+            AUTHOR, DraftPolicyVersion(policy_id=policy_id, rules=(_deny_all(),), rationale="x")
+        )
+        _approve_then_publish(store, clock, gate, policy_id, drafted.version)
+    draft_policy.execute(
+        AUTHOR, DraftPolicyVersion(policy_id="c", rules=(_deny_all(),), rationale="draft only")
+    )
+
+    assert _in_force(store, clock, gate).policy_count == 2
+
+
+def test_in_force_names_the_enforcement_gaps_the_gateway_would_refuse_on(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """A version in force that this deployment cannot enforce is reported, not hidden.
+
+    The authoring guard refuses to *draft* an unenforceable obligation, so this
+    state is reachable only by a deployment change after publication — the limiter
+    removed under a live policy. The rules stay in force, the gateway denies every
+    call they match, and the reason lives only in the audit trail. This report is
+    where an operator can see it.
+    """
+    drafted = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
+        AUTHOR, DraftPolicyVersion(policy_id="rl", rules=(_rate_limited(),), rationale="bounded")
+    )
+    _approve_then_publish(store, clock, gate, "rl", drafted.version)
+
+    assert _in_force(store, clock, gate).policies[0].unenforceable_obligations == ()
+
+    unenforceable = _in_force(store, clock, gate, rate_limiter_configured=False)
+    assert unenforceable.policies[0].unenforceable_obligations == (
+        PolicyObligation.RATE_LIMIT.value,
+    )
+
+
+def test_in_force_reports_a_missing_approval_rather_than_inferring_one(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A version in force without a recorded approver must say so.
+
+    ``published_by != approved_by`` is not the question. A version published
+    before approval became a recorded transition (NEX-065) is in force and must
+    stay there, but reporting it as reviewed would claim a human signed off on
+    rules nobody did. ``approval_on_record`` is the field that cannot lie.
+    """
+    legacy = PolicyVersion(
+        policy_id="legacy",
+        version=1,
+        rules=(_deny_all(),),
+        rationale="published before approval became a recorded transition",
+        status=PolicyStatus.PUBLISHED,
+        created_at=NOW,
+        published_at=NOW,
+        published_by=actor_label(PUBLISHER),
+        drafted_by=actor_label(AUTHOR),
+        approved_by=None,
+    )
+    monkeypatch.setattr(store, "all_published", lambda: (legacy,))
+
+    policy = _in_force(store, clock, gate).policies[0]
+
+    assert policy.approval_on_record is False
+    assert policy.published_by == actor_label(PUBLISHER)
+
+
+def test_a_version_with_a_recorded_approval_is_reported_as_reviewed(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """The positive half: an honoured lifecycle yields ``approval_on_record``.
+
+    Without this, the previous test would pass for a field hard-wired to ``False``
+    — and a report that never reports an approval is as useless to an auditor as
+    one that always does.
+    """
+    drafted = DraftPolicy(store=store, clock=clock, operator_gate=gate).execute(
+        AUTHOR, DraftPolicyVersion(policy_id="p", rules=(_deny_all(),), rationale="x")
+    )
+    _approve_then_publish(store, clock, gate, "p", drafted.version)
+
+    policy = _in_force(store, clock, gate).policies[0]
+
+    assert policy.approval_on_record is True
+    assert policy.approved_by == actor_label(OPERATOR)
+    assert policy.drafted_by == actor_label(AUTHOR)
+
+
+def test_in_force_stamps_the_report_with_the_injected_clock(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """``as_of`` comes from the injected clock, not the wall clock (R29)."""
+    clock.advance(minutes=3)
+
+    assert _in_force(store, clock, gate).as_of == clock.now()
+
+
+def test_in_force_names_the_adapter_that_answered(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+) -> None:
+    """The process-local store must be labelled as such, never as durable storage."""
+    assert _in_force(store, clock, gate).source_name == "in-memory"
+
+
+def test_in_force_raises_on_a_corrupt_row_rather_than_dropping_it(
+    store: InMemoryPolicyVersionRepository,
+    clock: FixedClock,
+    gate: OperatorGate,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable policy must fail the report, not silently shrink it.
+
+    Omitting a corrupt row would understate the restriction set: an operator would
+    believe fewer policies are in force than the gateway is applying. A report
+    that fails loudly is the only one that cannot mislead about what is enforced.
+    """
+
+    def _corrupt() -> tuple[PolicyVersion, ...]:
+        raise InvariantViolation("stored policy version is unreadable")
+
+    monkeypatch.setattr(store, "all_published", _corrupt)
+
+    with pytest.raises(InvariantViolation):
+        _in_force(store, clock, gate)

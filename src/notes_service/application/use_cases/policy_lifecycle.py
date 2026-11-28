@@ -46,6 +46,7 @@ decides.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from notes_service.application.actor_label import actor_label
 from notes_service.application.errors import Conflict, ResourceNotFound
@@ -474,13 +475,141 @@ class GetPolicyHistory:
         return PolicyHistory(policy_id=policy_id, versions=versions)
 
 
+@dataclass(frozen=True, slots=True)
+class PolicyInForce:
+    """One policy version currently in force, and what this deployment can enforce.
+
+    ``unenforceable_obligations`` is the operational half. The authoring path
+    refuses to draft a rule naming an obligation the deployment has no adapter for
+    (:func:`_require_enforceable_obligations`), but that guard runs once, at author
+    time. A version drafted while a limiter was configured keeps its ``rate-limit``
+    rule when the limiter is later removed, and from that moment every call the
+    rule matches is denied with the reason visible only in the audit trail. Naming
+    the gap here makes it visible to the same operator who can publish a fix.
+
+    It is computed with the gateway's own
+    :func:`~notes_service.domain.governance.policy.deployment_obligation_gaps`, so
+    this report and the enforcement path cannot disagree about what is supported.
+    """
+
+    policy_id: str
+    version: int
+    rules: tuple[PolicyRule, ...]
+    rationale: str
+    published_at: datetime | None
+    published_by: str | None
+    drafted_by: str | None
+    approved_by: str | None
+    approval_on_record: bool
+    unenforceable_obligations: tuple[str, ...]
+
+    @property
+    def ref(self) -> str:
+        return f"{self.policy_id}@v{self.version}"
+
+
+@dataclass(frozen=True, slots=True)
+class PoliciesInForce:
+    """Every policy version in force at one instant, in policy-id order.
+
+    This is the set the enforcement gateway evaluates, reported as data. Without
+    it the only way to ask "what is restricting this deployment right now" was to
+    already know every ``policy_id`` and read each history in turn — and an id is
+    free-form text an operator cannot enumerate from any other endpoint. A
+    deployment whose policy set is unenumerable cannot be audited, only sampled.
+
+    ``policies`` empty is a real, actionable answer rather than an error: nothing is
+    published means :func:`~notes_service.domain.governance.policy.evaluate` has
+    nothing to allow, and a deployment that denies everything is a fact an operator
+    needs told. So an empty result is ``200`` with an empty list, never ``404``.
+
+    ``as_of`` is the gate's clock, taken after authorisation, and ``source_name``
+    names the adapter that answered, so a reader cannot mistake the process-local
+    store for a durable deployment-wide one.
+    """
+
+    policies: tuple[PolicyInForce, ...]
+    as_of: datetime
+    source_name: str
+
+    @property
+    def policy_count(self) -> int:
+        return len(self.policies)
+
+
+class ListPoliciesInForce:
+    """Return every policy version currently in force to an authorized operator.
+
+    Gated by ``policy-history``, the scope that already reads a policy's full
+    version history. A history discloses strictly *more* than this report — it
+    includes drafts whose rules are not yet in force and versions already retired —
+    so reuse here cannot escalate: anything an ``in-force`` reader sees, a history
+    reader already sees. Minting a fifth policy token would instead force every
+    auditor to be granted twice to answer one question, the same reasoning
+    NEX-080 used to reuse ``operator-access-report`` for revoked grants.
+
+    A corrupt stored row makes this raise rather than skip. The store re-validates
+    on read and raises, which is deliberate: silently omitting an unparseable
+    policy from "what is in force" would understate the restriction set, and a
+    report that quietly drops rows is worse than one that fails loudly.
+    """
+
+    def __init__(
+        self,
+        *,
+        store: PolicyVersionRepository,
+        operator_gate: OperatorGate,
+        clock: Clock,
+        rate_limiter_configured: bool,
+    ) -> None:
+        self._store = store
+        self._operator_gate = operator_gate
+        self._clock = clock
+        self._rate_limiter_configured = rate_limiter_configured
+
+    def execute(self, principal: Principal) -> PoliciesInForce:
+        # Gate first, never after: a refused caller must not learn how many
+        # policies constrain this deployment, and the gate records the attempt.
+        self._operator_gate.authorize(principal, operation=HISTORY_OPERATION)
+
+        published = self._store.all_published()
+        return PoliciesInForce(
+            policies=tuple(self._describe(version) for version in published),
+            as_of=self._clock.now(),
+            source_name=self._store.name,
+        )
+
+    def _describe(self, version: PolicyVersion) -> PolicyInForce:
+        obligations = tuple(
+            dict.fromkeys(obligation for rule in version.rules for obligation in rule.obligations)
+        )
+        gaps = deployment_obligation_gaps(
+            obligations, rate_limiter_configured=self._rate_limiter_configured
+        )
+        return PolicyInForce(
+            policy_id=version.policy_id,
+            version=version.version,
+            rules=version.rules,
+            rationale=version.rationale,
+            published_at=version.published_at,
+            published_by=version.published_by,
+            drafted_by=version.drafted_by,
+            approved_by=version.approved_by,
+            approval_on_record=version.has_approval_record,
+            unenforceable_obligations=tuple(obligation.value for obligation in gaps),
+        )
+
+
 __all__ = [
     "ApproveDraft",
     "ApprovePolicyVersion",
     "DraftPolicy",
     "DraftPolicyVersion",
     "GetPolicyHistory",
+    "ListPoliciesInForce",
+    "PoliciesInForce",
     "PolicyHistory",
+    "PolicyInForce",
     "PublishDraft",
     "PublishPolicyVersion",
     "RollbackPolicy",

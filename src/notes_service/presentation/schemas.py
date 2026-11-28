@@ -27,7 +27,11 @@ from notes_service.application.use_cases.operator_grants import (
     RevokedOperatorGrantSnapshot,
 )
 from notes_service.application.use_cases.organization import OrganizationView
-from notes_service.application.use_cases.policy_lifecycle import PolicyHistory
+from notes_service.application.use_cases.policy_lifecycle import (
+    PoliciesInForce,
+    PolicyHistory,
+    PolicyInForce,
+)
 from notes_service.application.use_cases.tools import ToolResult
 from notes_service.domain.agent.audit_chain import ChainAuditReport, ChainVerdict
 from notes_service.domain.agent.decisioning import AbstentionReason
@@ -1670,6 +1674,81 @@ class PolicyHistoryResponse(ResponseModel):
             policy_id=history.policy_id,
             versions=[PolicyVersionResponse.from_domain(v) for v in history.versions],
             published_version=published.version if published is not None else None,
+        )
+
+
+class PolicyInForceResponse(ResponseModel):
+    """One policy version in force, with its enforcement gaps.
+
+    ``approval_on_record`` is a separate field from ``published_at`` on purpose: a
+    version published before approval became a recorded transition carries no
+    approver and must never be reported as reviewed. A client that needs "a human
+    approved these rules" reads this, not the presence of a publisher.
+
+    ``unenforceable_obligations`` names obligations the *current* deployment has no
+    adapter for. It is normally empty — the authoring path refuses such a draft —
+    but it is not a duplicate of that guard: the guard runs at author time, and a
+    version already in force can lose its adapter later (a limiter removed, say).
+    Each name here is a rule that is denying calls it was written to permit.
+    """
+
+    policy_id: str
+    version: int
+    ref: str
+    rules: list[PolicyRuleResponse]
+    rationale: str
+    published_at: datetime | None
+    published_by: str | None
+    drafted_by: str | None
+    approved_by: str | None
+    approval_on_record: bool
+    unenforceable_obligations: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_domain(cls, policy: PolicyInForce) -> PolicyInForceResponse:
+        return cls(
+            policy_id=policy.policy_id,
+            version=policy.version,
+            ref=policy.ref,
+            rules=[
+                PolicyRuleResponse(
+                    rule_id=rule.rule_id,
+                    effect=rule.effect.value,
+                    when=encode_condition(rule.when) if rule.when is not None else None,
+                    obligations=[obligation.value for obligation in rule.obligations],
+                )
+                for rule in policy.rules
+            ],
+            rationale=policy.rationale,
+            published_at=policy.published_at,
+            published_by=policy.published_by,
+            drafted_by=policy.drafted_by,
+            approved_by=policy.approved_by,
+            approval_on_record=policy.approval_on_record,
+            unenforceable_obligations=list(policy.unenforceable_obligations),
+        )
+
+
+class PoliciesInForceResponse(ResponseModel):
+    """Every policy version in force, oldest policy-id first.
+
+    An empty ``policies`` list is a valid, load-bearing answer: nothing published
+    means the evaluator has nothing to allow. ``source_name`` says which adapter
+    answered so a ``"in-memory"`` result is not mistaken for a durable one.
+    """
+
+    policies: list[PolicyInForceResponse]
+    as_of: datetime
+    policy_count: int
+    source_name: str
+
+    @classmethod
+    def from_domain(cls, snapshot: PoliciesInForce) -> PoliciesInForceResponse:
+        return cls(
+            policies=[PolicyInForceResponse.from_domain(p) for p in snapshot.policies],
+            as_of=snapshot.as_of,
+            policy_count=snapshot.policy_count,
+            source_name=snapshot.source_name,
         )
 
 

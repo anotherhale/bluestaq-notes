@@ -358,3 +358,96 @@ def test_a_grant_for_one_operation_does_not_cover_another(app: FastAPI) -> None:
 
 def test_an_unauthenticated_caller_is_rejected(operator_client: TestClient) -> None:
     assert operator_client.post(f"{BASE}/p8/versions", json=DRAFT).status_code == 401
+
+
+# --------------------------------------------------------------------------- #
+# Policies in force over HTTP (NEX-083)
+#
+# The use cases are covered directly in ``tests/application/test_policy_lifecycle.py``.
+# These cover what that cannot: the route answers without a caller-supplied id,
+# the response carries the audit fields, an empty set is a 200, and the same
+# operator gate guards it.
+# --------------------------------------------------------------------------- #
+
+
+def _publish_one(client: TestClient, policy_id: str = "risk-gate") -> None:
+    drafted = client.post(f"{BASE}/{policy_id}/versions", json=DRAFT, headers=auth_headers(ALICE))
+    assert drafted.status_code == 201, drafted.text
+    approved = client.post(
+        f"{BASE}/{policy_id}/approve", json={"version": 1}, headers=auth_headers(BOB)
+    )
+    assert approved.status_code == 200, approved.text
+    published = client.post(
+        f"{BASE}/{policy_id}/publish", json={"version": 1}, headers=auth_headers(CAROL)
+    )
+    assert published.status_code == 200, published.text
+
+
+def test_in_force_route_is_200_with_an_empty_set(operator_client: TestClient) -> None:
+    """Nothing published is a real answer, not a 404 for a missing route.
+
+    "Deny everything" is the most restrictive state a deployment can be in and
+    the one an operator most needs to see. Reporting it as an error would hide it
+    behind the same status as a typo'd path.
+    """
+    response = operator_client.get(BASE, headers=auth_headers(ALICE))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["policies"] == []
+    assert body["policy_count"] == 0
+    # The adapter is named so the reader knows whether this is durable evidence.
+    assert body["source_name"] == "sqlalchemy"
+
+
+def test_in_force_route_returns_the_published_set(operator_client: TestClient) -> None:
+    """One request answers "what is restricting this deployment" — no id needed."""
+    _publish_one(operator_client)
+
+    body = operator_client.get(BASE, headers=auth_headers(ALICE)).json()
+
+    assert body["policy_count"] == 1
+    policy = body["policies"][0]
+    assert policy["policy_id"] == "risk-gate"
+    assert policy["version"] == 1
+    assert policy["rules"][0]["rule_id"] == "allow-low-risk"
+    # The audit fields an operator reads first, serialised as data.
+    assert policy["approved_by"] == f"user-{BOB}"
+    assert policy["published_by"] == f"user-{CAROL}"
+    assert policy["approval_on_record"] is True
+    assert policy["unenforceable_obligations"] == []
+
+
+def test_in_force_route_omits_a_draft(operator_client: TestClient) -> None:
+    """A draft is not in force, so it must not appear — the report is the set,
+    not the rows, and ``policy_count`` counts policies in force."""
+    pending = operator_client.post(
+        f"{BASE}/pending/versions", json=DRAFT, headers=auth_headers(ALICE)
+    )
+    assert pending.status_code == 201, pending.text
+    _publish_one(operator_client, "live")
+
+    body = operator_client.get(BASE, headers=auth_headers(ALICE)).json()
+
+    assert [p["policy_id"] for p in body["policies"]] == ["live"]
+    assert body["policy_count"] == 1
+
+
+def test_in_force_route_is_404_for_a_non_operator(
+    app: FastAPI, operator_client: TestClient
+) -> None:
+    """A logged-in ordinary user must not learn that this surface exists.
+
+    The policy is published by an operator and stays in the durable store, so the
+    ungranted client sees the same rows — the 404 is the gate refusing, not an
+    empty repo.
+    """
+    _publish_one(operator_client)
+
+    denied = _client(app).get(BASE, headers=auth_headers(BOB))
+    assert denied.status_code == 404, denied.text
+
+
+def test_in_force_route_requires_authentication(operator_client: TestClient) -> None:
+    """No credential is not an empty policy set; it is a rejected request."""
+    assert operator_client.get(BASE).status_code == 401

@@ -32,6 +32,7 @@ from notes_service.domain.governance.policy import PolicyEffect, PolicyObligatio
 from notes_service.infrastructure.governance.policy_codec import decode_condition
 from notes_service.presentation.dependencies import ContainerDep, PrincipalDep, RateLimitDep
 from notes_service.presentation.schemas import (
+    PoliciesInForceResponse,
     PolicyApproveRequest,
     PolicyDraftRequest,
     PolicyHistoryResponse,
@@ -198,3 +199,34 @@ def get_policy_history(
     """
     history = container.get_policy_history().execute(principal, policy_id)
     return PolicyHistoryResponse.from_domain(history)
+
+
+@router.get(
+    "",
+    response_model=PoliciesInForceResponse,
+    summary="Every policy version in force right now (operators only)",
+    dependencies=[RateLimitDep],
+)
+def list_policies_in_force(
+    principal: PrincipalDep, container: ContainerDep
+) -> PoliciesInForceResponse:
+    """Return the set the enforcement gateway is evaluating at this instant.
+
+    Every other policy route takes a ``policy_id`` from the path, so the only way
+    to ask "what is restricting this deployment" was to already know every id, and
+    an id is free-form text no endpoint lists. The published set was therefore
+    unreachable in its entirety even though the gateway calls ``all_published`` on
+    every gated action. This is the read half of that loop: the same call the
+    enforcement path makes, reported as data.
+
+    An empty list is ``200``, not ``404``. Nothing published means the evaluator
+    has nothing to allow, so "deny everything" is a real answer an operator needs
+    to see; making it an error would hide the most restrictive state behind the
+    same status as a missing route.
+
+    Gated on ``policy-history``, which already discloses strictly more (drafts and
+    retired versions), and recorded like every other ops read. A non-operator gets
+    ``404``.
+    """
+    snapshot = container.list_policies_in_force().execute(principal)
+    return PoliciesInForceResponse.from_domain(snapshot)

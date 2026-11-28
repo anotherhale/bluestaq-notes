@@ -136,6 +136,7 @@ from notes_service.application.use_cases.policy_lifecycle import (
     ApproveDraft,
     DraftPolicy,
     GetPolicyHistory,
+    ListPoliciesInForce,
     PublishDraft,
     RollbackPolicy,
 )
@@ -328,6 +329,7 @@ class Container:
     publish_draft: Callable[[], PublishDraft]
     rollback_policy: Callable[[], RollbackPolicy]
     get_policy_history: Callable[[], GetPolicyHistory]
+    list_policies_in_force: Callable[[], ListPoliciesInForce]
 
 
 def _seed_operator_grants(
@@ -654,6 +656,17 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
     def make_get_policy_history() -> GetPolicyHistory:
         return GetPolicyHistory(store=policy_versions, operator_gate=operator_gate)
 
+    # The published set, reported as data. ``rate_limiter_configured`` is the same
+    # value the gateway and the drafting guard receive, so the enforcement gaps
+    # this report names are the gaps the gateway would refuse on.
+    def make_list_policies_in_force() -> ListPoliciesInForce:
+        return ListPoliciesInForce(
+            store=policy_versions,
+            operator_gate=operator_gate,
+            clock=clock,
+            rate_limiter_configured=rate_limiter is not None,
+        )
+
     def make(use_case_type: type[UseCaseT]) -> Callable[[], UseCaseT]:
         def factory() -> UseCaseT:
             return use_case_type(
@@ -825,4 +838,5 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         publish_draft=make_publish_draft,
         rollback_policy=make_rollback_policy,
         get_policy_history=make_get_policy_history,
+        list_policies_in_force=make_list_policies_in_force,
     )
