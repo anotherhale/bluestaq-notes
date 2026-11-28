@@ -8822,3 +8822,37 @@ Run 74: (1) read CI for `09888ac`, promote NEX-073 to VERIFIED-by-CI if green; (
 the highest-value dependency-ready slice from `BACKLOG.md` — named candidates are the
 `operator_access_log` retention policy (run 72's follow-up) and the PR #5 body catch-up for
 NEX-058..NEX-073. Do not re-implement NEX-058 or NEX-073.
+
+### NEX-073 — CI read, promoted to VERIFIED (same run, 2026-11-28T01:56Z)
+
+The entry above closed with CI unknown. It has since been read, so this addendum
+supersedes that one line rather than leaving the log asserting a gap that no longer exists.
+
+`gh api repos/anotherhale/bluestaq-notes/commits/09888ac/check-runs` returns four runs, all
+`completed` / `success`:
+
+| Check | Conclusion |
+| --- | --- |
+| Backend (ruff, mypy, pytest, migrations) | success |
+| Backend (ruff, mypy, pytest, migrations) | success |
+| Frontend (typecheck, lint, test, build) | success |
+| Frontend (typecheck, lint, test, build) | success |
+
+**The part that matters is the second frontend run.** On `38292d2` the pair split 1 success
+and 1 failure on the identical SHA; on `09888ac` both pass. The fix was claimed to remove a
+flake, and CI is the only place a flake can actually be observed as gone, because a local
+`vitest run` never produced the failure in the first place. NEX-073 is now **VERIFIED**, not
+merely tested.
+
+Both pairs are present because the branch concurrency group re-ran the workflows. Two
+check-run pairs for one SHA is normal, and the verdict is taken from pairs whose `status` is
+`completed`, not from the newest pair alone.
+
+### Run 73 close
+
+- Ending product commit `09888ac`; docs commit `8a24a71` (this file and the state files).
+- Working tree clean, remote verified at the docs head.
+- **Zero production files changed this run.** NEX-073 was a test-correctness slice, and the
+  honest way to describe the value is: the frontend gate now fails when the product is
+  broken, where before it could pass regardless.
+- Nothing is left uncommitted and no task is left in a half-state.
