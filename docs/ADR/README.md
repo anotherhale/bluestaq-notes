@@ -23,6 +23,7 @@ and immutable; superseding a decision means adding a new ADR.
 | [ADR-015](ADR-015-step-up-assurance-signal.md) | `step-up` is satisfied by a recorded authentication assurance, not a judgement |
 | [ADR-016](ADR-016-risk-based-approval.md) | Risk is derived from the capability, and it can only raise the gate |
 | [ADR-017](ADR-017-operator-access-log-retention.md) | The operator access log is retained on a bounded window; erasing it is its own authority |
+| [ADR-018](ADR-018-table-wide-constraints-must-admit-history.md) | A table-wide constraint must admit the history it will be evaluated against |
 
 
 See also the [Enterprise Authorization Architecture](../AUTHORIZATION_ARCHITECTURE.md) and [Authorization Policy Model](../AUTHORIZATION_POLICY_MODEL.md).

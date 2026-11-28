@@ -3577,6 +3577,18 @@ its CI was still registering when this was written, so it is **not** VERIFIED ye
   and by DB CHECK `ck_policy_versions_policy_versions_separation_of_duties` (migration
   `5d2b7c41e9a8`). The CHECK tolerates legacy published rows that record no approver, so
   existing data stays readable.
+
+  **Correction (NEX-101).** "Tolerates legacy published rows" above was true of the CHECK as
+  *written* in `5d2b7c41e9a8`, but the migration chain as *released* could not admit such a row
+  at all: `9c4d1e8a7b23` and `c4e7a1b93d05` both guarded the comparison with
+  `drafted_by IS NOT NULL`, and `9c4d1e8a7b23` runs *before* the row that already exists is
+  ever visible. A published row from the pre-NEX-065 schema has a NULL author, `NULL IS NOT
+  NULL` is FALSE, so SQLite's table rebuild aborted and `alembic upgrade head` failed with
+  `CHECK constraint failed` — the deployment could not be upgraded. Fixed by dropping the
+  presence guards from `9c4d1e8a7b23`, `c4e7a1b93d05` and `5d2b7c41e9a8` (inequality-only,
+  which passes on NULL). Presence for *new* rows is enforced by the domain and the use cases,
+  not by a table-wide CHECK that must also admit history. See also the `approved`-status
+  correction below.
 - **P2 — timezone-aware operator grant expiration.** `expires_at` is the whole safety property
   of a bounded grant, so an ambiguous one is refused. A naive datetime names a wall-clock
   reading in a zone the request never specified; the store would relabel it as UTC, so a UTC+10
@@ -3593,6 +3605,27 @@ round-trips upgrade → downgrade −1 → upgrade on top of `b4e6f1a2c9d7`, sin
 for the operator-grant rationale feature (now VERIFIED at `9f9a70f`). It was renumbered to
 NEX-078 and rebased onto the true head. Only this run's own references were renumbered; the
 other run's NEX-077 references were left untouched.
+
+**Correction — the `approved` status was unreachable on a migrated database (NEX-101).**
+`c4e7a1b93d05` introduced `PolicyStatus.APPROVED` and taught the *publication* and
+*separation-of-duties* constraints about it, but left
+`ck_policy_versions_status_valid` at the `4b1e7a9c3f28` list
+`('draft','published','retired')`. On any database built by `alembic upgrade`, the approve step
+— the middle of the only legal path to publication — failed with `CHECK constraint failed:
+ck_policy_versions_policy_versions_status_valid`. Nothing could be published, so the governed
+tool gateway had no policy to evaluate. Repair revision `f3a8c1d47e92` widens the status list
+and recreates the SoD CHECK, converging databases that had already applied the repaired
+`c4e7a1b93d05` with those that had not.
+
+Why every existing gate missed it: the pytest fixtures build their schema with
+`Base.metadata.create_all`, and the ORM model carries the correct status list, so only
+`alembic upgrade` produced the stale constraint. The migration tests seeded only
+`draft`/`published`/`retired` rows — exactly the statuses the stale constraint allowed.
+`alembic check` does not report it either: autogenerate diffs tables, columns, indexes and some
+constraint classes, but not CHECK constraint *expressions*. The new
+`TestModernPoliciesStillEnforceSeparationOfDuties::test_the_whole_lifecycle_runs_on_a_migrated_database`
+drives draft → approve → publish through the shipped adapter against a migrated DB, which fails
+without `f3a8c1d47e92`.
 
 ## Next best actions (run `NEX-2026-11-27-78`)
 

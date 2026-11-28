@@ -26,10 +26,30 @@ in force with both columns NULL reads as "no approval on record"
 requires re-drafting it with a named approver, which is the correct remediation.
 This mirrors the choice made in 9c4d1e8a7b23 for ``drafted_by``.
 
-This revision is edited in place rather than superseded by a follow-up: it has
-never been applied to a durable database (it is unreleased on an unmerged branch),
-and a later revision could not repair the failure because ``upgrade head`` would
-still stop at this one.
+This revision is edited in place rather than superseded by a follow-up, which needs
+justifying now that it has been released (it shipped in the PR that enforced the
+published policy at the tool gateway). A follow-up revision cannot repair this
+defect at all: the failure happens *during* this revision, so ``upgrade head``
+stops here and no later revision is ever reached. Editing in place is also the
+only shape that is safe for the databases already carrying it. A database that
+applied this revision did so with no legacy in-force row (the predicate refused
+them), so it holds no row whose treatment the edit changes; a database that holds
+such a row never got past this revision, so it has not run the old form either.
+The two populations therefore converge, and neither can be left on a constraint
+the other does not have.
+
+Separation of duties here must also survive a legacy row
+--------------------------------------------------------
+The SoD constraint is replaced in this revision, and the replacement must keep the
+tolerance the previous one was given in ``9c4d1e8a7b23``. Writing ``drafted_by IS
+NOT NULL`` into any branch of it re-breaks the upgrade for the same reason: a
+legacy in-force row has no author, ``NULL IS NOT NULL`` is FALSE, and the table
+rebuild that adds ``approved_at``/``approved_by`` then aborts with ``CHECK
+constraint failed``. The rule is expressed only as comparisons - ``NULL <> 'x'``
+is NULL, which a CHECK passes - so a grandfathered row survives while a *new* row
+that collapses author and approver, author and publisher, or approver and
+publisher is FALSE and refused. Author and approver *presence* for new rows is
+enforced by the domain and ``PublishDraft``, which no legacy row passes through.
 
 Revision ID: c4e7a1b93d05
 Revises: e5a9c3b7d812
@@ -59,8 +79,19 @@ _PUBLICATION_DATA_PREVIOUS = (
     " AND published_at IS NOT NULL AND published_by IS NOT NULL)"
 )
 
-_SEPARATION_OF_DUTIES_PREVIOUS = (
-    "status = 'draft' OR (drafted_by IS NOT NULL AND drafted_by <> published_by)"
+_SEPARATION_OF_DUTIES_PREVIOUS = "status = 'draft' OR (drafted_by <> published_by)"
+
+# Pairwise-distinct comparisons only. Every ``drafted_by IS NOT NULL`` /
+# ``approved_by IS NOT NULL`` guard is deliberately absent: a legacy in-force row
+# has both NULL, and ``NULL IS NOT NULL`` is FALSE, so any such guard would make
+# the table rebuild below abort with ``CHECK constraint failed``. ``NULL <> 'x'``
+# is NULL, which a CHECK passes, so history survives while a new row that
+# collapses two roles is refused. Presence for new rows is a domain/use-case rule.
+_SEPARATION_OF_DUTIES_NEW = (
+    "status = 'draft'"
+    " OR (status = 'approved' AND drafted_by <> approved_by)"
+    " OR (status IN ('published','retired')"
+    " AND drafted_by <> published_by AND drafted_by <> approved_by)"
 )
 
 
@@ -91,11 +122,7 @@ def upgrade() -> None:
             " OR (approved_at IS NOT NULL AND approved_by IS NOT NULL)))",
         )
         batch.create_check_constraint(
-            "policy_versions_separation_of_duties",
-            "status = 'draft'"
-            " OR (status = 'approved' AND drafted_by IS NOT NULL AND drafted_by <> approved_by)"
-            " OR (status IN ('published','retired') AND drafted_by IS NOT NULL"
-            " AND drafted_by <> published_by AND drafted_by <> approved_by)",
+            "policy_versions_separation_of_duties", _SEPARATION_OF_DUTIES_NEW
         )
 
 

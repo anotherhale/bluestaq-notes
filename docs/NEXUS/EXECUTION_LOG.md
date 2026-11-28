@@ -9414,6 +9414,21 @@ point.
 The CHECK tolerates a legacy published row that records no approver (the pre-NEX-065 shape), so
 existing data stays readable; every pairwise violation among *recorded* principals is refused.
 
+**Correction (NEX-101).** That tolerance was true of the CHECK text in `5d2b7c41e9a8` but not of
+the released chain. `9c4d1e8a7b23` and `c4e7a1b93d05` guarded the same comparison with
+`drafted_by IS NOT NULL`, and `9c4d1e8a7b23` rebuilds the table *with the legacy row already in
+it*, so a pre-NEX-065 published row (NULL author) aborted `alembic upgrade head`. The guards are
+removed from all three revisions: the predicates are inequality-only, which passes on NULL.
+Presence is a rule for *new* rows and lives in the domain and the use cases.
+
+Separately, and independently: `c4e7a1b93d05` added `PolicyStatus.APPROVED` but left
+`ck_policy_versions_status_valid` at `('draft','published','retired')`, so on any migrated
+database the approve step failed and no policy could ever be published. Repair revision
+`f3a8c1d47e92` widens it. Both defects were invisible to `create_all` and to `alembic check`;
+see `docs/NEXUS/STATE.md` for why, and
+`tests/persistence/test_migrations.py::TestLegacyPolicyWithoutAnyAuthorshipUpgrades` /
+`::TestModernPoliciesStillEnforceSeparationOfDuties` for the regressions.
+
 **P2 — timezone-aware operator grant expiration.**
 `expires_at` is the whole safety property of a bounded grant, so an ambiguous one is refused. A
 naive datetime is a wall-clock reading in a zone the request never named; the store would
