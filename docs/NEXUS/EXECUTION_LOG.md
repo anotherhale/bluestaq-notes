@@ -11268,3 +11268,63 @@ written and after `c470ef8` was pushed.
 Rule carried forward: a heredoc feeding a *publisher* (`gh pr comment`, `gh issue comment`,
 `git commit -F`, any request body) is unsafe by default regardless of length, because the
 failure mode is silent success rather than a parse error.
+
+---
+
+## Run `NEX-2026-11-28-93` — NEX-093: the agent listings had no tiebreaker
+
+**Branch** `feature/agentic-enterprise-platform` · **Starting commit** `bd736ce` ·
+**Ending commit** `48ad062` (product) · **Phase** 3 (governance)
+
+### What was actually true at the start
+
+The inherited status said six tiebreak tests were load-bearing evidence. Only one was. That
+distinction is the whole run, so it is recorded first.
+
+- An earlier version of `tests/persistence/test_agent_listing_order.py` inserted the tied rows
+  in **reverse** order and asserted the query returned them in insertion order. It passed
+  against the **unfixed** code, so it proved nothing.
+- Root cause: SQLite resolves an unordered tie by walking an index backwards, which happens to
+  reproduce reversed insertion. The test and the defect agreed by coincidence.
+- Fix: `_scrambled()` inserts in a fixed **non-monotone** permutation (`[1,3,0,2]`,
+  `[1,3,5,0,2,4]`). No incidental index order can satisfy the assertion.
+
+### The three queries
+
+| Query | Was | Now | Why this tiebreaker |
+| --- | --- | --- | --- |
+| `SqlAlchemyApprovalRequestRepository.list_for_agent` | `requested_at` | `requested_at, id` | `OFFSET` paging over a non-unique key repeats and skips rows |
+| `SqlAlchemyApprovalRequestRepository.list_pending_for_agent` | `requested_at` | `requested_at, id` | unbounded, but callers index `[0]` — an undefined order decided **which approval was acted on** |
+| `SqlAlchemyToolInvocationRepository.list_for_agent` | `invoked_at DESC` | `invoked_at DESC, chain_sequence DESC` | `chain_sequence` is unique per agent (`uq_tool_invocations_agent_chain_sequence`) and orders tied rows the way the audit chain read them, rather than by surrogate key |
+
+The third query was not in the inherited plan. It was added because it is the same defect in
+the same family, and because an authorisation read that depends on row order is worse than a
+page that repeats a row.
+
+### Evidence
+
+- **WITH** the fix: 7/7 green.
+- **WITHOUT** the fix: `FF.FFF.` — 5 of 7 fail. The 2 that still pass cover a status filter and
+  agent scope, which are different invariants.
+- Gates on the committed tree: `ruff format` 325 files unchanged, `ruff check` clean,
+  `mypy` clean over 144 source files, full `pytest` exit 0.
+
+### Decisions
+
+- `chain_sequence` over `id` for invocations: a verifier walks the audit chain, so the page
+  should agree with the chain. `id` is unique too but arbitrary relative to the chain.
+- The docstrings state what the tiebreaker *is* and which defect it prevents. They do not claim
+  a performance property — the NEX-086 lesson was a docstring promising boundedness above a
+  `select()` with no `where(...)`.
+
+### CI verdict, read before the docs push
+
+The CI verdict on `48ad062` was read **before** the docs commit was pushed, because a docs push
+cancels the product's in-flight runs in the concurrency group (`ci-<workflow>-<ref>`,
+`cancel-in-progress: true`). Verdict: **4/4 `completed/success` on the product commit itself** —
+runs `46138734219` (pull_request) and `46138728671` (push), Backend and Frontend green on each.
+No docs-head anchor was needed. NEX-093 is **VERIFIED**.
+
+Rule carried forward from this run: **reversed insertion is not a load-bearing test for a tie.**
+It is satisfied by a backwards index scan, so it passes against the defect it claims to catch.
+Use a non-monotone permutation.
