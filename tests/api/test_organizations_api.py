@@ -176,6 +176,83 @@ class TestTenantIsolation:
         assert "manage_roles" not in body["caller_capabilities"]
 
 
+class TestOrganizationRoster:
+    """Who the roster lists after a membership changes lifecycle state.
+
+    Offboarding is a soft delete: the row survives for audit history, so the
+    listing has to exclude it explicitly. The team roster already does
+    (``SqlAlchemyTeamMembershipRepository.list_for_team``); the organization
+    roster did not, and showed deprovisioned people as current members.
+    """
+
+    def roster(self, client: TestClient, org_id: str) -> dict:
+        response = client.get(
+            f"/api/v1/organizations/{org_id}/members", headers=auth_headers(ALICE)
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_a_deprovisioned_member_leaves_the_roster(self, client: TestClient) -> None:
+        org = create_org(client, ALICE, "acme")
+        invite(client, ALICE, org["id"], BOB, "org_member")
+        carol_membership = invite(client, ALICE, org["id"], CAROL, "org_member")
+        assert (
+            client.post(
+                f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/deprovision",
+                headers=auth_headers(ALICE),
+            ).status_code
+            == 200
+        )
+
+        roster = self.roster(client, org["id"])
+
+        users = [member["user_id"] for member in roster["items"]]
+        assert CAROL not in users, "an offboarded person is still listed as a member"
+        assert set(users) == {ALICE, BOB}
+        # The total describes the roster, so it must not count the offboarded row
+        # either — otherwise a client sees "3 members" above two rows.
+        assert roster["meta"]["total"] == 2
+
+    def test_a_suspended_member_stays_in_the_roster(self, client: TestClient) -> None:
+        # Suspension is a reversible pause, not an offboarding: the membership
+        # id must stay reachable or nothing could ever be reactivated. Filtering
+        # the roster to active members only would look like a fix and break that.
+        org = create_org(client, ALICE, "acme")
+        bob_membership = invite(client, ALICE, org["id"], BOB, "org_member")
+        client.post(
+            f"/api/v1/organizations/{org['id']}/members/{bob_membership['id']}/suspend",
+            headers=auth_headers(ALICE),
+        )
+
+        roster = self.roster(client, org["id"])
+
+        listed = {member["user_id"]: member for member in roster["items"]}
+        assert BOB in listed, "a suspended member must stay on the roster to be reactivated"
+        assert listed[BOB]["status"] == "suspended"
+        assert listed[BOB]["id"] == bob_membership["id"]
+        assert roster["meta"]["total"] == 2
+
+    def test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster(
+        self, client: TestClient
+    ) -> None:
+        # Offboarding is terminal, so the roster's silence about that person is
+        # consistent rather than lossy: there is no action left to take on them.
+        org = create_org(client, ALICE, "acme")
+        carol_membership = invite(client, ALICE, org["id"], CAROL, "org_member")
+        client.post(
+            f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/deprovision",
+            headers=auth_headers(ALICE),
+        )
+
+        response = client.post(
+            f"/api/v1/organizations/{org['id']}/members/{carol_membership['id']}/reactivate",
+            headers=auth_headers(ALICE),
+        )
+
+        assert response.status_code == 422, response.text
+        assert CAROL not in [m["user_id"] for m in self.roster(client, org["id"])["items"]]
+
+
 class TestPrivilegeEscalation:
     def test_admin_cannot_grant_a_role_above_their_own(self, client: TestClient) -> None:
         org = create_org(client, ALICE, "acme")

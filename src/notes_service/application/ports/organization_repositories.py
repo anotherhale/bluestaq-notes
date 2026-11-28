@@ -122,7 +122,15 @@ class OrganizationMembershipRepository(Protocol):
 
     def list_for_organization(
         self, organization_id: OrganizationId
-    ) -> list[OrganizationMembership]: ...
+    ) -> list[OrganizationMembership]:
+        """The organization's roster.
+
+        Excludes ``DEPROVISIONED`` memberships: offboarding is a soft delete, so
+        the row outlives the person's standing and would otherwise be listed as
+        a current member. Keeps ``SUSPENDED`` ones, because reactivation is a
+        legitimate next action and it needs the membership id.
+        """
+        ...
 
     def list_for_user(self, user_id: UserId) -> list[OrganizationMembership]: ...
 

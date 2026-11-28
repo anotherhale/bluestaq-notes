@@ -503,10 +503,19 @@ class SqlAlchemyOrganizationMembershipRepository:
     def list_for_organization(
         self, organization_id: OrganizationId
     ) -> list[OrganizationMembership]:
+        # Offboarding is a soft delete (status -> DEPROVISIONED): the row is kept
+        # for audit history, so the roster has to exclude it explicitly or an
+        # offboarded person keeps appearing as a current member. Only the
+        # terminal state is filtered out, not every non-active one: suspension is
+        # a reversible pause and the reactivate endpoint needs the membership id,
+        # so a suspended member must stay on the roster to be actionable.
         rows = (
             self._session.execute(
                 select(OrganizationMembershipRow)
-                .where(OrganizationMembershipRow.organization_id == _as_uuid(organization_id))
+                .where(
+                    OrganizationMembershipRow.organization_id == _as_uuid(organization_id),
+                    OrganizationMembershipRow.status != MembershipStatus.DEPROVISIONED.value,
+                )
                 .order_by(OrganizationMembershipRow.created_at, OrganizationMembershipRow.id)
             )
             .scalars()
