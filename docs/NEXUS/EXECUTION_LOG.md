@@ -10169,6 +10169,13 @@ wasted re-verification, so it was corrected to VERIFIED with its run ids. This r
 self-inflicted duplicate "NEX-084 NEX-084" in `STATE.md`. Both were caught by sweeping every
 record file after the promotion — the sweep is not optional.
 
+### Final head
+
+The promotion commit `c56563c` advanced the head past the commit that records it, so it was
+polled on its own: runs `46120502261` (pull_request) and `46120498874` (push), Backend and
+Frontend each `success` — 4/4, 2026-11-28T07:19Z. Three green conclusions over one unchanged
+product tree (`c698979` → `d9d0a3a` → `c56563c`, docs only after the fix).
+
 ### Next action
 
 Take the next dependency-ready slice from `BACKLOG.md`. No delivery debt remains on PR #5 or

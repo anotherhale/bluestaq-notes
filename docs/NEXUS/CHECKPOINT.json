@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "run_id": "NEX-2026-11-28-85",
-  "timestamp": "2026-11-28T07:15:00Z",
+  "timestamp": "2026-11-28T07:20:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "d9d0a3a2ecec7ed24a400c391a9e67bd8e33673a",
+  "commit": "c56563cc810bf9a51b53d39c3e1e267a0d1eae6d",
   "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 VERIFIED. NEX-085 closed the fail-closed asymmetry in operator revocation: the wildcard grant (the strongest one, seeded from configuration) could be issued but not revoked through the running platform. Revocation now uses its own allowlist. No open P1.",
   "active_task": null,
   "task_statuses": {
@@ -115,7 +115,8 @@
       "docs_head": "73cc288",
       "docs_head_result": "4/4 completed/success, polled 2026-11-28T06:47Z"
     },
-    "nex085_ci": "4/4 success on `d9d0a3a`: runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z."
+    "nex085_ci": "4/4 success on `d9d0a3a`: runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z.",
+    "final_head_ci": "Final head `c56563c` (the promotion commit) also concluded 4/4 success: runs `46120502261` (pull_request) and `46120498874` (push), Backend and Frontend each `success`, polled 2026-11-28T07:19Z. The tree is unchanged by that commit (docs only), so this is the third green conclusion over the same product tree."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -150,7 +151,7 @@
   ],
   "next_task": "NEX-085 closed and delivered. Take the next dependency-ready slice from BACKLOG.md; first re-read STATE.md 'Next best actions' and confirm no delivery debt remains on PR #5 / issue #2.",
   "next_action": "1. Read docs/NEXUS/BACKLOG.md and pick the highest-priority dependency-ready task that is not already VERIFIED. 2. Implement and test it as one vertical slice. 3. Commit, push, poll CI on the product commit, then record its result here.",
-  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED on CI 4/4 success at d9d0a3a and delivered to PR #5 and issue #2 - do not redo it. 3) Verify the live head with git ls-remote origin refs/heads/feature/agentic-enterprise-platform; never trust the SHA recorded here. 4) Pick the next dependency-ready slice from BACKLOG.md, write the failing test first, and leave a committed, pushed increment behind. 5) A docs commit's CI supersedes the product commit's runs (they read cancelled); poll the docs head for the verdict.",
+  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED - three green CI conclusions over the same product tree (d9d0a3a 4/4, c56563c 4/4), product commit c698979, and it is delivered to PR #5 and issue #2. Do not redo it. 3) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA recorded here. 4) Pick the next dependency-ready slice from BACKLOG.md, write the failing test first, and leave a committed, pushed increment behind. 5) A docs commit's CI supersedes the product commit's runs (they read cancelled); poll the docs head for the verdict. 6) If you write state, poll the new head once afterwards - each state write advances the head past the commit that records it.",
   "ci_status": {
     "product_commit": "09cc4ad3ed13b8ddf3c421f5479cb094297a1d39",
     "result": "4/4 completed/success",
