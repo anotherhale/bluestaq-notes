@@ -3553,3 +3553,55 @@ fails 3 of 6 new paging tests).
 
 **Remaining.** Poll CI for `4f8e15d`/`25f5a6c`, then append this section to PR #5's body and
 update issue #2 (both still end at NEX-081).
+
+## NEX-084 — A delegated grant may not outlive the grant it was delegated from (run `NEX-2026-11-28-84`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Access Center |
+| Priority | P1 — a bounded authority could be converted into a longer one by its holder |
+| Status | **COMMITTED + PUSHED** at `09cc4ad`; local gates green; CI `in_progress` at the stop boundary — **not** VERIFIED |
+| Dependencies | NEX-045 (operator grant store), NEX-074 (writable grant record), NEX-078 (aware `expires_at`), NEX-079 (revocation) — all met |
+| Architecture | `application/use_cases/operator_grants.py` (`IssueOperatorGrant`, `_require_attenuation`); tests at `tests/application/test_issue_operator_grant.py` and `tests/api/test_ops_operator_grants_api.py`; no migration |
+
+**Objective.** Operator grants support upper-bound attenuation in *scope*: an issuer may only
+hand on a scope they themselves hold. Nothing bounded the *lifetime*. An operator holding a
+one-hour incident grant could issue the same scope with a thirty-day expiry, so the recipient
+held authority the issuer never had and could not have kept. A grant whose holder can convert
+it into a longer one is not bounded in the dimension that makes it safe: expiry is the whole
+safety property of a bounded grant.
+
+**Delivered.**
+
+- `_require_attenuation` now returns the issuer's **temporal ceiling** for the requested scope
+  rather than only validating the scope: the furthest `expires_at` among the issuer's own live
+  grants that cover it, or `None` when any such grant is unbounded.
+- `IssueOperatorGrant` refuses with `409 Conflict` when the requested `expires_at` exceeds that
+  ceiling, naming the instant the issuer may delegate until.
+- Scope and lifetime are read in **one** store call, at the gate's clock, so attenuation and
+  the horizon describe the same instant — the scope check can no longer pass against a grant
+  that has already lapsed by the time the lifetime is compared.
+- The ceiling is the **furthest** covering grant, not the nearest. An issuer who holds a scope
+  for a week has not narrowed their authority by also holding an unrelated five-minute grant of
+  the same scope; refusing on the nearer one would reject a hand-out they plainly cover.
+- A wildcard grant covers both the scope and the horizon. A settings-seeded operator is
+  unbounded (`expires_at=None`, `granted_by=None`), so the ceiling is `None` and existing
+  deployments are unaffected.
+
+**Why 409 and not 403.** The caller is authorized to issue grants; the *requested grant* is in
+conflict with the issuer's own authority. A 403 would say the caller may not issue at all,
+which is false, and would collide with the permission split in ADR-008.
+
+**Validation.** Full suite `1678 passed, 4 skipped`, exit 0. `ruff format --check` 321 files
+clean; `ruff check` clean; `mypy` clean on 143 source files. Mutation control **observed
+failing**: with the temporal comparison disabled, all three new tests fail — the two use-case
+tests and the API test — so neither the unit nor the HTTP assertion is vacuous.
+
+**Tests.** Use-case level: a deadline beyond the issuer's own is a `Conflict`; a deadline
+exactly at the ceiling is allowed; a wildcard issuer is still bounded by their own wildcard
+deadline. API level: the 409 survives the store round trip through `TestClient`, asserting the
+nested envelope `body["error"]["code"] == "conflict"` rather than a bare status, so a change to
+the error contract is caught here.
+
+**Remaining.** Poll CI on `09cc4ad`; on 2/2 success promote to VERIFIED, then append this
+section to PR #5's body and comment on issue #2.

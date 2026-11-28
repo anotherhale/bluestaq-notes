@@ -9943,3 +9943,99 @@ boundary. NEX-083 is **COMMITTED + PUSHED**, deliberately *not* VERIFIED.
 
 Poll CI for `c16dd9b`; on 2/2 success promote NEX-083 to VERIFIED, then clear the
 delivery debt (NEX-082 and NEX-083 are both absent from PR #5's body and issue #2).
+
+## Run `NEX-2026-11-28-84` — NEX-084: a delegated grant could outlive its own source
+
+**Run ID:** `NEX-2026-11-28-84`
+**Branch:** `feature/agentic-enterprise-platform`
+**Starting commit:** `453e134` (docs head of run 83 over NEX-083's product tree `c16dd9b`)
+**Ending commit:** `09cc4ad` (product) plus a docs commit recording this entry
+**Phase:** 3 (governance) / platform operations — Access Center
+
+### Reconciled at start, and two records were stale in the *reassuring* direction
+
+1. **NEX-083 was already VERIFIED and delivered.** Run 83 stopped with CI `in_progress`, and the
+   checkpoint asked this run to poll `c16dd9b` and then clear delivery debt for NEX-082 and
+   NEX-083. Polling found `453e134` (the run-83 docs head, product tree identical to `c16dd9b`)
+   concluded **2/2 `completed/success`**, so NEX-083's product tree is verified. Independently
+   reading PR #5's live body from the API showed **one** `## NEX-082 ` and **one**
+   `## NEX-083 ` section, and issue #2 already carried both. The debt recorded as "two slices
+   missing from GitHub prose" did not exist.
+2. **A concurrent run had already done the promotion.** Issue #2 gained comment `7235362658` at
+   `06:32:43Z` — 103 seconds into this run — claiming NEX-083 VERIFIED and PR #5 updated. It was
+   not written by this run. Its claims were **verified independently** rather than trusted (CI
+   runs read, PR body section counts asserted) and checked out, so no second comment was posted:
+   duplicating it would have created the very debt it was describing.
+
+**Lesson, same family as the NEX-073 vacuous-assertion finding.** A state file can be wrong in
+the *reassuring* direction too. "Two slices of delivery debt" read as work to do; had it been
+trusted without reading GitHub, this run would have re-appended two sections that were already
+present. Count sections in the **live** body before writing to it.
+
+### The gap
+
+Operator grants attenuate **scope**: an issuer may only hand on a scope they themselves hold
+(`_require_attenuation`). Nothing bounded **lifetime**. An operator holding a one-hour incident
+grant could issue the same scope with a thirty-day expiry, so the recipient held authority the
+issuer never had and could not have kept. Expiry is the entire safety property of a bounded
+grant, and a grant whose holder can convert it into a longer one is not bounded in the
+dimension that matters. Bounded authority had exactly one arrow: revocation (NEX-079). It had
+no ceiling.
+
+### Delivered
+
+- `_require_attenuation` returns the issuer's **temporal ceiling** for the scope — the furthest
+  `expires_at` among their own live grants covering it, `None` if any is unbounded — instead of
+  only validating the scope.
+- `IssueOperatorGrant` raises `Conflict` (409) when the requested `expires_at` exceeds it,
+  naming the instant the issuer may delegate until.
+- Scope and lifetime are read in **one** store call at the gate's clock, so the scope check can
+  no longer pass against a grant that has lapsed by the time the lifetime is compared.
+- The ceiling is the **furthest** covering grant, not the nearest — an issuer who holds a scope
+  for a week has not narrowed their authority by also holding an unrelated five-minute grant of
+  it, and refusing on the nearer one would reject a hand-out their authority plainly covers.
+- Wildcard grants cover both scope and horizon. Settings-seeded operators are unbounded
+  (`expires_at=None`), so their ceiling is `None` and existing deployments are unaffected.
+
+**Why 409 and not 403.** The caller *is* authorized to issue grants; the requested grant
+conflicts with the issuer's own authority. 403 would assert the caller may not issue at all,
+which is false, and would collide with the ADR-008 permission split.
+
+### Validation (local, on the committed tree `09cc4ad`)
+
+| Gate | Result |
+| --- | --- |
+| `ruff format --check .` | 321 files already formatted |
+| `ruff check .` | All checks passed |
+| `mypy` | Success, 143 source files |
+| `pytest` (full suite) | **1678 passed, 4 skipped**, exit 0 |
+
+**Mutation control — the tests were made to fail before being trusted.** With the temporal
+comparison disabled (`if False and ceiling is not None ...`), three tests fail:
+
+- `tests/api/test_ops_operator_grants_api.py::test_a_deadline_beyond_the_issuers_own_is_a_409`
+- `tests/application/test_issue_operator_grant.py::test_a_grant_may_not_outlive_the_issuers_own_grant_of_that_scope`
+- `tests/application/test_issue_operator_grant.py::test_a_wildcard_issuer_is_still_bounded_by_their_own_wildcard_deadline`
+
+The API test asserts the **nested** envelope `body["error"]["code"] == "conflict"`, not a bare
+status, so it also pins the error contract.
+
+### CI
+
+Both runs on `09cc4ad` were `in_progress` when this entry was written. NEX-084 is
+**COMMITTED + PUSHED**, deliberately not VERIFIED. Polling it is the next run's first action.
+
+### Files changed
+
+3 files, +277/−12 (product commit `09cc4ad`):
+
+- `src/notes_service/application/use_cases/operator_grants.py`
+- `tests/application/test_issue_operator_grant.py`
+- `tests/api/test_ops_operator_grants_api.py`
+
+No migration. No new authority: this only restricts what a grant holder may already do.
+
+### Next action
+
+Poll CI on `09cc4ad`; on 2/2 success promote NEX-084 to VERIFIED and append its section to
+PR #5's body (assert `body.count("## NEX-084 ") == 0` first), then comment on issue #2.
