@@ -3984,7 +3984,7 @@ verdict is anchored to `c5a1250` and to the empty product diff that licenses tha
 
 ## NEX-090 — Page the run history, and make the total a count rather than the page size (run `NEX-2026-11-28-91`)
 
-**Status: COMMITTED `aa4b2c8` · PUSHED · CI not yet read** (not VERIFIED until a CI verdict is read).
+**Status: VERIFIED** — product `aa4b2c8`, CI **4/4 `completed/success`** on docs head `ea0a696` (runs `46131679941` push, `46131683446` pull_request), polled 02:41Z. Delivered to PR #5 and issue #2 in run 91.
 
 `GET /agent-runs?agent_id=…` is how a client reads what an agent has run. The store's listing was
 capped at 50 rows, the use case returned that capped list unchanged, and the route described it with

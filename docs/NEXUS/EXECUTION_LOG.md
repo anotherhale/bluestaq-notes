@@ -10824,3 +10824,64 @@ sha). Promote NEX-090 to VERIFIED only on four `completed`/`success` check-runs;
 Then append NEX-090 to PR #5's body and comment on issue #2.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+---
+
+## Run `NEX-2026-11-28-91` (continued) — NEX-090 CI read, verified, and delivered
+
+**Branch:** `feature/agentic-enterprise-platform` · **Start:** `4302966` · **Product commit:** `aa4b2c8` ·
+**Docs head:** `ea0a696` · **Timestamp:** 2026-11-28T02:41Z
+
+### What this segment did
+
+The previous segment stopped with NEX-090 IMPLEMENTED · TESTED · COMMITTED · PUSHED and **CI not read**.
+This segment read the verdict rather than assuming it, then cleared the delivery debt.
+
+### The verdict, read not inferred
+
+| Item | Value |
+| --- | --- |
+| Docs head | `ea0a696` |
+| Run (push) | `46131679941` — **4/4 `completed/success`** |
+| Run (pull_request) | `46131683446` — **4/4 `completed/success`** |
+| Checks | `Backend (ruff, mypy, pytest, migrations)` ✓, `Frontend (typecheck, lint, test, build)` ✓ |
+| Product diff | `git diff aa4b2c8 ea0a696 -- src/ tests/ frontend/ Dockerfile docker/ .github/` — **empty** |
+
+The docs commit touches only `docs/NEXUS/{BACKLOG.md,CHECKPOINT.json,EXECUTION_LOG.md,STATE.md}`, so the
+green runs tested exactly the tree `aa4b2c8` ships. That empty product diff is what licenses anchoring
+the verdict to the docs head.
+
+### A claim made in this run and then corrected
+
+An earlier note in this run said `aa4b2c8`'s own runs read `completed/cancelled`. **That was wrong.**
+`aa4b2c8` has **no check-runs at all**: the docs push superseded it in the concurrency group before any
+check-run reported. "Cancelled" and "never ran" are different facts, and only the second is true here.
+The conclusion was unaffected — neither is evidence — but the stated evidence was false, so it was
+corrected in the PR #5 body, in `CHECKPOINT.json`'s `status_semantics`, and here. A verdict has to be
+described by what the API actually returned.
+
+### Delivery
+
+- **PR #5** — body rebuilt from the base document plus an NEX-090 delivery section; NEX-090 promoted to
+  VERIFIED citing the two runs above. Verified by counting the *removed* strings, not the new ones:
+  0 × "CI UNREAD", 0 × "CI not read at write time", 0 × "Delivered through **NEX-089**".
+- **Issue #2** — comment `7237454626` with the corrected anchor explanation and the evidence table.
+
+### Status
+
+| Item | Status |
+| --- | --- |
+| NEX-090 implementation | IMPLEMENTED · TESTED |
+| NEX-090 CI | **4/4 `completed/success` on `ea0a696`** — VERIFIED |
+| PR #5 | body updated, NEX-090 present and VERIFIED |
+| Issue #2 | comment `7237454626` posted |
+| Checkpoint / STATE / BACKLOG | promoted to NEX-090 VERIFIED; stale negations swept to zero |
+| Merges | none — PR #5 remains open for human review |
+
+**Next exact action:** select the next dependency-ready slice from `BACKLOG.md` / `ROADMAP.md`.
+NEX-090 closed the last named instance of the NEX-082…NEX-090 family. `list_for_agent` (delegations) and
+`list_pending_for_agent` remain unpaginated but are on no listing route, so there is no defect today —
+do not rework them speculatively. Hold the next slice to the same standard: a test that fails without
+the fix, a mutation that proves the test bites, and a verdict read rather than assumed.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
