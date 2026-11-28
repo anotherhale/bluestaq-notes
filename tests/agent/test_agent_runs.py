@@ -512,8 +512,46 @@ def test_resumable_list_excludes_settled_runs(h: Harness) -> None:
 
     resumable = h.list_runs.run(h.principal, agent_id=str(agent.id), resumable_only=True)
 
-    assert [r.id for r in resumable] == [pending.id]
-    assert len(h.list_runs.run(h.principal, agent_id=str(agent.id))) == 2
+    assert [r.id for r in resumable.items] == [pending.id]
+    assert len(h.list_runs.run(h.principal, agent_id=str(agent.id)).items) == 2
+
+
+def test_a_page_reports_the_true_total_and_offset_walks_the_rest(h: Harness) -> None:
+    """A window must not pass itself off as the whole history.
+
+    Before NEX-090 ``list_for_agent`` capped at 50 rows and the use case returned
+    that capped list, so an agent with 120 runs had exactly 50 rows and no way to
+    reach the other 70 — the API had no ``limit``/``offset`` to page with and the
+    ``total`` equalled the page size anyway. The regression only shows up past the
+    default window, so this test plans more runs than one page holds.
+    """
+    agent, secret = h.secret_for()
+    for index in range(60):
+        h.plan.run(secret=secret, steps=[create_step(f"run-{index}")])
+
+    first = h.list_runs.run(h.principal, agent_id=str(agent.id))
+
+    assert len(first.items) == 50, "the default window is still a window"
+    assert first.total == 60, "the total is the history, not the page"
+
+    rest = h.list_runs.run(h.principal, agent_id=str(agent.id), limit=50, offset=50)
+    assert len(rest.items) == 10
+    assert rest.total == 60, "the total does not shrink as the offset advances"
+
+    seen = [run.id for run in first.items] + [run.id for run in rest.items]
+    assert len(set(seen)) == 60, "every run reachable exactly once, no overlap"
+
+
+def test_the_resumable_set_is_returned_whole_not_windowed(h: Harness) -> None:
+    """Recovery must see every unfinished run, so ``limit`` does not apply to it."""
+    agent, secret = h.secret_for()
+    for index in range(55):
+        h.plan.run(secret=secret, steps=[create_step(f"pending-{index}")])
+
+    resumable = h.list_runs.run(h.principal, agent_id=str(agent.id), resumable_only=True, limit=50)
+
+    assert len(resumable.items) == 55, "a window would abandon 5 resumable runs"
+    assert resumable.total == 55
 
 
 def test_a_step_cannot_be_skipped_by_the_domain(h: Harness) -> None:

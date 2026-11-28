@@ -939,11 +939,18 @@ class SqlAlchemyAgentRunRepository:
     def list_for_agent(
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[AgentRun]:
+        """An agent's runs, newest first, one page at a time.
+
+        ``id`` breaks ``created_at`` ties deliberately. A page is an ``OFFSET``
+        window, so a non-deterministic order can return the same row twice and
+        skip another as the windows shift; two runs planned in the same instant
+        are exactly the case where that happens.
+        """
         rows = (
             self._session.execute(
                 select(AgentRunRow)
                 .where(AgentRunRow.agent_id == _as_uuid(agent_id))
-                .order_by(AgentRunRow.created_at.desc())
+                .order_by(AgentRunRow.created_at.desc(), AgentRunRow.id.desc())
                 .limit(limit)
                 .offset(offset)
             )
@@ -951,6 +958,21 @@ class SqlAlchemyAgentRunRepository:
             .all()
         )
         return [self._hydrate(row) for row in rows]
+
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """Count this agent's runs with a ``COUNT`` aggregate, not a page.
+
+        Filtered by the same ``agent_id`` the listing is, so a page and its total
+        describe one set. An unscoped count here would disclose how many runs
+        another agent has scheduled, which is the same leak the listing is scoped
+        to avoid.
+        """
+        statement = (
+            select(func.count())
+            .select_from(AgentRunRow)
+            .where(AgentRunRow.agent_id == _as_uuid(agent_id))
+        )
+        return int(self._session.execute(statement).scalar_one())
 
     def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
         resumable = (RunStatus.PENDING.value, RunStatus.RUNNING.value, RunStatus.INTERRUPTED.value)

@@ -314,6 +314,20 @@ class AgentRunRepository(Protocol):
         self, agent_id: AgentId, *, limit: int = 50, offset: int = 0
     ) -> list[AgentRun]: ...
 
+    def count_for_agent(self, agent_id: AgentId) -> int:
+        """How many runs this agent has, for the page's metadata.
+
+        Exists so a paginated listing can say "showing 50 of 1,208" instead of
+        "showing 50". Deriving the total from ``len(rows)`` cannot work: the
+        listing is capped, so a page-derived total equals the page size on every
+        page and a reader cannot tell a complete history from a window over a
+        larger one.
+
+        Scoped by agent for the same reason as :meth:`list_for_agent`: a count is
+        a fact about another agent's activity too, so it is never global.
+        """
+        ...
+
     def list_resumable_for_agent(self, agent_id: AgentId) -> list[AgentRun]:
         """Runs for this agent that stopped without reaching a terminal state."""
         ...
