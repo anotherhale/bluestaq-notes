@@ -292,3 +292,34 @@ that the sweep does not append to what it reads.
 (retained for years) size on every page, and the number would be wrong the moment a read
 appends. A client that needs to know it reached the end follows `next_position` until it is
 null.
+
+---
+
+## D-097 — The roster excludes the terminal membership state only, not "anything not active" (NEX-097)
+
+`SqlAlchemyOrganizationMembershipRepository.list_for_organization` now filters
+`status != DEPROVISIONED`. The obvious alternative is `status == ACTIVE`, and it is wrong.
+
+**Alternatives considered.**
+
+- *`status == ACTIVE`.* Simplest to state, and it passes the two offboarding tests this run added.
+  It also hides `SUSPENDED`, `INVITED` and `PENDING` memberships. Those are all states an
+  administrator can move back to active, and the roster is where the administrator finds the
+  membership id to act on. Filtering them would make suspension a one-way door through the only
+  list that names the person. Rejected.
+- *Filter in the router rather than the repository.* The router already computes
+  `PageMeta(total=len(items))` from the repository's return value, so a router-side filter would
+  leave `total` counting the hidden rows — a roster that says it has 41 members and shows 38. The
+  defect this task fixes was exactly that miscount, so fixing the rows while keeping the count
+  wrong would have been half a fix. Rejected: the filter belongs where `total` is computed.
+- *Hard-delete the membership on offboarding.* Destroys the audit record of who was a member and
+  when they left, and `DEPROVISIONED` exists precisely to retain it. Rejected in NEX-001.
+
+**Adopted.** Filter only the terminal `DEPROVISIONED` state, in the repository, so rows and
+`total` agree. `test_a_suspended_member_stays_in_the_roster` is the guard against the rejected
+alternative, and it is a **proven** guard, not an assumed one: this run replaced the predicate
+with `== ACTIVE` and the test went red (`1 failed, 2 passed`), then restored it and re-ran green
+(`3 passed`). Do not "strengthen" it onto the deprovision path — its job is to fail for the wrong
+fix, and a test that also fails for the right fix cannot do that job. Equally, do not weaken it
+into "suspended rows are absent", which would agree with the wrong fix instead of contradicting
+it.

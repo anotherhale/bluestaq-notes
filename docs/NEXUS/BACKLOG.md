@@ -4440,3 +4440,77 @@ and no route exposes them paged, so the page size *is* the total there and the n
 it until a consumer needs a window. The frontend has no `/agents` consumer, so no UI change applies.
 Next: select the next dependency-ready slice.
 
+---
+
+## NEX-097 — The organization roster must not list offboarded people (run `NEX-2026-11-28-97`)
+
+**Phase.** 1 (organization & identity foundation). **Priority.** P1 — a governance list that names
+people who no longer have standing, and counts them.
+**Status.** **VERIFIED** — product commit `febb810`, CI **4/4 `completed/success` on the product
+commit itself** (runs `46148603437` push and `46148607713` pull_request; Backend 12/12 and Frontend
+11/11 steps green, zero failed, zero skipped, both `head_sha` = `febb810`), so no docs-head anchor is
+needed. Gate re-run in this run against this tree: **1769 passed, 4 skipped**; ruff, mypy clean.
+NEX-001's acceptance criterion "soft-deleted memberships never appear in rosters" is what this
+restores.
+**Depends on.** NEX-001 — the organization membership lifecycle this completes.
+
+### The defect
+
+`GET /organizations/{id}/members` listed deprovisioned people as current members.
+`SqlAlchemyOrganizationMembershipRepository.list_for_organization` selected every membership row for
+the organization with no status predicate, and `meta.total` was the length of that same list.
+
+Offboarding is a **soft delete**: the row is kept for audit history (status → `DEPROVISIONED`) rather
+than removed. So the listing had to exclude it explicitly, and did not. The sibling team roster
+(`SqlAlchemyTeamMembershipRepository.list_for_team`) already filtered `status == ACTIVE` for exactly
+this reason; the organization roster was the one that never got the treatment.
+
+NEX-001 recorded this criterion as verified, and its test did not cover the organization roster's
+deprovision path — which is how a governance invariant sat broken behind a green suite.
+
+### The fix, and the line not to cross
+
+- The listing now filters `status != DEPROVISIONED` — **only** the terminal state, not every
+  non-active one.
+- `meta.total` follows the same query, so the count no longer includes people it does not show.
+- The port carries the contract so an adapter cannot quietly reinterpret it.
+
+Filtering to `ACTIVE` only — the obvious "make it match the team roster" move — would have been
+wrong. Suspension is a **reversible pause**, and `POST .../members/{id}/reactivate` addresses the
+membership **by id**. Dropping suspended rows from the roster would hide the only handle an
+administrator has on an account they mean to restore: the bug would move from "shows the wrong people"
+to "cannot fix the right one", and no test that only checked `ACTIVE` filtering would notice.
+
+### Tests — `tests/api/test_organizations_api.py`, class `TestOrganizationRoster`
+
+- [x] `test_a_deprovisioned_member_leaves_the_roster` — roster and `meta.total` both drop the person
+- [x] `test_a_suspended_member_stays_in_the_roster` — still listed, `status == "suspended"`, membership
+      `id` still present, total still counts them
+- [x] `test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster` — reactivate is `422`, closing
+      the loop: silence about the person is consistent, there is no action left to take on them
+- [x] **Load-bearing, proved and restored.** Reverting only the adapter fails exactly the two
+      deprovisioned-member tests (`an offboarded person is still listed as a member`), 30 passed. The
+      suspended test passes with or without the fix — by design: its job is to fail when someone
+      "corrects" the filter to `ACTIVE`.
+
+### Security considerations
+
+Read-only and admin-scoped; the route's authorization is unchanged. The fix removes an over-disclosure
+(a roster asserting an offboarded person is still a member) without narrowing what an administrator can
+act on. No migration, no contract change, no new dependency: one `WHERE` clause and the total that
+rides on it.
+
+### Validation
+
+`ruff format --check` 325 files already formatted · `ruff check` all passed · `mypy` no issues in 144
+source files · full suite **1769 passed, 4 skipped** (`postgresql`-marked), run bare as
+`.github/workflows/ci.yml` does. Product commit **`febb810`**, pushed; remote head confirmed with
+`git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.
+
+### Remaining / next
+
+The roster is still a whole-set read with no window, and it is the one organization list a large tenant
+could grow without bound — the exact-total paging family (NEX-082…NEX-096) did not reach it because it
+lives under `organizations/`, not the agent surface. That is the natural next slice. Authorization on
+the reactivate path for a suspended-then-deprovisioned membership is already covered by the third test.
+

@@ -11725,4 +11725,133 @@ replacements instead. The lesson is unchanged: prose and structured edits do not
 Unchanged and now unambiguous: read the live head, then select the next dependency-ready slice from
 `BACKLOG.md` / `ROADMAP.md` and implement it test-first. Nothing is in flight; no verification debt.
 
+---
 
+## Run NEX-2026-11-28-97 — 2026-11-28T13:01Z → closed out (VERIFIED)
+
+| Field | Value |
+| --- | --- |
+| Run ID | `NEX-2026-11-28-97` |
+| Timestamp | 2026-11-28T13:01Z |
+| Branch | `feature/agentic-enterprise-platform` |
+| Starting commit | `6b15aeb` (run-96 close-out docs head, confirmed live with `git ls-remote`) |
+| Product commit | `febb810` |
+| Phase | 1 — Organization & Identity foundation |
+
+### Recovery: the work was on the wrong branch
+
+The run opened on `main` with the slice uncommitted — the previous run's mid-flight state, not a
+deliberate branch choice. Recovery was: `git diff` to a patch file, `git stash push`, check out
+`feature/agentic-enterprise-platform`, `git stash pop`. Nothing was discarded, nothing landed on
+`main`, and the restored tree was byte-identical to the stashed one (`git diff --stat` unchanged).
+
+This is the one operation this run could have lost work on, so it was done in that order — patch
+backup *before* the stash — rather than trusting the stash alone.
+
+### Task completed — NEX-097
+
+The organization roster listed offboarded people. `list_for_organization` selected on
+`organization_id` alone and `meta.total` was `len(items)`; offboarding is a soft delete
+(`status -> DEPROVISIONED`), so the row survived and kept being listed. The team roster had carried
+an `ACTIVE` predicate for this reason since it was written; the organization roster never did.
+
+Filtered `status != DEPROVISIONED` rather than `== ACTIVE`: suspension is reversible and `reactivate`
+addresses the membership by id, so filtering suspended rows would hide the only handle on a person
+an administrator means to restore. The port documents the contract.
+
+### Tests executed
+
+- `tests/api/test_organizations_api.py`: **32 passed** (three new in `TestOrganizationRoster`).
+- Full suite, bare: **1769 passed, 4 skipped** (the skips are `postgresql`-marked).
+- `ruff format --check` 325 files already formatted · `ruff check` all passed · `mypy` no issues in
+  144 source files.
+
+### The stale-venv trap (found, and it had already produced a false red)
+
+This workspace has **no `.venv`**. The only interpreter available is another run's venv, and that venv
+is editable-installed with a `.pth` pointing at **that workspace's** `src`:
+
+```
+.../agent-canvas/workspaces/automation-runs/c98bf9ae-.../bluestaq-notes/src
+```
+
+Running `pytest` from this tree without `PYTHONPATH=$PWD/src` therefore imports `notes_service` from the
+*other* clone. The test file resolves from the current tree (rootdir-relative), so the new tests ran
+against **unfixed source** and reported:
+
+```
+FAILED TestOrganizationRoster::test_a_deprovisioned_member_leaves_the_roster
+FAILED TestOrganizationRoster::test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster
+```
+
+Two red tests, from code that is correct. Worse than a plain false green: it looks exactly like the
+load-bearing proof, so the lazy reading is "the fix isn't in". What caught it was checking
+`notes_service.__file__` instead of trusting `which python`.
+
+Every test and gate number in this entry was re-run with `PYTHONPATH=$PWD/src` and
+`import notes_service -> <this workspace>/src/notes_service/__init__.py` printed first. For any future
+run in a fresh workspace: **assert the import path before believing any test result.**
+
+### Load-bearing proof
+
+Reverting only `infrastructure/db/organization_repositories.py` to its parent, keeping the new tests:
+**2 failed** — `test_a_deprovisioned_member_leaves_the_roster` ("an offboarded person is still listed
+as a member") and `test_a_deprovisioned_member_cannot_be_reactivated_from_the_roster`. Fix restored,
+re-ran: **32 passed**.
+
+`test_a_suspended_member_stays_in_the_roster` **is** load-bearing against the wrong fix, and this run
+proved it rather than assuming it. It builds a genuinely suspended membership, then asserts it is
+listed with `status == "suspended"` and its own membership id. Replacing the predicate with
+`status == ACTIVE` — the tempting one-line "fix" — turns it red while the other two stay green
+(`1 failed, 2 passed`); restoring `!= DEPROVISIONED` returns `3 passed`. So the wrong fix is
+excluded by a test rather than by a comment.
+
+Recorded because the first draft of this entry claimed the opposite — that the test "passes under
+either filter because the fixture has no suspended row". It has one. The claim was checkable in one
+`grep` and was false; it would have licensed a future run to delete the test as redundant.
+
+### Files changed
+
+- `src/notes_service/infrastructure/db/organization_repositories.py` — the `WHERE` clause
+- `src/notes_service/application/ports/organization_repositories.py` — the documented contract
+- `tests/api/test_organizations_api.py` — `TestOrganizationRoster`, +77 lines
+
+### Decisions
+
+- Terminal state only, not "active only". See above; this is the decision that matters in this slice.
+- The fix belongs in the adapter, not the router: `meta.total` and `items` must come from one query or
+  the count drifts from the page, which is the shape of defect NEX-088 fixed four times.
+- No migration, no contract change, no new dependency. One predicate.
+
+### Next action
+
+`GET /organizations/{id}/members` is still a whole-set read with no `limit`/`offset` — the one
+organization list a large tenant can grow without bound, and the part of the exact-total paging family
+(NEX-082…NEX-096) that lives outside the agent surface and was therefore never reached. **NEX-098**:
+page it with an exact `COUNT`, the same shape as NEX-096.
+
+### Close-out (second pass, same run ID)
+
+Status: **VERIFIED** — product `febb810`, CI **4/4 `completed/success` on the product commit itself**,
+runs `46148603437` (push) and `46148607713` (pull_request), Backend 12/12 and Frontend 11/11 steps,
+zero failed, zero skipped, both `head_sha = febb810`. Read per run *and* per job, because the exit code
+is not the verdict (`gh run watch --exit-status` also exits 0 for a `cancelled` run). No descendant-CI
+anchor was needed: the product commit carries its own green run.
+
+Two corrections were made to this entry's first draft, both recorded rather than quietly patched:
+
+1. The suite count was written as **1745**. Re-measured on this tree: **1769 passed, 4 skipped**. The
+   stale number came from before this slice's three new tests, and it was repeated in four places.
+2. The load-bearing proof claimed `test_a_suspended_member_stays_in_the_roster` "passes with and
+   without the fix because the fixture has no suspended row". **That was false** — the test builds a
+   genuinely suspended membership. Probed empirically: substituting `status == ACTIVE` turns it red
+   (`1 failed, 2 passed`); restoring `status != DEPROVISIONED` returns `3 passed`. The test is
+   load-bearing *against the wrong fix*, which is a stronger and different claim than the one first
+   written. Had the false version stood, a later run could have deleted the test as redundant and
+   removed the only thing preventing `== ACTIVE`.
+
+Diff scope of this close-out: `docs/NEXUS/` only — `BACKLOG.md`, `ROADMAP.md`, `STATE.md`,
+`EXECUTION_LOG.md`, `DECISIONS.md` (new `D-097`), `CHECKPOINT.json`. No product file changed, so the
+`febb810` verdict is untouched and this docs commit is licensed to land on it.
+
+PR #5 body and tracking issue #2 carry the NEX-097 section appended after this close-out's CI.
