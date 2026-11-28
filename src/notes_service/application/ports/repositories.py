@@ -73,6 +73,10 @@ class ExternalIdentityRepository(Protocol):
 
     def list_by_provider(self, provider: str) -> list[ExternalIdentity]: ...
 
+    def remove(self, identity_id: ExternalIdentityId) -> None:
+        """Delete a link. Idempotent: an unknown id is not an error."""
+        ...
+
 
 @runtime_checkable
 class NoteRepository(Protocol):

@@ -81,6 +81,11 @@ from notes_service.application.use_cases.identity import (
     ListDemoIdentities,
     ListUsers,
 )
+from notes_service.application.use_cases.identity_linking import (
+    LinkExternalIdentity,
+    ListUserExternalIdentities,
+    UnlinkExternalIdentity,
+)
 from notes_service.application.use_cases.notes import (
     CreateNote,
     DeleteNote,
@@ -252,6 +257,13 @@ class Container:
     add_team_member: Callable[[], AddTeamMember]
     remove_team_member: Callable[[], RemoveTeamMember]
     list_team_members: Callable[[], ListTeamMembers]
+
+    # External identity links. An operator holding ``MANAGE_MEMBERSHIPS``
+    # attaches an IdP subject to a tenant member, which is what makes real
+    # OIDC login resolve to a local account at all.
+    link_external_identity: Callable[[], LinkExternalIdentity]
+    unlink_external_identity: Callable[[], UnlinkExternalIdentity]
+    list_user_external_identities: Callable[[], ListUserExternalIdentities]
 
     # Agent identity. Authority here is a chain — agent ceiling, then a user's
     # delegation, then a short-lived token — and every hop only narrows the one
@@ -801,6 +813,9 @@ def build_container(settings: Settings, engine: Engine | None = None) -> Contain
         add_team_member=make_organization(AddTeamMember),
         remove_team_member=make_organization(RemoveTeamMember),
         list_team_members=make_organization(ListTeamMembers),
+        link_external_identity=make_organization(LinkExternalIdentity),
+        unlink_external_identity=make_organization(UnlinkExternalIdentity),
+        list_user_external_identities=make_organization(ListUserExternalIdentities),
         register_agent=make(RegisterAgent),
         list_agents=make(ListAgents),
         get_agent=make(GetAgent),

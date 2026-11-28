@@ -65,3 +65,14 @@ class UserSessionRepository(Protocol):
         suspected, so revocation is immediate rather than waiting for expiry.
         """
         ...
+
+    def revoke_for_identity(
+        self, user_id: UserId, *, provider: str, subject: str, now: datetime
+    ) -> int:
+        """Revoke live sessions a user established through one IdP identity.
+
+        Narrower than :meth:`revoke_all_for_user` on purpose: unlinking one
+        identity must not sign the user out of sessions established another way
+        (a different provider, or a first-factor login).
+        """
+        ...

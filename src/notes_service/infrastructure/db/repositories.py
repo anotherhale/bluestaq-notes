@@ -199,6 +199,11 @@ class SqlAlchemyExternalIdentityRepository:
         )
         return [self._row_to_domain(row) for row in rows]
 
+    def remove(self, identity_id: ExternalIdentityId) -> None:
+        row = self._session.get(ExternalIdentityRow, _as_uuid(identity_id))
+        if row is not None:
+            self._session.delete(row)
+
     @staticmethod
     def _row_to_domain(row: ExternalIdentityRow) -> ExternalIdentity:
         return ExternalIdentity(
@@ -703,6 +708,21 @@ class SqlAlchemyUserSessionRepository:
             update(UserSessionRow)
             .where(
                 UserSessionRow.user_id == _as_uuid(user_id),
+                UserSessionRow.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        return cast(CursorResult[Any], result).rowcount
+
+    def revoke_for_identity(
+        self, user_id: UserId, *, provider: str, subject: str, now: datetime
+    ) -> int:
+        result = self._session.execute(
+            update(UserSessionRow)
+            .where(
+                UserSessionRow.user_id == _as_uuid(user_id),
+                UserSessionRow.provider == provider,
+                UserSessionRow.subject == subject,
                 UserSessionRow.revoked_at.is_(None),
             )
             .values(revoked_at=now)

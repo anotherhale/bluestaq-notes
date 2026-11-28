@@ -47,7 +47,7 @@ from notes_service.domain.agent.value_objects import (
     TokenAudience,
 )
 from notes_service.domain.governance.policy import PolicyVersion
-from notes_service.domain.identity.entities import User
+from notes_service.domain.identity.entities import ExternalIdentity, User
 from notes_service.domain.identity.operator_grant import MAX_RATIONALE_LENGTH, OperatorGrant
 from notes_service.domain.identity.value_objects import UserId
 from notes_service.domain.notes.folder import Folder
@@ -506,6 +506,41 @@ class MembershipResponse(ResponseModel):
 class MembershipListResponse(BaseModel):
     items: list[MembershipResponse]
     meta: PageMeta
+
+
+class ExternalIdentityLinkRequest(StrictModel):
+    """Link an IdP ``(provider, subject)`` to a tenant member (NEX-091)."""
+
+    provider: str = Field(min_length=1, max_length=64)
+    subject: str = Field(min_length=1, max_length=512)
+
+
+class ExternalIdentityResponse(ResponseModel):
+    #: Only the issuer and subject are exposed. The local account is implied by
+    #: the URL the response was read from, so echoing ``user_id`` adds nothing.
+    id: uuid.UUID
+    provider: str
+    subject: str
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, identity: ExternalIdentity) -> ExternalIdentityResponse:
+        return cls(
+            id=uuid.UUID(str(identity.id)),
+            provider=identity.provider,
+            subject=identity.subject,
+            created_at=identity.created_at,
+        )
+
+
+class ExternalIdentityListResponse(BaseModel):
+    items: list[ExternalIdentityResponse]
+
+
+class UnlinkExternalIdentityResponse(BaseModel):
+    #: Sessions revoked by the unlink. Reported so an operator can see that a
+    #: live login was actually terminated rather than trusting that it was.
+    sessions_revoked: int
 
 
 class TeamMemberAddRequest(StrictModel):
