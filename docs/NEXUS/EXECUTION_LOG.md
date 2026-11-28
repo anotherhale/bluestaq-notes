@@ -8719,3 +8719,36 @@ future run to either re-run until green (which hides real failures) or distrust 
 **Next:** verify NEX-058's CI verdict on the completed pairs, then pick the next
 dependency-ready slice from `docs/NEXUS/BACKLOG.md`. Candidates: NEX-073 (small, restores
 gate trust), or the `operator_access_log` retention policy named by run 72.
+
+### Run 73 addendum — docs integration commits
+
+The product commit `38292d2` was already pushed when this run's coordination state was
+written, so the state files themselves landed separately:
+
+- `998eee2` — `docs(nexus): record NEX-058 verification and file NEX-073`. Carries the
+  NEX-058 verification paragraph, the NEX-073 backlog entry, `STATE.md`, `CHECKPOINT.json`,
+  and the run-73 log section.
+- `87c364c` — `docs(nexus): record why the checkpoint commit field lags by one`. Adds
+  `commit_field_lag_note` to the checkpoint after an attempt to "correct" the field was
+  recognised as pointless: the field cannot name the commit that writes it.
+
+Both pushed to `feature/agentic-enterprise-platform`; `main` remains at `997a6ac`,
+untouched. PR #5 remains open, non-draft, `MERGEABLE`/`CLEAN`, unmerged.
+
+**CI evidence for the flake verdict.** On `38292d2` the *push* run (46092212136) completed
+**success** while the *pull_request* run (46092218300) completed **failure** — the same
+tree, the same commit, opposite verdicts. That is the cleanest possible proof that the
+frontend failure is nondeterministic rather than caused by the change, and it is why
+NEX-073 is filed instead of the run being re-triggered until it goes green.
+
+**CI on the docs commits** (`998eee2`, `87c364c`) was still queued/in_progress at the run
+deadline: the workflow re-runs the full backend and frontend gates for a docs-only change.
+This is expected and is not a blocker — the product code is unchanged from the verified
+`38292d2`, and the docs changes are prose plus one JSON field. The next run should read
+the outcome with `gh run list --branch feature/agentic-enterprise-platform` before
+assuming either verdict.
+
+**Clock.** `RUN_START` 1795827657 (2026-11-28T01:00:57Z), `DEADLINE` 1795829157. The
+second slice (NEX-073) was deliberately not started: at 1272s elapsed only ~228s
+remained, far below the 10-minute floor, and starting it would have produced an
+uncommitted tree for the next run to discard.
