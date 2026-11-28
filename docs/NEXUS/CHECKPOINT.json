@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-27-80",
-  "timestamp": "2026-11-28T04:55Z",
+  "run_id": "NEX-2026-11-28-81",
+  "timestamp": "2026-11-28T05:15Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "139edf6",
-  "project_phase": "Phase 2/3/5 largely delivered. NEX-080 (this run) makes an operator grant's revocation provenance readable: NEX-079 recorded who revoked what and when, but nothing read it back. The last recorded P1 gap is closed pending CI. Next: verify NEX-080's CI, then clear the three-slice GitHub delivery debt (PR #5 body and issue #2 lag the branch by NEX-078..080).",
+  "commit": "3a05db2",
+  "project_phase": "Phase 2/3/5 largely delivered. NEX-081 (this run) makes a capped audit-integrity sweep finishable: the cap bounded one response but silently excluded every agent past it, permanently, and those were the newest trails. Next: poll CI for 3a05db2, then take the next dependency-ready slice from BACKLOG.md.",
   "active_task": null,
   "task_statuses": {
     "NEX-056": "VERIFIED - CI 4/4 at e7c7315 (polled by run 56).",
@@ -30,7 +30,9 @@
     "NEX-077": "VERIFIED - CI 4/4 completed/success (backend x2, frontend x2) on 9f9a70f, polled 2026-11-28T03:44Z. OperatorGrantDetail (one row per active grant: user_id, scope, granted_by, rationale, granted_at, expires_at) is exposed as OperatorGrantSnapshot.grants with grant_count, alongside the unchanged holders summary; both are built from the same active_grants() tuple at the same instant so they cannot describe different sets. OperatorGrantDetailResponse carries it over HTTP. 5 new tests (4 application, 1 API strengthened); mutation control: forcing rationale=None fails 4 tests. 1574 passed / 4 skipped, ruff format+check clean, mypy clean on 143 files.",
     "NEX-078": "VERIFIED - CI 4/4 completed/success on 6637c50 (Backend x2, Frontend x2; polled 2026-11-27T20:43Z, the completed pair is the verdict). PR #5 body carries NEX-078; issue #2 comment 7233539283. Two PR #5 security findings: (P1) three-way separation of duties for policy author/approver/publisher - domain `separation_of_duties()` checks all three pairs plus `approval_separation_of_duties()` for the approval step, enforced in the use cases and by DB CHECK `ck_policy_versions_policy_versions_separation_of_duties` (migration 5d2b7c41e9a8); (P2) operator grant `expires_at` must be timezone-aware, checked before comparison at the domain boundary and in IssueOperatorGrant. Local: 1589 passed / 4 skipped, ruff clean, mypy clean on 143 files, migration round-trip OK.",
     "NEX-079": "VERIFIED - IMPLEMENTED + TESTED + COMMITTED + PUSHED at a0c8ee0, CI 4/4 completed/success (Backend x2 + Frontend x2, every conclusion success, polled 2026-11-27T21:20Z).",
-    "NEX-080": "VERIFIED. Product 9336ba3, docs checkpoint 139edf6; CI 4/4 completed/success on both (Backend x2, Frontend x2, polled 2026-11-28T04:55Z). The 9336ba3 backend pair reads completed/cancelled - superseded by the docs push, not a failure; the docs head compiles and tests the same product tree and concluded green."
+    "NEX-080": "VERIFIED. Product 9336ba3, docs checkpoint 139edf6; CI 4/4 completed/success on both (Backend x2, Frontend x2, polled 2026-11-28T04:55Z). The 9336ba3 backend pair reads completed/cancelled - superseded by the docs push, not a failure; the docs head compiles and tests the same product tree and concluded green.",
+    "NEX-042": "VERIFIED (product) + EXTENDED by NEX-081. The sweep existed and was operator-gated, but a capped run examined only the oldest max_agents agents and offered no cursor, so the agents past the cap were never verified at all.",
+    "NEX-081": "IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3a05db2. CI NOT YET POLLED - this run ended at the window, so NEX-081 is NOT VERIFIED. Local: 16 targeted tests pass, full suite green, ruff format+check clean, mypy clean on 143 files. Mutation control: removing the `offset == 0` term from ChainAuditReport.verified fails test_a_clean_second_page_is_not_an_all_clear (observed failing, then restored)."
   },
   "completed_tasks": [
     "NEX-039",
@@ -71,7 +73,8 @@
     "NEX-075",
     "NEX-076",
     "NEX-078",
-    "NEX-080"
+    "NEX-080",
+    "NEX-081"
   ],
   "verified_tasks": [
     "NEX-001",
@@ -145,21 +148,22 @@
     "NEX-078",
     "NEX-079"
   ],
-  "in_progress_tasks": [],
+  "in_progress_tasks": [
+    "NEX-081 (CI verification pending)"
+  ],
   "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on a head that descends from the product commit. COMMITTED + PUSHED is not VERIFIED. NEX-063 is deliberately absent from verified_tasks for that reason.",
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format --check . : clean (319 files)",
+      "ruff format . : 2 files reformatted, 317 unchanged",
       "ruff check . : All checks passed",
       "mypy : Success, no issues found in 143 source files",
-      "pytest (full suite) : 1619 passed, 4 skipped",
-      "alembic upgrade head / downgrade -1 / upgrade head on sqlite : clean, new CHECK present"
+      "pytest (full suite) : pass, exit 0",
+      "pytest tests/application/test_audit_sweep.py tests/api/test_ops_audit_integrity_api.py : 16 passed"
     ],
-    "fixes_made_before_commit": [
-      "Relaxed the domain's granter/rationale pairing: ON DELETE SET NULL produces granted_by=None with a retained rationale, and refusing it made every read raise.",
-      "Migration a91c6f0d4b27 narrowed the revocation CHECK to the incoherent half only.",
-      "tests/domain/test_operator_grant.py::test_a_configuration_grant_must_not_invent_a_reason renamed to ..._is_the_post_deletion_shape; it pinned the rule that moved."
-    ]
+    "mutation_control": [
+      "Removed `self.offset == 0` from ChainAuditReport.verified; test_a_clean_second_page_is_not_an_all_clear failed. Restored and re-verified the guard is present before commit."
+    ],
+    "not_run_this_run": "CI was not polled; the commit landed at the close of the window."
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -184,40 +188,41 @@
   "blockers": [],
   "risks": [
     "No scheduled purge exists for the operator access log (ADR-017). An unattended purger changes who is accountable for an erasure, so it is a separate decision.",
-    "PR #5 stacks twenty-four slices; the reviewer's 'consider a split' note stands and is a human decision.",
-    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one (no source to reconstruct from). A recorded, deliberate gap, not a defect.",
-    "ON DELETE SET NULL on granted_by/revoked_by is now handled in the domain, but any future validation added over those columns must assume they can become NULL behind the writer's back. This bit twice in two runs (NEX-079 and NEX-080).",
-    "GitHub lags the branch by three slices (NEX-078..080 absent from the PR body). A reviewer reading only the PR description would not know the newest governance controls exist."
+    "PR #5 stacks twenty-five slices; the reviewer's 'consider a split' note stands and is a human decision.",
+    "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
+    "ON DELETE SET NULL on granted_by/revoked_by is handled in the domain, but any future validation over those columns must assume they can become NULL behind the writer's back.",
+    "A paging sweep relies on the listing order being TOTAL. It is (created_at, id); loosening that to created_at alone would let an OFFSET page skip an agent and still return a full page, reporting complete coverage of a set it never saw.",
+    "GitHub delivery lags the branch: PR #5's body and issue #2 do not yet carry NEX-081."
   ],
-  "next_task": "NEX-081 - choose the next dependency-ready slice from BACKLOG.md. Do NOT redo NEX-079 or NEX-080, and do NOT re-append NEX-078..NEX-080 to PR #5: that is done and verified.\nStart with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` against `git rev-parse HEAD`; this file's own commit field always lags the head by one commit.\nTwo items still need a human decision and must not be taken unilaterally: whether to split PR #5 (24 stacked slices; the reviewer's note stands), and whether an unattended purge of the operator access log should exist (ADR-017).\nOtherwise pick the highest-value P1/P2 gap that no slice has closed yet.",
+  "next_task": "NEX-082 - poll CI for 3a05db2 and promote NEX-081 to VERIFIED if 4/4 succeeds, then append NEX-081 to PR #5's body and post an issue #2 comment, then take the next dependency-ready slice from BACKLOG.md. Do NOT redo NEX-081 (the sweep cursor is done and pushed) and do NOT re-append NEX-078..NEX-080 - those are already in the PR body.",
   "next_action": "Select the next dependency-ready slice from BACKLOG.md. Delivery debt is zero; NEX-080 is verified at 139edf6 with CI 4/4.",
   "recovery_instructions": "1. `git fetch origin && git checkout feature/agentic-enterprise-platform && git pull --ff-only`. 2. `git ls-remote origin refs/heads/feature/agentic-enterprise-platform` for the true head; this checkpoint lags it by the docs commit that writes it. 3. NEX-078 is VERIFIED at product commit 6637c50 with CI 4/4. Do not re-implement it. 4. Run `.venv/bin/python -m pytest`, `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/python -m mypy` bare, exactly as CI does. 5. Take the next dependency-ready slice from BACKLOG.md. Never merge PR #5.",
-  "ci_status": "139edf6 (NEX-080 docs head): 4/4 completed/success 2026-11-28T04:55Z. 9336ba3 (product): Frontend 2/2 success, Backend 2/2 completed/cancelled (superseded). Prior: a0c8ee0 (NEX-079) 4/4 2026-11-27T21:20Z; 6637c50 (NEX-078) 4/4 20:43Z.",
+  "ci_status": "3a05db2 (NEX-081): NOT POLLED. Prior: 139edf6 (NEX-080) 4/4 success 2026-11-28T04:55Z.",
   "commits_this_run": [
-    "9336ba3 feat(operator-grants): make revocation provenance readable (NEX-080)",
-    "docs commit: NEX-080 checkpoint (this file) - see git log, it cannot name itself"
+    "3a05db2 feat(audit-sweep): let a capped integrity sweep be finished (NEX-081)",
+    "docs commit: NEX-081 checkpoint (this file) - see git log, it cannot name itself"
   ],
   "decisions_this_run": [
-    "D-080a: expose revocation as its own endpoint rather than a filter on the holdings report. The holdings view answers 'who holds what now'; revocation is history. Two questions, two answers, so no reader has to infer state from nullable columns.",
-    "D-080b: reuse the operator-access-report scope instead of minting a new one. Reading the removal history is the authority the holder report already needs; a fifth token would require every auditor to be granted twice for one question.",
-    "D-080c: treat 'revoked_at set, revoked_by NULL' as a valid post-deletion state and enforce only 'named revoker must have an instant'. A CHECK that ignores ON DELETE SET NULL makes the referenced account undeletable, which is a worse failure than the incoherence it prevents.",
-    "D-080d: move the 'configuration grant must not invent a reason' rule from the domain constructor to the write paths (IssueOperatorGrant requires it, the configuration seed forbids it). A domain invariant that the database itself can produce makes every read fail."
+    "D-081a: a cursor on the existing report rather than an uncapped sweep. An uncapped scan holds the database open for every agent's whole trail; the cap was a legitimate bound, the missing cursor was the defect.",
+    "D-081b: `verified` also requires offset == 0. A clean second page examined some agents, not the deployment; folding the two would let an operator page through a broken deployment and see only passes.",
+    "D-081c: order the sweep listing by (created_at, id), not created_at alone. Paging depends on the order being total, or an OFFSET page can skip an agent and still look full.",
+    "D-081d: validate offset in the use case (InvalidInput) as well as the query layer, and AFTER the operator gate, so a non-operator gets 404 and cannot probe the validation."
   ],
-  "run_summary": "Run 80 delivered NEX-080: an operator can now read the platform's grant-removal history. NEX-079 wrote revoked_at/revoked_by onto the grant row so that 'who removed whose authority, and when' was answerable, but nothing surfaced it - a durable write with no read, the same half-built loop NEX-076/NEX-077 closed for rationale. GET /api/v1/ops/operator-grants/revoked returns it under the existing operator-access-report scope (no fifth token), and the holdings report carries both fields. Running the neighbouring suites found two NEX-079 defects, both from ON DELETE SET NULL: the revocation CHECK made any account holding revocation history undeletable, and the domain's granter/rationale pairing turned one account deletion into an outage of the whole /ops surface. Migration a91c6f0d4b27 fixes the CHECK; the pairing rule moved to the write paths. 1619 passed / 4 skipped, ruff+mypy clean, migration round-trips. CI was not polled - the commit landed at the close of the window. Delivery debt cleared: PR #5's body now runs NEX-052..NEX-080 and issue #2 has a NEX-080 comment. CI for 139edf6 concluded 4/4 success, so NEX-080 is VERIFIED.",
+  "run_summary": "Run 81 delivered NEX-081: a capped audit-integrity sweep can now be finished. The sweep was operator-gated and complete for small deployments, but it walked only the oldest `max_agents` agents and offered no way to ask for the rest. `truncated` was honest about the exclusion yet left the operator with nothing to do about it, and the excluded agents were the newest chains - exactly the ones written most recently, and so the likeliest to be tampered with. GET /api/v1/ops/audit-integrity now takes `offset` and reports `next_offset`; the listing is ordered by (created_at, id) so a page boundary is total; and `verified` additionally requires offset == 0, so a clean page after the first can never read as a deployment-wide all-clear. 16 targeted tests, full suite green, ruff+mypy clean. The `offset == 0` guard was proved load-bearing by removing it and watching the intended test fail. CI was not polled - NEX-081 is COMMITTED + PUSHED, not VERIFIED.",
   "delivery_state": {
     "pr": 5,
     "pr_state": "open",
     "pr_draft": false,
     "pr_merged": false,
-    "pr_note": "PR #5 open, unmerged, draft=false. Body still carries NEX-052..NEX-077. NEX-079 is NOT yet in the body. Automated merging is prohibited.",
+    "pr_note": "PR #5 open, unmerged, draft=false. Body carries NEX-052..NEX-080. Automated merging is prohibited.",
     "issue": 2,
     "issue_state": "open",
     "issue_note": "Issue #2 open, latest comment 7234295952 covers NEX-080. Stays open: the programme is not done.",
-    "delivery_debt": "NONE - cleared this run. PR #5 body and issue #2 both reach NEX-080."
+    "delivery_debt": "PR #5 body and issue #2 do not yet carry NEX-081. One slice of debt."
   },
   "branch_head": "resolve with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a stored SHA",
   "head_drift_policy": "`commit` names the last head whose *product* code was verified by CI, not necessarily the branch tip. NEXUS checkpoint updates are themselves docs-only commits, so the tip advances one commit past `commit` every time this file is written - chasing it is an unbounded loop (run 64 hit this: 7456a89 -> 974d03f -> c49befe, each fix creating a new tip). On reconciliation, compare the product tree, not the SHA: `git diff <commit>..HEAD -- src/ tests/` being empty means `commit` is still an accurate description of what CI verified.",
-  "commit_note": "`commit` names a0c8ee0, the product commit this file's content describes. Because this file is committed on top of it, `commit` lags the branch head by exactly one commit. Resolve the head with git ls-remote; do not 'fix' the lag.",
+  "commit_note": "`commit` names 3a05db2, the product commit this file's content describes. Because this file is committed on top of it, `commit` lags the branch head by exactly one commit. Resolve the head with git ls-remote; do not 'fix' the lag.",
   "run_report": "NEX-079: give an operator grant a way to end early. Before this a grant ended only by expiry, so a mistaken hand-out was stuck for its term and a configuration grant (granted_by IS NULL) could not be ended at all without editing the seed and redeploying. Revocation is recorded on the row, not applied by DELETE, because the point of keeping a grant is that an audit can read what authority existed; a delete erases the grant and the evidence it was removed. 12 files, +720/-10. 11 new API tests. Full suite green locally. Two pre-existing-test/migration defects found and fixed before commit (duplicate index; stale column-set assertion).",
   "pr": {
     "body_covers_through": "NEX-077",
@@ -227,11 +232,11 @@
   },
   "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
   "commit_field_lag_note": "`commit` names the PRODUCT commit this checkpoint describes (38292d2, NEX-058). It cannot name the commit that writes this file: writing the file changes the tree, so that commit does not exist yet. The docs checkpoint therefore always sits one commit above `commit`. Do not 'fix' this by editing `commit` again - resolve the real head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`.",
-  "validation_status": "NEX-080 VERIFIED: 9336ba3 / 139edf6 both 4/4 completed/success. Local: 1619 passed / 4 skipped, ruff format+check clean (319 files), mypy clean on 143 files, migration a91c6f0d4b27 round-trips.",
+  "validation_status": "NEX-081 IMPLEMENTED + TESTED + COMMITTED + PUSHED at 3a05db2; CI NOT POLLED. Local: 16 targeted tests green, full suite green, ruff format+check clean, mypy clean on 143 files.",
   "next_actions": [
-    "Resolve the head with `git ls-remote` before trusting any SHA in this file.",
-    "Pick the next dependency-ready backlog slice; NEX-080 is closed.",
-    "Keep the run report honest about the two open human decisions (PR split, access-log purge)."
+    "Poll CI for 3a05db2; promote NEX-081 to VERIFIED on 4/4 success.",
+    "Append NEX-081 to PR #5's body and comment on issue #2 (one slice of delivery debt).",
+    "Pick the next dependency-ready backlog slice; NEX-081 is closed."
   ],
-  "last_ci_result": "139edf6 4/4 completed/success, polled 2026-11-28T04:55Z."
+  "last_ci_result": "Not polled this run. Prior: 139edf6 4/4 success, 2026-11-28T04:55Z."
 }

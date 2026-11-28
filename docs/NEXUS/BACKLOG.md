@@ -3453,3 +3453,59 @@ for operators (the listing is operator-gated); non-operator callers still see no
   only ever hold writer-supplied values.
 - **Next action:** poll CI on `9336ba3`. Then append NEX-078…NEX-080 to PR #5's body and post the
   issue #2 comment — the standing delivery debt.
+
+## NEX-081 — Let a capped integrity sweep be finished (run `NEX-2026-11-28-81`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations |
+| Priority | P1 — the check covered the OLDEST agent trails and could never reach the newest |
+| Status | **IMPLEMENTED + TESTED + COMMITTED + PUSHED** at `3a05db2`; **CI not polled**, so not VERIFIED |
+| Dependencies | NEX-042 (the sweep, operator-gated) — met; closes its cap gap |
+| Architecture | `application/ports/agents.py`, `application/use_cases/audit_sweep.py`, `domain/agent/audit_chain.py`, `infrastructure/db/agent_repositories.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** `SweepAuditIntegrity` (NEX-042) asks the one question no owner can: *is any
+agent's audit trail in this deployment broken*. It read
+`list_all_for_integrity_sweep(limit=max_agents)`. The cap is a legitimate bound — a sweep loads
+every agent's whole trail, so an uncapped scan would hold the database open far longer than a
+request should. The report said `truncated` when the cap bit, which is the honest half.
+
+The defect is that `truncated` was a dead end. There was no `offset` and no cursor, so the
+sweep was *always* the oldest `max_agents` agents: on any deployment with more agents than the
+cap, everything past it was outside the integrity check permanently. Because the walk is
+oldest-first, the excluded agents were the **newest** trails — written most recently, and so the
+likeliest to have been tampered with by whoever just gained write access.
+
+A cap with no cursor is not a bound on one request. It is a silent exclusion of everything past
+it.
+
+**Delivered.**
+
+- `GET /api/v1/ops/audit-integrity?offset=N`; the response carries `offset` and `next_offset`.
+  Follow `next_offset` while non-null to reach every agent.
+- `ChainAuditReport.offset`, `.next_offset`, `.covered` (`offset + agents_checked`).
+- `verified` additionally requires `offset == 0`. A second page that reaches the last agent and
+  finds nothing examined *some* agents, not the deployment, and says nothing about the agents
+  before it; without this term an operator could page through a broken deployment and see
+  nothing but passes.
+- `list_all_for_integrity_sweep(*, limit, offset=0)` ordered by `(created_at, id)` — paging
+  needs a **total** order, or an `OFFSET` page can skip the agent it should have started at and
+  still return a full page, reporting complete coverage of a set it never saw.
+- `offset` validated as `InvalidInput` (422) **after** the operator gate, so a non-operator
+  still gets `404` and cannot probe the validation by watching the error change.
+
+**Tests.** `tests/application/test_audit_sweep.py` (`TestACappedSweepCanBeFinished`, 5 tests)
+and `tests/api/test_ops_audit_integrity_api.py` (2). 16 targeted tests pass.
+
+**Mutation control.** Removing `self.offset == 0` from `ChainAuditReport.verified` makes
+`test_a_clean_second_page_is_not_an_all_clear` fail — observed failing, then the guard was
+re-verified present and the module re-parsed before the commit. The guard was written alongside
+its test and had never been seen failing; a test never seen fail is a hypothesis.
+
+**Acceptance criteria.** ✅ A truncated sweep offers a cursor that reaches the remainder.
+✅ Paging the whole set with the cap yields the same findings as one uncapped sweep. ✅ A clean
+page after the first never reports `verified`. ✅ A negative offset is refused with 422, and a
+non-operator gets 404 regardless of the offset. ✅ A non-operator cannot distinguish a valid
+from an invalid offset.
+
+**Remaining.** Poll CI for `3a05db2`; append NEX-081 to PR #5's body and comment on issue #2.

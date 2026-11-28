@@ -9638,3 +9638,65 @@ was read. `CHECKPOINT.json` says so and names polling as the next run's first ac
 
 **Delivery debt.** PR #5's body ends at NEX-077; NEX-078, NEX-079 and NEX-080 are absent from
 it. Issue #2's last comment covers NEX-079. This is the only thing making GitHub lag the branch.
+
+## Run `NEX-2026-11-28-81` — 2026-11-28T05:15Z
+
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `aaeeb8e` (docs head) / `b18e56d` / `9336ba3` (NEX-080 product)
+- **Ending commit:** `3a05db2` (product) + this docs checkpoint
+- **Project phase:** Phase 2/3/5 largely delivered; governance P1s closed through NEX-080
+
+**Task: NEX-081 — a capped audit-integrity sweep can now be finished.**
+
+`SweepAuditIntegrity` (NEX-042) was operator-gated and correct for a small deployment, but it
+read `list_all_for_integrity_sweep(limit=max_agents)` and had no `offset`. `truncated` was
+honest that the cap had bitten, and was also a dead end: the sweep was *always* the oldest
+`max_agents` agents, so everything past the cap was outside the integrity check forever. The
+walk is oldest-first, so the excluded agents were the **newest** trails — written most
+recently, and so the likeliest to have been tampered with by whoever just gained write access.
+A cap with no cursor is not a bound on one request; it is a silent exclusion of everything
+past it.
+
+**Files changed (8, +196/−20):**
+
+- `application/ports/agents.py` — `list_all_for_integrity_sweep(*, limit, offset=0)`
+- `application/use_cases/audit_sweep.py` — honours `offset`, reports `next_offset`; rejects a
+  negative offset via `InvalidInput` **after** the operator gate so a non-operator still gets
+  404 and cannot probe the validation
+- `domain/agent/audit_chain.py` — `ChainAuditReport` gains `offset`/`next_offset`/`covered`;
+  `verified` additionally requires `offset == 0`
+- `infrastructure/db/agent_repositories.py` — orders by `(created_at, id)`
+- `presentation/api/routers/ops.py`, `presentation/schemas.py` — the `offset` query parameter
+  and the new response fields
+- `tests/application/test_audit_sweep.py`, `tests/api/test_ops_audit_integrity_api.py`
+
+**Decisions.** D-081a cursor not uncapped sweep (an uncapped scan holds the DB open for every
+trail; the cap was legitimate, the missing cursor was the defect). D-081b `verified` requires
+`offset == 0` — a clean later page examined *some* agents, not the deployment, and folding the
+two would let an operator page through a broken deployment and see only passes. D-081c order
+by `(created_at, id)` because paging needs a **total** order, or an `OFFSET` page can skip an
+agent and still return a full page. D-081d validate after the gate.
+
+**Validation.**
+- `ruff format .` — 2 files reformatted, 317 unchanged
+- `ruff check .` — All checks passed
+- `mypy` — Success, no issues found in 143 source files
+- `pytest` full suite — pass, exit 0
+- targeted — 16 passed
+- **Mutation control:** removing `self.offset == 0` from `ChainAuditReport.verified` made
+  `test_a_clean_second_page_is_not_an_all_clear` fail. The guard was re-verified present and
+  the file re-parsed before the commit. This mattered: the guard was *written* with the test
+  and had never been observed failing, and a test never seen fail is a hypothesis.
+
+**CI: NOT POLLED.** The commit was pushed at the close of the window; no check-run was read.
+NEX-081 is COMMITTED + PUSHED, **not VERIFIED**. `CHECKPOINT.json` names polling as the next
+run's first action.
+
+**Delivery debt.** PR #5's body carries NEX-052…NEX-080 and issue #2's last comment covers
+NEX-080. NEX-081 is in neither — one slice of debt, recorded rather than left to be
+rediscovered.
+
+**Reconciliation noted.** `STATE.md` still described PR #5's body as ending at NEX-077 with
+NEX-078..080 missing. That was stale in the *pessimistic* direction — the dangerous one, since
+it invites a duplicate re-append. Corrected from the checkpoint's own NEX-080 evidence rather
+than by re-reading the PR, and the row now says NEX-080 is in the body.
