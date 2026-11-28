@@ -10182,3 +10182,101 @@ Take the next dependency-ready slice from `BACKLOG.md`. No delivery debt remains
 issue #2. Do not re-verify NEX-077…NEX-085.
 
 _This entry was created by an AI agent (OpenHands) on behalf of the repository owner._
+
+---
+
+## Run `NEX-2026-11-28-86` — NEX-086: the revocation history was unbounded on read
+
+- **Run ID:** `NEX-2026-11-28-86`
+- **Branch:** `feature/agentic-enterprise-platform`
+- **Starting commit:** `82bf1e6` (the run-85 close-out head)
+- **Ending commit:** product `70d7667`; this docs commit follows it
+- **Project phase:** Phase 3 (governance) / platform operations — Audit Center
+
+### What was found on entry
+
+The working tree was **dirty with an unbacklogged slice**: six source files and three test
+modules implementing `limit`/`offset` paging for `GET /api/v1/ops/operator-grants/revoked`,
+tagged `NEX-086` in test docstrings only. `BACKLOG.md` had no NEX-086 entry — `grep` returned
+nothing, confirmed by listing every `### NEX-0` heading, which stopped at NEX-080, with
+NEX-081..NEX-085 written as `##` sections instead. The task was not lost work to discard: the
+diff was coherent, complete, and locally green.
+
+`CHECKPOINT.json` was also **stale in a way that would have misled the next run**: its header
+was `run_id: NEX-2026-11-28-85` but its `ci_status`, `run_summary`, `commits_this_run` and
+`pr_state` all described **run 84** (NEX-084, `09cc4ad`, PR body through NEX-084). Only
+`task_statuses` had been updated for NEX-085. A run starting from it would have believed PR #5
+lacked NEX-085 and that the head was `1b466f4`. Rewritten wholesale this run.
+
+### The slice
+
+Revoked rows are never pruned — a revocation is a standing audit fact, not a value a retention
+window may erase — so the revocation history grows without bound for the life of the
+deployment. NEX-080 made it readable and served *all* of it in one tuple. On a long-lived
+deployment the report therefore could not be read at all: one request loaded every revocation
+ever recorded. Same unbounded-response defect NEX-082 fixed for the operator access trail, in a
+second audit report.
+
+Delivered: `revoked_grants(*, limit=None, offset=0)` and `count_revoked()` on the port and both
+adapters; `revoked_total`/`offset`/`next_offset`/`truncated` on the snapshot and the response;
+`limit`/`offset` query parameters with `ge=1, le=MAX_LIMIT` and `ge=0`. `offset < 0` raises
+`InvalidInput` (422) **after** the gate, so a non-operator still gets `404`.
+
+Two design points worth keeping:
+
+1. **Offset, not a keyset cursor.** NEX-082's access trail is appended to *by reading it* (each
+   read is audited), so its pages shift under a walker and it needs a cursor. Reading the
+   revocation history writes nothing, so offset over a total order is correct and simpler. The
+   two reports look alike and are deliberately paged differently.
+2. **The domain predicate stays in Python.** Paging is applied after `is_revoked`, not pushed
+   into SQL as `revoked_at IS NOT NULL` + `LIMIT`/`OFFSET`, so the page and `count_revoked()`
+   cannot describe different sets. A single SQL `COUNT` behind the same predicate is the
+   performance follow-up; it must not become a second definition of "revoked".
+
+### Validation
+
+- Gates run bare, as CI does: `ruff format .` then `ruff check .` (all checks passed), `mypy`
+  (143 source files clean), `pytest` **1696 passed, 4 skipped, exit 0**.
+- **Mutation control, observed failing:** two mutations at once — `next_offset` forced to `None`
+  and the limit ignored — failed 4/4 targeted tests
+  (`test_a_page_reports_the_total_beyond_the_page`, `test_the_last_page_has_no_next_offset`,
+  `test_a_non_positive_limit_does_not_serve_the_whole_history`,
+  `test_paging_reaches_every_revocation_and_the_total_holds`). Source restored, re-run green,
+  and `grep -c revoked_total` confirmed the restore before the commit.
+- **Committed message integrity checked.** The terminal again echoed fragments of the commit
+  command's own text into the output, which has corrupted content before. `git log -1 --format=%B`
+  read back from git itself: 22 lines, one `Co-authored-by`, one occurrence of each body line.
+  The echo was display-only; the stored message is clean.
+
+### Evidence
+
+- Product `70d7667`, 9 files, **+455/−16**, no migration, no new scope, no new authority.
+- CI: 4 check-runs created on `70d7667`. Read at 07:39Z and 07:41Z: Frontend **2/2
+  `completed/success`**, Backend **2/2 still `in_progress`**. **No verdict on the whole, so
+  NEX-086 is COMMITTED + PUSHED, not VERIFIED.** The next run must read Backend to a conclusion
+  before promoting it.
+
+### Reconciliation and delivery state
+
+- `BACKLOG.md`: NEX-086 section appended (it did not exist); NEX-085's trailing paragraph
+  preserved — an early edit clobbered it and it was restored verbatim before committing.
+- `STATE.md`: position table, head, CI result and a run-86 next-best-actions list rewritten; the
+  run-85 list kept below, marked superseded.
+- `CHECKPOINT.json`: replaced atomically (validated as JSON, then moved into place).
+- **PR #5** — live API read at 07:39Z: `open`, `draft: false`, `mergeable: true`, body 93604
+  bytes, `## NEX-085 ` present exactly once, `## NEX-086 ` **absent**. Delivery debt.
+- **Issue #2** — 69 comments, newest `7235822904` covers NEX-085; **zero** comments mention
+  NEX-086. Delivery debt.
+
+### Next action
+
+1. Read CI on `70d7667` to a verdict; promote NEX-086 to VERIFIED only on `completed`/`success`
+   on every run.
+2. Deliver NEX-086: append to PR #5's body (assert `body.count("## NEX-086 ") == 0` first, read
+   back from the API) and post one issue #2 comment.
+3. Then the next dependency-ready slice from `BACKLOG.md`. Do not start a new slice with under
+   10 minutes left on the clock.
+
+**Do not redo** NEX-086's implementation, and do not re-verify NEX-077…NEX-085.
+
+_This entry was created by an AI agent (OpenHands) on behalf of the repository owner._

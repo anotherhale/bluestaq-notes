@@ -1,122 +1,40 @@
 {
   "schema_version": 1,
-  "run_id": "NEX-2026-11-28-85",
-  "timestamp": "2026-11-28T07:20:00Z",
+  "run_id": "NEX-2026-11-28-86",
+  "timestamp": "2026-11-28T07:45:00Z",
   "branch": "feature/agentic-enterprise-platform",
-  "commit": "c56563cc810bf9a51b53d39c3e1e267a0d1eae6d",
-  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 VERIFIED. NEX-085 closed the fail-closed asymmetry in operator revocation: the wildcard grant (the strongest one, seeded from configuration) could be issued but not revoked through the running platform. Revocation now uses its own allowlist. No open P1.",
+  "commit": "70d766755ee358659558601bbf6cb204ea536a85",
+  "branch_head": "70d7667 (product); a docs commit carrying this checkpoint advances the tip one past it",
+  "project_phase": "Phase 2 complete. Phase 5: NEX-001..NEX-046 VERIFIED. Phase 3 (governance): NEX-047..NEX-085 VERIFIED; NEX-086 COMMITTED + PUSHED, CI PENDING. NEX-086 bounded the revocation history read: revoked rows are never pruned, so the NEX-080 report that served the whole history in one tuple could not be read at all on a long-lived deployment. limit/offset + count_revoked() now bound it, with revoked_total/next_offset/truncated on the response.",
   "active_task": null,
   "task_statuses": {
-    "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134 (product tree identical, proved with git diff -- src/ tests/). PR #5 body and issue #2 both carry it (section counts asserted from the live API).",
-    "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success (Backend + Frontend on both the pull_request and push events; check-runs read directly this run). Local gates green (ruff format/check, mypy 143 files, pytest 1678 passed / 4 skipped, exit 0) and the mutation control was observed failing 3/3. PR #5 body carries NEX-084 exactly once and issue #2 needed no new comment (a concurrent run's 7235362658 covered NEX-083 accurately).",
-    "NEX-085": "VERIFIED \u2014 CI 4/4 success on `d9d0a3a` (runs `46120082100` push and `46120085453` pull_request; Backend and Frontend each `success`), polled 2026-11-28 run 85. The product commit `c698979`'s own runs read `completed/cancelled` \u2014 superseded in the concurrency group by this docs commit, never a failure; `d9d0a3a` carries the identical product tree (proved with `git diff c698979 d9d0a3a -- src/ tests/`, empty). Local gates: pytest 1679 passed / 4 skipped exit 0, ruff format/check clean, mypy 143 files clean, mutation control observed failing (source fix stashed -> both wildcard tests 422). PR #5 body and issue #2 updated in this run."
+    "NEX-083": "VERIFIED - product c16dd9b, CI 2/2 success on docs head 453e134.",
+    "NEX-084": "VERIFIED - product 09cc4ad, CI 4/4 completed/success.",
+    "NEX-085": "VERIFIED - product c698979, CI 4/4 success on docs heads d9d0a3a..2f58931. Delivered to PR #5 and issue #2 (comment 7235822904).",
+    "NEX-086": "COMMITTED + PUSHED - product 70d7667. Local gates green (1696 passed, 4 skipped, ruff format/check clean, mypy 143 files clean). CI check-runs created on 70d7667 and read queued/in_progress, NOT yet concluded. NOT VERIFIED. Not yet delivered to PR #5 body or issue #2."
   },
-  "completed_tasks": [
-    "NEX-083",
-    "NEX-084",
-    "NEX-085"
-  ],
-  "verified_tasks": [
-    "NEX-001",
-    "NEX-002",
-    "NEX-003",
-    "NEX-004",
-    "NEX-005",
-    "NEX-005-HTTP",
-    "NEX-005-followup",
-    "NEX-006",
-    "NEX-007",
-    "NEX-008",
-    "NEX-009",
-    "NEX-009-HTTP",
-    "NEX-010",
-    "NEX-011",
-    "NEX-012",
-    "NEX-013",
-    "NEX-014",
-    "NEX-015",
-    "NEX-016",
-    "NEX-017",
-    "NEX-018",
-    "NEX-019",
-    "NEX-020",
-    "NEX-021",
-    "NEX-022",
-    "NEX-023",
-    "NEX-024",
-    "NEX-025",
-    "NEX-026",
-    "NEX-027",
-    "NEX-028",
-    "NEX-029",
-    "NEX-030",
-    "NEX-031",
-    "NEX-032",
-    "NEX-033",
-    "NEX-034",
-    "NEX-035",
-    "NEX-036",
-    "NEX-037",
-    "NEX-039",
-    "NEX-040",
-    "NEX-041",
-    "NEX-044",
-    "NEX-047",
-    "NEX-052",
-    "NEX-054",
-    "NEX-055",
-    "NEX-056",
-    "NEX-057",
-    "NEX-058",
-    "NEX-059",
-    "NEX-060",
-    "NEX-062",
-    "NEX-063",
-    "NEX-064",
-    "NEX-065",
-    "NEX-066",
-    "NEX-067",
-    "NEX-068",
-    "NEX-069",
-    "NEX-070",
-    "NEX-071",
-    "NEX-072",
-    "NEX-073",
-    "NEX-074",
-    "NEX-075",
-    "NEX-076",
-    "NEX-078",
-    "NEX-079",
-    "NEX-080",
-    "NEX-081",
-    "NEX-082",
-    "NEX-083",
-    "NEX-084",
-    "NEX-085"
-  ],
-  "in_progress_tasks": [],
-  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed on the branch tree. COMMITTED + PUSHED is not VERIFIED. NEX-083 became VERIFIED this run by reading CI on 453e134, whose product tree is identical to c16dd9b's (proved with git diff -- src/ tests/, empty). NEX-084 is COMMITTED + PUSHED with green local gates and is deliberately absent from verified_tasks.",
+  "completed_tasks": ["NEX-083", "NEX-084", "NEX-085"],
+  "verified_tasks_up_to": "NEX-085",
+  "in_progress_tasks": ["NEX-086"],
+  "status_semantics": "A task is VERIFIED only once its CI has actually been read and passed. COMMITTED + PUSHED is not VERIFIED. NEX-086 is committed and pushed but its CI had not concluded when this checkpoint was written; the next run must read /commits/70d7667/check-runs to a verdict before promoting it. A docs commit that supersedes 70d7667 in the concurrency group reads completed/cancelled, which is never a failure; anchor evidence to a concluded run, or to a docs head whose product tree is identical (proved with git diff -- src/ tests/).",
   "validation": {
     "commands_run_on_committed_tree": [
-      "ruff format --check . : 321 files already formatted",
+      "ruff format . : 5 files reformatted, 316 unchanged; then all formatted",
       "ruff check . : All checks passed",
-      "mypy : Success, no issues found in 143 source files",
-      "pytest (full suite) : 1678 passed, 4 skipped, exit 0",
-      "mutation control: temporal comparison disabled -> 3 of 3 new tests fail (2 use-case, 1 API)"
+      "mypy : Success, no issues in 143 source files",
+      "pytest (full suite) : 1696 passed, 4 skipped, exit 0",
+      "mutation control: next_offset forced None + limit ignored -> 4 of 4 targeted tests failed; source restored and re-run green before commit"
     ],
-    "not_run_this_run": "Nothing outstanding. CI on 09cc4ad is green (4/4) and was read from the API this run; the docs head 73cc288 also concluded 4/4 success.",
+    "new_tests": 17,
     "ci": {
-      "commit": "09cc4ad",
-      "total": 4,
-      "conclusions": {
-        "completed/success": 4
-      },
-      "polled_at": "2026-11-28T06:44Z",
-      "docs_head": "73cc288",
-      "docs_head_result": "4/4 completed/success, polled 2026-11-28T06:47Z"
+      "commit": "70d7667",
+      "result": "PENDING",
+      "detail": "4 check-runs (Backend x2, Frontend x2) read queued/in_progress at 2026-11-28T07:39Z. No verdict."
     },
-    "nex085_ci": "4/4 success on `d9d0a3a`: runs `46120082100` (push) and `46120085453` (pull_request), Backend and Frontend each `success`, polled 2026-11-28T07:14Z.",
-    "final_head_ci": "Final head `c56563c` (the promotion commit) also concluded 4/4 success: runs `46120502261` (pull_request) and `46120498874` (push), Backend and Frontend each `success`, polled 2026-11-28T07:19Z. The tree is unchanged by that commit (docs only), so this is the third green conclusion over the same product tree. A third docs-only head `2f58931` also concluded 4/4 success (polled 07:22Z). Every docs-only commit since c698979 carries an identical product tree (`git diff c698979 <head> -- src/ tests/` empty), so once the tree is green once, the remaining docs commits cannot change the verdict. Do NOT chase this regress: each state write advances the head past the commit that records it."
+    "verified_prior": {
+      "commit": "09cc4ad",
+      "result": "4/4 completed/success (NEX-084)"
+    }
   },
   "uncommitted_work": false,
   "pr_state": {
@@ -124,101 +42,45 @@
     "url": "https://github.com/anotherhale/bluestaq-notes/pull/5",
     "draft": false,
     "mergeable": true,
-    "body_sections_through": "NEX-084",
-    "body_length_bytes": 90541,
-    "note": "PR #5 body carries NEX-052..NEX-085 (asserted `body.count(\"## NEX-085 \") == 0` before the append, then read back: NEX-085 1, NEX-084 1, no duplicate). Issue #2 received the NEX-085 verification comment (issuecomment-7235822904) after asserting 0 prior NEX-085 mentions across 68 comments.",
-    "updated_at": "2026-11-28T06:45:00Z",
-    "delivery_through": "NEX-085",
-    "issue_2": "commented with the NEX-085 verification summary (issuecomment-7235822904)"
+    "state": "open",
+    "body_sections_through": "NEX-085",
+    "body_length_bytes": 93604,
+    "head_sha": "70d7667",
+    "note": "NEX-085 present exactly once (asserted from the live API this run). NEX-086 is ABSENT - delivery debt for the next run. Body length and head are measured from the PR object at 07:39Z, not copied from an earlier run."
   },
   "tracking_issue": {
     "number": 2,
     "state": "open",
-    "latest_comment": "7235362658",
-    "covers": "NEX-083",
-    "note": "Comment 7235362658 was posted at 06:32:43Z by a concurrent automation run, not by this one. Its claims were verified independently here (CI read, PR section counts asserted) and are accurate, so no duplicate was posted. NEX-084 needs a comment once CI is green."
+    "comment_count": 69,
+    "latest_comment": "7235822904",
+    "covers": "NEX-085",
+    "note": "69 comments; the newest covers NEX-085. Zero comments mention NEX-086 - delivery debt for the next run. Use lists, not markdown tables, in issue comments on this repository."
   },
   "blockers": [],
   "risks": [
     "No scheduled purge exists for the operator access log (ADR-017).",
-    "PR #5 stacks twenty-eight slices; the reviewer's 'consider a split' note stands and is a human decision.",
+    "PR #5 stacks twenty-nine slices; the reviewer's 'consider a split' note stands and is a human decision.",
     "Pre-NEX-074 operator-grant rows carry no rationale and cannot honestly be given one.",
-    "ON DELETE SET NULL on granted_by/revoked_by is handled in the domain, but future validation over those columns must assume they can become NULL behind the writer's back.",
-    "A paging sweep relies on the listing order being TOTAL. It is (created_at, id).",
-    "The keyset cursor assumes positions only ever increase.",
-    "Concurrent NEXUS runs share this branch and /tmp: one posted issue #2 comment 7235362658 during this run and created /tmp/checkpoint_new.json. Re-read GitHub and use unique temp paths.",
-    "Run 85 reconciliation: BACKLOG's NEX-080 line still read 'CI UNVERIFIED' although `9336ba3`/`139edf6` were 4/4 green since 04:55Z - stale in the pessimistic direction, which invites wasted re-verification. Corrected. This run also fixed a self-inflicted duplicate 'NEX-084 NEX-084' in STATE.md. Both caught by the post-promotion sweep, which is why that sweep is mandatory."
+    "ON DELETE SET NULL on granted_by/revoked_by shapes domain validation; the NEX-080 defect that made an account with revocation history undeletable is fixed, but the pattern deserves a durable test if a third such column is added.",
+    "count_revoked() and revoked_grants() each scan the operator_grants table in Python. Correct and consistent now; if the table grows large a single SQL COUNT pushed behind the same predicate is the follow-up, not a second definition of 'revoked'."
   ],
-  "next_task": "NEX-085 closed and delivered. Take the next dependency-ready slice from BACKLOG.md; first re-read STATE.md 'Next best actions' and confirm no delivery debt remains on PR #5 / issue #2.",
-  "next_action": "1. Read docs/NEXUS/BACKLOG.md and pick the highest-priority dependency-ready task that is not already VERIFIED. 2. Implement and test it as one vertical slice. 3. Commit, push, poll CI on the product commit, then record its result here.",
-  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED - three green CI conclusions over the same product tree (d9d0a3a 4/4, c56563c 4/4), product commit c698979, and it is delivered to PR #5 and issue #2. Do not redo it. 3) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust the SHA recorded here. 4) Pick the next dependency-ready slice from BACKLOG.md, write the failing test first, and leave a committed, pushed increment behind. 5) A docs commit's CI supersedes the product commit's runs (they read cancelled); poll the docs head for the verdict. 6) If you write state, poll the new head once afterwards - each state write advances the head past the commit that records it.",
+  "next_task": "NEX-086 is implemented, committed and pushed at 70d7667 but NOT verified. Its CI had not concluded when this run ended.",
+  "next_action": "1. Read CI on 70d7667 to a verdict (GET /commits/70d7667/check-runs). Promote NEX-086 to VERIFIED only on completed/success on every run. 2. Deliver NEX-086: append its section to PR #5's body (assert body.count('## NEX-086 ') == 0 first, then read back from the API) and post one issue #2 comment. 3. Then take the next dependency-ready slice from BACKLOG.md - Phase 4 (admin console frontend) or the remaining backend gaps. Do not start a new slice with under 10 minutes left on the clock.",
+  "recovery_instructions": "1) Read this file and STATE.md. 2) NEX-085 is VERIFIED and delivered - do not redo it. 3) NEX-086 is at 70d7667: implementation and tests are done and locally green, CI was not read. Poll it before writing VERIFIED anywhere. 4) Verify the live head with `git ls-remote origin refs/heads/feature/agentic-enterprise-platform`; never trust a SHA in these files, because writing them is itself a commit that advances the tip. 5) Delivery debt owed by this run: NEX-086 to PR #5 body and issue #2. 6) A docs commit reads completed/cancelled once superseded in the concurrency group - never a failure, and never evidence.",
   "ci_status": {
-    "product_commit": "09cc4ad3ed13b8ddf3c421f5479cb094297a1d39",
-    "result": "4/4 completed/success",
-    "detail": "Backend (ruff, mypy, pytest, migrations) and Frontend (typecheck, lint, test, build), on both the pull_request and push events. Read directly from /commits/09cc4ad/check-runs this run, not inherited from a summary.",
-    "polled_at": "2026-11-28T06:44Z",
-    "docs_head": "73cc288fd78e52f0d37a33aa19fc7a3e08530063",
-    "docs_head_result": "4/4 completed/success (polled 2026-11-28T06:47Z)",
-    "prior_verified": "453e134 (run-83 docs head, product tree identical to NEX-083 c16dd9b): 2/2 success."
+    "product_commit": "70d766755ee358659558601bbf6cb204ea536a85",
+    "result": "PENDING",
+    "detail": "4 check-runs created; queued/in_progress at 07:39Z. Prior run's conclusion: 09cc4ad 4/4 completed/success (NEX-084)."
   },
   "commits_this_run": [
-    "09cc4ad fix(ops): bound a delegated operator grant by the issuer's own deadline (NEX-084)",
-    "1b466f4 docs(nexus): promote NEX-084 to VERIFIED on 4/4 CI and deliver PR #5 section",
-    "73cc288 chore(nexus): point checkpoint at delivered docs head 1b466f4"
+    "70d7667 feat(ops): page the revoked operator-grant history (NEX-086)"
   ],
   "decisions_this_run": [
-    "The ceiling is the FURTHEST covering grant, not the nearest. An issuer who holds a scope for a week has not narrowed their authority by also holding an unrelated five-minute grant of the same scope; refusing on the nearer one would reject a hand-out their authority plainly covers.",
-    "A settings-seeded operator has an unbounded grant (expires_at=None), so their ceiling is None and existing deployments are unaffected. Reading the ceiling from the store rather than from configuration keeps one source of truth for what the gate believes.",
-    "409 Conflict, not 403. The caller is authorized to issue grants; the requested grant conflicts with the issuer's own authority. A 403 would assert the caller may not issue at all, which is false, and would collide with the ADR-008 permission split.",
-    "Scope and lifetime are read in a single store call at the gate's clock, so attenuation cannot pass against a grant that has lapsed by the time the lifetime is compared.",
-    "A state file can be stale in the reassuring direction (run 83 recorded two slices of delivery debt that did not exist). GitHub prose is read from the API and section counts asserted before any append."
+    "Offset paging, not a keyset cursor. NEX-082's access trail is appended to by reading it (the read is audited), so its pages shift under a walker and it needs a cursor. Reading the revocation history writes nothing, so offset over a total order is correct and simpler.",
+    "The adapter keeps the is_revoked domain predicate in Python rather than pushing revoked_at IS NOT NULL into SQL for the LIMIT/OFFSET, so the page and count_revoked cannot describe different sets. A single SQL COUNT behind the same predicate is the performance follow-up if the table grows; it must not become a second definition of 'revoked'.",
+    "limit=None preserves the whole-history behaviour for tests and a future export; the serving path always passes a limit, and the route refuses limit>MAX_LIMIT rather than clamping so a caller cannot believe it read more than the cap. _clamp_limit() maps a non-positive limit to 1, never to 'everything'.",
+    "count_revoked() is called AFTER the operator gate, so a refused caller still learns nothing about how much authority has been removed - the total is exactly that number."
   ],
-  "run_summary": "Run 84 delivered NEX-084: operator-grant delegation attenuated scope but not lifetime, so a one-hour incident grant could be re-issued for thirty days. Product commit 09cc4ad, 3 files, +277/-12, no migration, no new authority. Local gates: 1678 passed / 4 skipped (exit 0), ruff format/check clean, mypy 143 files clean, mutation control observed failing 3/3. The run then split on the clock: the first half stopped with CI in_progress, and this half verified and delivered. VERIFIED on CI 4/4 completed/success on 09cc4ad, read directly from check-runs rather than inherited. PR #5 body now carries NEX-084 (87112 -> 90541 bytes, section counts asserted from the API before and after). Issue #2 needed no new comment: a concurrent run's 7235362658 covered NEX-083 and its claims checked out. Docs head 73cc288 also concluded 4/4. Also caught, in both halves, promotion edits that left neighbouring fields reading the old status; a whole-file grep for the old words found each one.",
-  "delivery_state": {
-    "pr_number": 5,
-    "state": "open",
-    "draft": false,
-    "mergeable": true,
-    "body_sections_through": "NEX-084",
-    "sections_appended_this_run": [
-      "NEX-084"
-    ],
-    "body_length_bytes": 90541,
-    "section_counts_verified_from_api": {
-      "NEX-082": 1,
-      "NEX-083": 1,
-      "NEX-084": 1
-    },
-    "note": "Counts assert before-write (NEX-084=0) and after-write (1) so a re-run cannot duplicate a section. AI-disclosure line remains the final line of the body.",
-    "tracking_issue_comment": "none this half - concurrent run posted 7235362658 (NEX-083) at 06:32:43Z and its claims were verified accurate; a second comment for the same slice would be noise."
-  },
-  "branch_head": "1b466f4",
-  "head_drift_policy": "The commit field names the product commit whose tree CI is reading. NEXUS checkpoint updates are docs-only commits, so the tip advances one commit past commit every time this file is written. On reconciliation compare the product tree, not the SHA: git diff <commit>..HEAD -- src/ tests/ being empty means commit still describes what CI verified.",
-  "commit_field_semantics": "This field cannot name the commit that writes it; it lags the head by one commit forever. Resolve the true head with git ls-remote.",
-  "concurrency_note": "A second NEXUS run is active on this branch: issue #2 comment 7235362658 appeared at 06:32:43Z, 103 seconds into this run, and was not written by it. Its claims were checked and accurate. Any run starting here must re-read PR #5's body and issue #2 before posting, and must anchor to git ls-remote because the other run's docs commits advance the tip independently.",
-  "run_report": "Run 84 delivered NEX-084: operator-grant delegation attenuated scope but not lifetime, so a one-hour incident grant could be re-issued for thirty days. Product commit 09cc4ad, 3 files, +277/-12, no migration, no new authority. Local gates: 1678 passed / 4 skipped (exit 0), ruff format/check clean, mypy 143 files clean, mutation control observed failing 3/3. The run then split on the clock: the first half stopped with CI in_progress, and this half verified and delivered. VERIFIED on CI 4/4 completed/success on 09cc4ad, read directly from check-runs rather than inherited. PR #5 body now carries NEX-084 (87112 -> 90541 bytes, section counts asserted from the API before and after). Issue #2 needed no new comment: a concurrent run's 7235362658 covered NEX-083 and its claims checked out. Docs head 73cc288 also concluded 4/4. Also caught, in both halves, promotion edits that left neighbouring fields reading the old status; a whole-file grep for the old words found each one.",
-  "validation_status": {
-    "local_gates": {
-      "ruff_format_check": "pass (321 files already formatted)",
-      "ruff_check": "pass (All checks passed!)",
-      "mypy": "pass (143 source files, no issues)"
-    },
-    "ci": {
-      "commit": "09cc4ad",
-      "total_check_runs": 4,
-      "successful": 4,
-      "events": [
-        "pull_request",
-        "push"
-      ],
-      "checks": {
-        "Backend (ruff, mypy, pytest, migrations)": "completed/success",
-        "Frontend (typecheck, lint, test, build)": "completed/success"
-      },
-      "polled_at_epoch": 1795848155,
-      "verdict": "NEX-084 VERIFIED"
-    },
-    "docs_head_ci": "c04a554 docs-only; not a verdict on the product tree"
-  },
-  "docs_head_delivered": "1b466f4 (docs promotion + PR #5 delivery)"
+  "run_summary": "Run 86 took the in-flight NEX-086 slice (unbounded revocation-history read, the same defect NEX-082 fixed for the access trail) from uncommitted working tree to committed and pushed. Verified the diff across all six source files and three test modules, ran the full suite (1696 passed, 4 skipped, exit 0) and all gates bare as CI does, and proved the new tests fail under a two-part mutation (next_offset disabled + limit ignored: 4/4 failing) before restoring and re-running green. Product commit 70d7667, 9 files, +455/-16, no migration, no new authority, no new scope. CI check-runs were created on 70d7667 and had not concluded when the run closed, so NEX-086 is COMMITTED + PUSHED, not VERIFIED. Reconciliation found CHECKPOINT.json stale in the run-85 header over a run-84 body; it is rewritten here.",
+  "docs_head_delivered": "pending - the run-86 docs commit carrying BACKLOG/STATE/EXECUTION_LOG/CHECKPOINT for NEX-086"
 }

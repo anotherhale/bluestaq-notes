@@ -3650,3 +3650,79 @@ unrelated operator view after revocation; `test_revoking_the_wildcard_leaves_an_
 
 **Remaining.** None for implementation or verification. Delivery (append this section to
 PR #5's body, comment on issue #2) is done in run 85 after this promotion.
+
+---
+
+## NEX-086 — Page the revocation history so the whole thing is readable (run `NEX-2026-11-28-86`)
+
+| Field | Value |
+| --- | --- |
+| Phase | 3 (governance) / platform operations — Audit Center |
+| Priority | P1 — the report could not be read at all on a long-lived deployment |
+| Status | **COMMITTED + PUSHED** — product commit `70d7667`; CI polled, not yet promoted to VERIFIED |
+| Dependencies | NEX-080 (the read side, whose endpoint this bounds), NEX-082 (the same defect fixed for the access trail) — met |
+| Architecture | `application/ports/operator_grants.py`, `application/use_cases/operator_grants.py`, `infrastructure/db/operator_grants.py`, `infrastructure/security/operator_grants.py`, `presentation/api/routers/ops.py`, `presentation/schemas.py`; no migration |
+
+**Objective.** NEX-080 made the revocation history readable; it served *all* of it in one
+tuple. Revoked rows are never pruned — a revocation is a standing audit fact, not a value a
+retention window may erase — so the history grows without bound for the life of the
+deployment. On a long-lived deployment, reading the report meant loading every revocation
+ever recorded into memory in a single response. That is the same unbounded-response defect
+NEX-082 fixed for the operator access trail, in a second report.
+
+**Delivered.**
+
+- `OperatorGrantRepository.revoked_grants(*, limit=None, offset=0)` on the port; both adapters
+  implement it. `limit=None` keeps the whole-history behaviour for the tests and a future
+  export path; a serving path always passes a limit.
+- `OperatorGrantRepository.count_revoked() -> int` — the total, counted through the same
+  `is_revoked` domain predicate as the listing rather than `revoked_at IS NOT NULL` in SQL, so
+  the total and the page can never describe different sets.
+- `RevokedOperatorGrantSnapshot` carries `revoked_total`, `offset` and `next_offset`, plus a
+  `truncated` property (`next_offset is not None`). `grant_count` still counts rows *on this
+  page*; it is deliberately not the total.
+- `GET /api/v1/ops/operator-grants/revoked?limit=&offset=`; `limit` is `ge=1, le=MAX_LIMIT`, so
+  a mistyped value is refused rather than silently clamped and a caller cannot believe it read
+  more than the cap. `offset` is `ge=0`.
+- `_clamp_limit()` in the use case, mirroring `GetOperatorAccessReport`: a non-positive limit
+  becomes `1`, never "everything". `offset < 0` raises `InvalidInput` (422) **after** the gate,
+  so a non-operator still gets `404` and cannot probe the validation by watching the error
+  change.
+
+**Why offset and not a keyset cursor.** NEX-082's access trail is *appended to by reading it*
+(the read is itself audited), so its pages would shift under a walker and it needs a keyset
+cursor. Reading the revocation history writes nothing, so offset paging over a total order is
+correct and simpler. The adapter keeps `is_revoked` in Python rather than pushing a
+`revoked_at IS NOT NULL` predicate into SQL for exactly that reason: the definition of
+"revoked" must stay in one place or the page could drift from the count.
+
+**Tests.** +17. `tests/application/test_operator_grants.py` (6): the page reports the total
+beyond it, the last page has no cursor, walking pages covers every revocation once, an offset
+past the end is an empty final page, a non-positive limit does not serve everything, an
+over-ceiling limit clamps. `tests/api/test_ops_operator_grant_revoked_read_api.py` (8): the
+response carries the paging fields, paging reaches every revocation, `limit=0/-1` and
+`limit=10000` are 422, a negative offset is 422, a non-operator cannot page the history.
+`tests/persistence/test_operator_grants.py` (2): the adapter pages over the same stable order
+it returns whole, and `count_revoked` omits live and merely-expired grants.
+
+**Mutation control.** Two mutations at once — `next_offset` forced to `None`, and the limit
+ignored — was observed failing 4/4 (`test_a_page_reports_the_total_beyond_the_page`,
+`test_the_last_page_has_no_next_offset`, `test_a_non_positive_limit_does_not_serve_the_whole_history`,
+`test_paging_reaches_every_revocation_and_the_total_holds`), then the source was restored and
+re-run green before the commit.
+
+**Local gates on the committed tree.** `ruff format --check .` 321 files already formatted;
+`ruff check .` all checks passed; `mypy` 143 source files clean; `pytest` 1696 passed,
+4 skipped, exit 0.
+
+**Security.** Read-only and gated, unchanged scope. The gate still runs before the read, and
+`count_revoked` is called *after* it — a refused caller must not learn how much authority has
+been removed, and the total is that number. Bounding the read also bounds the resource a single
+authorized operator can force the service to hold.
+
+**Remaining.** None for implementation. Promote to VERIFIED once CI check-runs on `70d7667`
+conclude `completed`/`success`, then append this section to PR #5's body and comment on
+issue #2.
+
+---
+
